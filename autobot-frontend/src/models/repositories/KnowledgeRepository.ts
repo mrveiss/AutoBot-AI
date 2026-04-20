@@ -18,9 +18,14 @@ import type {
 } from '@/types/knowledgeBase'
 // Issue #5209: canonical request types generated from backend OpenAPI schema.
 // Prefer these over hand-written duplicates for wire-format types.
+// Issue #5248: KB stats + category response types now also come from
+// backend Pydantic schemas via the same OpenAPI pipeline.
 import type {
   CreateConnectorRequest,
-  UpdateConnectorRequest
+  UpdateConnectorRequest,
+  KnowledgeStatsBasic,
+  KnowledgeCategoryEntry as ApiKnowledgeCategoryEntry,
+  DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -125,23 +130,19 @@ export interface AddFileOptions {
 /**
  * Basic knowledge base statistics as returned by `/api/knowledge_base/stats/basic`.
  *
- * Issue #5215 (found in #5207 audit): the previous declaration claimed
- * `total_documents`, `total_categories`, `total_size`, `last_updated` plus a
- * `categories: {name, document_count}[]` list. The backend actually returns
- * `total_facts`, `total_vectors`, a bare string list of category names, and a
- * `status` field — none of the previously declared fields exist at the top
- * level. Callers relying on `stats.categories[i].name` got `undefined.name`
- * at runtime.
+ * Issue #5248: aliased to the backend-generated `KnowledgeStatsBasic` Pydantic
+ * schema (in `autobot-backend/knowledge/schemas/stats.py`) via OpenAPI type-gen.
+ * The #5215 hand-written duplicate has been replaced with this alias so drift
+ * between Python and TS is structurally impossible.
  */
-export interface KnowledgeStats {
-  total_facts: number
-  total_vectors: number
-  categories: string[]
-  status: string
-}
+export type KnowledgeStats = KnowledgeStatsBasic
 
 /**
  * Size-breakdown block inside `DetailedKnowledgeStats`.
+ *
+ * Issue #5248: kept as a hand-written interface (not in OpenAPI) because it's
+ * referenced directly from callers that want to construct a zero-default
+ * fallback without importing the nested schema.
  */
 export interface DetailedKnowledgeSizeMetrics {
   total_content_size: number
@@ -155,49 +156,20 @@ export interface DetailedKnowledgeSizeMetrics {
  * Detailed knowledge base statistics as returned by
  * `/api/knowledge_base/detailed_stats`.
  *
- * Issue #5215: the previous declaration (`extends KnowledgeStats` + flat
- * `documents_by_type` / `recent_additions` / `top_categories`) did not match
- * the nested envelope the backend actually returns. All fields in
- * `basic_stats` are keyed by the concrete backend response; extra diagnostic
- * keys (`embedding_cache`, `chromadb_path`, etc.) are preserved via
- * `Record<string, unknown>` so stats-renderers can display them without a
- * fresh contract bump.
+ * Issue #5248: aliased to the backend-generated `DetailedKnowledgeStats`
+ * Pydantic schema via OpenAPI type-gen. Kept as a local `type` (not re-export)
+ * so existing consumers keep importing `DetailedKnowledgeStats` from this
+ * module unchanged.
  */
-export interface DetailedKnowledgeStats {
-  status: string
-  basic_stats: KnowledgeStats & {
-    total_documents?: number
-    total_chunks?: number
-    db_size?: number
-    last_updated?: string | null
-    redis_db?: number | string | null
-    vector_store?: string | null
-    chromadb_collection?: string | null
-    initialized?: boolean
-    llama_index_configured?: boolean
-    embedding_model?: string | null
-    embedding_dimensions?: number | null
-    index_available?: boolean
-    indexed_documents?: number
-    chromadb_path?: string | null
-    embedding_cache?: Record<string, unknown>
-    [key: string]: unknown
-  }
-  category_breakdown: Record<string, number>
-  source_breakdown: Record<string, number>
-  type_breakdown: Record<string, number>
-  size_metrics: DetailedKnowledgeSizeMetrics
-  rag_available: boolean
-}
+export type DetailedKnowledgeStats = ApiDetailedKnowledgeStats
 
 /**
  * A single category row from `/api/knowledge_base/categories`.
+ *
+ * Issue #5248: aliased to the backend-generated `KnowledgeCategoryEntry`
+ * Pydantic schema via OpenAPI type-gen.
  */
-export interface KnowledgeCategoryEntry {
-  name: string
-  count: number
-  id: string
-}
+export type KnowledgeCategoryEntry = ApiKnowledgeCategoryEntry
 
 /**
  * Raw backend search result (before transformation)
