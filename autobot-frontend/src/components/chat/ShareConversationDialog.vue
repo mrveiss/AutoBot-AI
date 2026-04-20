@@ -61,13 +61,13 @@
           <template v-else>
             <div class="flex items-center justify-between">
               <p class="text-sm font-medium text-autobot-text-primary">
-                {{ $t('chat.share.factsSelected', { selected: selectedFactIds.size, total: facts.length }) }}
+                {{ $t('chat.share.factsSelected', { selected: factSelection.selectedCount.value, total: facts.length }) }}
               </p>
               <button
                 class="text-xs text-autobot-primary hover:text-autobot-text-secondary"
                 @click="toggleAllFacts"
               >
-                {{ selectedFactIds.size === facts.length ? $t('chat.share.deselectAll') : $t('chat.share.selectAll') }}
+                {{ factSelection.allSelected.value ? $t('chat.share.deselectAll') : $t('chat.share.selectAll') }}
               </button>
             </div>
 
@@ -76,13 +76,13 @@
                 v-for="fact in facts"
                 :key="fact.id"
                 class="flex items-start gap-2 p-2 rounded hover:bg-autobot-bg-tertiary transition-colors cursor-pointer"
-                @click="toggleFact(fact.id)"
+                @click="factSelection.toggle(fact)"
               >
                 <input
                   type="checkbox"
-                  :checked="selectedFactIds.has(fact.id)"
+                  :checked="factSelection.isSelected(fact)"
                   class="mt-1 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
-                  @click.stop="toggleFact(fact.id)"
+                  @click.stop="factSelection.toggle(fact)"
                 />
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-autobot-text-primary line-clamp-2">{{ fact.content }}</p>
@@ -118,6 +118,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 
 const { t } = useI18n()
 const logger = createLogger('ShareConversationDialog')
@@ -145,7 +146,7 @@ const recipients = ref<string[]>([])
 const includeKnowledge = ref(false)
 const facts = ref<ShareFact[]>([])
 const factsLoading = ref(false)
-const selectedFactIds = ref(new Set<string>())
+const factSelection = useBatchSelection<ShareFact, string>(facts, (f) => f.id)
 const sharing = ref(false)
 
 const addRecipient = () => {
@@ -160,20 +161,11 @@ const removeRecipient = (r: string) => {
   recipients.value = recipients.value.filter(x => x !== r)
 }
 
-const toggleFact = (id: string) => {
-  if (selectedFactIds.value.has(id)) {
-    selectedFactIds.value.delete(id)
-  } else {
-    selectedFactIds.value.add(id)
-  }
-  selectedFactIds.value = new Set(selectedFactIds.value)
-}
-
 const toggleAllFacts = () => {
-  if (selectedFactIds.value.size === facts.value.length) {
-    selectedFactIds.value = new Set()
+  if (factSelection.allSelected.value) {
+    factSelection.clear()
   } else {
-    selectedFactIds.value = new Set(facts.value.map(f => f.id))
+    factSelection.selectAll()
   }
 }
 
@@ -185,7 +177,7 @@ const loadFacts = async () => {
       `${getApiBase()}/chat/sessions/${props.sessionId}/share/preview`
     )
     facts.value = data?.data?.facts || []
-    selectedFactIds.value = new Set(facts.value.map(f => f.id))
+    factSelection.selectAll()
   } catch (err) {
     logger.error('Failed to load share preview:', err)
     facts.value = []
@@ -206,7 +198,7 @@ watch(() => props.visible, (val) => {
     recipientInput.value = ''
     includeKnowledge.value = false
     facts.value = []
-    selectedFactIds.value = new Set()
+    factSelection.clear()
   }
 })
 
@@ -225,8 +217,8 @@ const handleShare = async () => {
       share_with: recipients.value,
       include_knowledge: includeKnowledge.value,
     }
-    if (includeKnowledge.value && selectedFactIds.value.size > 0) {
-      body.knowledge_facts = Array.from(selectedFactIds.value)
+    if (includeKnowledge.value && factSelection.selectedCount.value > 0) {
+      body.knowledge_facts = Array.from(factSelection.selected.value)
     }
     const result = await ApiClient.post(
       `${getApiBase()}/chat/sessions/${props.sessionId}/share`,

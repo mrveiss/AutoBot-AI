@@ -45,7 +45,7 @@
               >
                 <input
                   type="checkbox"
-                  :checked="selectedFactIds.has(fact.id)"
+                  :checked="factSelection.isSelected(fact)"
                   class="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
                   @click.stop="toggleFactSelection(fact.id)"
                 />
@@ -78,7 +78,7 @@
               </button>
               <span class="flex-1"></span>
               <span class="text-autobot-text-muted">
-                {{ $t('chat.deleteDialog.selectedForPreservation', { count: selectedFactIds.size }) }}
+                {{ $t('chat.deleteDialog.selectedForPreservation', { count: factSelection.selectedCount.value }) }}
               </span>
             </div>
           </div>
@@ -264,6 +264,7 @@ import { useI18n } from 'vue-i18n'
 import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import { formatFileSize } from '@/utils/formatHelpers'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
 const { t } = useI18n()
@@ -289,50 +290,40 @@ const kbCategories = ref('')
 const extractText = ref(true)
 const sharedPath = ref('')
 const isDeleting = ref(false)
-const selectedFactIds = ref<Set<string>>(new Set())
+
+// Selection: keyed on fact id. Source is the props.kbFacts list.
+const factSelection = useBatchSelection<SessionFact, string>(
+  () => props.kbFacts ?? [],
+  (f) => f.id
+)
 
 // Computed
 const hasFiles = computed(() => props.fileStats && props.fileStats.total_files > 0)
 
-// Watch for facts changes to reset selection
+// Watch for facts changes to seed selection with already-important/preserve facts.
 watch(() => props.kbFacts, (newFacts) => {
-  selectedFactIds.value = new Set()
-  // Auto-select facts already marked as important
   if (newFacts) {
-    newFacts.forEach(fact => {
-      if (fact.important || fact.preserve) {
-        selectedFactIds.value.add(fact.id)
-      }
-    })
+    factSelection.setSelected(
+      newFacts.filter(f => f.important || f.preserve).map(f => f.id)
+    )
+  } else {
+    factSelection.clear()
   }
 }, { immediate: true })
 
-// KB Facts selection methods
 const toggleFactSelection = (factId: string) => {
-  const newSet = new Set(selectedFactIds.value)
-  if (newSet.has(factId)) {
-    newSet.delete(factId)
-  } else {
-    newSet.add(factId)
-  }
-  selectedFactIds.value = newSet
+  const fact = props.kbFacts?.find(f => f.id === factId)
+  if (fact) factSelection.toggle(fact)
 }
 
-const selectAllFacts = () => {
-  if (props.kbFacts) {
-    selectedFactIds.value = new Set(props.kbFacts.map(f => f.id))
-  }
-}
-
-const deselectAllFacts = () => {
-  selectedFactIds.value = new Set()
-}
+const selectAllFacts = () => factSelection.selectAll()
+const deselectAllFacts = () => factSelection.clear()
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const getKBFactsSummary = (): string => {
   const totalFacts = props.kbFacts?.length || 0
-  const preserveCount = selectedFactIds.value.size
+  const preserveCount = factSelection.selectedCount.value
   const deleteCount = totalFacts - preserveCount
 
   if (preserveCount === 0) {
@@ -378,7 +369,7 @@ const handleConfirm = () => {
 
   const fileOptions = buildFileOptions()
   // Issue #547: Pass selected fact IDs for preservation
-  emit('confirm', fileAction.value, fileOptions, Array.from(selectedFactIds.value))
+  emit('confirm', fileAction.value, fileOptions, Array.from(factSelection.selected.value))
 
   // Reset state
   setTimeout(() => {
@@ -387,7 +378,7 @@ const handleConfirm = () => {
     kbCategories.value = ''
     extractText.value = true
     sharedPath.value = ''
-    selectedFactIds.value = new Set()
+    factSelection.clear()
   }, 500)
 }
 
@@ -399,7 +390,7 @@ const handleCancel = () => {
   kbCategories.value = ''
   extractText.value = true
   sharedPath.value = ''
-  selectedFactIds.value = new Set()
+  factSelection.clear()
 
   emit('cancel')
 }
