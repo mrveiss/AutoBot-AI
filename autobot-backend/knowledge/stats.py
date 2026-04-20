@@ -37,7 +37,7 @@ class StatsMixin:
     """
 
     # Type hints for attributes from base class
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
     redis_client: "redis.Redis"
     vector_store: "ChromaVectorStore"
     _stats_key: str
@@ -51,7 +51,7 @@ class StatsMixin:
 
     async def _increment_stat(self, field: str, amount: int = 1) -> None:
         """Atomically increment a stats counter field."""
-        if self.aioredis_client:
+        if self._aioredis_client:
             try:
                 await self.redis().hincrby(self._stats_key, field, amount)
                 logger.debug("Incremented %s by %d", field, amount)
@@ -60,7 +60,7 @@ class StatsMixin:
 
     async def _decrement_stat(self, field: str, amount: int = 1) -> None:
         """Atomically decrement a stats counter field (prevents negative values)."""
-        if self.aioredis_client:
+        if self._aioredis_client:
             try:
                 # Use hincrby with negative value for atomic decrement
                 await self.redis().hincrby(self._stats_key, field, -amount)
@@ -70,7 +70,7 @@ class StatsMixin:
 
     async def _get_stat(self, field: str) -> int:
         """Get a single stats counter value (O(1))."""
-        if self.aioredis_client:
+        if self._aioredis_client:
             try:
                 value = await self.redis().hget(self._stats_key, field)
                 if value is not None:
@@ -89,7 +89,7 @@ class StatsMixin:
             Dict with counter fields as integers. Metadata fields (initialized_at,
             last_corrected) are excluded as they contain timestamp strings.
         """
-        if self.aioredis_client:
+        if self._aioredis_client:
             try:
                 stats = await self.redis().hgetall(self._stats_key)
                 result = {}
@@ -130,7 +130,7 @@ class StatsMixin:
 
     async def _initialize_stats_counters(self) -> None:
         """Initialize stats counters from existing data (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return
 
         try:
@@ -218,7 +218,7 @@ class StatsMixin:
 
     async def _verify_stats_consistency(self, auto_correct: bool = True) -> dict:
         """Verify stats counters are accurate (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"status": "error", "message": "Redis not available"}
 
         try:
@@ -400,7 +400,7 @@ class StatsMixin:
         try:
             stats = self._build_base_stats()
 
-            if self.aioredis_client:
+            if self._aioredis_client:
                 await self._populate_redis_stats(stats)
 
             await self._get_chromadb_stats(stats)

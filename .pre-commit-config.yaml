@@ -94,6 +94,24 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #5225 KB redis accessor migration.
+  # Blocks any reference to the old public ``aioredis_client`` attribute
+  # (renamed to ``_aioredis_client`` in #5225) and any reference to the new
+  # private ``_aioredis_client`` attribute from outside the KB class itself
+  # (narrow allowlist: ``knowledge/base.py`` lifecycle paths, sibling mixin
+  # type hints, test fakes). Use ``kb.redis()`` instead — the accessor raises
+  # ``RuntimeError`` on uninitialized access and was added in #5184 / PR #5218
+  # specifically to decouple cross-module callers from KB internals.
+  - repo: local
+    hooks:
+      - id: no-kb-aioredis-access
+        name: Block direct access to KB.aioredis_client / ._aioredis_client (#5225)
+        entry: tools/lint/check_no_kb_aioredis_access.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use kb.redis() instead of reaching into KB internals (#5225)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

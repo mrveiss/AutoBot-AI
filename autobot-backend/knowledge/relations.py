@@ -47,7 +47,7 @@ class RelationsMixin:
     """
     Mixin providing fact-to-fact relation operations for KnowledgeBase.
 
-    Requires ``self.aioredis_client`` (async Redis) and ``self.redis_client``
+    Requires ``self._aioredis_client`` (async Redis) and ``self.redis_client``
     (sync Redis) from KnowledgeBaseCore.
     """
 

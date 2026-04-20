@@ -93,7 +93,7 @@ class SearchMixin:
 
     # Type hints for attributes from base class
     vector_store: "ChromaVectorStore"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
     redis_client: "redis.Redis"
     initialized: bool
 
@@ -109,14 +109,14 @@ class SearchMixin:
     def _get_tag_filter(self) -> TagFilter:
         """Lazy initialization of tag filter."""
         if self._tag_filter is None:
-            self._tag_filter = TagFilter(getattr(self, "aioredis_client", None))
+            self._tag_filter = TagFilter(getattr(self, "_aioredis_client", None))
         return self._tag_filter
 
     def _get_keyword_searcher(self) -> KeywordSearcher:
         """Lazy initialization of keyword searcher."""
         if self._keyword_searcher is None:
             self._keyword_searcher = KeywordSearcher(
-                getattr(self, "aioredis_client", None)
+                getattr(self, "_aioredis_client", None)
             )
         return self._keyword_searcher
 

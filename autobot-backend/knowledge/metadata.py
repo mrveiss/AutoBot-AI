@@ -59,7 +59,7 @@ class MetadataMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     # Redis key patterns
     TEMPLATE_PREFIX = "metadata:template:"

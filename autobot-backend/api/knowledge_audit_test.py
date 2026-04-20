@@ -48,7 +48,7 @@ def _make_kb(audit_log=None):
 
     ``kb`` is a MagicMock so ``kb.redis()`` auto-creates a child mock; the RBAC
     tests here do not exercise any Redis-backed code paths, so no explicit
-    redis() or aioredis_client setup is required.
+    redis() or _aioredis_client setup is required.
     """
     kb = MagicMock()
     kb.audit_log = audit_log or _make_audit_log()

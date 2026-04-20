@@ -45,7 +45,7 @@ class CategoriesMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     # =========================================================================
     # CATEGORY CRUD OPERATIONS (Issue #411)
@@ -130,7 +130,7 @@ class CategoriesMixin:
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new category in the hierarchy (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -180,7 +180,7 @@ class CategoriesMixin:
         Returns:
             Dict with success status and category data
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -209,7 +209,7 @@ class CategoriesMixin:
         Returns:
             Dict with success status and category data
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -282,7 +282,7 @@ class CategoriesMixin:
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update category metadata (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -391,7 +391,7 @@ class CategoriesMixin:
         reassign_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delete a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -462,7 +462,7 @@ class CategoriesMixin:
         include_fact_counts: bool = True,
     ) -> Dict[str, Any]:
         """Get full category tree structure (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -494,7 +494,7 @@ class CategoriesMixin:
         Returns:
             Dict with list of child categories
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -543,7 +543,7 @@ class CategoriesMixin:
         Returns:
             Dict with list of ancestors from root to parent
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -610,7 +610,7 @@ class CategoriesMixin:
         self, fact_id: str, category_id: str
     ) -> Dict[str, Any]:
         """Assign a fact to a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -674,7 +674,7 @@ class CategoriesMixin:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """Get all facts in a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -814,7 +814,7 @@ class CategoriesMixin:
         self, path_pattern: str, limit: int = 50
     ) -> Dict[str, Any]:
         """Search categories by path pattern (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:

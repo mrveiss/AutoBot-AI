@@ -101,7 +101,7 @@ class KnowledgeBaseCore:
     def _init_connection_vars(self) -> None:
         """Initialize connection and state variables (Issue #398: extracted)."""
         self.redis_client: Optional[redis.Redis] = None
-        self.aioredis_client: Optional[aioredis.Redis] = None
+        self._aioredis_client: Optional[aioredis.Redis] = None
         self.vector_store: Optional[ChromaVectorStore] = None
         self.vector_index: Optional[VectorStoreIndex] = None
         self._async_chroma_collection = None
@@ -338,15 +338,15 @@ class KnowledgeBaseCore:
             # accidentally store the coroutine without awaiting it.
             from autobot_shared.redis_client import get_async_redis_client
 
-            self.aioredis_client = await get_async_redis_client(database="knowledge")
-            if self.aioredis_client is None:
+            self._aioredis_client = await get_async_redis_client(database="knowledge")
+            if self._aioredis_client is None:
                 raise Exception(
                     "Async Redis client initialization returned None "
                     "(circuit breaker open or Redis disabled)"
                 )
 
             # Test async connection
-            await self.aioredis_client.ping()
+            await self._aioredis_client.ping()
             logger.info("Knowledge Base async Redis client connected successfully")
 
         except Exception as e:
@@ -477,9 +477,9 @@ class KnowledgeBaseCore:
     async def _cleanup_on_failure(self):
         """Cleanup resources on initialization failure"""
         try:
-            if self.aioredis_client:
-                await self.aioredis_client.close()
-                self.aioredis_client = None
+            if self._aioredis_client:
+                await self._aioredis_client.close()
+                self._aioredis_client = None
 
             if self.redis_client:
                 await asyncio.to_thread(self.redis_client.close)
@@ -508,7 +508,7 @@ class KnowledgeBaseCore:
 
     async def _get_async_redis_client(self) -> Optional[aioredis.Redis]:
         """Get async Redis client for async operations (V1 compatibility)"""
-        return self.aioredis_client
+        return self._aioredis_client
 
     async def _init_redis_and_vector_store(self):
         """Initialize Redis connection and vector store asynchronously (V1 compatibility)"""
@@ -537,22 +537,22 @@ class KnowledgeBaseCore:
         """Return the async Redis client configured for knowledge-base persistence.
 
         Public accessor for cross-module callers so they don't have to reach
-        into the private ``aioredis_client`` attribute (#5184).
+        into the private ``_aioredis_client`` attribute (#5184, #5225).
 
         Raises:
             RuntimeError: If called before ``initialize()`` completed.
         """
-        if self.aioredis_client is None:
+        if self._aioredis_client is None:
             raise RuntimeError(
                 "KnowledgeBase.redis() called before initialize() completed"
             )
-        return self.aioredis_client
+        return self._aioredis_client
 
     async def ping_redis(self) -> str:
         """Test Redis connection"""
         self.ensure_initialized()
         try:
-            if self.aioredis_client:
+            if self._aioredis_client:
                 pong = await self.redis().ping()
                 return "healthy" if pong else "unhealthy"
             else:
@@ -580,7 +580,7 @@ class KnowledgeBaseCore:
 
     async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
         """Scan Redis keys with pattern using async client"""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             logger.warning("Async Redis client not available for key scanning")
             return []
 
@@ -615,7 +615,7 @@ class KnowledgeBaseCore:
         """Detect which embedding model was used for existing data.
         Issue #315: Refactored to use helper for reduced nesting.
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return None
 
         try:
@@ -635,9 +635,9 @@ class KnowledgeBaseCore:
         try:
             logger.info("Closing knowledge base connections...")
 
-            if self.aioredis_client:
-                await self.aioredis_client.close()
-                self.aioredis_client = None
+            if self._aioredis_client:
+                await self._aioredis_client.close()
+                self._aioredis_client = None
 
             if self.redis_client:
                 await asyncio.to_thread(self.redis_client.close)
