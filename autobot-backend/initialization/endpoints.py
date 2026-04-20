@@ -120,11 +120,8 @@ def register_root_endpoints(app: FastAPI) -> None:
         app: FastAPI application instance
     """
 
-    @app.api_route("/api/health", methods=["GET", "HEAD"])
-    @with_error_handling(category=ErrorCategory.SYSTEM)
-    async def root_health_check(request: Request):
-        """Health endpoint with per-service breakdown and capabilities (supports GET and HEAD)."""
-        state = request.app.state
+    def _health_payload(state: Any) -> Dict[str, Any]:
+        """Build the /api/health response body (shared by GET and HEAD)."""
         services = _build_services_status(state)
         ai_stack_ready = services.get("ai_stack") == "connected"
         ai_agents_ready = services.get("ai_stack_agents") == "ready"
@@ -138,6 +135,18 @@ def register_root_endpoints(app: FastAPI) -> None:
             "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
             "circuit_breakers": _get_circuit_breaker_states(),
         }
+
+    @app.get("/api/health", operation_id="root_health_check_get")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def root_health_check_get(request: Request):
+        """Health endpoint with per-service breakdown and capabilities."""
+        return _health_payload(request.app.state)
+
+    @app.head("/api/health", operation_id="root_health_check_head", include_in_schema=False)
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def root_health_check_head(request: Request):
+        """HEAD variant for liveness probes — FastAPI strips the body automatically."""
+        return _health_payload(request.app.state)
 
     @app.get("/api/health/ai-stack")
     @with_error_handling(category=ErrorCategory.SYSTEM)
