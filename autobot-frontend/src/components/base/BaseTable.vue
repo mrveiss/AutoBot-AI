@@ -229,13 +229,7 @@ const toggleSelectAll = () => {
 }
 
 const toggleRowSelection = (key: any) => {
-  if (rowSelection.selected.value.has(key)) {
-    rowSelection.deselectByKey(key)
-  } else {
-    // Look up the row object to feed select(); row objects are the items source.
-    const row = props.data.find(r => r[props.rowKey] === key)
-    if (row) rowSelection.select(row)
-  }
+  rowSelection.toggleByKey(key)
 }
 
 const handleRowClick = (row: any) => {
