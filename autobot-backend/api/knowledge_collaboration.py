@@ -92,12 +92,12 @@ class KnowledgeAccessResponse(BaseModel):
 
 
 async def _filter_fact_ids_by_scope(
-    fact_ids: List[str], scope: VisibilityLevel, aioredis_client
+    fact_ids: List[str], scope: VisibilityLevel, redis
 ) -> List[str]:
     """Helper for get_knowledge_by_scope. Ref: #1088."""
     filtered = []
     for fact_id in fact_ids:
-        fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+        fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
         if fact_data:
             metadata = json.loads(fact_data)
             if metadata.get("visibility") == scope:
@@ -106,12 +106,12 @@ async def _filter_fact_ids_by_scope(
 
 
 async def _fetch_facts_from_redis(
-    fact_ids: List[str], aioredis_client, include_title_only: bool = False
+    fact_ids: List[str], redis, include_title_only: bool = False
 ) -> List[Dict]:
     """Helper for get_knowledge_by_scope. Ref: #1088."""
     facts = []
     for fact_id in fact_ids:
-        fact_data = await aioredis_client.hgetall(f"fact:{fact_id}")
+        fact_data = await redis.hgetall(f"fact:{fact_id}")
         if fact_data:
             content = fact_data.get(b"content") or fact_data.get("content")
             metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
@@ -137,9 +137,9 @@ async def _fetch_facts_from_redis(
     return facts
 
 
-async def _fetch_and_verify_owner(fact_id: str, user_id: str, aioredis_client) -> Dict:
+async def _fetch_and_verify_owner(fact_id: str, user_id: str, redis) -> Dict:
     """Helper for update_knowledge_permissions. Ref: #1088."""
-    fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+    fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
     if not fact_data:
         raise HTTPException(status_code=404, detail="Fact not found")
     if isinstance(fact_data, bytes):
@@ -179,7 +179,7 @@ async def _persist_permissions_update(
     permissions_request: "UpdatePermissionsRequest",
     old_visibility: str,
     ownership_manager,
-    aioredis_client,
+    redis,
 ) -> None:
     """Helper for update_knowledge_permissions. Ref: #1088."""
     await ownership_manager.set_owner(
@@ -191,7 +191,7 @@ async def _persist_permissions_update(
         organization_id=permissions_request.organization_id,
         group_ids=permissions_request.group_ids or [],
     )
-    await aioredis_client.hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
+    await redis.hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
     logger.info(
         "Updated fact %s permissions: %s -> %s",
         fact_id,
@@ -200,9 +200,9 @@ async def _persist_permissions_update(
     )
 
 
-async def _fetch_fact_metadata(fact_id: str, aioredis_client) -> Dict:
+async def _fetch_fact_metadata(fact_id: str, redis) -> Dict:
     """Fetch and decode a fact's metadata hash from Redis. Ref: #1088."""
-    fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+    fact_data = await redis.hget(f"fact:{fact_id}", "metadata")
     if not fact_data:
         raise HTTPException(status_code=404, detail="Fact not found")
     if isinstance(fact_data, bytes):
@@ -246,10 +246,10 @@ def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
 
 
 async def _verify_fact_ownership(
-    fact_id: str, user_id: str, aioredis_client, action_label: str
+    fact_id: str, user_id: str, redis, action_label: str
 ) -> Dict:
     """Fetch metadata and assert the caller is the owner. Ref: #1088."""
-    metadata = await _fetch_fact_metadata(fact_id, aioredis_client)
+    metadata = await _fetch_fact_metadata(fact_id, redis)
     if metadata.get("owner_id") != user_id:
         raise HTTPException(
             status_code=403, detail=f"Only the owner can {action_label} knowledge"
@@ -601,7 +601,7 @@ async def update_knowledge_permissions(
             permissions_request=permissions_request,
             old_visibility=old_visibility,
             ownership_manager=kb.ownership_manager,
-            aioredis_client=kb.redis(),
+            redis=kb.redis(),
         )
 
         return {
