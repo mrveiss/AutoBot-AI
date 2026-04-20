@@ -336,6 +336,14 @@ export function useCodebaseExport(deps: {
   progressStatus: Ref<string>
   fetchWithAuth: typeof fetch
   getBackendUrl: () => Promise<string>
+  /**
+   * URL wrapper that appends `?source_id=<id>` for per-project scoping.
+   * #5266: previously missing \u2014 both `/report` and `/env-analysis/export`
+   * are source-scoped at the backend but the frontend was dropping the
+   * scope, silently falling back to `get_default_source_id()` (same
+   * bug class as #5111).
+   */
+  withSourceId: (url: string) => string
   notify: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void
   t: (key: string, params?: Record<string, unknown>) => string
 }) {
@@ -350,7 +358,11 @@ export function useCodebaseExport(deps: {
 
     try {
       const backendUrl = await deps.getBackendUrl()
-      const url = `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`
+      // #5266: wrap with withSourceId so per-project exports hit the
+      // scoped doc instead of the backend's get_default_source_id() fallback.
+      const url = deps.withSourceId(
+        `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`,
+      )
       const response = await deps.fetchWithAuth(url, {
         method: 'GET',
         headers: { 'Accept': 'text/markdown' },
@@ -383,8 +395,11 @@ export function useCodebaseExport(deps: {
   ): Promise<unknown> => {
     try {
       const backendUrl = await deps.getBackendUrl()
+      // #5266: wrap with withSourceId \u2014 same rationale as exportReport.
       const response = await deps.fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/env-analysis/export`,
+        deps.withSourceId(
+          `${backendUrl}/api/analytics/codebase/env-analysis/export`,
+        ),
         { method: 'GET', headers: { 'Content-Type': 'application/json' } },
       )
       if (response.ok) {
