@@ -59,4 +59,57 @@ describe('useKnowledgeFiles', () => {
       await expect(uploadKnowledgeFile(formData)).rejects.toThrow('Upload failed')
     })
   })
+
+  describe('reactive refs + managed upload (#5195)', () => {
+    it('should expose initial ref state as null/false/null', () => {
+      const { uploadResult, isUploading, error } = useKnowledgeFiles()
+
+      expect(uploadResult.value).toBe(null)
+      expect(isUploading.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('upload() should flip isUploading true while in-flight and populate uploadResult', async () => {
+      const mockResponse: UploadResponse = {
+        success: true,
+        file_path: '/uploads/x.pdf',
+        facts_added: 3,
+      }
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
+
+      const { uploadResult, isUploading, error, upload } = useKnowledgeFiles()
+
+      const formData = new FormData()
+      const promise = upload(formData)
+      expect(isUploading.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockResponse)
+      expect(uploadResult.value).toEqual(mockResponse)
+      expect(isUploading.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('upload() should populate error ref and reset isUploading on failure', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue(new Error('upload boom'))
+
+      const { uploadResult, isUploading, error, upload } = useKnowledgeFiles()
+
+      await expect(upload(new FormData())).rejects.toThrow('upload boom')
+      expect(uploadResult.value).toBe(null)
+      expect(isUploading.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('upload boom')
+    })
+
+    it('upload() error should wrap non-Error thrown value as Error instance', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue('raw string')
+
+      const { error, upload } = useKnowledgeFiles()
+
+      await expect(upload(new FormData())).rejects.toBeDefined()
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('raw string')
+    })
+  })
 })

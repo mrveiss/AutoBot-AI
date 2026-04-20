@@ -154,4 +154,97 @@ describe('useKnowledgeJobs', () => {
       }
     })
   })
+
+  describe('reactive refs + managed actions (#5195)', () => {
+    it('should expose initial ref state as null/false/null', () => {
+      const {
+        vectorizationStatus,
+        vectorizationResult,
+        isLoadingStatus,
+        isVectorizing,
+        error,
+      } = useKnowledgeJobs()
+
+      expect(vectorizationStatus.value).toBe(null)
+      expect(vectorizationResult.value).toBe(null)
+      expect(isLoadingStatus.value).toBe(false)
+      expect(isVectorizing.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('refreshStatus() should flip isLoadingStatus and populate vectorizationStatus', async () => {
+      const mockStatus: VectorizationStatusResponse = {
+        status: 'idle',
+        total_facts: 10,
+        vectorized_facts: 10,
+      }
+      vi.mocked(apiClient.get).mockResolvedValue(mockStatus)
+
+      const { vectorizationStatus, isLoadingStatus, error, refreshStatus } =
+        useKnowledgeJobs()
+
+      const promise = refreshStatus()
+      expect(isLoadingStatus.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockStatus)
+      expect(vectorizationStatus.value).toEqual(mockStatus)
+      expect(isLoadingStatus.value).toBe(false)
+      expect(error.value).toBe(null)
+    })
+
+    it('refreshStatus() should populate error ref and reset isLoadingStatus on failure', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('status boom'))
+
+      const { vectorizationStatus, isLoadingStatus, error, refreshStatus } =
+        useKnowledgeJobs()
+
+      await expect(refreshStatus()).rejects.toThrow('status boom')
+      expect(vectorizationStatus.value).toBe(null)
+      expect(isLoadingStatus.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('status boom')
+    })
+
+    it('runVectorization() should flip isVectorizing, populate vectorizationResult on success', async () => {
+      const mockResponse: VectorizationResponse = {
+        status: 'success',
+        message: 'ok',
+        successful: 50,
+        skipped: 0,
+        failed: 0,
+        total_processed: 50,
+      }
+      vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
+
+      const { vectorizationResult, isVectorizing, error, runVectorization } =
+        useKnowledgeJobs()
+
+      const promise = runVectorization(100, 1.0, false)
+      expect(isVectorizing.value).toBe(true)
+
+      const data = await promise
+      expect(data).toEqual(mockResponse)
+      expect(vectorizationResult.value).toEqual(mockResponse)
+      expect(isVectorizing.value).toBe(false)
+      expect(error.value).toBe(null)
+      // Verify params forwarded
+      expect(apiClient.post).toHaveBeenCalledWith(
+        expect.any(String),
+        { batch_size: 100, batch_delay: 1.0, skip_existing: false },
+        expect.any(Object)
+      )
+    })
+
+    it('runVectorization() error should set error ref as Error instance, not raw string', async () => {
+      vi.mocked(apiClient.post).mockRejectedValue('vector failure')
+
+      const { error, isVectorizing, runVectorization } = useKnowledgeJobs()
+
+      await expect(runVectorization()).rejects.toBeDefined()
+      expect(isVectorizing.value).toBe(false)
+      expect(error.value).toBeInstanceOf(Error)
+      expect(error.value?.message).toBe('vector failure')
+    })
+  })
 })
