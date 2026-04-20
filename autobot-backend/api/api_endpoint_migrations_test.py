@@ -2620,33 +2620,36 @@ class TestVectorizeExistingFactsEndpoint:
     """Test migrated POST /vectorize_facts endpoint"""
 
     def test_vectorize_existing_facts_has_decorator(self):
-        """Verify @with_error_handling decorator is applied"""
+        """Verify FastAPI route decorator is applied"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
-        assert "@with_error_handling" in source
-        assert "ErrorCategory.SERVER_ERROR" in source
-        assert 'error_code_prefix="KNOWLEDGE"' in source
+        # Issue #620 refactor removed @with_error_handling in favor of explicit
+        # HTTPException raises; only the @router.post decorator remains.
+        assert '@router.post("/vectorize_facts")' in source
 
     def test_vectorize_existing_facts_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
-        # Should have inner try block for batch processing loop (non-fatal errors)
+        # Issue #620 extracted batch processing to helpers; the endpoint itself
+        # contains no try/except blocks — error handling is explicit via
+        # HTTPException (tested in test_preserves_httpexception) and implicit
+        # via helper-internal try/except (tested in test_handles_inner_errors).
         try_count = source.count("try:")
-        assert try_count >= 1  # Inner try-catch for fact processing (non-fatal)
+        assert try_count == 0
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for KB not initialized"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
 
@@ -2658,34 +2661,37 @@ class TestVectorizeExistingFactsEndpoint:
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_batch_processing(self):
-        """Verify endpoint preserves batch processing logic"""
+        """Verify batch processing logic preserved (in _process_all_batches helper post-#620)"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import _process_all_batches
 
-        source = inspect.getsource(vectorize_existing_facts)
+        # Issue #620 extracted batch processing to _process_all_batches.
+        source = inspect.getsource(_process_all_batches)
 
-        # Should have batch processing logic
         assert "total_batches = (len(fact_keys) + batch_size - 1) // batch_size" in source
         assert "for batch_num in range(total_batches):" in source
         assert "await asyncio.sleep(batch_delay)" in source
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_handles_inner_errors(self):
-        """Verify endpoint handles inner errors with try-catch for non-fatal processing"""
+        """Verify inner error handling preserved (in _process_batch + _process_single_fact_safe helpers post-#620)"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import (
+            _process_batch,
+            _process_single_fact_safe,
+        )
 
-        source = inspect.getsource(vectorize_existing_facts)
+        # Issue #620 extracted inner loop to _process_batch (iterates over
+        # zipped (fact_key, fact_data, fact_id) tuples) and inner exception
+        # handling to _process_single_fact_safe.
+        batch_source = inspect.getsource(_process_batch)
+        assert "for fact_key, fact_data, fact_id in zip" in batch_source
 
-        # Should have inner try-catch for fact processing
-        assert "for fact_key in batch:" in source
-        assert "fact_data = await kb.redis().hgetall(fact_key)" in source
-        # Inner exception handling preserved
-        assert "except Exception as e:" in source
-        assert "failed_count += 1" in source
-        assert "logger.error" in source
+        single_source = inspect.getsource(_process_single_fact_safe)
+        assert "except Exception as e:" in single_source
+        assert "logger.error" in single_source
 
 
 class TestGetImportStatusEndpoint:
