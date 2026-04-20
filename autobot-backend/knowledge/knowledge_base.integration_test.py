@@ -43,7 +43,7 @@ class TestKnowledgeBaseRedisIntegration:
         try:
             test_keys = await kb._scan_redis_keys_async("fact:test_*")
             if test_keys:
-                await kb.aioredis_client.delete(*test_keys)
+                await kb.redis().delete(*test_keys)
         except Exception:
             pass
 
@@ -55,7 +55,7 @@ class TestKnowledgeBaseRedisIntegration:
         assert kb.redis_manager is not None
 
         # Verify connection works with ping
-        result = await kb.aioredis_client.ping()
+        result = await kb.redis().ping()
         assert result is True
 
     @pytest.mark.asyncio
@@ -89,7 +89,7 @@ class TestKnowledgeBaseRedisIntegration:
 
         # Verify data was actually stored in Redis
         fact_key = f"fact:{fact_id}"
-        fact_data = await kb.aioredis_client.hgetall(fact_key)
+        fact_data = await kb.redis().hgetall(fact_key)
 
         assert fact_data is not None
         assert fact_data.get("content") == test_content
@@ -331,7 +331,7 @@ class TestKnowledgeBaseRedisIntegration:
         assert kb.aioredis_client is initial_client
 
         # Verify connection is still healthy
-        assert await kb.aioredis_client.ping() is True
+        assert await kb.redis().ping() is True
 
     @pytest.mark.asyncio
     async def test_error_recovery_invalid_data(self, kb):
@@ -368,7 +368,7 @@ class TestKnowledgeBaseRedisIntegration:
         assert len(results) == num_operations
 
         # Verify connection pool is still healthy
-        assert await kb.aioredis_client.ping() is True
+        assert await kb.redis().ping() is True
 
         print(  # noqa: print
             f"\n✓ {num_operations} operations completed without pool exhaustion in {duration:.2f}s"
@@ -453,7 +453,7 @@ class TestKnowledgeBaseAsyncRedisManagerIntegration:
             await kb.store_fact(f"Pool metrics test {i}", {"test": "pool"})
 
         # Verify connection pool is working (no errors)
-        assert await kb.aioredis_client.ping() is True
+        assert await kb.redis().ping() is True
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_integration(self, kb):
@@ -485,7 +485,7 @@ class TestKnowledgeBasePerformanceIntegration:
         try:
             test_keys = await kb._scan_redis_keys_async("fact:perf_*")
             if test_keys:
-                await kb.aioredis_client.delete(*test_keys)
+                await kb.redis().delete(*test_keys)
         except Exception:
             pass
 

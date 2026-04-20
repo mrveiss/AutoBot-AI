@@ -25,11 +25,21 @@ class TestStatsCounterParsing:
         """Create a minimal StatsMixin instance for testing."""
         from knowledge.stats import StatsMixin
 
-        # Create a simple class that inherits from StatsMixin for testing
+        # Create a simple class that inherits from StatsMixin for testing.
+        # ``aioredis_client`` stays as an attribute (read by the guard in
+        # ``_get_all_stats``) and ``redis()`` returns the same mock so that
+        # ``self.redis().hgetall(...)`` in production resolves to the same
+        # AsyncMock the tests configure below. This matches the shim pattern
+        # used by ``_FakeKB`` in ``tests/test_knowledge_boards.py`` and keeps
+        # the suite working across the pending ``aioredis_client`` ->
+        # ``_aioredis_client`` rename (#5225).
         class TestStats(StatsMixin):
             def __init__(self):
                 self.aioredis_client = AsyncMock()
                 self._stats_key = "kb:stats"  # Required by _get_all_stats()
+
+            def redis(self):
+                return self.aioredis_client
 
         instance = TestStats()
         return instance
