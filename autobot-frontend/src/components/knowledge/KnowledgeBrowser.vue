@@ -4,6 +4,7 @@
     <KnowledgeMainCategories
       :categories="mainCategories"
       :population-states="populationStates"
+      :kb-connected="kbConnected"
       @select="selectMainCategory"
       @populate="handlePopulate"
       @import="() => router.push('/knowledge/upload')"
@@ -270,6 +271,11 @@ const updateDebouncedSearch = useDebounce((value: string) => {
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
 const mainCategories = ref<any[]>([])
+// Issue #5201: track backend KB connectivity so the UI can distinguish
+// "empty KB" (all counts 0, kb_connected=true) from "broken KB"
+// (kb_connected=false). Defaults to true so we don't flash the error
+// banner before the first fetch completes.
+const kbConnected = ref<boolean>(true)
 const categoryCounts = ref<Record<string, number>>({})
 const isVectorizing = ref(false)
 const showProgressModal = ref(false)
@@ -571,9 +577,16 @@ const loadMainCategories = async () => {
 
     if (data && data.categories) {
       mainCategories.value = data.categories
+      // Issue #5201: surface backend connectivity flag. Treat missing
+      // field as "connected" (true) to stay compatible with older
+      // backends that predate the field.
+      kbConnected.value = data.kb_connected !== false
     }
   } catch (err) {
     logger.error('Failed to load main categories:', err)
+    // Fetch itself failed — treat as broken KB so the UI shows the
+    // distinct error panel (#5201).
+    kbConnected.value = false
     // Set default categories if API fails
     mainCategories.value = [
       {

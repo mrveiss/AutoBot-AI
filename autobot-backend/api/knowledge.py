@@ -465,6 +465,7 @@ async def get_main_categories(
     return KnowledgeMainCategoriesResponse(
         categories=main_categories,
         total=len(main_categories),
+        kb_connected=redis_client is not None,
     )
 
 

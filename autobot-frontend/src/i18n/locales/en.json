@@ -2187,6 +2187,15 @@
   },
   "knowledge": {
     "title": "Knowledge Base",
+    "emptyState": {
+      "title": "Your knowledge base is empty",
+      "description": "Each category shows 0 facts because nothing has been indexed yet.",
+      "hint": "Click 'Populate' on any category card to seed it, or upload documents under User Knowledge."
+    },
+    "categoriesError": {
+      "title": "Knowledge base is unreachable",
+      "description": "Redis connection failed. Check that the backend has Redis running."
+    },
     "search": {
       "aiSynthesis": "Ai synthesis",
       "allCategories": "All categories",
