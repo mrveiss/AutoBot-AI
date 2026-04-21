@@ -41,6 +41,8 @@ from typing import Iterable, List, Tuple
 ALLOWLIST = {
     # The hook itself contains the patterns as strings — exclude it
     "tools/lint/check_no_utcnow_isoformat.py",
+    # The hook's test file uses the banned patterns as fixtures by design
+    "tools/lint/check_no_utcnow_isoformat_test.py",
     # The audit docs reference the patterns in code blocks
     "docs/developer/audits/datetime-parsing-audit.md",
     "docs/developer/audits/datetime-producer-audit.md",
@@ -48,7 +50,34 @@ ALLOWLIST = {
     # — not the banned `utcnow().isoformat()` pattern, but the regex is
     # defensive enough to flag it. Module is exempt by design.
     "autobot_shared/time_utils.py",
+    # Test deliberately exercises the recency-score handler against a naive
+    # timestamp (the test name is `test_naive_timestamp_handled`). Migrating
+    # the fixture would defeat the test purpose. See #5393.
+    "autobot-backend/knowledge/knowledge_context_suggestions_test.py",
 }
+
+# Path prefixes whose files cannot import `autobot_shared.time_utils` reliably
+# (standalone agent on remote nodes, ansible-synced agent code, infra log
+# forwarders). For violations in these paths, suggest the inline canonical
+# form instead of the helper. See PR #5384 (#5381) and #5397.
+INLINE_PATH_PREFIXES: Tuple[str, ...] = (
+    "autobot-slm-agent/",
+    "autobot-slm-backend/slm/agent/",
+    "autobot-slm-backend/ansible/roles/slm_agent/files/",
+    "autobot-infrastructure/shared/scripts/",
+)
+
+
+def _suggestion_for(rel_path: str) -> str:
+    """Return the canonical fix string appropriate for the file's deployment scope."""
+    posix = rel_path.replace("\\", "/")
+    if any(posix.startswith(p) for p in INLINE_PATH_PREFIXES):
+        return (
+            "`datetime.now(timezone.utc).isoformat()` (inline) — this component "
+            "lacks `autobot_shared` on path. See PR #5384."
+        )
+    return "`utc_timestamp()` from `autobot_shared.time_utils`."
+
 
 # Patterns are intentionally precise — this hook only prevents regression
 # of the #5178 migration, not the broader datetime.utcnow() backlog
@@ -57,14 +86,12 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
     (
         "isoformat",
         re.compile(r"datetime\.utcnow\(\)\.isoformat\("),
-        "Use `utc_timestamp()` from `autobot_shared.time_utils` instead. "
         "`datetime.utcnow().isoformat()` produces tz-naive strings that "
         "mis-compare against tz-aware datetimes (#5178).",
     ),
     (
         "z-suffix-isoformat",
         re.compile(r'datetime\.utcnow\(\)\.isoformat\(\)\s*\+\s*["\']Z["\']'),
-        "Use `utc_timestamp()` from `autobot_shared.time_utils` instead. "
         "`datetime.utcnow().isoformat() + \"Z\"` produces invalid ISO-8601 "
         "(microseconds + Z mutually exclusive) — fails `fromisoformat` on "
         "Python 3.10 (#5238).",
@@ -76,7 +103,6 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
         # Matches strftime calls with the ISO format and NO comma after
         # the format string (no time tuple passed).
         re.compile(r'time\.strftime\(\s*["\']%Y-%m-%dT[^"\']*["\']\s*\)'),
-        "Use `utc_timestamp()` from `autobot_shared.time_utils` instead. "
         "`time.strftime(\"%Y-%m-%dT...\")` with no time argument defaults to "
         "`time.localtime()` (LOCAL time, mislabeled as UTC) (#5178 audit).",
     ),
@@ -90,7 +116,12 @@ def _is_allowlisted(rel_path: str) -> bool:
 
 
 def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
-    """Return [(line_no, pattern_id, message)] of banned-pattern hits."""
+    """Return [(line_no, pattern_id, message)] of banned-pattern hits.
+
+    Message includes the path-aware fix suggestion (utc_timestamp() vs inline
+    pattern) so the contributor sees the right replacement for the file's
+    deployment scope. See #5397.
+    """
     try:
         rel = str(path.resolve().relative_to(repo_root))
     except ValueError:
@@ -102,11 +133,12 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return []
+    suggestion = _suggestion_for(rel)
     hits: List[Tuple[int, str, str]] = []
     for line_no, line in enumerate(text.splitlines(), start=1):
-        for pattern_id, regex, message in PATTERNS:
+        for pattern_id, regex, reason in PATTERNS:
             if regex.search(line):
-                hits.append((line_no, pattern_id, message))
+                hits.append((line_no, pattern_id, f"Use {suggestion} {reason}"))
     return hits
 
 
@@ -126,7 +158,17 @@ def _iter_target_files(args: List[str], repo_root: Path) -> Iterable[Path]:
         # Skip vendored / generated / external / vcs-ignored locations
         parts = p.relative_to(repo_root).parts
         if any(
-            part in {".venv", "venv", "node_modules", "__pycache__", ".git", "dist", "build"}
+            part
+            in {
+                ".venv",
+                "venv",
+                "node_modules",
+                "__pycache__",
+                ".git",
+                "dist",
+                "build",
+                ".worktrees",  # #5394: parallel-work git worktrees, not vendored code
+            }
             for part in parts
         ):
             continue
@@ -151,7 +193,7 @@ def main(argv: List[str]) -> int:
     if total_hits:
         print(
             f"\n[no-utcnow-isoformat] {total_hits} banned pattern(s) found. "
-            f"Use `utc_timestamp()` from `autobot_shared.time_utils` instead.",
+            f"See per-line fix suggestions above.",
             file=sys.stderr,
         )
         return 1
