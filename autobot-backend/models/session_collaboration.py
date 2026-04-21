@@ -13,6 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -213,7 +214,7 @@ class SessionCollaboration(Base):
         invitation = {
             "user_id": str(user_id),
             "permission": permission.value,
-            "invited_at": datetime.utcnow().isoformat(),
+            "invited_at": utc_timestamp(),
         }
 
         if expires_at:

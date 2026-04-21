@@ -17,7 +17,7 @@ import logging
 import re
 import shlex
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -1367,7 +1367,7 @@ class BlueGreenService:
                     "bg_deployment_id": bg_deployment_id,
                     "event_type": event_type,
                     "message": message,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
         except Exception as e:

@@ -89,6 +89,16 @@
             >
               <i class="fas fa-paperclip"></i>
             </button>
+            <!-- Issue #4414: multi-model comparison toggle -->
+            <button
+              @click="showComparePanel = !showComparePanel"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': showComparePanel }"
+              :title="$t('chat.compare.toggleTitle')"
+              :aria-pressed="showComparePanel"
+            >
+              <i class="fas fa-columns" aria-hidden="true"></i>
+            </button>
           </template>
         </ChatHeader>
 
@@ -114,6 +124,11 @@
             v-if="activeTab === 'chat'"
             :entries="cotEntries"
             :is-active="cotIsActive"
+            class="mx-2 mt-1"
+          />
+          <!-- Issue #4414: multi-model comparison panel -->
+          <MultiModelChat
+            v-if="showComparePanel && activeTab === 'chat'"
             class="mx-2 mt-1"
           />
           <ChatTabContent
@@ -170,7 +185,17 @@
 
       <!-- Agent-Loop Tool Approval Dialog (#4952) -->
       <!-- Shown when the agent loop publishes APPROVAL_REQUIRED for a sensitive tool -->
-      <div v-if="pendingToolApproval" class="tool-approval-overlay" role="dialog" aria-modal="true" :aria-label="$t('chat.interface.toolApprovalTitle')">
+      <div
+        v-if="pendingToolApproval"
+        ref="toolApprovalDialogRef"
+        class="tool-approval-overlay"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('chat.interface.toolApprovalTitle')"
+        tabindex="-1"
+        @keydown="onToolApprovalKeydown"
+        @keydown.escape="onToolDenied()"
+      >
         <div class="tool-approval-dialog">
           <div class="tool-approval-header">
             <i class="fas fa-shield-exclamation" aria-hidden="true"></i>
@@ -247,6 +272,10 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -285,6 +314,8 @@ import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
 // Issue #4952: agent-loop tool approval
 import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
+// Issue #4414: multi-model comparison
+import MultiModelChat from './MultiModelChat.vue'
 
 // i18n
 const { t } = useI18n()
@@ -342,6 +373,16 @@ watch(pendingToolApproval, (approval: PendingToolApproval | null) => {
   }
 }, { immediate: false })
 
+// Tool-approval dialog a11y kit (#5410). Escape denies (safer default
+// for a security prompt — avoids accidental approval via keyboard).
+const toolApprovalDialogRef = ref<HTMLElement | null>(null)
+const isToolApprovalOpen = computed(() => pendingToolApproval.value !== null)
+const { onKeydown: onToolApprovalKeydown } = useFocusTrap(toolApprovalDialogRef)
+useFocusRestore(isToolApprovalOpen)
+useBodyScrollLock(isToolApprovalOpen)
+const { focusFirst: focusToolApprovalFirst } = useInitialFocus(toolApprovalDialogRef)
+watch(isToolApprovalOpen, (open) => { if (open) focusToolApprovalFirst() }, { immediate: true })
+
 const onToolApproved = async (comment?: string): Promise<void> => {
   _stopCountdown()
   try {
@@ -395,6 +436,9 @@ const { showToast } = useToast()
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
+
+// Issue #4414: multi-model compare panel toggle
+const showComparePanel = ref(false)
 
 // Dialog states
 const showKnowledgeDialog = ref(false)

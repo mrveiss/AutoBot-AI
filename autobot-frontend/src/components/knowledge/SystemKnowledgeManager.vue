@@ -185,11 +185,15 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
+import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge';
+import { useManPages } from '@/composables/knowledge/useManPages';
+import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
+import { usePollingJob } from '@/composables/usePollingJob';
+import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
 import appConfig from '@/config/AppConfig.js';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BasePanel from '@/components/base/BasePanel.vue';
@@ -208,16 +212,23 @@ export default {
   setup() {
     const { t } = useI18n();
 
-    // Use the shared composable
+    // Domain composables (migrated from useKnowledgeBase BC shim in #5193).
+    // `formatKey` is now imported from @/utils/formatHelpers as an alias for
+    // `formatCategoryName` (snake_case/kebab-case → Title Case). It was
+    // previously destructured from the shim but never defined there —
+    // runtime `undefined` would have thrown in the template at line ~152.
     const {
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
-      pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
+    } = useMachineKnowledge();
+    const {
       populateManPages: populateManPagesAPI,
       populateAutoBotDocs: populateAutoBotDocsAPI,
+    } = useManPages();
+    const {
+      pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
       vectorizeFacts: vectorizeFactsAPI,
-      formatKey
-    } = useKnowledgeBase();
+    } = useKnowledgeJobs();
 
     // NEW: Use shared Pinia store instead of local state
     const knowledgeStore = useKnowledgeStore();
@@ -390,6 +401,68 @@ export default {
       }
     };
 
+    // Issue #5191: Managed job-status polling via usePollingJob
+    const refreshJob = usePollingJob(
+      (taskId) => pollJobStatusAPI(taskId),
+      {
+        intervalMs: 2000,
+        maxAttempts: 600, // up to 20 minutes at 2s intervals
+        isComplete: (r) => r?.status === 'SUCCESS' || r?.status === 'FAILURE',
+        onDone: async (statusResponse) => {
+          if (statusResponse.status === 'SUCCESS') {
+            progressPercent.value = 100;
+            progressMessage.value = 'Refresh complete!';
+
+            const result = statusResponse.result || {};
+            lastResult.value = {
+              status: 'success',
+              message: result.message || 'System knowledge refreshed successfully',
+              details: {
+                'Commands Indexed': result.commands_indexed || 0,
+                'Total Facts': result.total_facts || 0
+              }
+            };
+
+            commandsIndexed.value = result.commands_indexed || 0;
+            addLogEntry(`Indexed ${result.commands_indexed || 0} commands`, 'success');
+
+            await fetchStats();
+
+            setTimeout(() => {
+              progressMessage.value = '';
+              progressPercent.value = 0;
+              isRefreshing.value = false;
+            }, 3000);
+          } else {
+            // FAILURE
+            const errorMsg = statusResponse.error || 'Unknown error';
+            lastResult.value = {
+              status: 'error',
+              message: `System knowledge refresh failed: ${errorMsg}`
+            };
+            addLogEntry(`System knowledge refresh failed: ${errorMsg}`, 'error');
+            isRefreshing.value = false;
+            progressMessage.value = '';
+            progressPercent.value = 0;
+          }
+        }
+      }
+    );
+
+    // Mirror in-flight PENDING/PROGRESS updates into UI state
+    watch(refreshJob.data, (statusResponse) => {
+      if (!statusResponse) return;
+      logger.debug('Poll status:', statusResponse.status);
+      if (statusResponse.status === 'PENDING') {
+        progressMessage.value = 'Task queued, waiting to start...';
+        progressPercent.value = 5;
+      } else if (statusResponse.status === 'PROGRESS') {
+        const meta = statusResponse.meta || {};
+        progressMessage.value = meta.status || 'Processing...';
+        progressPercent.value = meta.current || 10;
+      }
+    });
+
     const refreshSystemKnowledge = async () => {
       if (isRefreshing.value) return;
 
@@ -401,8 +474,6 @@ export default {
       progressMessage.value = 'Starting background job...';
       progressPercent.value = 0;
       lastResult.value = null;
-
-      let pollInterval = null;
 
       try {
         addLogEntry('Starting comprehensive system knowledge refresh (background job)', 'info');
@@ -418,76 +489,10 @@ export default {
         progressMessage.value = 'Background job started. Polling for completion...';
         addLogEntry(`Background job started: ${taskId}`, 'info');
 
-        // Poll job status every 2 seconds
-        pollInterval = setInterval(async () => {
-          try {
-            const statusResponse = await pollJobStatusAPI(taskId);
-
-            logger.debug('Poll status:', statusResponse.status);
-
-            if (statusResponse.status === 'PENDING') {
-              progressMessage.value = 'Task queued, waiting to start...';
-              progressPercent.value = 5;
-
-            } else if (statusResponse.status === 'PROGRESS') {
-              // Update progress from backend
-              const meta = statusResponse.meta || {};
-              progressMessage.value = meta.status || 'Processing...';
-              progressPercent.value = meta.current || 10;
-
-            } else if (statusResponse.status === 'SUCCESS') {
-              // Job completed successfully
-              clearInterval(pollInterval);
-              progressPercent.value = 100;
-              progressMessage.value = 'Refresh complete!';
-
-              const result = statusResponse.result || {};
-              lastResult.value = {
-                status: 'success',
-                message: result.message || 'System knowledge refreshed successfully',
-                details: {
-                  'Commands Indexed': result.commands_indexed || 0,
-                  'Total Facts': result.total_facts || 0
-                }
-              };
-
-              commandsIndexed.value = result.commands_indexed || 0;
-              addLogEntry(`Indexed ${result.commands_indexed || 0} commands`, 'success');
-
-              // Refresh stats
-              await fetchStats();
-
-              // Clean up UI after 3 seconds
-              setTimeout(() => {
-                progressMessage.value = '';
-                progressPercent.value = 0;
-                isRefreshing.value = false;
-              }, 3000);
-
-            } else if (statusResponse.status === 'FAILURE') {
-              // Job failed
-              clearInterval(pollInterval);
-              const errorMsg = statusResponse.error || 'Unknown error';
-
-              lastResult.value = {
-                status: 'error',
-                message: `System knowledge refresh failed: ${errorMsg}`
-              };
-              addLogEntry(`System knowledge refresh failed: ${errorMsg}`, 'error');
-
-              isRefreshing.value = false;
-              progressMessage.value = '';
-              progressPercent.value = 0;
-            }
-
-          } catch (pollError) {
-            logger.error('Polling error:', pollError);
-            // Don't stop polling on transient errors - backend may be busy
-          }
-        }, 2000); // Poll every 2 seconds
+        refreshJob.start(taskId);
 
       } catch (error) {
-        if (pollInterval) clearInterval(pollInterval);
+        refreshJob.stop();
 
         let errorMessage = 'Failed to start system knowledge refresh';
         if (error instanceof Error) {

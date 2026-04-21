@@ -7,48 +7,45 @@
  *
  * Configuration duplicate detection analysis.
  * Extracted from useSpecializedAnalysis (Issue #2372).
+ * Migrated from useAnalyticsFetch to useFetchEndpoint (Issue #5208 POC).
  */
 
-import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import type {
   UseCodeIntelAnalysisDeps,
   ConfigDuplicatesResult,
 } from './codeIntelTypes'
-import { getApiBase } from '@/config/ssot-config'
 
-export function useConfigDuplicates(
-  deps: UseCodeIntelAnalysisDeps,
-) {
-  const { sourceIdQuery } = deps
+interface ConfigDuplicatesRaw {
+  status: string
+  duplicates_found?: number
+  duplicates?: ConfigDuplicatesResult['duplicates']
+  report?: string
+}
 
-  const {
-    data: configDuplicatesAnalysis,
-    loading: loadingConfigDuplicates,
-    error: configDuplicatesError,
-    load: _loadConfigDuplicates,
-  } = useAnalyticsFetch<ConfigDuplicatesResult>(
-    `${getApiBase()}/analytics/codebase/config-duplicates`,
-    (r) => {
-      if (r.status === 'success') {
-        return {
-          duplicates_found: (r.duplicates_found as number) || 0,
-          duplicates:
-            (r.duplicates as ConfigDuplicatesResult['duplicates']) ||
-            [],
-          report: (r.report as string) || '',
-        }
-      }
-      return undefined
+export function useConfigDuplicates(deps: UseCodeIntelAnalysisDeps) {
+  const { withSourceId } = deps
+
+  const endpoint = useFetchEndpoint<ConfigDuplicatesRaw, ConfigDuplicatesResult>(
+    {
+      path: '/api/analytics/codebase/config-duplicates',
+      scopeToSource: true,
+      pickData: (r) =>
+        r.status === 'success'
+          ? {
+              duplicates_found: r.duplicates_found ?? 0,
+              duplicates: r.duplicates ?? [],
+              report: r.report ?? '',
+            }
+          : null,
     },
+    { withSourceId },
   )
 
-  const loadConfigDuplicates = () =>
-    _loadConfigDuplicates(sourceIdQuery.value)
-
   return {
-    configDuplicatesAnalysis,
-    loadingConfigDuplicates,
-    configDuplicatesError,
-    loadConfigDuplicates,
+    configDuplicatesAnalysis: endpoint.data,
+    loadingConfigDuplicates: endpoint.loading,
+    configDuplicatesError: endpoint.error,
+    loadConfigDuplicates: endpoint.load,
   }
 }

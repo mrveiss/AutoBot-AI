@@ -8,7 +8,12 @@
     @click.self="$emit('close')"
     @keydown.escape="$emit('close')"
   >
-    <div ref="panelRef" class="entity-detail" tabindex="-1">
+    <div
+      ref="panelRef"
+      class="entity-detail"
+      tabindex="-1"
+      @keydown="onFocusTrapKeydown"
+    >
       <!-- Header -->
       <div class="detail-header">
         <div class="header-left">
@@ -122,14 +127,16 @@
 import {
   computed,
   onMounted,
-  onUnmounted,
   ref,
-  nextTick,
 } from 'vue'
 import {
   useKnowledgeGraph,
   type Entity,
 } from '@/composables/useKnowledgeGraph'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { getEntityTypeColor as getTypeColor } from '../constants'
 import RelationshipViewer from './RelationshipViewer.vue'
 
@@ -143,31 +150,11 @@ defineEmits<{
 }>()
 
 const panelRef = ref<HTMLElement | null>(null)
-let previouslyFocused: Element | null = null
-
-function trapFocus(e: KeyboardEvent): void {
-  if (e.key !== 'Tab' || !panelRef.value) return
-  const focusable = panelRef.value.querySelectorAll<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  )
-  if (focusable.length === 0) return
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', trapFocus)
-  if (previouslyFocused instanceof HTMLElement) {
-    previouslyFocused.focus()
-  }
-})
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(panelRef)
+useFocusRestore()
+// Mount-lifecycle = always-active. Component is v-if'd by parent on open/close.
+useBodyScrollLock(ref(true))
+const { focusFirst } = useInitialFocus(panelRef)
 
 const propertyEntries = computed(() => {
   return Object.entries(props.entity.properties || {})
@@ -179,12 +166,7 @@ function formatValue(value: unknown): string {
   return String(value)
 }
 
-onMounted(async () => {
-  previouslyFocused = document.activeElement
-  document.addEventListener('keydown', trapFocus)
-  await nextTick()
-  panelRef.value?.focus()
-})
+onMounted(focusFirst)
 </script>
 
 <style scoped>

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
@@ -151,7 +152,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
                 "success": False,
                 "error": "AI Stack unavailable",
                 "details": "Internal server error",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 

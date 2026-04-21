@@ -14,6 +14,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
+from autobot_shared.time_utils import utc_timestamp
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,7 +116,7 @@ class KnowledgeAuditLog:
             "organization_id": organization_id,
             "details": details or {},
             "ip_address": ip_address,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
 
         # Store event in Redis

@@ -19,7 +19,7 @@ import signal
 import socket
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -155,7 +155,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         conn.execute(
             "INSERT INTO event_buffer (timestamp, event_type, data) VALUES (?, ?, ?)",
-            (datetime.utcnow().isoformat(), event_type, json.dumps(data)),
+            (datetime.now(timezone.utc).isoformat(), event_type, json.dumps(data)),
         )
         conn.commit()
         conn.close()
@@ -493,7 +493,7 @@ class SLMAgent:
                     "node_id": self.node_id,
                     "commit": commit,
                     "is_code_source": True,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 async with session.post(
                     url,

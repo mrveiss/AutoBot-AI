@@ -50,6 +50,13 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from knowledge.schemas.stats import (
+    DetailedKnowledgeStats,
+    KnowledgeCategoriesResponse,
+    KnowledgeMainCategoriesResponse,
+    KnowledgeStatsBasic,
+)
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
@@ -267,6 +274,14 @@ async def get_knowledge_stats(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit ops-visible
+        # counter + warning so operators see the degradation.
+        logger.warning("get_knowledge_stats: KB uninitialized - returning offline stats")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="stats", reason="kb_uninit"
+        ).inc()
         return {
             "total_documents": 0,
             "total_chunks": 0,
@@ -321,29 +336,44 @@ async def test_main_categories(
     operation="get_knowledge_stats_basic",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats/basic")
+@router.get("/stats/basic", response_model=KnowledgeStatsBasic)
 async def get_knowledge_stats_basic(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeStatsBasic:
     """Get basic knowledge base statistics for quick display
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        return {"total_facts": 0, "total_vectors": 0, "status": "offline"}
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_stats_basic: KB uninitialized - returning offline stats"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="stats_basic", reason="kb_uninit"
+        ).inc()
+        return KnowledgeStatsBasic(
+            status="offline",
+            total_facts=0,
+            total_vectors=0,
+            categories=[],
+        )
 
     stats = await kb_to_use.get_stats()
 
     # Return lightweight basic stats
-    return {
-        "total_facts": stats.get("total_facts", 0),
-        "total_vectors": stats.get("total_vectors", 0),
-        "categories": stats.get("categories", []),
-        "status": "online" if stats.get("initialized", False) else "offline",
-    }
+    return KnowledgeStatsBasic(
+        total_facts=stats.get("total_facts", 0),
+        total_vectors=stats.get("total_vectors", 0),
+        categories=stats.get("categories", []),
+        status="online" if stats.get("initialized", False) else "offline",
+    )
 
 
 def _get_category_cache_keys(KnowledgeCategory) -> dict:
@@ -359,7 +389,7 @@ async def _get_or_compute_category_counts(
     kb, cache_keys: dict, get_category_for_source, category_counts: dict
 ) -> None:
     """Get cached counts or compute from facts (Issue #398: extracted)."""
-    cached_values = await kb.aioredis_client.mget(list(cache_keys.values()))
+    cached_values = await kb.redis().mget(list(cache_keys.values()))
     if all(v is not None for v in cached_values):
         # Use cached values
         for i, cat_id in enumerate(cache_keys.keys()):
@@ -376,7 +406,7 @@ async def _get_or_compute_category_counts(
         logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
-            await kb.aioredis_client.set(
+            await kb.redis().set(
                 cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
             )
 
@@ -402,15 +432,16 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     operation="get_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories/main")
+@router.get("/categories/main", response_model=KnowledgeMainCategoriesResponse)
 async def get_main_categories(
     current_user: dict = Depends(get_current_user),
     req: Request = None,
-):
+) -> KnowledgeMainCategoriesResponse:
     """Get the 3 main knowledge base categories with their metadata and stats.
 
     Issue #910: Available to all authenticated users (not admin-only).
     The 3 top-level categories are non-sensitive public metadata.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     from knowledge_categories import (
         CATEGORY_METADATA,
@@ -419,10 +450,30 @@ async def get_main_categories(
     )
 
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    has_redis = kb.aioredis_client is not None if kb else False
+    redis_client = None
+    if kb is not None:
+        try:
+            redis_client = kb.redis()
+        except RuntimeError:
+            redis_client = None
     logger.info(
-        "get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis
+        "get_main_categories - kb: %s, has_redis: %s",
+        kb is not None,
+        redis_client is not None,
     )
+    if redis_client is None:
+        # Issue #5319 / #5407: surface kb_connected=false as a log line +
+        # Prometheus counter so operators see the outage, not just the
+        # frontend banner.  reason="redis_down" - KB instance exists but
+        # its Redis connection is unreachable (infra page).
+        logger.warning(
+            "KB categories returning kb_connected=false - Redis unreachable"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="categories_main", reason="redis_down"
+        ).inc()
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -430,7 +481,7 @@ async def get_main_categories(
         KnowledgeCategory.USER_KNOWLEDGE: 0,
     }
 
-    if kb and kb.aioredis_client:
+    if redis_client is not None:
         logger.info("Attempting to get cached category counts...")
         try:
             cache_keys = _get_category_cache_keys(KnowledgeCategory)
@@ -441,7 +492,11 @@ async def get_main_categories(
             logger.error("Error categorizing facts: %s", e)
 
     main_categories = _build_main_categories(CATEGORY_METADATA, category_counts)
-    return {"categories": main_categories, "total": len(main_categories)}
+    return KnowledgeMainCategoriesResponse(
+        categories=main_categories,
+        total=len(main_categories),
+        kb_connected=redis_client is not None,
+    )
 
 
 @with_error_handling(
@@ -449,19 +504,29 @@ async def get_main_categories(
     operation="get_knowledge_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories")
+@router.get("/categories", response_model=KnowledgeCategoriesResponse)
 async def get_knowledge_categories(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeCategoriesResponse:
     """Get all knowledge base categories with fact counts
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        return {"categories": [], "total": 0}
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_categories: KB uninitialized - returning empty list"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="categories", reason="kb_uninit"
+        ).inc()
+        return KnowledgeCategoriesResponse(categories=[], total=0)
 
     # Get stats - await async method
     stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
@@ -512,7 +577,10 @@ async def get_knowledge_categories(
             "Could not fetch doc_indexer stats (non-critical): %s", doc_idx_err
         )
 
-    return {"categories": categories, "total": len(categories)}
+    return KnowledgeCategoriesResponse(
+        categories=categories,
+        total=len(categories),
+    )
 
 
 def _extract_add_text_fields(request: dict) -> tuple:
@@ -624,6 +692,13 @@ async def add_text_to_knowledge(
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_text_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="add_text", reason="kb_uninit"
+        ).inc()
         raise InternalError(
             "Knowledge base not initialized - please check logs for errors"
         )
@@ -876,6 +951,13 @@ async def add_facts_to_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_facts_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="facts_add", reason="kb_uninit"
+        ).inc()
         raise InternalError(
             "Knowledge base not initialized - please check logs for errors"
         )
@@ -963,6 +1045,13 @@ async def add_url_to_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_url_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="url_add", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     try:
@@ -1140,6 +1229,13 @@ async def upload_file_to_knowledge(
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("upload_file_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="upload", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1163,6 +1259,10 @@ async def upload_file_to_knowledge(
         raise HTTPException(
             status_code=400, detail="No text content could be extracted from file"
         )
+
+    # Issue #5064: sanitize uploaded document content against prompt injection
+    # before the text reaches the KB / embedding pipeline.
+    content = _sanitize_document(content, source="file_upload").sanitized_text
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
@@ -1326,6 +1426,13 @@ async def ingest_audio_url(
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("ingest_audio_url: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audio", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     logger.info(
@@ -1376,6 +1483,13 @@ async def upload_audio_file(
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("upload_audio_file: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audio_upload", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1455,6 +1569,15 @@ async def get_knowledge_health(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_health: KB uninitialized - returning unhealthy status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="health", reason="kb_uninit"
+        ).inc()
         return {
             "status": "unhealthy",
             "initialized": False,
@@ -1536,6 +1659,13 @@ async def get_knowledge_entries(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("get_knowledge_entries: KB uninitialized - returning empty list")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="entries", reason="kb_uninit"
+        ).inc()
         return _empty_entries_response(message="Knowledge base not initialized")
 
     logger.info("Getting knowledge entries: limit=%s, cursor=%s", limit, cursor)
@@ -1625,18 +1755,26 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     operation="get_detailed_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/detailed_stats")
+@router.get("/detailed_stats", response_model=DetailedKnowledgeStats)
 async def get_detailed_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> DetailedKnowledgeStats:
     """Get detailed knowledge base statistics with additional metrics.
 
     Issue #744: Requires admin authentication.
+    Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        return _create_offline_stats_response()
+        # Issue #5407: KB instance not initialized.
+        logger.warning("get_detailed_stats: KB uninitialized - returning offline stats")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="detailed_stats", reason="kb_uninit"
+        ).inc()
+        return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
     try:
@@ -1649,15 +1787,15 @@ async def get_detailed_stats(
     cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(
         all_facts_data
     )
-    return {
-        "status": "online" if basic_stats.get("initialized") else "offline",
-        "basic_stats": basic_stats,
-        "category_breakdown": cat_counts,
-        "source_breakdown": src_counts,
-        "type_breakdown": type_counts,
-        "size_metrics": _compute_size_metrics(sizes),
-        "rag_available": RAG_AVAILABLE,
-    }
+    return DetailedKnowledgeStats(
+        status="online" if basic_stats.get("initialized") else "offline",
+        basic_stats=basic_stats,
+        category_breakdown=cat_counts,
+        source_breakdown=src_counts,
+        type_breakdown=type_counts,
+        size_metrics=_compute_size_metrics(sizes),
+        rag_available=RAG_AVAILABLE,
+    )
 
 
 @with_error_handling(
@@ -1729,6 +1867,15 @@ async def get_man_pages_summary(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_man_pages_summary: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_summary", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1801,6 +1948,15 @@ async def initialize_machine_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "initialize_machine_knowledge: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="machine_knowledge_initialize", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1844,6 +2000,15 @@ async def integrate_man_pages(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "integrate_man_pages: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_integrate", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1880,6 +2045,13 @@ async def search_man_pages(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("search_man_pages: KB uninitialized - returning empty results")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_search", reason="kb_uninit"
+        ).inc()
         return {"results": [], "total_results": 0, "query": query}
 
     logger.info("Searching man pages: '%s' (limit=%s)", query, limit)
@@ -1941,6 +2113,13 @@ async def clear_all_knowledge(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="clear_all", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "items_removed": 0,
@@ -2184,6 +2363,13 @@ async def get_facts_by_category(
     """
     kb = await get_or_create_knowledge_base(req.app)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_facts_by_category: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="facts_by_category", reason="kb_uninit"
+        ).inc()
         _raise_kb_unavailable()
 
     cached_result, cache_key = await _check_facts_cache(kb, category, limit)
@@ -2623,6 +2809,13 @@ async def browse_documentation(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("browse_documentation: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_browse", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2676,6 +2869,15 @@ async def get_documentation_categories(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning(
+            "get_documentation_categories: KB uninitialized - raising 503"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_categories", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2737,6 +2939,13 @@ async def get_documentation_stats(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_documentation_stats: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_stats", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     all_docs = await _get_indexed_docs_from_redis(kb)
@@ -2862,6 +3071,91 @@ async def control_documentation_watcher(
             "success": False,
             "message": "Documentation watcher not available",
         }
+
+
+# ===== PER-ORG LLM + EMBEDDING MODEL CONFIG (Issue #4451) =====
+# Admin-only endpoints for reading and writing an organization's persisted
+# LLM provider, LLM model, and embedding model. Config is resolved via the
+# fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
+
+
+class OrgKnowledgeConfigPayload(BaseModel):
+    """Per-org LLM + embedding model config payload (Issue #4451)."""
+
+    llm_provider: Optional[str] = Field(default=None, max_length=64)
+    llm_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)
+
+
+def _resolve_target_org_id(
+    current_user: dict, override_org_id: Optional[str]
+) -> Optional[str]:
+    """Pick the org_id a config request should target.
+
+    Admins can target another org via ``?org_id=`` query param. Non-admins
+    always read/write their own org. A missing ``org_id`` means single-org
+    mode — the service uses the ``__default__`` sentinel.
+    """
+    if override_org_id:
+        role = (current_user or {}).get("role", "")
+        if role not in ("admin", "platform_admin", "superadmin"):
+            raise HTTPException(
+                status_code=403, detail="Only admins may target another org"
+            )
+        return override_org_id
+    return (current_user or {}).get("org_id")
+
+
+@router.get("/org-config")
+async def get_org_model_config(
+    org_id: Optional[str] = Query(default=None, max_length=128),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the org's persisted model config with SSOT-resolved defaults.
+
+    The response always contains a non-null ``effective`` payload (org
+    config merged over SSOT defaults) and a ``stored`` payload showing what
+    was actually persisted (may be ``null`` when the org has never set a
+    preference).
+    """
+    from services.knowledge.org_knowledge_config import (
+        get_org_knowledge_config_service,
+    )
+
+    target_org = _resolve_target_org_id(current_user, org_id)
+    service = get_org_knowledge_config_service()
+    stored = await service.get(target_org)
+    effective = await service.get_effective(target_org)
+    return {
+        "org_id": target_org or "__default__",
+        "stored": stored.model_dump() if stored else None,
+        "effective": effective.model_dump(),
+    }
+
+
+@router.put("/org-config")
+async def set_org_model_config(
+    payload: OrgKnowledgeConfigPayload,
+    org_id: Optional[str] = Query(default=None, max_length=128),
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Persist the org's LLM + embedding model config (admin only)."""
+    from services.knowledge.org_knowledge_config import (
+        OrgKnowledgeConfig,
+        get_org_knowledge_config_service,
+    )
+
+    target_org = _resolve_target_org_id(current_user, org_id)
+    service = get_org_knowledge_config_service()
+    stored = await service.set(target_org, OrgKnowledgeConfig(**payload.model_dump()))
+    effective = await service.get_effective(target_org)
+    return {
+        "org_id": target_org or "__default__",
+        "stored": stored.model_dump(),
+        "effective": effective.model_dump(),
+    }
 
 
 # ===== MAINTENANCE ENDPOINTS =====

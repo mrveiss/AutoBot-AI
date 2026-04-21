@@ -91,7 +91,7 @@ def get_orchestrator(
         diagnostics: Diagnostics instance
 
     Returns:
-        Orchestrator: Orchestrator instance configured with all dependencies
+        Orchestrator: instance configured with all dependencies
     """
     # Lazy import to reduce startup time
     from orchestrator import Orchestrator
@@ -197,18 +197,6 @@ def get_cached_orchestrator(config: ConfigManager = Depends(get_config)):
     return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
 
-def get_redis_client():
-    """
-    Dependency injection provider for Redis client (synchronous).
-
-    Returns:
-        Redis client instance (sync)
-    """
-    from autobot_shared.redis_client import get_redis_client as _get_redis_client
-
-    return _get_redis_client()
-
-
 async def get_async_redis_client(database: str = "main"):
     """
     Dependency injection provider for async Redis client.
@@ -233,7 +221,6 @@ KnowledgeBaseDep = Depends(get_knowledge_base)
 LLMInterfaceDep = Depends(get_llm_interface)
 OrchestratorDep = Depends(get_orchestrator)
 SecurityLayerDep = Depends(get_security_layer)
-RedisClientDep = Depends(get_redis_client)
 
 # Cached versions
 CachedKnowledgeBaseDep = Depends(get_cached_knowledge_base)

@@ -119,7 +119,11 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "openMainMenu": "Open main menu",
-    "operations": "عملیات"
+    "operations": "عملیات",
+    "applicationError": "Application Error",
+    "unexpectedError": "An unexpected error occurred",
+    "loadingTimeout": "Loading Timed Out",
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
   },
   "agent": {
     "registry": {
@@ -1376,6 +1380,25 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
+      }
+    },
+    "hardcodes": {
+      "title": "مقادیر کدنویسی‌شده",
+      "values": "مقدار",
+      "totalValues": "تعداد کل مقادیر",
+      "highLabel": "بالا",
+      "mediumLabel": "متوسط",
+      "lowLabel": "پایین",
+      "uniqueTypes": "انواع یکتا",
+      "variable": "متغیر",
+      "value": "مقدار",
+      "suggestedEnvVar": "متغیر محیطی پیشنهادی",
+      "showingOf": "نمایش {shown} از {total}",
+      "emptyMessage": "هیچ مقدار کدنویسی‌شده‌ای یافت نشد",
+      "severityGroups": {
+        "high": "شدت بالا",
+        "medium": "شدت متوسط",
+        "low": "شدت پایین"
       }
     },
     "problems": {

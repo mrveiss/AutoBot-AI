@@ -23,6 +23,7 @@ import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
+from autobot_shared.time_utils import utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,7 @@ class ComplianceManager:
         """
         return {
             "event_id": str(uuid4()),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "event_type": event_type.value,
             "user_id": user_id,
             "action": action,
@@ -718,7 +719,7 @@ class ComplianceManager:
             # Log violation
             violation_event = {
                 "event_id": str(uuid4()),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
                 "event_type": "compliance_violation",
                 "original_event_id": audit_event["event_id"],
                 "violation": violation,
@@ -804,7 +805,7 @@ class ComplianceManager:
         report = {
             "framework": framework.value,
             "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "statistics": await self._gather_compliance_statistics(
                 framework, start_date, end_date
             ),

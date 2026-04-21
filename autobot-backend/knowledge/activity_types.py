@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
+from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
 
 
@@ -53,7 +54,7 @@ class TerminalActivity(BaseModel):
         default_factory=dict,
         description="Additional metadata (shell type, env vars, etc.)",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
     class Config:
         json_schema_extra = {
@@ -100,7 +101,7 @@ class FileActivity(BaseModel):
         default_factory=dict,
         description="Additional metadata (permissions, owner, etc.)",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
     class Config:
         json_schema_extra = {
@@ -151,7 +152,7 @@ class BrowserActivity(BaseModel):
         default_factory=dict,
         description="Additional metadata (status code, cookies, etc.)",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
     class Config:
         json_schema_extra = {
@@ -199,7 +200,7 @@ class DesktopActivity(BaseModel):
         default_factory=dict,
         description="Additional metadata (app name, OCR results, etc.)",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
     class Config:
         json_schema_extra = {
@@ -252,7 +253,7 @@ class SecretUsage(BaseModel):
         default_factory=dict,
         description="Additional metadata (IP, user agent, etc.)",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
     class Config:
         json_schema_extra = {

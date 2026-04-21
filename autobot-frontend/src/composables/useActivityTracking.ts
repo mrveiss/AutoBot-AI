@@ -7,7 +7,7 @@
  * Combines activity logging with WebSocket broadcasting for multi-user sessions.
  */
 
-import { computed, onMounted, onUnmounted, type ComputedRef, type Ref } from 'vue'
+import { computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type ComputedRef, type Ref } from 'vue'
 import {
   useSessionActivityLogger,
   type ActivityType,
@@ -299,24 +299,28 @@ export function useActivityTracking(): UseActivityTrackingReturn {
   // Auto-sync activities on interval
   let syncInterval: ReturnType<typeof setInterval> | null = null
 
-  onMounted(() => {
-    // Start periodic sync
-    syncInterval = setInterval(() => {
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      // Start periodic sync
+      syncInterval = setInterval(() => {
+        activityLogger.syncActivitiesToBackend()
+      }, 30000) // Every 30 seconds
+
+      logger.debug('[Issue #874] Activity tracking initialized')
+    })
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (syncInterval) {
+        clearInterval(syncInterval)
+        syncInterval = null
+      }
+
+      // Final sync before unmount
       activityLogger.syncActivitiesToBackend()
-    }, 30000) // Every 30 seconds
-
-    logger.debug('[Issue #874] Activity tracking initialized')
-  })
-
-  onUnmounted(() => {
-    if (syncInterval) {
-      clearInterval(syncInterval)
-      syncInterval = null
-    }
-
-    // Final sync before unmount
-    activityLogger.syncActivitiesToBackend()
-  })
+    })
+  }
 
   return {
     activities,

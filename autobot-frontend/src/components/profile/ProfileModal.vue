@@ -4,7 +4,17 @@
 <!-- Author: mrveiss -->
 <template>
   <div v-if="isOpen" class="modal-overlay" @click="handleClose">
-    <div class="modal-content" @click.stop role="dialog" aria-modal="true" aria-labelledby="profile-title">
+    <div
+      ref="dialogRef"
+      class="modal-content"
+      @click.stop
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="profile-title"
+      tabindex="-1"
+      @keydown="onFocusTrapKeydown"
+      @keydown.escape="handleClose"
+    >
       <div class="modal-header">
         <h2 id="profile-title">{{ $t('profile.title') }}</h2>
         <button @click="handleClose" class="close-button" :aria-label="$t('profile.closeAria')">&times;</button>
@@ -209,17 +219,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
-defineProps<{
+const props = defineProps<{
   isOpen: boolean
 }>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'isOpen'))
+useBodyScrollLock(toRef(props, 'isOpen'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.isOpen, (open) => { if (open) focusFirst() }, { immediate: true })
 
 const emit = defineEmits<{
   close: []
@@ -412,7 +433,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: var(--spacing-neg-px);
   transition: color var(--duration-150), border-color var(--duration-150);
 }
 

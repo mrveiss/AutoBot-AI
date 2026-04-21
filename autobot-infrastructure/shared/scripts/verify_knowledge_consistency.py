@@ -29,9 +29,18 @@ from config import ConfigManager
 from knowledge_base import KnowledgeBase
 from utils.redis_client import get_redis_client
 
+# Wire in the canonical chunker so the embedding-model consistency check
+# at `verify_embedding_model_consistency()` can actually verify the
+# chunker (#5396). Optional: falls back to ASSUMED_COMPATIBLE if the
+# backend is not on sys.path (e.g. running the script against a partial
+# deployment).
+try:
+    from utils.semantic_chunker import AutoBotSemanticChunker as SemanticChunker
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - deployment-topology dependent
+    SemanticChunker = None
+
 # Initialize unified config
 config = ConfigManager()
-# from utils.semantic_chunker import SemanticChunker  # Skip if not available
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -147,12 +156,38 @@ class KnowledgeConsistencyVerifier:
                 kb_embedding_model = expected_model
                 logger.info("✅ Using default embedding model: %s", expected_model)
 
-            # 3. Verify semantic chunker uses same model (skip if not available)
-            try:
-                # Check if semantic chunker is configured properly
-                logger.info("📝 Semantic chunker consistency check: ASSUMED_COMPATIBLE")
-            except Exception as e:
-                logger.warning("Could not verify semantic chunker: %s", e)
+            # 3. Verify semantic chunker uses same model (#5396: was ASSUMED_COMPATIBLE
+            # stub — now performs an actual embedding-model comparison).
+            if SemanticChunker is None:
+                logger.info(
+                    "📝 Semantic chunker consistency check: SKIPPED "
+                    "(SemanticChunker not importable from this deployment)"
+                )
+            else:
+                try:
+                    chunker = SemanticChunker()
+                    chunker_model = getattr(chunker, "embedding_model_name", None)
+                    if chunker_model and chunker_model != kb_embedding_model:
+                        self.critical_errors.append(
+                            f"CRITICAL: Chunker embedding model {chunker_model!r} "
+                            f"does not match KB model {kb_embedding_model!r}"
+                        )
+                        logger.error(
+                            "❌ Chunker/KB embedding-model mismatch: %s vs %s",
+                            chunker_model,
+                            kb_embedding_model,
+                        )
+                        return False
+                    logger.info(
+                        "✅ Semantic chunker consistency: %s",
+                        chunker_model or "no embedding_model_name attr",
+                    )
+                except (ImportError, AttributeError, RuntimeError, OSError) as e:
+                    # SemanticChunker() can raise on missing config,
+                    # failed model load, or Redis-init failure.
+                    # Log + continue instead of aborting the whole
+                    # consistency script (#5441).
+                    logger.warning("Could not verify semantic chunker: %s", e)
 
             # 4. Check Redis vector schema consistency
             try:

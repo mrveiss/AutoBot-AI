@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import get_cost_tracker
 
 
@@ -117,7 +118,7 @@ async def get_usage_by_user_all(
     users = await tracker.get_all_user_costs()
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "users": users,
         "total_users": len(users),
     }
@@ -244,7 +245,7 @@ async def export_usage_csv(
     Issue #1807: CSV export for billing/reporting.
     """
     tracker = get_cost_tracker()
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = now_utc() - timedelta(days=days)
 
     records = await tracker.get_recent_usage(limit=10000)
     filtered = [

@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class ThreatDetectionLearner:
         field = "tp" if is_true_positive else "fp"
         try:
             self._redis.hincrby(key, field, 1)
-            self._redis.hset(key, "last_seen", datetime.utcnow().isoformat())
+            self._redis.hset(key, "last_seen", utc_timestamp())
             logger.debug(
                 "Recorded outcome pattern=%s tp=%s", pattern_id, is_true_positive
             )
@@ -229,7 +230,7 @@ class ThreatDetectionLearner:
         """
         pruned = 0
         flagged = 0
-        cutoff = datetime.utcnow() - timedelta(days=_INACTIVE_DAYS)
+        cutoff = now_utc() - timedelta(days=_INACTIVE_DAYS)
 
         try:
             pattern_keys = self._redis.keys(_OUTCOME_KEY_PREFIX + "*")

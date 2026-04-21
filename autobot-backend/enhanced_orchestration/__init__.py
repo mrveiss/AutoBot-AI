@@ -2,22 +2,21 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Enhanced Orchestration Package
+Enhanced Orchestration Package — re-exports only.
 
 Issue #381: Extracted from enhanced_multi_agent_orchestrator.py god class refactoring.
-Provides advanced orchestration system with improved agent coordination.
+Issue #4048: EnhancedMultiAgentOrchestrator inlined here from orchestrator.py.
+Issue #5040: EnhancedMultiAgentOrchestrator merged into the single Orchestrator conductor.
+             This package now re-exports types and sub-components only.
 
+Sub-modules:
 - types.py: Enums and dataclasses (AgentCapability, ExecutionStrategy, AgentTask, etc.)
 - execution_strategies.py: Strategy implementations (sequential, parallel, pipeline, etc.)
 - workflow_planning.py: Workflow planning, building, and utilities
+- success_criteria.py: Structured success criteria evaluation
 """
 
 from .execution_strategies import ExecutionStrategyHandler
-from .orchestrator import (
-    EnhancedMultiAgentOrchestrator,
-    create_and_execute_workflow,
-    enhanced_orchestrator,
-)
 from .success_criteria import (
     CriteriaResult,
     EvaluationResult,
@@ -34,6 +33,9 @@ from .types import (
     WorkflowPlan,
 )
 from .workflow_planning import WorkflowPlanner
+
+# Backward compatibility alias
+_FALLBACK_TIERS = FALLBACK_TIERS
 
 __all__ = [
     # Types and enums
@@ -53,8 +55,4 @@ __all__ = [
     "CriteriaResult",
     "EvaluationResult",
     "SuccessCriteriaEvaluator",
-    # Issue #3393: orchestrator moved from enhanced_multi_agent_orchestrator.py
-    "EnhancedMultiAgentOrchestrator",
-    "enhanced_orchestrator",
-    "create_and_execute_workflow",
 ]

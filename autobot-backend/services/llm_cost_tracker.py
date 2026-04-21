@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
@@ -462,7 +463,7 @@ class LLMCostTracker:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=utc_timestamp(),
             session_id=session_id,
             user_id=user_id,
             agent_id=agent_id,
@@ -948,7 +949,7 @@ class LLMCostTracker:
                 json.dumps(
                     {
                         "budget_monthly_cents": budget_cents,
-                        "updated_at": datetime.utcnow().isoformat(),
+                        "updated_at": utc_timestamp(),
                     }
                 ),
             )

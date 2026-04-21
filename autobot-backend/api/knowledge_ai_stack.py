@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
@@ -440,7 +441,7 @@ async def _store_single_fact_with_semaphore(
                     "source": source,
                     "category": category,
                     "extraction_confidence": fact.get("confidence", 0.5),
-                    "extracted_at": datetime.utcnow().isoformat(),
+                    "extracted_at": utc_timestamp(),
                 },
             )
         except Exception as e:
@@ -710,7 +711,7 @@ async def get_enhanced_stats(
                 "local_knowledge_base": local_stats,
                 "ai_stack_insights": ai_stats,
                 "enhanced_capabilities": True,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -740,7 +741,7 @@ async def enhanced_knowledge_health(
     try:
         health_status = {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "components": {},
         }
 
@@ -769,6 +770,6 @@ async def enhanced_knowledge_health(
             content={
                 "status": "unhealthy",
                 "error": "Internal server error",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )

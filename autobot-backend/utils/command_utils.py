@@ -28,8 +28,9 @@ import asyncio
 import logging
 from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+
+from autobot_shared.time_utils import utc_timestamp as get_timestamp
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
@@ -74,11 +75,6 @@ class StreamChunk:
     content: str
     chunk_type: str  # "stdout", "stderr"
     is_final: bool = False
-
-
-def get_timestamp() -> str:
-    """Get current timestamp in ISO format."""
-    return datetime.now(tz=timezone.utc).isoformat()
 
 
 async def execute_shell_command(command: str) -> Dict[str, Any]:

@@ -259,6 +259,24 @@
   --spacing-24: 6rem;
   --spacing-32: 8rem;
 
+  /* Sub-half-unit micro spacing — used in dense UI (badges, chips, voice controls).
+   * Unused (micro-1, micro-2, micro-6) removed in #5036 audit.
+   * Remaining values are rem-based, so they scale with user font size. */
+  --spacing-micro-3: 0.2rem;   /* ~3.2px */
+  --spacing-micro-4: 0.3rem;   /* ~4.8px */
+  --spacing-micro-5: 0.4rem;   /* ~6.4px */
+
+  /* Semantic accessibility tokens */
+  --touch-target-min: 44px; /* WCAG 2.5.8 minimum touch target size */
+
+  /* Negative spacing tokens — used for border-overlap, tab underline alignment */
+  --spacing-neg-px: -1px;
+  --spacing-neg-2px: -2px;
+  --spacing-neg-4px: -4px;
+  --spacing-neg-8px: -8px;
+  --spacing-neg-40px: -40px;
+  --spacing-neg-0-5: -0.5rem;
+
   /* Semantic spacing aliases */
   --spacing-xs: var(--spacing-1);
   --spacing-sm: var(--spacing-2);

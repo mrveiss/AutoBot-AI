@@ -13,7 +13,7 @@ __all__ = [
     "research_agent",
     "get_chat_agent",
     "get_rag_agent",
-    "get_agent_orchestrator",
+    "get_distributed_agent_coordinator",
     "AgentType",
     "ClassificationAgent",
     "get_enhanced_system_commands_agent",

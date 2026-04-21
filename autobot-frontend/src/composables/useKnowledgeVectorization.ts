@@ -7,10 +7,11 @@
  */
 
 import { ref, computed } from 'vue'
-import { useKnowledgeBase } from './useKnowledgeBase'
+import { useKnowledgeJobs } from './knowledge/useKnowledgeJobs'
+import { usePollingJob } from './usePollingJob'
+import { useBatchSelection } from './useBatchSelection'
 import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useDebounce } from './useTimeout'
@@ -50,13 +51,10 @@ export interface VectorizationProgress {
 }
 
 export function useKnowledgeVectorization() {
-  const { vectorizeFacts, getVectorizationStatus } = useKnowledgeBase()
+  const { vectorizeFacts, getVectorizationStatus } = useKnowledgeJobs()
 
   // State
   const documentStates = ref<Map<string, DocumentVectorizationState>>(new Map())
-  const selectedDocuments = ref<Set<string>>(new Set())
-  const isPolling = ref(false)
-  const pollInterval = ref<number | null>(null)
   const globalProgress = ref<VectorizationProgress>({
     total: 0,
     completed: 0,
@@ -67,12 +65,20 @@ export function useKnowledgeVectorization() {
   // Request deduplication cache (Issue #4006)
   const requestCache = new Map<string, CachedRequest>()
 
-  // Computed
-  const hasSelection = computed(() => selectedDocuments.value.size > 0)
+  // Batch selection state (#5192). This composable never owned a reactive list
+  // of document IDs — selection was always driven by caller-supplied IDs — so
+  // we wire `useBatchSelection` against an empty items source and expose
+  // id-centric shims below. The shared Set<Key> state, toggle/select/deselect
+  // primitives, and selectedCount derivation are reused.
+  const selection = useBatchSelection<string, string>(ref<string[]>([]))
 
-  const selectionCount = computed(() => selectedDocuments.value.size)
-
-  const selectedDocumentsList = computed(() => Array.from(selectedDocuments.value))
+  // Preserve the existing public API shape (Ref<Set<string>>, string[]).
+  // `selection.selected` is typed `Readonly<Ref<Set<string>>>` because we
+  // instantiated `useBatchSelection<string, string>` above.
+  const selectedDocuments = selection.selected
+  const selectionCount = selection.selectedCount
+  const hasSelection = computed(() => selection.selectedCount.value > 0)
+  const selectedDocumentsList = computed<string[]>(() => Array.from(selection.selected.value))
 
   const canVectorizeSelection = computed(() => {
     return selectedDocumentsList.value.some(docId => {
@@ -130,11 +136,10 @@ export function useKnowledgeVectorization() {
   const fetchDocumentStatus = async (documentId: string): Promise<VectorizationStatus> => {
     try {
       // Query actual backend status
-      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
+      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
         fact_ids: [documentId],
         use_cache: true
       })
-      const data = await parseApiResponse(response)
 
       if (data?.statuses?.[documentId]) {
         const status: VectorizationStatus = data.statuses[documentId].vectorized ? 'vectorized' : 'pending'
@@ -191,11 +196,10 @@ export function useKnowledgeVectorization() {
         for (let i = 0; i < documentIds.length; i += batchSize) {
           const batch = documentIds.slice(i, i + batchSize)
 
-          const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
+          const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
             fact_ids: batch,
             use_cache: true
           })
-          const data = await parseApiResponse(response)
 
           if (data?.statuses) {
             // Update cache with all statuses, including document names if provided (Issue #165)
@@ -291,52 +295,32 @@ export function useKnowledgeVectorization() {
   }
 
   // ==================== BATCH SELECTION MANAGEMENT ====================
+  // Thin id-centric shims around `useBatchSelection` (#5192) to preserve this
+  // composable's historical public API. The underlying state lives on
+  // `selection` declared above.
 
+  const toggleDocumentSelection = (documentId: string) => selection.toggle(documentId)
+  const selectDocument = (documentId: string) => selection.select(documentId)
+  const deselectDocument = (documentId: string) => selection.deselect(documentId)
   /**
-   * Toggle document selection
-   */
-  const toggleDocumentSelection = (documentId: string) => {
-    if (selectedDocuments.value.has(documentId)) {
-      selectedDocuments.value.delete(documentId)
-    } else {
-      selectedDocuments.value.add(documentId)
-    }
-  }
-
-  /**
-   * Select document
-   */
-  const selectDocument = (documentId: string) => {
-    selectedDocuments.value.add(documentId)
-  }
-
-  /**
-   * Deselect document
-   */
-  const deselectDocument = (documentId: string) => {
-    selectedDocuments.value.delete(documentId)
-  }
-
-  /**
-   * Select all documents
+   * Add the given document IDs to the current selection. Additive (existing
+   * selections are preserved). Uses a single `setSelected()` assignment so the
+   * cost is O(n + m) rather than O(n · m) — a per-id `selection.select()` loop
+   * copies the backing Set on every call, which makes 10k-id selections take
+   * ~12 s (#5412).
    */
   const selectAll = (documentIds: string[]) => {
-    documentIds.forEach(id => selectedDocuments.value.add(id))
+    // #5412: O(n+m) additive bulk-add. Docstring says "existing selections
+    // preserved" — so we merge the new ids into the existing selection
+    // and assign once. (#5366's prior fix was also O(n) but silently
+    // changed selectAll to replacement semantics, which violates the
+    // docstring and may break callers that rely on incremental selection.)
+    const merged = new Set<string>(selection.selected.value)
+    for (const id of documentIds) merged.add(id)
+    selection.setSelected(merged)
   }
-
-  /**
-   * Deselect all documents
-   */
-  const deselectAll = () => {
-    selectedDocuments.value.clear()
-  }
-
-  /**
-   * Check if document is selected
-   */
-  const isDocumentSelected = (documentId: string): boolean => {
-    return selectedDocuments.value.has(documentId)
-  }
+  const deselectAll = () => selection.clear()
+  const isDocumentSelected = (documentId: string): boolean => selection.isSelected(documentId)
 
   // ==================== VECTORIZATION OPERATIONS ====================
 
@@ -354,13 +338,9 @@ export function useKnowledgeVectorization() {
       const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
       // Call backend API to vectorize the fact with proper timeout
-      // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
+      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
         timeout: knowledgeTimeout
       })
-
-      // Parse JSON response (handles both ApiClient parsed JSON)
-      const data = await parseApiResponse(response)
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -379,11 +359,9 @@ export function useKnowledgeVectorization() {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
         // Use knowledge timeout for job status polling as well
-        // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-        const jobResponse = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
+        const jobData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
-        const jobData = await parseApiResponse(jobResponse)
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job
@@ -428,12 +406,11 @@ export function useKnowledgeVectorization() {
   ): Promise<{ succeeded: string[], failed: string[] }> => {
     const knowledgeTimeout = appConfig.getTimeout('knowledge')
     const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_documents`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_documents`, {
       document_ids: documentIds
     }, {
       timeout: batchTimeout
     })
-    const data = await parseApiResponse(response)
 
     const succeeded: string[] = []
     const failed: string[] = []
@@ -538,26 +515,39 @@ export function useKnowledgeVectorization() {
 
   // ==================== STATUS POLLING ====================
 
+  // Issue #5191: Back status polling with usePollingJob for auto-cleanup + race protection.
+  type StatusResult = Awaited<ReturnType<typeof getVectorizationStatus>>
+
+  const applyStatusUpdate = (status: StatusResult | null) => {
+    if (!status) return
+    globalProgress.value = {
+      total: status.total_facts || 0,
+      completed: status.vectorized_facts || 0,
+      failed: 0,
+      inProgress: status.pending_vectorization || 0
+    }
+  }
+
+  const fetchStatus = async (): Promise<StatusResult | null> => {
+    const status = await getVectorizationStatus()
+    applyStatusUpdate(status ?? null)
+    return status ?? null
+  }
+
+  // Mirrors the polling job's lifecycle; allows callers to configure intervalMs on each start.
+  const isPolling = ref(false)
+  let statusJob: ReturnType<typeof usePollingJob<StatusResult | null>> | null = null
+
   /**
-   * Poll vectorization status from backend
+   * Poll vectorization status from backend (standalone — one-shot status fetch).
+   * Preserved for direct invocation by consumers that want a single status read.
+   * Does NOT start or drive the polling loop.
    */
   const pollStatus = async () => {
     try {
-      const status = await getVectorizationStatus()
-
-      if (status) {
-        // Update global progress using correct property names
-        globalProgress.value = {
-          total: status.total_facts || 0,
-          completed: status.vectorized_facts || 0,
-          failed: 0, // Not provided by backend, calculate from document states if needed
-          inProgress: status.pending_vectorization || 0
-        }
-
-        // Stop polling if complete
-        if (status.status === 'completed' || status.status === 'idle') {
-          stopPolling()
-        }
+      const status = await fetchStatus()
+      if (status && (status.status === 'completed' || status.status === 'idle')) {
+        stopPolling()
       }
     } catch (error) {
       logger.error('Failed to poll vectorization status:', error)
@@ -565,22 +555,33 @@ export function useKnowledgeVectorization() {
   }
 
   /**
-   * Start polling for status updates
+   * Start polling for status updates.
+   * No-op if already polling (idempotent, preserves legacy contract).
    */
   const startPolling = (intervalMs: number = 2000) => {
     if (isPolling.value) return
 
+    statusJob = usePollingJob<StatusResult | null>(fetchStatus, {
+      intervalMs,
+      maxAttempts: Number.MAX_SAFE_INTEGER, // lifecycle is caller-managed
+      isComplete: (status) =>
+        status?.status === 'completed' || status?.status === 'idle',
+      onDone: () => {
+        isPolling.value = false
+      }
+    })
+
     isPolling.value = true
-    pollInterval.value = window.setInterval(pollStatus, intervalMs)
+    statusJob.start('')
   }
 
   /**
    * Stop polling for status updates
    */
   const stopPolling = () => {
-    if (pollInterval.value) {
-      clearInterval(pollInterval.value)
-      pollInterval.value = null
+    if (statusJob) {
+      statusJob.stop()
+      statusJob = null
     }
     isPolling.value = false
   }

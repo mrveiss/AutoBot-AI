@@ -44,10 +44,14 @@ def _make_audit_log():
 
 
 def _make_kb(audit_log=None):
-    """Return a mock knowledge base with an audit_log."""
+    """Return a mock knowledge base with an audit_log.
+
+    ``kb`` is a MagicMock so ``kb.redis()`` auto-creates a child mock; the RBAC
+    tests here do not exercise any Redis-backed code paths, so no explicit
+    redis() or _aioredis_client setup is required.
+    """
     kb = MagicMock()
     kb.audit_log = audit_log or _make_audit_log()
-    kb.aioredis_client = MagicMock()
     return kb
 
 
@@ -59,6 +63,8 @@ def _make_kb(audit_log=None):
 @pytest.mark.asyncio
 async def test_org_audit_log_admin_allowed():
     """Admin role can access org audit log."""
+    from autobot_shared.models.pagination import PaginationParams
+
     from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u1", "org_id": "org1", "role": "admin"}
@@ -69,7 +75,9 @@ async def test_org_audit_log_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_organization_audit_log(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb),
+            current_user=user,
+            pagination=PaginationParams(limit=50, offset=0),
         )
 
     assert result["organization_id"] == "org1"
@@ -79,6 +87,8 @@ async def test_org_audit_log_admin_allowed():
 @pytest.mark.asyncio
 async def test_org_audit_log_org_admin_allowed():
     """org_admin role can access org audit log."""
+    from autobot_shared.models.pagination import PaginationParams
+
     from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u2", "org_id": "org1", "role": "org_admin"}
@@ -89,7 +99,9 @@ async def test_org_audit_log_org_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_organization_audit_log(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb),
+            current_user=user,
+            pagination=PaginationParams(limit=50, offset=0),
         )
 
     assert result["organization_id"] == "org1"
@@ -215,7 +227,7 @@ async def test_compliance_summary_org_admin_allowed():
         new=AsyncMock(return_value=kb),
     ):
         result = await get_compliance_summary(
-            request=_make_request(kb), current_user=user
+            request=_make_request(kb), current_user=user, days=30
         )
 
     assert "summary_period_days" in result

@@ -101,7 +101,7 @@ class KnowledgeBaseCore:
     def _init_connection_vars(self) -> None:
         """Initialize connection and state variables (Issue #398: extracted)."""
         self.redis_client: Optional[redis.Redis] = None
-        self.aioredis_client: Optional[aioredis.Redis] = None
+        self._aioredis_client: Optional[aioredis.Redis] = None
         self.vector_store: Optional[ChromaVectorStore] = None
         self.vector_index: Optional[VectorStoreIndex] = None
         self._async_chroma_collection = None
@@ -338,15 +338,15 @@ class KnowledgeBaseCore:
             # accidentally store the coroutine without awaiting it.
             from autobot_shared.redis_client import get_async_redis_client
 
-            self.aioredis_client = await get_async_redis_client(database="knowledge")
-            if self.aioredis_client is None:
+            self._aioredis_client = await get_async_redis_client(database="knowledge")
+            if self._aioredis_client is None:
                 raise Exception(
                     "Async Redis client initialization returned None "
                     "(circuit breaker open or Redis disabled)"
                 )
 
             # Test async connection
-            await self.aioredis_client.ping()
+            await self._aioredis_client.ping()
             logger.info("Knowledge Base async Redis client connected successfully")
 
         except Exception as e:
@@ -477,9 +477,9 @@ class KnowledgeBaseCore:
     async def _cleanup_on_failure(self):
         """Cleanup resources on initialization failure"""
         try:
-            if self.aioredis_client:
-                await self.aioredis_client.close()
-                self.aioredis_client = None
+            if self._aioredis_client:
+                await self._aioredis_client.close()
+                self._aioredis_client = None
 
             if self.redis_client:
                 await asyncio.to_thread(self.redis_client.close)
@@ -508,7 +508,7 @@ class KnowledgeBaseCore:
 
     async def _get_async_redis_client(self) -> Optional[aioredis.Redis]:
         """Get async Redis client for async operations (V1 compatibility)"""
-        return self.aioredis_client
+        return self._aioredis_client
 
     async def _init_redis_and_vector_store(self):
         """Initialize Redis connection and vector store asynchronously (V1 compatibility)"""
@@ -533,12 +533,27 @@ class KnowledgeBaseCore:
                 "or get instance via get_knowledge_base() factory function."
             )
 
+    def redis(self) -> aioredis.Redis:
+        """Return the async Redis client configured for knowledge-base persistence.
+
+        Public accessor for cross-module callers so they don't have to reach
+        into the private ``_aioredis_client`` attribute (#5184, #5225).
+
+        Raises:
+            RuntimeError: If called before ``initialize()`` completed.
+        """
+        if self._aioredis_client is None:
+            raise RuntimeError(
+                "KnowledgeBase.redis() called before initialize() completed"
+            )
+        return self._aioredis_client
+
     async def ping_redis(self) -> str:
         """Test Redis connection"""
         self.ensure_initialized()
         try:
-            if self.aioredis_client:
-                pong = await self.aioredis_client.ping()
+            if self._aioredis_client:
+                pong = await self.redis().ping()
                 return "healthy" if pong else "unhealthy"
             else:
                 return "no_client"
@@ -565,13 +580,13 @@ class KnowledgeBaseCore:
 
     async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
         """Scan Redis keys with pattern using async client"""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             logger.warning("Async Redis client not available for key scanning")
             return []
 
         try:
             keys = []
-            async for key in self.aioredis_client.scan_iter(match=pattern):
+            async for key in self.redis().scan_iter(match=pattern):
                 if isinstance(key, bytes):
                     keys.append(key.decode("utf-8"))
                 else:
@@ -600,13 +615,13 @@ class KnowledgeBaseCore:
         """Detect which embedding model was used for existing data.
         Issue #315: Refactored to use helper for reduced nesting.
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return None
 
         try:
             # Look for model metadata in existing facts
-            async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
-                metadata_json = await self.aioredis_client.hget(key, "metadata")
+            async for key in self.redis().scan_iter(match="fact:*", count=10):
+                metadata_json = await self.redis().hget(key, "metadata")
                 model = _extract_embedding_model_from_metadata(metadata_json)
                 if model:
                     return model
@@ -620,9 +635,9 @@ class KnowledgeBaseCore:
         try:
             logger.info("Closing knowledge base connections...")
 
-            if self.aioredis_client:
-                await self.aioredis_client.close()
-                self.aioredis_client = None
+            if self._aioredis_client:
+                await self._aioredis_client.close()
+                self._aioredis_client = None
 
             if self.redis_client:
                 await asyncio.to_thread(self.redis_client.close)
@@ -641,7 +656,9 @@ class KnowledgeBaseCore:
     def __del__(self):
         """Destructor to ensure cleanup"""
         # Only log, don't perform async operations in __del__
-        if self.initialized:
+        # Use getattr so __new__'d instances (tests that skip __init__) don't
+        # raise AttributeError during GC (#5357).
+        if getattr(self, "initialized", False):
             logger.debug(
                 "KnowledgeBase instance deleted while still initialized - "
                 "consider calling await close() explicitly"

@@ -13,8 +13,7 @@
  */
 
 import { ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -66,6 +65,54 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
   const realTimeEnabled = ref(false)
   const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null)
 
+  // --- Endpoints (#5257) ---------------------------------------------------
+  // All but `duplicatesEndpoint` are non-codebase (quality / debt /
+  // performance / monitoring / communication). Default scopeToSource: false
+  // applies. pickData returns the raw response so per-loader synthesis can
+  // access nested fields (health_score, breakdown, patterns_enabled, etc.).
+
+  type Raw = Record<string, unknown>
+
+  const commPatternsEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/analytics/communication/patterns',
+    pickData: (r) => r,
+    label: 'Communication patterns',
+  })
+
+  const qualityHealthEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/quality/health-score',
+    pickData: (r) => r,
+    label: 'Quality health score',
+  })
+
+  const duplicatesEndpoint = useFetchEndpoint<Raw, Raw>(
+    {
+      path: '/api/analytics/codebase/duplicates',
+      scopeToSource: true,
+      pickData: (r) => r,
+      label: 'Codebase duplicates',
+    },
+    { withSourceId: deps.withSourceId },
+  )
+
+  const debtSummaryEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/debt/summary',
+    pickData: (r) => r,
+    label: 'Technical debt summary',
+  })
+
+  const performanceSummaryEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/performance/summary',
+    pickData: (r) => r,
+    label: 'Performance summary',
+  })
+
+  const monitoringStatusEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/monitoring/status',
+    pickData: (r) => r,
+    label: 'Monitoring status',
+  })
+
   const loadSystemOverview = async () => {
     try {
       const ok = await dashboardTask.start()
@@ -105,123 +152,114 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
   }
 
   const loadCommunicationPatterns = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/communication/patterns`)
-
-      if (!response.ok) {
-        throw new Error(`Status ${response.status}`)
-      }
-
-      const result = await response.json()
-
-      const wsActivity = result.websocket_activity || {}
-      const apiPatterns = result.api_patterns || []
-      const totalCalls = result.total_api_calls || 0
-      const uniqueEndpoints = result.unique_endpoints || 0
-
-      const wsConnections = Object.keys(wsActivity).length || 0
-
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const apiFrequency = apiPatterns.length > 0
-        ? Math.round(apiPatterns.reduce(
-          (sum: number, p: any) => sum + (p.frequency || 0), 0,
-        ) / Math.max(apiPatterns.length, 1))
-        : totalCalls
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-
-      const avgResponseTime = result.avg_response_time || 0
-      const estimatedDataRate = Math.round((totalCalls * avgResponseTime * 10) / 100) / 10
-
-      communicationPatterns.value = {
-        websocket_connections: wsConnections,
-        api_call_frequency: apiFrequency,
-        data_transfer_rate: estimatedDataRate,
-        unique_endpoints: uniqueEndpoints,
-      }
-    } catch (error: unknown) {
-      logger.error('loadCommunicationPatterns failed:', error)
+    await commPatternsEndpoint.load()
+    if (commPatternsEndpoint.error.value || !commPatternsEndpoint.data.value) {
       communicationPatterns.value = null
+      return
+    }
+    const result = commPatternsEndpoint.data.value as Record<string, unknown>
+
+    const wsActivity = (result.websocket_activity as Record<string, unknown>) || {}
+    const apiPatterns = (result.api_patterns as Array<Record<string, unknown>>) || []
+    const totalCalls = (result.total_api_calls as number) || 0
+    const uniqueEndpoints = (result.unique_endpoints as number) || 0
+
+    const wsConnections = Object.keys(wsActivity).length || 0
+
+    const apiFrequency = apiPatterns.length > 0
+      ? Math.round(apiPatterns.reduce(
+        (sum: number, p) => sum + ((p.frequency as number) || 0), 0,
+      ) / Math.max(apiPatterns.length, 1))
+      : totalCalls
+
+    const avgResponseTime = (result.avg_response_time as number) || 0
+    const estimatedDataRate = Math.round((totalCalls * avgResponseTime * 10) / 100) / 10
+
+    communicationPatterns.value = {
+      websocket_connections: wsConnections,
+      api_call_frequency: apiFrequency,
+      data_transfer_rate: estimatedDataRate,
+      unique_endpoints: uniqueEndpoints,
     }
   }
 
   const loadCodeQuality = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
+    // Three parallel loads; each endpoint tolerates !ok silently by
+    // returning data.value = null. Downstream synthesis handles missing
+    // fields with `??` fallbacks.
+    await Promise.all([
+      qualityHealthEndpoint.load(),
+      duplicatesEndpoint.load(),
+      debtSummaryEndpoint.load(),
+    ])
+    const healthData = qualityHealthEndpoint.data.value as Record<string, unknown> | null
+    const duplicatesData = duplicatesEndpoint.data.value as Record<string, unknown> | null
+    const debtData = debtSummaryEndpoint.data.value as Record<string, unknown> | null
 
-      const healthResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-      const healthData = healthResponse.ok ? await healthResponse.json() : null
-
-      const duplicatesResponse = await fetchWithAuth(
-        deps.withSourceId(`${backendUrl}/api/analytics/codebase/duplicates`),
-      )
-      const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
-
-      const debtResponse = await fetchWithAuth(`${backendUrl}/api/debt/summary`)
-      const debtData = debtResponse.ok ? await debtResponse.json() : null
-
-      if (healthData?.status === 'no_data' && debtData?.status === 'no_data') {
-        codeQuality.value = null
-        logger.debug('No code quality data - run indexing first')
-        return
-      }
-
-      const testCoverage = healthData?.breakdown?.testability || 50
-      const performanceScore = healthData?.breakdown?.performance || 0
-      const overallScore = healthData?.health_score || performanceScore
-
-      let duplicateCount = 0
-      if (duplicatesData?.status === 'success') {
-        duplicateCount = duplicatesData.total_duplicates || duplicatesData.count || 0
-      }
-
-      const technicalDebt = debtData?.total_debt_hours || debtData?.total_items || 0
-
-      codeQuality.value = {
-        overall_score: Math.round(overallScore),
-        test_coverage: Math.round(testCoverage),
-        code_duplicates: duplicateCount,
-        technical_debt: technicalDebt,
-      }
-    } catch (error: unknown) {
-      logger.error('loadCodeQuality failed:', error)
+    if (healthData?.status === 'no_data' && debtData?.status === 'no_data') {
       codeQuality.value = null
+      logger.debug('No code quality data - run indexing first')
+      return
+    }
+
+    const breakdown = (healthData?.breakdown as Record<string, number>) || {}
+    const testCoverage = breakdown.testability || 50
+    const performanceScore = breakdown.performance || 0
+    const overallScore = (healthData?.health_score as number) || performanceScore
+
+    let duplicateCount = 0
+    if (duplicatesData?.status === 'success') {
+      duplicateCount =
+        (duplicatesData.total_duplicates as number) ||
+        (duplicatesData.count as number) ||
+        0
+    }
+
+    const technicalDebt =
+      (debtData?.total_debt_hours as number) ||
+      (debtData?.total_items as number) ||
+      0
+
+    codeQuality.value = {
+      overall_score: Math.round(overallScore),
+      test_coverage: Math.round(testCoverage),
+      code_duplicates: duplicateCount,
+      technical_debt: technicalDebt,
     }
   }
 
   const loadPerformanceMetrics = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
+    // qualityHealthEndpoint is shared with loadCodeQuality — re-loading is
+    // cheap and keeps the two paths decoupled (caller doesn't have to know
+    // what the other already fetched).
+    await Promise.all([
+      performanceSummaryEndpoint.load(),
+      monitoringStatusEndpoint.load(),
+      qualityHealthEndpoint.load(),
+    ])
+    const summaryData = performanceSummaryEndpoint.data.value as Record<string, unknown> | null
+    const monitoringData = monitoringStatusEndpoint.data.value as Record<string, unknown> | null
+    const qualityData = qualityHealthEndpoint.data.value as Record<string, unknown> | null
 
-      const summaryResponse = await fetchWithAuth(`${backendUrl}/api/performance/summary`)
-      const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
+    if (summaryData?.status === 'no_data' && qualityData?.status === 'no_data') {
+      performanceMetrics.value = null
+      logger.debug('No performance metrics data - run indexing first')
+      return
+    }
 
-      const monitoringResponse = await fetchWithAuth(`${backendUrl}/api/monitoring/status`)
-      const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
+    const breakdown = (qualityData?.breakdown as Record<string, number>) || {}
+    const performanceScore = breakdown.performance || 0
+    const efficiencyScore =
+      (summaryData?.average_score as number) || performanceScore
+    const patternsEnabled = (summaryData?.patterns_enabled as number) || 0
 
-      const qualityResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-      const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
-
-      if (summaryData?.status === 'no_data' && qualityData?.status === 'no_data') {
-        performanceMetrics.value = null
-        logger.debug('No performance metrics data - run indexing first')
-        return
-      }
-
-      const performanceScore = qualityData?.breakdown?.performance || 0
-      const efficiencyScore = summaryData?.average_score || performanceScore
-      const patternsEnabled = summaryData?.patterns_enabled || 0
-
-      performanceMetrics.value = {
-        efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
-        memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0,
-        cpu_usage: Math.round(100 - performanceScore),
-        load_time: monitoringData?.uptime_seconds
-          ? Math.round(monitoringData.uptime_seconds)
-          : 0,
-      }
-    } catch (error: unknown) {
-      logger.error('loadPerformanceMetrics failed:', error)
+    performanceMetrics.value = {
+      efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
+      memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0,
+      cpu_usage: Math.round(100 - performanceScore),
+      load_time: monitoringData?.uptime_seconds
+        ? Math.round(monitoringData.uptime_seconds as number)
+        : 0,
     }
   }
 

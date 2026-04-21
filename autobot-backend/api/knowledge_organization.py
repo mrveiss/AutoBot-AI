@@ -99,7 +99,7 @@ async def get_organization_policy(
     try:
         # Get policy from Redis or use defaults
         policy_key = f"org:policy:{org_id}"
-        policy_data = await kb.aioredis_client.get(policy_key)
+        policy_data = await kb.redis().get(policy_key)
 
         if policy_data:
             import json
@@ -156,7 +156,7 @@ async def update_organization_policy(
         # Store policy in Redis
         policy_key = f"org:policy:{org_id}"
         policy_json = policy_request.policy.model_dump_json()
-        await kb.aioredis_client.set(policy_key, policy_json)
+        await kb.redis().set(policy_key, policy_json)
 
         logger.info("Updated organization policy for org %s", org_id)
 
@@ -185,7 +185,7 @@ async def _analyze_organization_facts(kb, fact_ids: list) -> dict:
     user_contributions = {}
 
     for fact_id in fact_ids:
-        fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
+        fact_data = await kb.redis().hgetall(f"fact:{fact_id}")
         if not fact_data:
             continue
 
@@ -309,11 +309,12 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
     Helper for cleanup_organization_knowledge. Ref: #1088.
     """
     import json
-    from datetime import datetime
+
+    from autobot_shared.time_utils import parse_utc_iso
 
     deleted_count = 0
     for fact_id in fact_ids:
-        fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
+        fact_data = await kb.redis().hgetall(f"fact:{fact_id}")
         if not fact_data:
             continue
 
@@ -330,10 +331,10 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
             continue
 
         try:
-            created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            created_at = parse_utc_iso(created_at_str)
             if created_at < cutoff_date:
                 await kb.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
-                await kb.aioredis_client.delete(f"fact:{fact_id}")
+                await kb.redis().delete(f"fact:{fact_id}")
                 deleted_count += 1
         except (ValueError, TypeError):
             # Skip if date parsing fails
@@ -361,7 +362,9 @@ async def cleanup_organization_knowledge(
     Raises:
         403: If user is not an organization admin
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+
+    from autobot_shared.time_utils import now_utc
 
     org_id = current_user.get("org_id")
     if not org_id:
@@ -383,7 +386,7 @@ async def cleanup_organization_knowledge(
             organization_id=org_id
         )
 
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = now_utc() - timedelta(days=retention_days)
         deleted_count = await _delete_expired_facts(kb, fact_ids, cutoff_date)
 
         logger.info(

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -1800,8 +1801,8 @@ async def analyze_code_evolution(
 
     try:
         # Parse dates if provided
-        start = datetime.fromisoformat(start_date) if start_date else None
-        end = datetime.fromisoformat(end_date) if end_date else None
+        start = parse_utc_iso(start_date) if start_date else None
+        end = parse_utc_iso(end_date) if end_date else None
 
         # Analyze evolution
         miner = CodeEvolutionMiner(path)
@@ -2036,8 +2037,8 @@ async def get_full_evolution_report(
 
     try:
         # Parse dates if provided
-        start = datetime.fromisoformat(start_date) if start_date else None
-        end = datetime.fromisoformat(end_date) if end_date else None
+        start = parse_utc_iso(start_date) if start_date else None
+        end = parse_utc_iso(end_date) if end_date else None
 
         miner = CodeEvolutionMiner(path)
         (

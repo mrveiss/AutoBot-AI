@@ -1,0 +1,127 @@
+# Visual regression workflow — Playwright + Storybook
+#
+# Pixel-diffs every Storybook story against committed baseline PNGs on
+# every PR that touches the frontend. Catches design-token rounds, icon
+# typos, layout shifts, color regressions that vue-tsc + vitest can't.
+#
+# Companion to autobot-frontend/tests/visual/ infrastructure shipped in
+# PR #5221. Closes #5226.
+#
+# Behavior:
+#   - On PR: build Storybook, run `npm run test:visual` against the
+#     static build (no need to start the dev server)
+#   - First-run / no-baselines: warn-only (does not fail the build),
+#     so the PR that adds the first baseline doesn't fail itself
+#   - On diff: HTML report + actual/expected/diff PNGs uploaded as
+#     workflow artifacts; the workflow fails the PR
+#   - Linux baselines only — frontend tests/visual/README.md documents
+#     the cross-platform baseline policy (per-OS suffix)
+
+name: Visual Regression
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-frontend/**'
+      - '.github/workflows/visual-regression.yml'
+  pull_request:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-frontend/**'
+      - '.github/workflows/visual-regression.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  visual-regression:
+    name: Storybook visual regression
+    runs-on: self-hosted
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium only)
+        working-directory: autobot-frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Storybook (static)
+        working-directory: autobot-frontend
+        run: npm run build-storybook -- --output-dir storybook-static --quiet
+
+      - name: Serve static Storybook on :6006
+        working-directory: autobot-frontend
+        # Background the server; visual tests connect to it. Run with
+        # SKIP_STORYBOOK_START=1 so playwright.visual.config.ts does NOT
+        # try to spawn its own `npm run storybook -- --ci`.
+        run: npx http-server storybook-static -p 6006 --silent &
+
+      - name: Wait for Storybook to be ready
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:6006/index.json >/dev/null 2>&1; then
+              echo "Storybook ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Storybook did not become ready on :6006 within 30s" >&2
+          exit 1
+
+      - name: Run visual regression tests
+        id: visual
+        working-directory: autobot-frontend
+        env:
+          SKIP_STORYBOOK_START: '1'
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          # If no baselines yet, --update-snapshots so the first run
+          # generates them and the workflow stays green. Subsequent runs
+          # diff against committed baselines and fail on regression.
+          if [ ! -d "tests/visual/__screenshots__" ]; then
+            echo "::warning::No visual baselines committed yet — running with --update-snapshots (will not fail on diff). Pull this branch + commit the generated baselines to enable enforcement."
+            npm run test:visual -- --update-snapshots
+            echo "first_run=true" >> "$GITHUB_OUTPUT"
+          else
+            npm run test:visual
+            echo "first_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Playwright HTML report on failure
+        if: failure() || steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-report-${{ github.run_id }}
+          path: autobot-frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload diff screenshots on failure
+        if: failure() || steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-diffs-${{ github.run_id }}
+          path: autobot-frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

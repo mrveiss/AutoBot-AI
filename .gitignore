@@ -168,6 +168,14 @@ logs/
 /trace_*.log        # Traces belong in logs/performance/
 /benchmark_*.json   # Benchmarks belong in tests/benchmarks/
 
+# === AGENT SCRATCH / PLANNING FILES ===
+# Temporary planning and scratch files created by AI agents (not intended for repo)
+/MERGE_PLAN.md
+/PLAN.md
+/SCRATCH.md
+/scratch/
+/.agent-scratch/
+
 # === OS GENERATED FILES ===
 *:Zone.Identifier
 *.Identifier

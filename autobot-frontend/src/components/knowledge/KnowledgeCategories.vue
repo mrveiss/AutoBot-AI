@@ -170,8 +170,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
@@ -186,15 +187,9 @@ const { t } = useI18n()
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
 
-// Use the shared composable
-const {
-  fetchBasicStats,
-  formatDateOnly: formatDate,
-  formatCategoryName,
-  getCategoryIcon,
-  getTypeIcon,
-  formatFileSize
-} = useKnowledgeBase()
+// Domain composables (migrated from useKnowledgeBase BC shim in #5193)
+const { fetchBasicStats } = useKnowledgeStats()
+const { getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
 
 // Router
 const router = useRouter()
@@ -253,8 +248,7 @@ const viewCategoryDocuments = async (category: any) => {
   selectedCategoryPath.value = category.path
 
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
     categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
   } catch (error) {
@@ -286,19 +280,12 @@ const loadMainCategories = async () => {
   isLoadingCategories.value = true
   categoriesError.value = null
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
-    if (response && typeof response === 'object' && 'status' in response) {
-      const status = (response as { status: number }).status
-      if (status === 401) {
-        categoriesError.value = t('knowledge.categories.authRequired')
-        return
-      }
-      if (status === 403) {
-        categoriesError.value = t('knowledge.categories.noPermission')
-        return
-      }
-    }
-    const data = await parseApiResponse(response)
+    // apiClient.get<T> returns parsed JSON or throws on HTTP error — it
+    // never returns a Response-like object with a `status` field. The
+    // previous `if (response && 'status' in response)` guard was dead code
+    // left over from the parseApiResponse wrapper pattern (#5033); the 401 /
+    // 403 handling now lives in the catch below via the thrown error.
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
     if (!data?.categories || !Array.isArray(data.categories)) {
       categoriesError.value = t('knowledge.categories.invalidResponse')
       return
@@ -629,7 +616,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all var(--duration-200);
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: var(--spacing-neg-2px);
 }
 
 .tab-btn:hover {

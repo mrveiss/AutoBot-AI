@@ -25,11 +25,20 @@ class TestStatsCounterParsing:
         """Create a minimal StatsMixin instance for testing."""
         from knowledge.stats import StatsMixin
 
-        # Create a simple class that inherits from StatsMixin for testing
+        # Create a simple class that inherits from StatsMixin for testing.
+        # ``_aioredis_client`` stays as an attribute (read by the guard in
+        # ``_get_all_stats``) and ``redis()`` returns the same mock so that
+        # ``self.redis().hgetall(...)`` in production resolves to the same
+        # AsyncMock the tests configure below. This matches the shim pattern
+        # used by ``_FakeKB`` in ``tests/test_knowledge_boards.py`` after the
+        # #5225 rename of ``aioredis_client`` -> ``_aioredis_client``.
         class TestStats(StatsMixin):
             def __init__(self):
-                self.aioredis_client = AsyncMock()
+                self._aioredis_client = AsyncMock()
                 self._stats_key = "kb:stats"  # Required by _get_all_stats()
+
+            def redis(self):
+                return self._aioredis_client
 
         instance = TestStats()
         return instance
@@ -38,7 +47,7 @@ class TestStatsCounterParsing:
     async def test_get_all_stats_skips_metadata_fields(self, stats_mixin_instance):
         """Test that metadata fields (initialized_at, last_corrected) are skipped."""
         # Mock Redis response with mixed counter and metadata fields
-        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(
+        stats_mixin_instance._aioredis_client.hgetall = AsyncMock(
             return_value={
                 b"total_facts": b"100",
                 b"total_vectors": b"50",
@@ -65,7 +74,7 @@ class TestStatsCounterParsing:
     async def test_get_all_stats_handles_string_keys(self, stats_mixin_instance):
         """Test that string keys (not bytes) are also handled correctly."""
         # Mock Redis response with string keys
-        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(
+        stats_mixin_instance._aioredis_client.hgetall = AsyncMock(
             return_value={
                 "total_facts": "200",
                 "total_vectors": "75",
@@ -83,7 +92,7 @@ class TestStatsCounterParsing:
     async def test_get_all_stats_handles_invalid_integer_values(self, stats_mixin_instance, caplog):
         """Test that invalid integer values are logged and skipped."""
         # Mock Redis response with an unexpected non-integer value
-        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(
+        stats_mixin_instance._aioredis_client.hgetall = AsyncMock(
             return_value={
                 b"total_facts": b"100",
                 b"unknown_field": b"not_an_integer",
@@ -107,7 +116,7 @@ class TestStatsCounterParsing:
     @pytest.mark.asyncio
     async def test_get_all_stats_returns_empty_dict_on_error(self, stats_mixin_instance):
         """Test that an empty dict is returned when Redis fails."""
-        stats_mixin_instance.aioredis_client.hgetall = AsyncMock(side_effect=Exception("Redis connection failed"))
+        stats_mixin_instance._aioredis_client.hgetall = AsyncMock(side_effect=Exception("Redis connection failed"))
 
         result = await stats_mixin_instance._get_all_stats()
 
@@ -115,11 +124,11 @@ class TestStatsCounterParsing:
 
     @pytest.mark.asyncio
     async def test_get_all_stats_returns_empty_dict_without_client(self):
-        """Test that an empty dict is returned when aioredis_client is None."""
+        """Test that an empty dict is returned when _aioredis_client is None."""
         from knowledge.stats import StatsMixin
 
         instance = object.__new__(StatsMixin)
-        instance.aioredis_client = None
+        instance._aioredis_client = None
 
         result = await instance._get_all_stats()
 

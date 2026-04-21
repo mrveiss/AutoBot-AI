@@ -368,11 +368,6 @@ container = AsyncServiceContainer()
 
 
 # Convenience functions for common services
-async def get_redis() -> async_redis.Redis:
-    """Get Redis manager"""
-    return await container.get_service("redis")
-
-
 async def get_config() -> ConfigManager:
     """Get config manager"""
     return await container.get_service("config")

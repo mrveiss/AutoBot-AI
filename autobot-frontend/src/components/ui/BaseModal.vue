@@ -3,7 +3,6 @@
     <Transition
       name="modal-fade"
       @after-enter="onAfterEnter"
-      @after-leave="onAfterLeave"
     >
       <div
         v-if="modelValue"
@@ -20,6 +19,7 @@
           class="dialog"
           :class="[sizeClass, { 'dialog-scrollable': scrollable }]"
           @click.stop
+          @keydown="onFocusTrapKeydown"
           tabindex="-1"
         >
           <!-- Header -->
@@ -32,7 +32,7 @@
               :aria-label="t('ui.modal.closeDialog')"
               type="button"
             >
-              <i class="fas fa-times" aria-hidden="true"></i>
+              <Icon name="times" size="sm" />
             </button>
           </div>
 
@@ -52,8 +52,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { ref, computed, useId, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import Icon from './Icon.vue'
 
 /**
  * Reusable Modal/Dialog Component
@@ -63,7 +68,7 @@ import { useI18n } from 'vue-i18n'
  *
  * Accessibility Features:
  * - WCAG 2.1 Level AA compliant
- * - Focus trap (prevents focus from escaping modal)
+ * - Focus trap via Tab/Shift+Tab wrap (does not fight browser devtools or outside clicks)
  * - ESC key to close
  * - Focus restoration (returns focus to trigger element)
  * - Screen reader announcements (role="dialog", aria-modal="true")
@@ -117,10 +122,19 @@ const { t } = useI18n()
 
 // Refs
 const dialogRef = ref<HTMLElement | null>(null)
-let previousActiveElement: HTMLElement | null = null
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 
-// Generate stable unique IDs for ARIA labeling (random only once, not per-render)
-const _uid = Math.random().toString(36).substr(2, 9)
+// Save activeElement on open, restore on close — driven by modelValue.
+// Note: this fires immediately on the prop change, before BaseModal's
+// onAfterEnter focuses the first focusable, so the saved reference is
+// the trigger element (correct).
+useFocusRestore(toRef(props, 'modelValue'))
+useBodyScrollLock(toRef(props, 'modelValue'))
+
+const { focusFirst } = useInitialFocus(dialogRef)
+
+// Stable unique IDs for ARIA labeling (Vue 3.5+ useId)
+const _uid = useId()
 const titleId = computed(() => `modal-title-${_uid}`)
 const descriptionId = computed(() => `modal-desc-${_uid}`)
 
@@ -146,69 +160,8 @@ const handleOverlayClick = () => {
   }
 }
 
-// Focus trap implementation
-const onAfterEnter = async () => {
-  // Store element that had focus before modal opened
-  previousActiveElement = document.activeElement as HTMLElement
-
-  await nextTick()
-
-  // Focus the dialog or first focusable element
-  if (dialogRef.value) {
-    const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )
-
-    if (firstFocusable) {
-      firstFocusable.focus()
-    } else {
-      dialogRef.value.focus()
-    }
-  }
-
-  // Lock body scroll
-  document.body.style.overflow = 'hidden'
-
-  // Add focus trap
-  document.addEventListener('focusin', trapFocus)
-}
-
-const onAfterLeave = () => {
-  // Restore focus to element that opened modal
-  if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-    previousActiveElement.focus()
-  }
-
-  // Unlock body scroll
-  document.body.style.overflow = ''
-
-  // Remove focus trap
-  document.removeEventListener('focusin', trapFocus)
-}
-
-const trapFocus = (event: FocusEvent) => {
-  if (!dialogRef.value) return
-
-  const focusableElements = dialogRef.value.querySelectorAll<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  )
-
-  if (focusableElements.length === 0) return
-
-  const firstElement = focusableElements[0]
-
-  // If focus leaves dialog, trap it back to first element
-  if (!dialogRef.value.contains(event.target as Node)) {
-    firstElement.focus()
-    event.preventDefault()
-  }
-}
-
-// Cleanup on unmount
-onUnmounted(() => {
-  document.removeEventListener('focusin', trapFocus)
-  document.body.style.overflow = ''
-})
+// Focus, restore, and scroll-lock all driven by composables above.
+const onAfterEnter = () => focusFirst()
 </script>
 
 <style scoped>

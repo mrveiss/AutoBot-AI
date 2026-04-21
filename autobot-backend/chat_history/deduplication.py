@@ -14,6 +14,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.time_utils import parse_utc_iso
+
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for streaming message types (Issue #326)
@@ -26,7 +28,7 @@ def _parse_timestamp(msg_ts: str) -> Optional[datetime]:
         return None
     try:
         if "T" in msg_ts:
-            return datetime.fromisoformat(msg_ts.replace("Z", "+00:00"))
+            return parse_utc_iso(msg_ts)
         return datetime.strptime(msg_ts, "%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
         return None

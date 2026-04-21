@@ -174,13 +174,22 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
+        :loading="loadingProgress.duplicates"
         @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
 
       <!-- Function Declarations (#1469, #184) -->
       <DeclarationsSection
         :declarations="declarationsForPanel"
+        :loading="loadingProgress.declarations"
         @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
+      />
+
+      <!-- Hardcoded Values (#5277: wire orphan data flow) -->
+      <HardcodesSection
+        :hardcodes="hardcodeAnalysis"
+        :loading="loadingProgress.hardcodes"
+        @export="(fmt: string) => exportSection('hardcodes', fmt as 'md' | 'json')"
       />
 
       <!-- Issue #527: API Endpoint Checker Section (#1469: extracted to CodebaseApiEndpointsPanel) -->
@@ -456,6 +465,7 @@ import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.
 import CodeSmellsSection from '@/components/analytics/CodeSmellsSection.vue'
 import DuplicatesSection from '@/components/analytics/DuplicatesSection.vue'
 import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
+import HardcodesSection from '@/components/analytics/HardcodesSection.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
@@ -536,6 +546,7 @@ const {
   duplicateAnalysis,
   declarationAnalysis,
   hardcodeAnalysis,
+  loadingProgress,
   chartData,
   chartDataLoading,
   chartDataError,
@@ -778,11 +789,11 @@ const { exportReport, exportSection } = useCodebaseExport({
     'environment': environmentAnalysis as Ref<unknown>,
     'statistics': codebaseStats as Ref<unknown>,
     'ownership': ownershipAnalysis as Ref<unknown>,
+    'hardcodes': hardcodeAnalysis as Ref<unknown>,
   },
   exportingReport,
   progressStatus,
-  fetchWithAuth: fetchWithAuth as typeof fetch,
-  getBackendUrl: () => appConfig.getServiceUrl('backend'),
+  withSourceId,
   notify,
   t,
 })

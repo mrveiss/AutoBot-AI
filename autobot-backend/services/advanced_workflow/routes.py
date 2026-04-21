@@ -15,48 +15,48 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-from .orchestrator import AdvancedWorkflowOrchestrator
+from .coordinator import WorkflowCoordinator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["advanced_workflow"])
 
 # Global instance (lazy initialized)
-_orchestrator: Optional[AdvancedWorkflowOrchestrator] = None
+_coordinator: Optional[WorkflowCoordinator] = None
 
 
 async def get_orchestrator_instance(request: Request = None):
-    """Get orchestrator instance, preferring pre-initialized app.state"""
-    global _orchestrator
+    """Get WorkflowCoordinator instance, preferring pre-initialized app.state."""
+    global _coordinator
 
-    # Try to use pre-initialized orchestrator from app state first
+    # Try to use pre-initialized coordinator from app state first
     if request is not None:
-        app_orchestrator = getattr(
+        app_coordinator = getattr(
             request.app.state, "advanced_workflow_orchestrator", None
         )
-        if app_orchestrator is not None:
+        if app_coordinator is not None:
             logger.debug(
-                "Using pre-initialized advanced workflow orchestrator from app.state"
+                "Using pre-initialized WorkflowCoordinator from app.state"
             )
-            return app_orchestrator
+            return app_coordinator
 
     # Try to use global instance
-    if _orchestrator is not None:
-        logger.debug("Using global advanced workflow orchestrator instance")
-        return _orchestrator
+    if _coordinator is not None:
+        logger.debug("Using global WorkflowCoordinator instance")
+        return _coordinator
 
     # Create new instance as last resort
     logger.info(
-        "Creating new AdvancedWorkflowOrchestrator instance (expensive operation)"
+        "Creating new WorkflowCoordinator instance (expensive operation)"
     )
-    _orchestrator = AdvancedWorkflowOrchestrator()
+    _coordinator = WorkflowCoordinator()
 
     # Cache in app state if request available
     if request is not None:
-        request.app.state.advanced_workflow_orchestrator = _orchestrator
-        logger.info("Cached new orchestrator in app.state for future requests")
+        request.app.state.advanced_workflow_orchestrator = _coordinator
+        logger.info("Cached new WorkflowCoordinator in app.state for future requests")
 
-    return _orchestrator
+    return _coordinator
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)

@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
 .voice-panel__lang-badge {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--spacing-micro-3);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-default);
   background: rgba(37, 99, 235, 0.1);

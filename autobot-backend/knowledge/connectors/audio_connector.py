@@ -197,6 +197,9 @@ class AudioConnector(AbstractConnector):
     """
 
     connector_type = "audio"
+    # Issue #4421: zero-config — local files or public YouTube/media URLs; no
+    # credentials required.  Whisper models run on NPU/CPU.
+    tier = 0
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)

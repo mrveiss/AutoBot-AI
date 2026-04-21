@@ -7,7 +7,9 @@
  * Author: mrveiss
  */
 import type { Ref } from 'vue'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
+import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 const logger = createLogger('CodebaseExport')
 
@@ -16,6 +18,7 @@ export type SectionType =
   | 'bug-prediction' | 'code-smells' | 'problems' | 'duplicates'
   | 'declarations' | 'api-endpoints' | 'cross-language' | 'config-duplicates'
   | 'code-intelligence' | 'environment' | 'statistics' | 'ownership'
+  | 'hardcodes'
 
 interface OwnershipExportData {
   summary: {
@@ -47,17 +50,7 @@ interface EnvExportData {
   total_hardcoded_values?: number
   high_priority_count?: number
   categories?: Record<string, number>
-  hardcoded_values?: Array<{
-    type: string
-    severity: string
-    value: string
-    file?: string
-    line?: number
-    variable_name?: string
-    suggested_env_var?: string
-    context?: string
-    current_usage?: string
-  }>
+  hardcoded_values?: HardcodedValue[]
   recommendations?: Array<{
     priority?: string
     description?: string
@@ -139,6 +132,39 @@ function _generateDeclarationsMd(data: unknown): string {
   if (decls.length > 0) {
     md += `| File | Name | Type | Line |\n|------|------|------|------|\n`
     decls.forEach(d => { md += `| ${d.file} | ${d.name} | ${d.type} | ${d.line} |\n` })
+  }
+  return md
+}
+
+function _generateHardcodesMd(data: unknown): string {
+  // #5277: dedicated markdown for the array form returned by
+  // `/api/analytics/codebase/hardcodes` (distinct from env-analysis export).
+  // #5311: use canonical `HardcodedValue` instead of inline shape.
+  const hcs = data as HardcodedValue[]
+  let md = `## Hardcoded Values\n\n**Total Values Found:** ${hcs.length}\n\n`
+  if (hcs.length === 0) return md
+  const groups: Record<string, typeof hcs> = { high: [], medium: [], low: [] }
+  hcs.forEach(h => {
+    const sev = (h.severity || 'low').toLowerCase()
+    if (sev === 'high' || sev === 'critical') groups.high.push(h)
+    else if (sev === 'medium') groups.medium.push(h)
+    else groups.low.push(h)
+  })
+  const levels = [
+    { key: 'high', emoji: '🔴' },
+    { key: 'medium', emoji: '🟡' },
+    { key: 'low', emoji: '🟢' },
+  ]
+  for (const { key, emoji } of levels) {
+    if (groups[key].length === 0) continue
+    md += `### ${emoji} ${key.charAt(0).toUpperCase() + key.slice(1)} Severity (${groups[key].length})\n\n`
+    md += `| Type | File | Line | Variable | Value | Suggested Env Var |\n`
+    md += `|------|------|------|----------|-------|-------------------|\n`
+    groups[key].forEach(h => {
+      const val = String(h.value).substring(0, 50) + (String(h.value).length > 50 ? '...' : '')
+      md += `| ${h.type} | ${h.file} | ${h.line} | ${h.variable_name || '-'} | \`${val}\` | ${h.suggested_env_var ? '`' + h.suggested_env_var + '`' : '-'} |\n`
+    })
+    md += `\n`
   }
   return md
 }
@@ -296,6 +322,7 @@ const sectionGenerators: Record<SectionType, (data: unknown) => string> = {
   'environment': _generateEnvironmentMd,
   'code-intelligence': _generateCodeIntelligenceMd,
   'ownership': _generateOwnershipMd,
+  'hardcodes': _generateHardcodesMd,
 }
 
 /**
@@ -334,41 +361,80 @@ export function useCodebaseExport(deps: {
   sectionData: Record<SectionType, Ref<unknown>>
   exportingReport: Ref<boolean>
   progressStatus: Ref<string>
-  fetchWithAuth: typeof fetch
-  getBackendUrl: () => Promise<string>
+  /**
+   * URL wrapper that appends `?source_id=<id>` for per-project scoping.
+   * #5266: previously missing \u2014 both `/report` and `/env-analysis/export`
+   * are source-scoped at the backend but the frontend was dropping the
+   * scope, silently falling back to `get_default_source_id()` (same
+   * bug class as #5111).
+   */
+  withSourceId: (url: string) => string
   notify: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void
   t: (key: string, params?: Record<string, unknown>) => string
 }) {
   /**
    * Export full codebase analysis report (quick or full).
+   *
+   * #5388: routed through `useFetchEndpoint` via the `parseResponse`
+   * hook (#5276) so the `text/markdown` response goes through the
+   * same loading/error/source-scoping pipeline as every other
+   * analytics fetcher. The old hand-rolled try/catch + manual
+   * exportingReport flag + status-string juggling collapses to hooks.
    */
+  let _currentReportType: 'quick' | 'full' = 'quick'
+  const reportEndpoint = useFetchEndpoint<string, string>(
+    {
+      path: '/api/analytics/codebase/report',
+      scopeToSource: true,
+      parseResponse: async (r) => await r.text(),
+      pickData: (raw) => raw,
+      onSuccess: (content) => {
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, '-')
+          .slice(0, 19)
+        _downloadFile(
+          content,
+          `code-analysis-report-${_currentReportType}-${timestamp}.md`,
+          'text/markdown;charset=utf-8',
+        )
+        deps.notify(deps.t('analytics.codebase.notify.reportExported'), 'success')
+        deps.progressStatus.value = deps.t(
+          'analytics.codebase.status.reportExported',
+        )
+      },
+      onError: (msg) => {
+        deps.notify(
+          deps.t('analytics.codebase.notify.reportExportFailed', { error: msg }),
+          'error',
+        )
+        deps.progressStatus.value = deps.t(
+          'analytics.codebase.status.reportExportFailed',
+        )
+      },
+      onResponse: async (response) => {
+        // Preserve the original "Status N: <body-text>" error shape.
+        const text = await response.text().catch(() => '')
+        return `Status ${response.status}${text ? `: ${text}` : ''}`
+      },
+      label: 'Report export',
+    },
+    { withSourceId: deps.withSourceId },
+  )
+
+  // The Vue template binds to `deps.exportingReport` (component-owned).
+  // Keep the bridge so consumers see the single flag they already wire.
   const exportReport = async (quick: boolean = true): Promise<void> => {
+    _currentReportType = quick ? 'quick' : 'full'
     deps.exportingReport.value = true
     deps.progressStatus.value = quick
       ? deps.t('analytics.codebase.status.generatingQuickReport')
       : deps.t('analytics.codebase.status.generatingFullReport')
-
     try {
-      const backendUrl = await deps.getBackendUrl()
-      const url = `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`
-      const response = await deps.fetchWithAuth(url, {
-        method: 'GET',
-        headers: { 'Accept': 'text/markdown' },
+      await reportEndpoint.load({
+        format: 'markdown',
+        quick: String(quick),
       })
-      if (!response.ok) {
-        throw new Error(`Status ${response.status}: ${await response.text()}`)
-      }
-      const reportContent = await response.text()
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-      const reportType = quick ? 'quick' : 'full'
-      _downloadFile(reportContent, `code-analysis-report-${reportType}-${timestamp}.md`, 'text/markdown;charset=utf-8')
-      deps.notify(deps.t('analytics.codebase.notify.reportExported'), 'success')
-      deps.progressStatus.value = deps.t('analytics.codebase.status.reportExported')
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error)
-      logger.error('Report export failed:', error)
-      deps.notify(deps.t('analytics.codebase.notify.reportExportFailed', { error: msg }), 'error')
-      deps.progressStatus.value = deps.t('analytics.codebase.status.reportExportFailed')
     } finally {
       deps.exportingReport.value = false
     }
@@ -376,33 +442,45 @@ export function useCodebaseExport(deps: {
 
   /**
    * Fetch environment export data with fallback to cached display data.
+   *
    * Issue #631: Uses dedicated export endpoint to avoid truncation.
+   * Issue #5389: routed through useFetchEndpoint's fallbackData hook.
+   * The composable's old strict error model required bespoke
+   * try/catch + notify branches. Now:
+   *   - onSuccess logs total_in_export / total_in_analysis.
+   *   - onError fires the "using cached data" warning toast.
+   *   - fallbackData returns the cached snapshot on failure, keeping
+   *     error.value empty so downstream export code proceeds with
+   *     the stale data rather than aborting.
    */
   const _fetchEnvironmentExportData = async (
     cachedData: unknown,
   ): Promise<unknown> => {
-    try {
-      const backendUrl = await deps.getBackendUrl()
-      const response = await deps.fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/env-analysis/export`,
-        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-      )
-      if (response.ok) {
-        const data = await response.json()
-        logger.info('Environment export: fetched full data', {
-          total_in_export: (data as { total_in_export?: number }).total_in_export,
-          total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
-        })
-        return data
-      }
-      logger.warn('Environment export: endpoint failed, using display data')
-      deps.notify(deps.t('analytics.codebase.notify.usingCachedData'), 'warning')
-      return cachedData
-    } catch (err) {
-      logger.warn('Environment export: fetch failed, using display data', err)
-      deps.notify(deps.t('analytics.codebase.notify.exportEndpointUnavailable'), 'warning')
-      return cachedData
-    }
+    const endpoint = useFetchEndpoint<unknown, unknown>(
+      {
+        path: '/api/analytics/codebase/env-analysis/export',
+        scopeToSource: true,
+        pickData: (raw) => raw,
+        onSuccess: (data) => {
+          logger.info('Environment export: fetched full data', {
+            total_in_export: (data as { total_in_export?: number }).total_in_export,
+            total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
+          })
+        },
+        onError: (_msg, err) => {
+          logger.warn('Environment export: using display data', err)
+          deps.notify(
+            deps.t('analytics.codebase.notify.exportEndpointUnavailable'),
+            'warning',
+          )
+        },
+        fallbackData: cachedData,
+        label: 'Environment export',
+      },
+      { withSourceId: deps.withSourceId },
+    )
+    await endpoint.load()
+    return endpoint.data.value
   }
 
   /**
@@ -435,6 +513,7 @@ export function useCodebaseExport(deps: {
       'cross-language': 'cross-language', 'config-duplicates': 'config-duplicates',
       'code-intelligence': 'code-intelligence-scores', 'environment': 'environment-analysis',
       'statistics': 'codebase-statistics', 'ownership': 'ownership-analysis',
+      'hardcodes': 'hardcoded-values',
     }
     const baseName = nameMap[section] || section
     const ext = format === 'json' ? '.json' : '.md'

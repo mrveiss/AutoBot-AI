@@ -37,7 +37,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from queue import Empty, Queue
@@ -442,7 +442,7 @@ class LokiDestination(LogDestination):
         Groups entries by (source, level) to create efficient streams.
         """
         from collections import defaultdict
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Group entries by stream labels (source + level)
         streams_dict = defaultdict(list)
@@ -526,7 +526,7 @@ class WebhookDestination(LogDestination):
             payload = {
                 "logs": [e.to_elasticsearch_format() for e in entries],
                 "source": "AutoBot",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
             response = requests.post(self.config.url, headers=headers, json=payload, timeout=10)
@@ -934,7 +934,7 @@ class LogForwarder:
     ):
         """Queue a log entry for forwarding."""
         entry = LogEntry(
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat(),
             level=level,
             message=message,
             source=source,

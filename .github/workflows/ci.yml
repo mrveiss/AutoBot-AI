@@ -22,7 +22,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install Python 3.12 via deadsnakes PPA
       run: |
@@ -151,7 +151,7 @@ jobs:
         fi
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v6
       with:
         files: ./coverage.xml
         flags: unittests
@@ -166,7 +166,7 @@ jobs:
   frontend-tests:
     runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -215,7 +215,7 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install Python 3.12 via deadsnakes PPA
       run: |
@@ -320,7 +320,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md

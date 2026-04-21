@@ -15,9 +15,9 @@ is already in use throughout the backend.
 """
 
 import logging
-from datetime import datetime
 from typing import List
 
+from autobot_shared.time_utils import utc_timestamp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -82,7 +82,7 @@ async def get_phases_status() -> PhasesStatusResponse:
             status="ok",
             service="phase_management",
             phases=phases,
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utc_timestamp(),
         )
     except Exception as exc:
         logger.error("Error getting phases status: %s", exc)
@@ -102,7 +102,7 @@ async def run_phases_validation() -> ValidationRunResponse:
         return ValidationRunResponse(
             status="ok",
             message="Validation queued",
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utc_timestamp(),
         )
     except Exception as exc:
         logger.error("Error queuing phase validation: %s", exc)

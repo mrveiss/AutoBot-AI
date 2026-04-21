@@ -87,6 +87,13 @@ async def get_user_activity_log(
     """
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_user_activity_log: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_user_activity", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -127,11 +134,18 @@ async def get_fact_access_log(
     """
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_fact_access_log: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_fact_access", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
         # Verify user is the owner
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
+        fact_data = await kb.redis().hget(f"fact:{fact_id}", "metadata")
         if not fact_data:
             raise HTTPException(status_code=404, detail="Fact not found")
 
@@ -192,6 +206,15 @@ async def get_organization_audit_log(
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning(
+            "get_organization_audit_log: KB uninitialized - raising 503"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_organization", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -237,6 +260,13 @@ async def get_permission_changes(
     """
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_permission_changes: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_permission_changes", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -295,6 +325,15 @@ async def generate_compliance_report(
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning(
+            "generate_compliance_report: KB uninitialized - raising 503"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_compliance_report", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
@@ -348,6 +387,13 @@ async def get_compliance_summary(
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_compliance_summary: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audit_compliance_summary", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:

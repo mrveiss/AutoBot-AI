@@ -777,10 +777,10 @@ def plan_to_todowrite(plan: ExecutionPlan) -> list[dict]:
 
 ## 6. Agent Loop Integration
 
-### 6.1 Modified Agent Orchestrator
+### 6.1 Modified Orchestrator
 
 ```python
-class AgentOrchestrator:
+class Orchestrator:
     def __init__(self):
         self.planner = LLMPlannerModule(...)
         self.event_stream = RedisEventStreamManager()

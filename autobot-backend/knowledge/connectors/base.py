@@ -31,9 +31,22 @@ class AbstractConnector(ABC):
     the four abstract methods.  The default ``sync()`` method orchestrates
     change detection → fetch → ingest and can be overridden when a connector
     needs a custom sync strategy.
+
+    Subclasses SHOULD also declare their setup-complexity ``tier`` (Issue #4421):
+
+    * ``tier = 0`` — Zero-config. Works immediately once the target is
+      reachable (local file server, unauthenticated web crawl, local audio).
+    * ``tier = 1`` — Needs a free API key or env var (e.g. Notion integration
+      token, RSS with key).
+    * ``tier = 2`` — Needs credentials, OAuth, a cookie, or a private DB
+      connection string (e.g. database, GitHub private repos).
+
+    The tier is surfaced to the UI via ``/knowledge_base/connector_types`` so
+    users see a readiness badge before they start filling out the config form.
     """
 
     connector_type: str = ""
+    tier: int = 0
 
     def __init__(self, config: ConnectorConfig) -> None:
         self.config = config

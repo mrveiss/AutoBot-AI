@@ -125,7 +125,6 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -194,8 +193,7 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 const loadBackups = async () => {
   try {
     isLoadingBackups.value = true
-    const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/backups`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backups`)
 
     if (data.backups) {
       backups.value = data.backups
@@ -212,13 +210,12 @@ const createBackup = async () => {
   try {
     isCreatingBackup.value = true
 
-    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/backup`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backup`, {
       include_embeddings: backupOptions.value.includeEmbeddings,
       compression: backupOptions.value.compression,
       description: backupOptions.value.description || undefined
     })
 
-    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusBackupCreated', { name: data.backup_name }))
@@ -246,12 +243,11 @@ const restoreBackup = async (backupName: string) => {
     isRestoring.value = true
 
     // First, dry run to validate
-    const dryRunResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/restore`, {
+    const dryRunData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/restore`, {
       backup_file: backupName,
       dry_run: true
     })
 
-    const dryRunData = await parseApiResponse(dryRunResponse)
 
     if (dryRunData.status !== 'success') {
       throw new Error(dryRunData.message || t('knowledge.backup.errorValidation'))
@@ -265,13 +261,12 @@ const restoreBackup = async (backupName: string) => {
     if (!confirmRestore) return
 
     // Actual restore
-    const restoreResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/restore`, {
+    const restoreData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/restore`, {
       backup_file: backupName,
       dry_run: false,
       skip_duplicates: true
     })
 
-    const restoreData = await parseApiResponse(restoreResponse)
 
     if (restoreData.status === 'success') {
       showStatus('success', t('knowledge.backup.statusRestored', { count: restoreData.restored }))
@@ -296,12 +291,11 @@ const deleteBackup = async (backupName: string) => {
   try {
     isDeletingBackup.value = true
 
-    const response = await apiClient.delete(`${getApiBase()}/knowledge-maintenance/backup`, {
+    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/backup`, {
       body: JSON.stringify({ backup_file: backupName }),
       headers: { 'Content-Type': 'application/json' }
     } as any)
 
-    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       showStatus('success', t('knowledge.backup.statusDeleted'))

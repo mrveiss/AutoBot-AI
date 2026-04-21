@@ -7,6 +7,7 @@
 
 import { ref, computed } from 'vue'
 import { useApi } from './useApi'
+import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { getApiBase } from '@/config/ssot-config'
@@ -69,13 +70,20 @@ export function useConversationFiles(sessionId: string) {
   const searchQuery = ref('')
   const sortField = ref<SortField>('date')
   const sortDirection = ref<SortDirection>('desc')
-  const selectedFileIds = ref<Set<string>>(new Set())
+  // Selection state is owned by the shared useBatchSelection primitive (#5322);
+  // `files` is passed as the reactive items source so `allSelected`/`selectedCount`
+  // stay in sync automatically when the file list changes.
+  const fileSelection = useBatchSelection<ConversationFile, string>(
+    files,
+    (f) => f.file_id,
+  )
+  const selectedFileIds = fileSelection.selected
+  const selectedCount = fileSelection.selectedCount
+  const allSelected = fileSelection.allSelected
 
   // Computed
   const hasFiles = computed(() => files.value.length > 0)
   const totalSizeFormatted = computed(() => formatFileSize(stats.value.total_size_bytes))
-  const selectedCount = computed(() => selectedFileIds.value.size)
-  const allSelected = computed(() => files.value.length > 0 && selectedFileIds.value.size === files.value.length)
 
   const sortedFiles = computed(() => {
     let result = [...files.value]
@@ -407,28 +415,26 @@ export function useConversationFiles(sessionId: string) {
   // Bulk & sort operations
 
   const toggleFileSelection = (fileId: string) => {
-    const next = new Set(selectedFileIds.value)
-    if (next.has(fileId)) { next.delete(fileId) } else { next.add(fileId) }
-    selectedFileIds.value = next
+    fileSelection.toggleByKey(fileId)
   }
 
   const selectAllFiles = () => {
-    if (allSelected.value) {
-      selectedFileIds.value = new Set()
+    if (fileSelection.allSelected.value) {
+      fileSelection.clear()
     } else {
-      selectedFileIds.value = new Set(files.value.map(f => f.file_id))
+      fileSelection.selectAll()
     }
   }
 
   const deleteSelectedFiles = async (): Promise<boolean> => {
-    const ids = Array.from(selectedFileIds.value)
+    const ids = Array.from(fileSelection.selected.value)
     if (ids.length === 0) return false
     loading.value = true
     error.value = null
     for (const fid of ids) {
       try { await api.delete(`${API}/files/${fid}`) } catch { /* continue */ }
     }
-    selectedFileIds.value = new Set()
+    fileSelection.clear()
     await loadFiles()
     loading.value = false
     return true

@@ -1843,6 +1843,25 @@
         "low": "Baja similitud"
       }
     },
+    "hardcodes": {
+      "title": "Valores codificados",
+      "values": "valores",
+      "totalValues": "Valores totales",
+      "highLabel": "Alto",
+      "mediumLabel": "Medio",
+      "lowLabel": "Bajo",
+      "uniqueTypes": "Tipos únicos",
+      "variable": "Variable",
+      "value": "Valor",
+      "suggestedEnvVar": "Variable de entorno sugerida",
+      "showingOf": "Mostrando {shown} de {total}",
+      "emptyMessage": "No se detectaron valores codificados",
+      "severityGroups": {
+        "high": "Severidad alta",
+        "medium": "Severidad media",
+        "low": "Severidad baja"
+      }
+    },
     "problems": {
       "title": "Problemas",
       "total": "Total",
@@ -6413,7 +6432,11 @@
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
     "systemStatus": "System Status",
-    "operations": "Operaciones"
+    "operations": "Operaciones",
+    "applicationError": "Application Error",
+    "unexpectedError": "An unexpected error occurred",
+    "loadingTimeout": "Loading Timed Out",
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
   },
   "reasoningTrace": {
     "title": "Traza de razonamiento",

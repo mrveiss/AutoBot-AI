@@ -11,7 +11,7 @@ initiated what is a manual, fragmented task.
 Each A2A task is assigned a trace_id on receipt.  The trace_id is:
   - Returned in the task response (X-A2A-Trace-Id header + body field)
   - Stored on the Task object
-  - Passed to the AgentOrchestrator as context['a2a_trace_id']
+  - Passed to the DistributedAgentCoordinator as context['a2a_trace_id']
   - Included in every audit log entry for the task
 
 Trace ID format: 32 hex chars (UUID4 without dashes) — compatible with

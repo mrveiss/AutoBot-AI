@@ -12,9 +12,9 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime
 from typing import Dict, List, Set
 
+from autobot_shared.time_utils import utc_timestamp
 from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ class PresenceManager:
                 {
                     "type": "user_joined",
                     "user_id": user_id,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utc_timestamp(),
                 },
                 exclude=websocket,
             )
@@ -99,7 +99,7 @@ class PresenceManager:
                             {
                                 "type": "user_left",
                                 "user_id": user_id,
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": utc_timestamp(),
                             },
                         )
 
@@ -222,7 +222,7 @@ async def _send_presence_sync(websocket: WebSocket, session_id: str) -> None:
         {
             "type": "presence_sync",
             "online_users": online_users,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
     )
 
@@ -238,7 +238,7 @@ async def _handle_presence_message(
     Returns True to continue the loop, False to break out.
     """
     if message.get("type") == "ping":
-        await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+        await websocket.send_json({"type": "pong", "timestamp": utc_timestamp()})
         return True
     if message.get("type") == "broadcast":
         payload = message.get("payload", {})
@@ -248,7 +248,7 @@ async def _handle_presence_message(
                 "type": "user_message",
                 "user_id": user_id,
                 "payload": payload,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
     return True

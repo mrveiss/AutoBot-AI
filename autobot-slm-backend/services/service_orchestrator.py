@@ -14,7 +14,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -536,7 +536,7 @@ class ServiceOrchestrator:
             Dict with service statuses and health information
         """
         status = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "services": {},
             "healthy_count": 0,
             "unhealthy_count": 0,

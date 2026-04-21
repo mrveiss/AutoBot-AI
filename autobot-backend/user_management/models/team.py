@@ -12,6 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
+from autobot_shared.time_utils import now_utc
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -175,7 +176,7 @@ class TeamMembership(Base):
     # When the user joined the team
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=now_utc,
         nullable=False,
     )
 

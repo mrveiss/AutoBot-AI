@@ -420,3 +420,42 @@ onMounted(async () => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Mobile responsive overrides — Tailwind utility classes handle desktop layout,
+   scoped styles handle mobile stacking that Tailwind responsive prefixes can't
+   express without overriding third-party class output. */
+
+@media (max-width: 640px) {
+  /* Stack header title + refresh button vertically */
+  .p-6 > .flex.items-center.justify-between:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Scrollable tab nav instead of wrapping */
+  .border-b > nav.-mb-px {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    /* Hide scrollbar visually but keep functionality */
+    scrollbar-width: none;
+  }
+
+  .border-b > nav.-mb-px::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Ensure tab buttons don't shrink below readable size */
+  .border-b > nav.-mb-px > button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Category filter buttons: allow wrap on mobile */
+  .mb-4.flex.flex-wrap {
+    gap: 0.5rem;
+  }
+}
+</style>

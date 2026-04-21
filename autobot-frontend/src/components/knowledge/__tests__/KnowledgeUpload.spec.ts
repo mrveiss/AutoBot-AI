@@ -45,8 +45,8 @@ vi.mock('@/models/controllers', () => ({
   useKnowledgeController: vi.fn()
 }))
 
-vi.mock('@/composables/useKnowledgeBase', () => ({
-  useKnowledgeBase: vi.fn()
+vi.mock('@/composables/knowledge/useKnowledgeIcons', () => ({
+  useKnowledgeIcons: vi.fn()
 }))
 
 vi.mock('@/composables/useUploadProgress', () => ({
@@ -66,7 +66,7 @@ vi.mock('@/utils/debugUtils', () => ({
 
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeController } from '@/models/controllers'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import KnowledgeUpload from '../KnowledgeUpload.vue'
 
@@ -114,7 +114,7 @@ function applyMocks(
   vi.mocked(useI18n).mockReturnValue({ t: stubT } as any)
   vi.mocked(useKnowledgeController).mockReturnValue(controllerMock as any)
   vi.mocked(useUploadProgress).mockReturnValue(progressMock as any)
-  vi.mocked(useKnowledgeBase).mockReturnValue(makeKnowledgeBaseMock() as any)
+  vi.mocked(useKnowledgeIcons).mockReturnValue(makeKnowledgeBaseMock() as any)
 }
 
 // ── Mount helper ─────────────────────────────────────────────────────────────

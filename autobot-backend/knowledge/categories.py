@@ -45,7 +45,7 @@ class CategoriesMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     # =========================================================================
     # CATEGORY CRUD OPERATIONS (Issue #411)
@@ -69,19 +69,19 @@ class CategoriesMixin:
         self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]
     ) -> None:
         """Store category in Redis (Issue #398: extracted)."""
-        await self.aioredis_client.hset(
+        await self.redis().hset(
             f"category:{category_id}", mapping=category_data
         )
-        await self.aioredis_client.set(
+        await self.redis().set(
             f"category:path:{category_data['path']}", category_id
         )
 
         if parent_id:
-            await self.aioredis_client.sadd(
+            await self.redis().sadd(
                 f"category:children:{parent_id}", category_id
             )
         else:
-            await self.aioredis_client.sadd("category:root", category_id)
+            await self.redis().sadd("category:root", category_id)
 
     def _build_category_data(
         self,
@@ -130,7 +130,7 @@ class CategoriesMixin:
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new category in the hierarchy (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -142,7 +142,7 @@ class CategoriesMixin:
             if error:
                 return {"success": False, "message": error}
 
-            if await self.aioredis_client.get(f"category:path:{path}"):
+            if await self.redis().get(f"category:path:{path}"):
                 return {
                     "success": False,
                     "message": f"Category path already exists: {path}",
@@ -180,7 +180,7 @@ class CategoriesMixin:
         Returns:
             Dict with success status and category data
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -209,12 +209,12 @@ class CategoriesMixin:
         Returns:
             Dict with success status and category data
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
             path = path.strip().lower()
-            category_id = await self.aioredis_client.get(f"category:path:{path}")
+            category_id = await self.redis().get(f"category:path:{path}")
 
             if not category_id:
                 return {"success": False, "message": f"Category path not found: {path}"}
@@ -250,7 +250,7 @@ class CategoriesMixin:
         else:
             new_path = new_name
 
-        if await self.aioredis_client.get(f"category:path:{new_path}"):
+        if await self.redis().get(f"category:path:{new_path}"):
             return f"Category path already exists: {new_path}"
 
         await self._update_category_path(category_id, old_path, new_path)
@@ -282,7 +282,7 @@ class CategoriesMixin:
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update category metadata (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -306,7 +306,7 @@ class CategoriesMixin:
 
             self._apply_metadata_updates(updates, description, icon, color)
 
-            await self.aioredis_client.hset(f"category:{category_id}", mapping=updates)
+            await self.redis().hset(f"category:{category_id}", mapping=updates)
             updated = await self._get_category_data(category_id)
             logger.info("Updated category '%s'", category_id)
 
@@ -326,7 +326,7 @@ class CategoriesMixin:
         """Reassign facts from categories being deleted (Issue #398: extracted)."""
         count = 0
         for cat_id in categories:
-            cat_facts = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
+            cat_facts = await self.redis().smembers(f"category:facts:{cat_id}")
             for fact_id in cat_facts:
                 if isinstance(fact_id, bytes):
                     fact_id = fact_id.decode("utf-8")
@@ -346,15 +346,15 @@ class CategoriesMixin:
         path = cat_data.get("path", "")
         parent_id = cat_data.get("parent_id", "")
 
-        await self.aioredis_client.delete(f"category:path:{path}")
+        await self.redis().delete(f"category:path:{path}")
         if parent_id:
-            await self.aioredis_client.srem(f"category:children:{parent_id}", cat_id)
+            await self.redis().srem(f"category:children:{parent_id}", cat_id)
         else:
-            await self.aioredis_client.srem("category:root", cat_id)
+            await self.redis().srem("category:root", cat_id)
 
-        await self.aioredis_client.delete(f"category:children:{cat_id}")
-        await self.aioredis_client.delete(f"category:facts:{cat_id}")
-        await self.aioredis_client.delete(f"category:{cat_id}")
+        await self.redis().delete(f"category:children:{cat_id}")
+        await self.redis().delete(f"category:facts:{cat_id}")
+        await self.redis().delete(f"category:{cat_id}")
 
     async def _build_deletion_list(
         self, category_id: str, recursive: bool
@@ -369,7 +369,7 @@ class CategoriesMixin:
             Tuple of (categories_to_delete, error_response)
             error_response is None if successful
         """
-        children = await self.aioredis_client.smembers(
+        children = await self.redis().smembers(
             f"category:children:{category_id}"
         )
         if children and not recursive:
@@ -391,7 +391,7 @@ class CategoriesMixin:
         reassign_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delete a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -440,7 +440,7 @@ class CategoriesMixin:
         self, max_depth: int, include_fact_counts: bool
     ) -> Dict[str, Any]:
         """Build full tree from all roots (Issue #398: extracted)."""
-        root_ids = await self.aioredis_client.smembers("category:root")
+        root_ids = await self.redis().smembers("category:root")
         tree = []
         total = 0
 
@@ -462,7 +462,7 @@ class CategoriesMixin:
         include_fact_counts: bool = True,
     ) -> Dict[str, Any]:
         """Get full category tree structure (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -494,7 +494,7 @@ class CategoriesMixin:
         Returns:
             Dict with list of child categories
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -507,7 +507,7 @@ class CategoriesMixin:
                         "message": f"Category not found: {category_id}",
                     }
 
-            child_ids = await self.aioredis_client.smembers(
+            child_ids = await self.redis().smembers(
                 f"category:children:{category_id}"
             )
             children = []
@@ -543,7 +543,7 @@ class CategoriesMixin:
         Returns:
             Dict with list of ancestors from root to parent
         """
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -591,7 +591,7 @@ class CategoriesMixin:
         if not category:
             return None, f"Category not found: {category_id}"
 
-        fact_exists = await self.aioredis_client.exists(f"fact:{fact_id}")
+        fact_exists = await self.redis().exists(f"fact:{fact_id}")
         if not fact_exists:
             return None, f"Fact not found: {fact_id}"
 
@@ -603,14 +603,14 @@ class CategoriesMixin:
         """Remove fact from old category if reassigning (Issue #398: extracted)."""
         old_category = await self._get_fact_category_id(fact_id)
         if old_category and old_category != new_category_id:
-            await self.aioredis_client.srem(f"category:facts:{old_category}", fact_id)
+            await self.redis().srem(f"category:facts:{old_category}", fact_id)
             await self._decrement_category_count(old_category)
 
     async def assign_fact_to_category(
         self, fact_id: str, category_id: str
     ) -> Dict[str, Any]:
         """Assign a fact to a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -645,7 +645,7 @@ class CategoriesMixin:
         """Gather all fact IDs from multiple categories (Issue #398: extracted)."""
         all_ids: set = set()
         for cat_id in category_ids:
-            fact_ids = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
+            fact_ids = await self.redis().smembers(f"category:facts:{cat_id}")
             for fid in fact_ids:
                 all_ids.add(fid.decode("utf-8") if isinstance(fid, bytes) else fid)
         return all_ids
@@ -654,7 +654,7 @@ class CategoriesMixin:
         """Load fact data for multiple fact IDs (Issue #398: extracted)."""
         facts = []
         for fid in fact_ids:
-            fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
+            fact_data = await self.redis().hgetall(f"fact:{fid}")
             if fact_data:
                 decoded = {
                     (k.decode("utf-8") if isinstance(k, bytes) else k): (
@@ -674,7 +674,7 @@ class CategoriesMixin:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """Get all facts in a category (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -732,7 +732,7 @@ class CategoriesMixin:
             List of matching key strings
         """
         keys = []
-        async for key in self.aioredis_client.scan_iter(match=redis_pattern, count=100):
+        async for key in self.redis().scan_iter(match=redis_pattern, count=100):
             key = key.decode("utf-8") if isinstance(key, bytes) else key
             keys.append(key)
             if len(keys) >= max_keys:
@@ -751,7 +751,7 @@ class CategoriesMixin:
         Returns:
             List of decoded category data dicts
         """
-        pipe = self.aioredis_client.pipeline()
+        pipe = self.redis().pipeline()
         for cat_id in category_ids:
             pipe.hgetall(f"category:{cat_id}")
         results = await pipe.execute()
@@ -774,7 +774,7 @@ class CategoriesMixin:
         if not keys:
             return []
 
-        pipe = self.aioredis_client.pipeline()
+        pipe = self.redis().pipeline()
         for key in keys:
             pipe.get(key)
         category_ids = await pipe.execute()
@@ -814,7 +814,7 @@ class CategoriesMixin:
         self, path_pattern: str, limit: int = 50
     ) -> Dict[str, Any]:
         """Search categories by path pattern (Issue #398: refactored)."""
-        if not self.aioredis_client:
+        if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
@@ -841,7 +841,7 @@ class CategoriesMixin:
 
     async def _get_category_data(self, category_id: str) -> Optional[Dict[str, Any]]:
         """Get category data from Redis hash."""
-        data = await self.aioredis_client.hgetall(f"category:{category_id}")
+        data = await self.redis().hgetall(f"category:{category_id}")
         if not data:
             return None
 
@@ -902,7 +902,7 @@ class CategoriesMixin:
         Returns:
             List of child node dictionaries
         """
-        child_ids = await self.aioredis_client.smembers(
+        child_ids = await self.redis().smembers(
             f"category:children:{category_id}"
         )
         if not child_ids:
@@ -958,7 +958,7 @@ class CategoriesMixin:
 
     async def _get_all_descendants(self, category_id: str) -> List[str]:
         """Get all descendant category IDs recursively."""
-        child_ids = await self.aioredis_client.smembers(
+        child_ids = await self.redis().smembers(
             f"category:children:{category_id}"
         )
 
@@ -987,13 +987,13 @@ class CategoriesMixin:
     ) -> None:
         """Update category path and all descendant paths."""
         # Delete old path lookup
-        await self.aioredis_client.delete(f"category:path:{old_path}")
+        await self.redis().delete(f"category:path:{old_path}")
 
         # Set new path lookup
-        await self.aioredis_client.set(f"category:path:{new_path}", category_id)
+        await self.redis().set(f"category:path:{new_path}", category_id)
 
         # Update descendants
-        child_ids = await self.aioredis_client.smembers(
+        child_ids = await self.redis().smembers(
             f"category:children:{category_id}"
         )
 
@@ -1004,7 +1004,7 @@ class CategoriesMixin:
             if child_data:
                 child_old_path = child_data.get("path", "")
                 child_new_path = child_old_path.replace(old_path, new_path, 1)
-                await self.aioredis_client.hset(
+                await self.redis().hset(
                     f"category:{cid}", "path", child_new_path
                 )
                 await self._update_category_path(cid, child_old_path, child_new_path)
@@ -1012,28 +1012,28 @@ class CategoriesMixin:
     async def _assign_fact_to_category(self, fact_id: str, category_id: str) -> None:
         """Internal method to assign a fact to a category."""
         # Add to category's fact set
-        await self.aioredis_client.sadd(f"category:facts:{category_id}", fact_id)
+        await self.redis().sadd(f"category:facts:{category_id}", fact_id)
 
         # Update fact metadata
-        await self.aioredis_client.hset(f"fact:{fact_id}", "category_id", category_id)
+        await self.redis().hset(f"fact:{fact_id}", "category_id", category_id)
 
         # Increment category count
-        await self.aioredis_client.hincrby(f"category:{category_id}", "fact_count", 1)
+        await self.redis().hincrby(f"category:{category_id}", "fact_count", 1)
 
     async def _remove_fact_category(self, fact_id: str) -> None:
         """Remove category assignment from a fact."""
-        await self.aioredis_client.hdel(f"fact:{fact_id}", "category_id")
+        await self.redis().hdel(f"fact:{fact_id}", "category_id")
 
     async def _get_fact_category_id(self, fact_id: str) -> Optional[str]:
         """Get the category ID a fact is assigned to."""
-        category_id = await self.aioredis_client.hget(f"fact:{fact_id}", "category_id")
+        category_id = await self.redis().hget(f"fact:{fact_id}", "category_id")
         if category_id and isinstance(category_id, bytes):
             category_id = category_id.decode("utf-8")
         return category_id if category_id else None
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
-        current = await self.aioredis_client.hget(
+        current = await self.redis().hget(
             f"category:{category_id}", "fact_count"
         )
         if current:
@@ -1041,6 +1041,6 @@ class CategoriesMixin:
                 current.decode("utf-8") if isinstance(current, bytes) else current
             )
             if count > 0:
-                await self.aioredis_client.hset(
+                await self.redis().hset(
                     f"category:{category_id}", "fact_count", count - 1
                 )

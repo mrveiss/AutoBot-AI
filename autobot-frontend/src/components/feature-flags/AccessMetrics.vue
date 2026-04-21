@@ -562,7 +562,7 @@ const formatTime = (timestamp: number) => {
 .breakdown-item.clickable {
   cursor: pointer;
   padding: var(--spacing-2);
-  margin: -8px;
+  margin: var(--spacing-neg-8px);
   border-radius: var(--radius-md);
   transition: background var(--duration-150);
 }

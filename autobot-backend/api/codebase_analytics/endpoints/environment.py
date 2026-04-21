@@ -22,6 +22,8 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import QUALITY_MODEL
 
+from ..analyzers import normalize_hardcode_record
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -88,9 +90,7 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
                 timeout=ANALYSIS_TIMEOUT,
             )
     except asyncio.TimeoutError:
-        logger.warning(
-            "Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT
-        )
+        logger.warning("Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
         return None
 
 
@@ -138,9 +138,7 @@ async def _run_llm_filtered_analysis(
         return None
 
 
-def _build_environment_result(
-    analysis: dict, path: str, for_display: bool = True
-) -> dict:
+def _build_environment_result(analysis: dict, path: str, for_display: bool = True) -> dict:
     """
     Build result from analysis data.
 
@@ -154,6 +152,14 @@ def _build_environment_result(
     """
     hardcoded_values = analysis.get("hardcoded_details", [])
     recommendations = analysis.get("configuration_recommendations", [])
+
+    # Issue #5367: normalize records at the response boundary so the
+    # env-analysis endpoint guarantees the same canonical shape
+    # (`file`/`severity`) as `/hardcodes` (#5290). Defensive parity —
+    # the upstream serializer in env_analyzer already emits canonical
+    # shape today, but a regression there would otherwise leak into
+    # the frontend silently.
+    hardcoded_values = [normalize_hardcode_record(h) for h in hardcoded_values]
 
     # For display, limit to 50 items (UI performance)
     # For export, include all items
@@ -210,12 +216,7 @@ def _get_environment_analyzer():
         # Issue #611: Load env_analyzer directly from file to avoid namespace conflict
         # Issue #2655: Fixed path — env_analyzer lives in autobot-backend/code_analysis/src/,
         # not in tools/code-analysis-suite/src/ (which does not exist in this layout).
-        env_analyzer_path = (
-            Path(__file__).resolve().parents[3]
-            / "code_analysis"
-            / "src"
-            / "env_analyzer.py"
-        )
+        env_analyzer_path = Path(__file__).resolve().parents[3] / "code_analysis" / "src" / "env_analyzer.py"
 
         if not env_analyzer_path.exists():
             logger.warning(
@@ -253,9 +254,7 @@ def _build_error_response(message: str, status: str = "error") -> dict:
     }
 
 
-async def _check_env_analysis_cache(
-    use_llm_filter: bool, refresh: bool
-) -> Optional[JSONResponse]:
+async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool) -> Optional[JSONResponse]:
     """
     Check if cached environment analysis is available and valid.
 
@@ -297,16 +296,12 @@ async def _execute_env_analysis(
     if use_llm_filter:
         # Issue #633: Convert 'all' to None for the filter
         priority = None if filter_priority == "all" else filter_priority
-        return await _run_llm_filtered_analysis(
-            analyzer, path, pattern_list, llm_model, priority
-        )
+        return await _run_llm_filtered_analysis(analyzer, path, pattern_list, llm_model, priority)
     else:
         return await _run_environment_analysis(analyzer, path, pattern_list)
 
 
-async def _cache_env_analysis_results(
-    result: dict, full_result: dict, use_llm_filter: bool
-) -> None:
+async def _cache_env_analysis_results(result: dict, full_result: dict, use_llm_filter: bool) -> None:
     """
     Cache environment analysis results (thread-safe).
 
@@ -321,9 +316,7 @@ async def _cache_env_analysis_results(
             _env_analysis_full_cache = full_result
 
 
-def _add_llm_filtering_metadata(
-    result: dict, analysis: dict, use_llm_filter: bool
-) -> None:
+def _add_llm_filtering_metadata(result: dict, analysis: dict, use_llm_filter: bool) -> None:
     """
     Add LLM filtering metadata to result if applicable.
 
@@ -342,9 +335,7 @@ async def _analyze_and_return_env_result(
     filter_priority: str,
 ) -> JSONResponse:
     """Helper for get_environment_analysis. Ref: #1088."""
-    analysis = await _execute_env_analysis(
-        analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
-    )
+    analysis = await _execute_env_analysis(analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority)
     if analysis is None:
         return JSONResponse(
             _build_error_response(
@@ -373,24 +364,16 @@ async def _analyze_and_return_env_result(
     error_code_prefix="CODEBASE",
 )
 async def get_environment_analysis(
-    path: str = Query(
-        None, description="Root path to analyze (defaults to project root)"
-    ),
+    path: str = Query(None, description="Root path to analyze (defaults to project root)"),
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
-    patterns: str = Query(
-        "**/*.py", description="Glob patterns for files to scan, comma-separated"
-    ),
-    use_llm_filter: bool = Query(
-        False, description="Issue #633: Use LLM to filter false positives"
-    ),
+    patterns: str = Query("**/*.py", description="Glob patterns for files to scan, comma-separated"),
+    use_llm_filter: bool = Query(False, description="Issue #633: Use LLM to filter false positives"),
     llm_model: str = Query(QUALITY_MODEL, description="Ollama model for LLM filtering"),
     filter_priority: str = Query(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -415,11 +398,7 @@ async def get_environment_analysis(
     try:
         analyzer = await asyncio.to_thread(_get_environment_analyzer)
         if not analyzer:
-            return JSONResponse(
-                _build_error_response(
-                    "EnvironmentAnalyzer not available. Check tools installation."
-                )
-            )
+            return JSONResponse(_build_error_response("EnvironmentAnalyzer not available. Check tools installation."))
         return await _analyze_and_return_env_result(
             analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
         )
@@ -435,12 +414,8 @@ async def get_environment_analysis(
     error_code_prefix="CODEBASE",
 )
 async def get_env_recommendations(
-    path: str = Query(
-        None, description="Root path to analyze (defaults to project root)"
-    ),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    path: str = Query(None, description="Root path to analyze (defaults to project root)"),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get environment variable recommendations for a codebase (Issue #538).
@@ -522,9 +497,7 @@ _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _VALID_SEVERITIES = {"high", "medium", "low"}
 
 
-def _filter_hardcoded_values(
-    values: list, category: Optional[str], severity: Optional[str]
-) -> list:
+def _filter_hardcoded_values(values: list, category: Optional[str], severity: Optional[str]) -> list:
     """
     Filter hardcoded values by category and/or severity.
 
@@ -534,9 +507,7 @@ def _filter_hardcoded_values(
     if category:
         result = [v for v in result if v.get("type", "").lower() == category.lower()]
     if severity:
-        result = [
-            v for v in result if v.get("severity", "").lower() == severity.lower()
-        ]
+        result = [v for v in result if v.get("severity", "").lower() == severity.lower()]
     return result
 
 
@@ -546,9 +517,7 @@ def _sort_by_severity(values: list) -> list:
 
     Issue #665: Extracted helper for severity sorting.
     """
-    return sorted(
-        values, key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3)
-    )
+    return sorted(values, key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3))
 
 
 def _calculate_category_breakdown(values: list) -> dict:
@@ -597,9 +566,7 @@ def _build_export_response_json(
             },
             "hardcoded_values": hardcoded_values,
             "recommendations": recommendations if include_recommendations else [],
-            "recommendations_count": (
-                len(recommendations) if include_recommendations else 0
-            ),
+            "recommendations_count": (len(recommendations) if include_recommendations else 0),
         }
     )
 
@@ -649,19 +616,11 @@ def _validate_export_severity(severity: Optional[str]) -> Optional[JSONResponse]
     error_code_prefix="CODEBASE",
 )
 async def export_env_analysis(
-    category: str = Query(
-        None, description="Filter by category (e.g., 'security', 'port', 'hostname')"
-    ),
-    severity: str = Query(
-        None, description="Filter by severity ('high', 'medium', 'low')"
-    ),
+    category: str = Query(None, description="Filter by category (e.g., 'security', 'port', 'hostname')"),
+    severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
     limit: int = Query(None, description="Limit number of results (default: all)"),
-    include_recommendations: bool = Query(
-        True, description="Include recommendations in export"
-    ),
-    source_id: Optional[str] = Query(
-        None, description="#1772: source_id for API consistency"
-    ),
+    include_recommendations: bool = Query(True, description="Include recommendations in export"),
+    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Export full environment analysis results without truncation (Issue #631).

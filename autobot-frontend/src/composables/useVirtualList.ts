@@ -31,7 +31,7 @@
  * ```
  */
 
-import { ref, computed, onMounted, onUnmounted, watch, toValue, type MaybeRefOrGetter } from 'vue'
+import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, toValue, type MaybeRefOrGetter } from 'vue'
 
 interface VirtualItem<T> {
   data: T
@@ -90,17 +90,21 @@ export function useVirtualList<T extends { id: string | number }>(
   }
 
   // Lifecycle
-  onMounted(() => {
-    if (containerRef.value) {
-      containerRef.value.addEventListener('scroll', handleScroll, { passive: true })
-    }
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (containerRef.value) {
+        containerRef.value.addEventListener('scroll', handleScroll, { passive: true })
+      }
+    })
+  }
 
-  onUnmounted(() => {
-    if (containerRef.value) {
-      containerRef.value.removeEventListener('scroll', handleScroll)
-    }
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (containerRef.value) {
+        containerRef.value.removeEventListener('scroll', handleScroll)
+      }
+    })
+  }
 
   // Re-attach listener if container ref changes
   watch(

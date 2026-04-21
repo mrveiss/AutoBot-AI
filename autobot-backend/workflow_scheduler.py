@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
+from autobot_shared.time_utils import parse_utc_iso
 from autobot_types import TaskComplexity
 from constants.threshold_constants import RetryConfig, WorkflowConfig
 
@@ -157,8 +158,8 @@ class ScheduledWorkflow:
     def from_dict(cls, data: Dict[str, Any]) -> "ScheduledWorkflow":
         """Create from dictionary"""
         # Convert datetime strings back to datetime objects
-        data["scheduled_time"] = datetime.fromisoformat(data["scheduled_time"])
-        data["created_at"] = datetime.fromisoformat(data["created_at"])
+        data["scheduled_time"] = parse_utc_iso(data["scheduled_time"])
+        data["created_at"] = parse_utc_iso(data["created_at"])
         data["priority"] = WorkflowPriority(data["priority"])
         data["status"] = WorkflowStatus(data["status"])
         return cls(**data)
@@ -474,7 +475,7 @@ class WorkflowScheduler:
         # Parse scheduled time
         if isinstance(scheduled_time, str):
             try:
-                scheduled_time = datetime.fromisoformat(scheduled_time)
+                scheduled_time = parse_utc_iso(scheduled_time)
             except ValueError:
                 scheduled_time = self._parse_time_string(scheduled_time)
 
@@ -874,7 +875,7 @@ class WorkflowScheduler:
 
         # Default: try parsing as ISO format
         try:
-            return datetime.fromisoformat(time_str)
+            return parse_utc_iso(time_str)
         except ValueError:
             # Fall back to current time + 5 minutes
             return now + timedelta(minutes=5)

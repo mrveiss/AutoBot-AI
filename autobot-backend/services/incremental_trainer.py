@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -145,7 +146,7 @@ class IncrementalTrainer:
 
     def _fetch_recent_feedback(self, db, time_window_hours: int):
         """Helper for update_from_feedback. Ref: #1088."""
-        since = datetime.utcnow() - timedelta(hours=time_window_hours)
+        since = now_utc() - timedelta(hours=time_window_hours)
         return (
             db.query(CompletionFeedback)
             .filter(
@@ -206,7 +207,7 @@ class IncrementalTrainer:
                     "feedback_count": len(feedback_events),
                     "batches_processed": num_batches,
                     "avg_loss": avg_loss,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
 
             except Exception as e:
@@ -214,7 +215,7 @@ class IncrementalTrainer:
                 return {
                     "status": "error",
                     "error": "Incremental training failed",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
 
     def trigger_full_retrain(
@@ -260,7 +261,7 @@ class IncrementalTrainer:
                 "epochs_trained": trainer.current_epoch,
                 "final_val_loss": final_metrics.get("val_loss"),
                 "final_accuracy": final_metrics.get("accuracy"),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
         except Exception as e:
@@ -268,5 +269,5 @@ class IncrementalTrainer:
             return {
                 "status": "error",
                 "error": "Full retraining failed",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }

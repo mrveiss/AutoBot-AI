@@ -4,7 +4,7 @@
 """
 A2A Task Executor
 
-Issue #961: Bridges incoming A2A tasks to AutoBot's existing AgentOrchestrator.
+Issue #961: Bridges incoming A2A tasks to AutoBot's existing DistributedAgentCoordinator.
 Runs as a FastAPI BackgroundTask so the POST /tasks endpoint returns immediately
 with the task ID while execution continues asynchronously.
 """
@@ -45,7 +45,7 @@ async def execute_a2a_task(
     eval_threshold: float = DEFAULT_EVAL_THRESHOLD,
 ) -> None:
     """
-    Execute an A2A task via the existing AgentOrchestrator.
+    Execute an A2A task via the existing DistributedAgentCoordinator.
 
     Lifecycle:
       SUBMITTED → WORKING → (adds text + metadata artifacts)
@@ -70,9 +70,9 @@ async def execute_a2a_task(
 
     try:
         # Late import to avoid circular deps at module load time
-        from agents.agent_orchestration import get_agent_orchestrator
+        from agents.agent_orchestration import get_distributed_agent_coordinator
 
-        orchestrator = get_agent_orchestrator()
+        orchestrator = get_distributed_agent_coordinator()
         result: Dict[str, Any] = await orchestrator.process_request(
             input_text,
             context=context,

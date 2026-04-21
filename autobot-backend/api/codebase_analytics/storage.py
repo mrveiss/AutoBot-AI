@@ -27,36 +27,16 @@ async def get_redis_connection():
     Uses DB 11 (analytics) for codebase indexing and analysis.
 
     Returns a SYNC Redis client for use with asyncio.to_thread().
-    For async operations, use get_redis_connection_async() instead.
+    For async operations, call get_async_redis_client(database="analytics") directly.
     """
     # Use canonical Redis utility - returns sync client
-    from autobot_shared.redis_client import get_async_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
         logger.warning(
             "Redis client initialization returned None, using in-memory storage"
         )
-        return None
-
-    return redis_client
-
-
-async def get_redis_connection_async():
-    """
-    Get async Redis connection for codebase analytics.
-
-    This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
-    Uses DB 11 (analytics) for codebase indexing and analysis.
-
-    Returns an ASYNC Redis client for native async operations.
-    Use this when you want to avoid thread pool blocking.
-    """
-    from autobot_shared.redis_client import get_async_redis_client
-
-    redis_client = await get_async_redis_client(database="analytics")
-    if redis_client is None:
-        logger.warning("Async Redis client initialization returned None")
         return None
 
     return redis_client

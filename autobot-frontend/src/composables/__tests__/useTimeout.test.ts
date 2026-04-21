@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, effectScope, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   useDebounce,
@@ -1104,6 +1104,107 @@ describe('useTimeout Composable', () => {
       await nextTick()
 
       expect(rejected).toBe(true)
+    })
+  })
+
+  // ========================================
+  // Scope-aware cleanup (#5347)
+  // ========================================
+
+  describe('scope-aware cleanup (#5347)', () => {
+    it('useDebounce does not warn in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useDebounce(() => {}, 100)
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useThrottle does not warn in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useThrottle(() => {}, 100)
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useTimeout does not warn in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useTimeout(() => {}, 100)
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useInterval does not warn in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useInterval(() => {}, 100)
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useCancelableSleep does not warn in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        const sleep = useCancelableSleep(100)
+        // avoid unhandled rejection when scope.stop() cancels it
+        sleep.promise.catch(() => {})
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useCancelableSleep does not warn when no active scope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const sleep = useCancelableSleep(100)
+      sleep.promise.catch(() => {})
+      sleep.cancel()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('useCancelableSleep cleanup fires on scope.stop()', () => {
+      const scope = effectScope()
+      let sleep: ReturnType<typeof useCancelableSleep> | undefined
+      scope.run(() => {
+        sleep = useCancelableSleep(10000)
+      })
+      expect(sleep).toBeDefined()
+      let rejected = false
+      sleep!.promise.catch(() => {
+        rejected = true
+      })
+      scope.stop()
+      return Promise.resolve().then(() => {
+        expect(rejected).toBe(true)
+      })
     })
   })
 })

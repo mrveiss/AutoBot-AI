@@ -27,7 +27,9 @@ from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -63,11 +65,6 @@ def _build_evolution_prefixes(source_id: Optional[str]) -> tuple[str, str, str]:
     else:
         ev = EVOLUTION_PREFIX
     return ev, f"{ev}snapshot:", f"{ev}patterns:"
-
-
-def _decode_redis_value(value) -> str:
-    """Decode Redis bytes value to string (Issue #315)."""
-    return value.decode("utf-8") if isinstance(value, bytes) else value
 
 
 def _get_snapshot_data(redis_client, keys: list) -> dict | None:
@@ -273,9 +270,7 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
     try:
         # Store snapshot with timestamp-based key
         key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_snapshot():
@@ -304,9 +299,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 
     try:
         key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
         timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
 
         # Issue #361: Execute sync Redis ops in thread pool
@@ -326,12 +319,12 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
     """Parse date range to timestamps (Issue #398: extracted)."""
     start_ts = (
-        datetime.fromisoformat(start_date).timestamp()
+        parse_utc_iso(start_date).timestamp()
         if start_date
         else (datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp()
     )
     end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
+        parse_utc_iso(end_date).timestamp()
         if end_date
         else datetime.now(tz=timezone.utc).timestamp()
     )
@@ -759,9 +752,9 @@ def _parse_export_date_range(
     start_date: Optional[str], end_date: Optional[str]
 ) -> tuple:
     """Parse export date range with defaults (Issue #398: extracted)."""
-    start_ts = datetime.fromisoformat(start_date).timestamp() if start_date else 0
+    start_ts = parse_utc_iso(start_date).timestamp() if start_date else 0
     end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
+        parse_utc_iso(end_date).timestamp()
         if end_date
         else datetime.now(tz=timezone.utc).timestamp()
     )
@@ -981,7 +974,7 @@ def _aggregate_by_granularity(
             continue
 
         try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = parse_utc_iso(ts)
 
             if granularity == "weekly":
                 # Use ISO week
@@ -1062,11 +1055,11 @@ def _generate_demo_timeline(
     TEST ONLY - Not used in production responses (Issue #543).
     """
     start = (
-        datetime.fromisoformat(start_date)
+        parse_utc_iso(start_date)
         if start_date
         else datetime.now(tz=timezone.utc) - timedelta(days=30)
     )
-    end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
+    end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
     step = _get_granularity_step(granularity)
 
     timeline = []
@@ -1291,10 +1284,10 @@ async def trigger_evolution_analysis(
 
         # Parse dates
         start_date = (
-            datetime.fromisoformat(request.start_date) if request.start_date else None
+            parse_utc_iso(request.start_date) if request.start_date else None
         )
         end_date = (
-            datetime.fromisoformat(request.end_date) if request.end_date else None
+            parse_utc_iso(request.end_date) if request.end_date else None
         )
 
         # Run analysis in thread pool to avoid blocking

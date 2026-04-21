@@ -12,7 +12,7 @@ import json
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -550,7 +550,7 @@ async def _run_discover_job(
         return
 
     job["status"] = "running"
-    job["started_at"] = datetime.utcnow().isoformat()
+    job["started_at"] = datetime.now(timezone.utc).isoformat()
 
     try:
         executor = get_playbook_executor()
@@ -575,7 +575,7 @@ async def _run_discover_job(
         if not result["success"] and not host_results:
             job["status"] = "failed"
             job["message"] = "Playbook failed: " + result["output"][:500]
-            job["completed_at"] = datetime.utcnow().isoformat()
+            job["completed_at"] = datetime.now(timezone.utc).isoformat()
             logger.error("Discover job %s failed — no nodes reported results", job_id)
             return
 
@@ -609,14 +609,14 @@ async def _run_discover_job(
 
         job["progress"] = 100
         job["packages_found"] = total_packages
-        job["completed_at"] = datetime.utcnow().isoformat()
+        job["completed_at"] = datetime.now(timezone.utc).isoformat()
         await _broadcast_job_update(job_id, job["status"], 100, job["message"])
 
     except Exception as e:
         logger.exception("Discover job failed: %s", job_id)
         job["status"] = "failed"
         job["message"] = "Discover job failed"
-        job["completed_at"] = datetime.utcnow().isoformat()
+        job["completed_at"] = datetime.now(timezone.utc).isoformat()
         await _broadcast_job_update(job_id, "failed", job.get("progress", 0), "Discover job failed")
 
 

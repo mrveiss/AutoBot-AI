@@ -133,8 +133,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useSlots } from 'vue'
+import { ref, computed, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 
 interface TableColumn {
   key: string
@@ -182,7 +183,20 @@ const emit = defineEmits<{
 const slots = useSlots()
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
-const selectedRows = ref<Set<any>>(new Set())
+
+// Row selection backed by useBatchSelection. Items source is props.data;
+// the Key is whatever `row[props.rowKey]` yields (typically string/number).
+const rowSelection = useBatchSelection<any, any>(
+  () => props.data ?? [],
+  (row) => row[props.rowKey]
+)
+const selectedRows = rowSelection.selected
+const allSelected = rowSelection.allSelected
+
+// Emit selection-change whenever the selected keys mutate.
+watch(selectedRows, (set) => {
+  emit('selection-change', Array.from(set))
+}, { deep: false })
 
 const wrapperClasses = computed(() => [
   `table-${props.variant}`,
@@ -194,11 +208,6 @@ const totalColumns = computed(() => {
   if (props.selectable) count++
   if (slots.actions) count++
   return count
-})
-
-const allSelected = computed(() => {
-  if (!props.data || props.data.length === 0) return false
-  return props.data.every(row => selectedRows.value.has(row[props.rowKey]))
 })
 
 const handleSort = (key: string) => {
@@ -213,22 +222,14 @@ const handleSort = (key: string) => {
 
 const toggleSelectAll = () => {
   if (allSelected.value) {
-    selectedRows.value.clear()
+    rowSelection.clear()
   } else {
-    props.data.forEach(row => {
-      selectedRows.value.add(row[props.rowKey])
-    })
+    rowSelection.selectAll()
   }
-  emit('selection-change', Array.from(selectedRows.value))
 }
 
 const toggleRowSelection = (key: any) => {
-  if (selectedRows.value.has(key)) {
-    selectedRows.value.delete(key)
-  } else {
-    selectedRows.value.add(key)
-  }
-  emit('selection-change', Array.from(selectedRows.value))
+  rowSelection.toggleByKey(key)
 }
 
 const handleRowClick = (row: any) => {

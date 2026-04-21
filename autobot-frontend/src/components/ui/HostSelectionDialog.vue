@@ -12,10 +12,11 @@
       :aria-labelledby="dialogTitleId"
       :aria-describedby="dialogDescId"
       tabindex="-1"
+      @keydown="onFocusTrapKeydown"
     >
       <div class="dialog-header">
         <div class="dialog-icon" aria-hidden="true">
-          <i class="fas fa-server"></i>
+          <Icon name="server" size="md" />
         </div>
         <div class="dialog-title">
           <h3 :id="dialogTitleId">{{ t('ui.hostSelection.title') }}</h3>
@@ -28,7 +29,7 @@
           @click="handleCancel"
           :aria-label="t('ui.hostSelection.close')"
         >
-          <i class="fas fa-times" aria-hidden="true"></i>
+          <Icon name="times" size="sm" />
         </button>
       </div>
 
@@ -47,16 +48,16 @@
 
           <!-- Loading State -->
           <div v-if="loading" class="loading-state" role="status" aria-live="polite">
-            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <LoadingSpinner size="md" />
             <span>{{ t('ui.hostSelection.loadingHosts') }}</span>
           </div>
 
           <!-- No Hosts State -->
           <div v-else-if="hosts.length === 0" class="empty-state">
-            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <Icon name="exclamation-circle" size="md" />
             <span>{{ t('ui.hostSelection.noHostsConfigured') }}</span>
             <button type="button" @click="openSecretsManager" class="add-host-link">
-              <i class="fas fa-plus" aria-hidden="true"></i> {{ t('ui.hostSelection.addHost') }}
+              <Icon name="plus" size="sm" /> {{ t('ui.hostSelection.addHost') }}
             </button>
           </div>
 
@@ -88,21 +89,21 @@
                 />
               </div>
               <div class="host-icon" aria-hidden="true">
-                <i :class="getHostIcon(host)"></i>
+                <Icon :name="getHostIcon(host)" size="sm" />
               </div>
               <div class="host-info">
                 <div class="host-name">
                   {{ host.name }}
                   <span v-if="host.id === defaultHostId" class="default-badge">
-                    <i class="fas fa-star" aria-hidden="true"></i> {{ t('ui.hostSelection.default') }}
+                    <Icon name="star" size="xs" /> {{ t('ui.hostSelection.default') }}
                   </span>
                 </div>
                 <div class="host-details">
                   <span class="host-connection">
-                    <i class="fas fa-user" aria-hidden="true"></i> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
+                    <Icon name="user" size="xs" /> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
                   </span>
                   <span v-if="host.capabilities?.includes('vnc')" class="host-capability">
-                    <i class="fas fa-desktop" aria-hidden="true"></i> VNC
+                    <Icon name="desktop" size="xs" /> VNC
                   </span>
                 </div>
                 <div v-if="host.purpose" class="host-purpose">
@@ -119,7 +120,7 @@
                   :title="t('ui.hostSelection.setAsDefault')"
                   :disabled="isProcessing"
                 >
-                  <i class="fas fa-star" aria-hidden="true"></i>
+                  <Icon name="star" size="sm" />
                 </button>
               </div>
             </div>
@@ -141,7 +142,7 @@
 
         <!-- Error Message -->
         <div v-if="error" class="error-message" role="alert" aria-live="assertive">
-          <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+          <Icon name="exclamation-triangle" size="sm" />
           <span>{{ error }}</span>
         </div>
       </div>
@@ -154,7 +155,7 @@
             @click="handleCancel"
             :disabled="isProcessing"
           >
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <Icon name="times" size="sm" />
             {{ t('ui.hostSelection.cancel') }}
           </button>
           <button
@@ -164,14 +165,14 @@
             :disabled="!selectedHostId || isProcessing"
             :aria-busy="isProcessing"
           >
-            <i v-if="isProcessing" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-            <i v-else class="fas fa-check" aria-hidden="true"></i>
+            <LoadingSpinner v-if="isProcessing" size="sm" />
+            <Icon v-else name="check" size="sm" />
             {{ isProcessing ? t('ui.hostSelection.connecting') : t('ui.hostSelection.connectAndExecute') }}
           </button>
         </div>
 
         <div class="security-note">
-          <i class="fas fa-lock" aria-hidden="true"></i>
+          <Icon name="lock" size="sm" />
           <span>{{ t('ui.hostSelection.securityNote') }}</span>
         </div>
       </div>
@@ -180,11 +181,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, useId, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
+import Icon, { type IconName } from '@/components/ui/Icon.vue';
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { useFocusTrap } from '@/composables/useFocusTrap';
+import { useFocusRestore } from '@/composables/useFocusRestore';
+import { useInitialFocus } from '@/composables/useInitialFocus';
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -231,15 +238,18 @@ const emit = defineEmits<{
 // #1721: In-memory session host preference (avoids clear-text sessionStorage)
 let _sessionHostChoice: string | null = null;
 
-// Stable IDs for ARIA labeling
-const _uid = Math.random().toString(36).substr(2, 9);
+// Stable IDs for ARIA labeling (Vue 3.5+ useId)
+const _uid = useId();
 const dialogTitleId = `host-dialog-title-${_uid}`;
 const dialogDescId = `host-dialog-desc-${_uid}`;
 const hostListLabelId = `host-list-label-${_uid}`;
 
 // Focus management
 const dialogRef = ref<HTMLElement | null>(null);
-let previousActiveElement: HTMLElement | null = null;
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
+useFocusRestore(toRef(props, 'show'));
+useBodyScrollLock(toRef(props, 'show'));
+const { focusFirst } = useInitialFocus(dialogRef);
 
 // State
 const showDialog = ref(false);
@@ -344,11 +354,11 @@ const setAsDefault = (host: InfrastructureHost) => {
 };
 
 // Get host icon based on capabilities
-const getHostIcon = (host: InfrastructureHost): string => {
+const getHostIcon = (host: InfrastructureHost): IconName => {
   if (host.capabilities?.includes('vnc')) {
-    return 'fas fa-desktop';
+    return 'desktop';
   }
-  return 'fas fa-server';
+  return 'server';
 };
 
 // Open secrets manager to add new host
@@ -414,33 +424,13 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 };
 
-// Focus trap helpers
-const trapFocus = (event: FocusEvent) => {
-  if (!dialogRef.value) return;
-  if (!dialogRef.value.contains(event.target as Node)) {
-    const focusable = dialogRef.value.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable.length > 0) {
-      focusable[0].focus();
-      event.preventDefault();
-    }
-  }
-};
-
-// Watchers
+// Watchers — focus save/restore handled by useFocusRestore above,
+// initial focus by useInitialFocus.
 watch(() => props.show, async (newValue) => {
   showDialog.value = newValue;
   if (newValue) {
-    previousActiveElement = document.activeElement as HTMLElement;
     loadHosts();
-    document.addEventListener('focusin', trapFocus);
-    await nextTick();
-    dialogRef.value?.focus();
-  } else {
-    document.removeEventListener('focusin', trapFocus);
-    previousActiveElement?.focus();
-    previousActiveElement = null;
+    await focusFirst();
   }
 }, { immediate: true });
 
@@ -451,7 +441,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape);
-  document.removeEventListener('focusin', trapFocus);
 });
 </script>
 

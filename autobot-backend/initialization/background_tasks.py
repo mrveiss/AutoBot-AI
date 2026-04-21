@@ -44,11 +44,14 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         return None
 
 
-async def _init_redis(update_status_fn, append_error_fn):
+async def _mark_redis_ready(update_status_fn, append_error_fn):
     """
-    Initialize Redis status using centralized client management.
+    Mark Redis as ready in the initialization status tracker.
 
-    Issue #281: Extracted helper for Redis initialization.
+    Issue #281: Extracted helper for Redis initialization status.
+    Issue #5101: Renamed from _init_redis — no Redis client is initialized here;
+    this function only flips the status flag. Components obtain Redis clients
+    directly via autobot_shared.redis_client.get_redis_client().
 
     Args:
         update_status_fn: Function to update initialization status
@@ -60,7 +63,7 @@ async def _init_redis(update_status_fn, append_error_fn):
         await update_status_fn("redis_pools", "ready")
         log_initialization_step(
             "Redis",
-            "Using centralized Redis client management (src.utils.redis_client)",
+            "Using centralized Redis client management (autobot_shared.redis_client)",
             90,
             True,
         )
@@ -270,7 +273,7 @@ async def enhanced_background_init(
 
         # Run all initialization tasks concurrently (Issue #281: uses helpers)
         tasks = [
-            _init_redis(update_status_fn, append_error_fn),
+            _mark_redis_ready(update_status_fn, append_error_fn),
             _init_knowledge_base(app, update_status_fn, append_error_fn, get_status_fn),
             _init_chat_workflow(app, update_status_fn, append_error_fn),
             _init_llm_sync(update_status_fn, append_error_fn),

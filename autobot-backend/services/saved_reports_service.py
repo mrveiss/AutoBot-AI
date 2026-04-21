@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class SavedReportsService:
         """Create and persist a new saved report."""
         redis = await self._get_redis()
         report_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = utc_timestamp()
 
         report = {
             "id": report_id,
@@ -113,7 +114,7 @@ class SavedReportsService:
         existing["name"] = name
         existing["report_type"] = report_type
         existing["sections"] = sections or existing.get("sections", ["cost", "agents"])
-        existing["updated_at"] = datetime.utcnow().isoformat()
+        existing["updated_at"] = utc_timestamp()
 
         await redis.set(f"{_REPORT_KEY_PREFIX}{report_id}", json.dumps(existing))
         logger.info("Updated saved report %s: %s", report_id, name)
@@ -153,7 +154,7 @@ class SavedReportsService:
             "report_name": report["name"],
             "report_type": report["report_type"],
             "days": days,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_timestamp(),
             "data": {},
         }
 

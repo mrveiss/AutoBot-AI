@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,6 +44,19 @@ jobs:
       - name: Install dependencies
         working-directory: autobot-frontend
         run: npm ci
+
+      - name: Verify generated API types exist (#5209)
+        working-directory: autobot-frontend
+        run: |
+          # Fails if someone edits src/types/generated/api.ts by hand.
+          # Full drift detection (regenerate against live backend, diff)
+          # runs separately where a backend is available — see
+          # docs/developer/frontend-type-generation.md.
+          test -f src/types/generated/api.ts || (
+            echo "Missing src/types/generated/api.ts — run 'npm run gen:types' against a running backend and commit the result."
+            exit 1
+          )
+          npm run verify:types
 
       - name: Run type checking
         working-directory: autobot-frontend
@@ -70,7 +83,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: ./autobot-frontend/coverage/lcov.info
           directory: ./autobot-frontend/coverage
@@ -79,7 +92,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results-unit
@@ -100,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -123,7 +136,7 @@ jobs:
           npx auditjs ossi || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-scan-results
@@ -143,7 +156,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

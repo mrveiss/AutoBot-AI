@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Unit tests for AutonomousLoopOrchestrator — Issue #4680.
+Unit tests for AutonomousLoopRunner — Issue #4680.
 
 Tests cover each phase (LEARN, HYPOTHESIZE, EXPERIMENT, ANALYZE, PROMOTE) and
 the guardrails (dry-run, promotion threshold, hard-stop).
@@ -19,11 +19,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.knowledge.autonomous_loop import (
-    AutonomousLoopOrchestrator,
+    AutonomousLoopRunner,
     LoopRunRecord,
     LoopStatus,
     _DEFAULT_PROMOTION_THRESHOLD,
-    get_loop_orchestrator,
+    get_loop_runner,
 )
 
 
@@ -47,9 +47,9 @@ def _make_orchestrator(
     promotion_threshold: float = _DEFAULT_PROMOTION_THRESHOLD,
     llm_response: str = "",
     max_variants: int = 3,
-) -> AutonomousLoopOrchestrator:
+) -> AutonomousLoopRunner:
     llm = _make_llm(llm_response)
-    return AutonomousLoopOrchestrator(
+    return AutonomousLoopRunner(
         llm_service=llm,
         dry_run=dry_run,
         max_variants=max_variants,
@@ -649,7 +649,7 @@ async def test_running_false_after_run_once():
 
 @pytest.mark.asyncio
 async def test_get_loop_orchestrator_returns_singleton_when_running():
-    """get_loop_orchestrator() returns existing instance when _running=True."""
+    """get_loop_runner() returns existing instance when _running=True."""
     import services.knowledge.autonomous_loop as mod
 
     original = mod._loop_orchestrator
@@ -658,7 +658,7 @@ async def test_get_loop_orchestrator_returns_singleton_when_running():
         existing._running = True
         mod._loop_orchestrator = existing
 
-        result = await get_loop_orchestrator(llm_service=MagicMock())
+        result = await get_loop_runner(llm_service=MagicMock())
         assert result is existing
     finally:
         mod._loop_orchestrator = original
@@ -666,7 +666,7 @@ async def test_get_loop_orchestrator_returns_singleton_when_running():
 
 @pytest.mark.asyncio
 async def test_get_loop_orchestrator_replaces_when_not_running():
-    """get_loop_orchestrator() replaces the singleton when _running=False."""
+    """get_loop_runner() replaces the singleton when _running=False."""
     import services.knowledge.autonomous_loop as mod
 
     original = mod._loop_orchestrator
@@ -678,11 +678,11 @@ async def test_get_loop_orchestrator_replaces_when_not_running():
 
         new_llm = MagicMock()
         with patch.object(
-            AutonomousLoopOrchestrator,
+            AutonomousLoopRunner,
             "restore_state",
             new=AsyncMock(),
         ):
-            result = await get_loop_orchestrator(llm_service=new_llm)
+            result = await get_loop_runner(llm_service=new_llm)
 
         assert result is not existing
         assert result._llm is new_llm

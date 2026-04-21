@@ -208,13 +208,13 @@ def create_success_response(
         >>> response.status_code
         200
     """
-    from datetime import datetime
+    from autobot_shared.time_utils import utc_timestamp
 
     response = {
         "success": True,
         "data": data,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
     }
     if request_id:
         response["request_id"] = request_id

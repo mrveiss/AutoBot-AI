@@ -96,6 +96,13 @@ async def record_rag_feedback(
                 "record_rag_feedback: Redis unavailable; annotation dropped for user %s",
                 uid,
             )
+            # Issue #5319 / #5407: emit ops-visible counter alongside the
+            # warning.  reason="redis_down" - analytics Redis unreachable.
+            from knowledge.metrics import autobot_kb_degradation_total
+
+            autobot_kb_degradation_total.labels(
+                endpoint="rag_feedback", reason="redis_down"
+            ).inc()
             return {"status": "skipped", "reason": "redis_unavailable"}
 
         await redis.xadd(stream_key, entry)

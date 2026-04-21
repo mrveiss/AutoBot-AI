@@ -29,7 +29,7 @@
  * ```
  */
 
-import { onMounted, onUnmounted, type Ref } from 'vue'
+import { onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
 import { resolveTarget } from './utils/target-resolver'
 
 // ========================================
@@ -153,16 +153,20 @@ export function useKeyPress(
   // Cache target to ensure cleanup works even if ref changes
   let cachedTarget: HTMLElement | Document | Window | null = null
 
-  onMounted(() => {
-    cachedTarget = resolveTarget(target)
-    cachedTarget.addEventListener(event, handleKeyPress)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      cachedTarget = resolveTarget(target)
+      cachedTarget.addEventListener(event, handleKeyPress)
+    })
+  }
 
-  onUnmounted(() => {
-    if (cachedTarget) {
-      cachedTarget.removeEventListener(event, handleKeyPress)
-    }
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cachedTarget) {
+        cachedTarget.removeEventListener(event, handleKeyPress)
+      }
+    })
+  }
 }
 
 // ========================================
@@ -398,16 +402,20 @@ export function useKeyboardShortcut(
   // Cache target to ensure cleanup works even if ref changes
   let cachedTarget: HTMLElement | Document | Window | null = null
 
-  onMounted(() => {
-    cachedTarget = resolveTarget(target)
-    cachedTarget.addEventListener(event, handleShortcut)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      cachedTarget = resolveTarget(target)
+      cachedTarget.addEventListener(event, handleShortcut)
+    })
+  }
 
-  onUnmounted(() => {
-    if (cachedTarget) {
-      cachedTarget.removeEventListener(event, handleShortcut)
-    }
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cachedTarget) {
+        cachedTarget.removeEventListener(event, handleShortcut)
+      }
+    })
+  }
 }
 
 // ========================================
@@ -555,16 +563,20 @@ export function useArrowKeys(
   // Cache target to ensure cleanup works even if ref changes
   let cachedTarget: HTMLElement | Document | Window | null = null
 
-  onMounted(() => {
-    cachedTarget = resolveTarget(target)
-    cachedTarget.addEventListener('keydown', handleArrowKey)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      cachedTarget = resolveTarget(target)
+      cachedTarget.addEventListener('keydown', handleArrowKey)
+    })
+  }
 
-  onUnmounted(() => {
-    if (cachedTarget) {
-      cachedTarget.removeEventListener('keydown', handleArrowKey)
-    }
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cachedTarget) {
+        cachedTarget.removeEventListener('keydown', handleArrowKey)
+      }
+    })
+  }
 }
 
 // ========================================
@@ -619,14 +631,18 @@ export function useCommandPaletteHotkey(
 
   let cachedTarget: HTMLElement | Document | Window | null = null
 
-  onMounted(() => {
-    cachedTarget = resolveTarget(target)
-    cachedTarget.addEventListener('keydown', handlePalette)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      cachedTarget = resolveTarget(target)
+      cachedTarget.addEventListener('keydown', handlePalette)
+    })
+  }
 
-  onUnmounted(() => {
-    if (cachedTarget) {
-      cachedTarget.removeEventListener('keydown', handlePalette)
-    }
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cachedTarget) {
+        cachedTarget.removeEventListener('keydown', handlePalette)
+      }
+    })
+  }
 }

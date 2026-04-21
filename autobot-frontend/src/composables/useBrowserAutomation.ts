@@ -7,7 +7,7 @@
  * Issue #900 - Browser Automation Dashboard
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -76,7 +76,6 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   const sessions = ref<BrowserSession[]>([])
   const currentSession = ref<BrowserSession | null>(null)
   const screenshots = ref<ScreenshotResult[]>([])
-  const scripts = ref<AutomationScript[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -305,18 +304,22 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   // ===== Lifecycle =====
 
-  onMounted(() => {
-    if (autoFetch) {
-      Promise.all([fetchWorkerStatus(), fetchSessions()])
-    }
-    if (pollInterval > 0) {
-      startPolling()
-    }
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (autoFetch) {
+        Promise.all([fetchWorkerStatus(), fetchSessions()])
+      }
+      if (pollInterval > 0) {
+        startPolling()
+      }
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     // State
@@ -324,7 +327,6 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     sessions,
     currentSession,
     screenshots,
-    scripts,
     isLoading,
     error,
 

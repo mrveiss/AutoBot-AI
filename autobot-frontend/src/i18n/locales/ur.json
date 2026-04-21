@@ -119,7 +119,11 @@
     "services": "Services",
     "skipToNavigation": "Skip to navigation",
     "openMainMenu": "Open main menu",
-    "operations": "آپریشنز"
+    "operations": "آپریشنز",
+    "applicationError": "Application Error",
+    "unexpectedError": "An unexpected error occurred",
+    "loadingTimeout": "Loading Timed Out",
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
   },
   "agent": {
     "registry": {
@@ -1376,6 +1380,25 @@
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
+      }
+    },
+    "hardcodes": {
+      "title": "ہارڈ کوڈڈ ویلیوز",
+      "values": "ویلیوز",
+      "totalValues": "کل ویلیوز",
+      "highLabel": "زیادہ",
+      "mediumLabel": "درمیانہ",
+      "lowLabel": "کم",
+      "uniqueTypes": "منفرد اقسام",
+      "variable": "ویریبل",
+      "value": "ویلیو",
+      "suggestedEnvVar": "تجویز کردہ ماحولیاتی ویریبل",
+      "showingOf": "{shown} میں سے {total} دکھا رہا ہے",
+      "emptyMessage": "کوئی ہارڈ کوڈڈ ویلیوز نہیں ملیں",
+      "severityGroups": {
+        "high": "اعلیٰ شدت",
+        "medium": "درمیانی شدت",
+        "low": "کم شدت"
       }
     },
     "problems": {

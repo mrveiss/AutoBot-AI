@@ -189,7 +189,6 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -260,8 +259,7 @@ const scanForIssues = async () => {
   try {
     // Scan for duplicates (dry run)
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const dupResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=true`)
-    const dupData = await parseApiResponse(dupResponse)
+    const dupData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=true`)
 
     if (dupData.status === 'success') {
       duplicateStats.value = dupData
@@ -271,8 +269,7 @@ const scanForIssues = async () => {
 
     // Scan for orphans
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const orphanResponse = await apiClient.get(`${getApiBase()}/knowledge-maintenance/orphans`)
-    const orphanData = await parseApiResponse(orphanResponse)
+    const orphanData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/orphans`)
 
     if (orphanData.status === 'success') {
       orphanStats.value = orphanData
@@ -300,8 +297,7 @@ const cleanupDuplicates = async () => {
 
   try {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=false`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=false`)
 
     if (data.status === 'success') {
       logger.info(`Successfully removed ${data.deleted_count} duplicates`)
@@ -329,8 +325,7 @@ const cleanupOrphans = async () => {
 
   try {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await apiClient.delete(`${getApiBase()}/knowledge-maintenance/orphans?dry_run=false`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/orphans?dry_run=false`)
 
     if (data.status === 'success') {
       logger.info(`Successfully removed ${data.deleted_count} orphans`)

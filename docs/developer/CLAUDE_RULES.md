@@ -225,3 +225,35 @@ Create issue + DEFER (don't ask):
 When an issue is complete, wait for explicit user instruction before starting new work.
 
 > Violation: Noticing a broken error handler and not creating a GitHub issue because "it's not my task."
+
+---
+
+## Rule 7: Behavioral Grep for Extraction PRs (#5372)
+
+**Extraction PRs (pulling a duplicated pattern into a shared composable/utility + migrating N sites) MUST grep for the *behavior*, not just the *symbol*, and document before/after hit counts in the PR description.**
+
+**Why:** The issue body enumerates sites by symbol name at filing time. Symbol names drift (rename, different convention per consumer); behavior does not. Symbol-only greps underreport consistently — **~50% of extraction PRs this session shipped incomplete migrations** and required follow-up PRs.
+
+**Required PR section:**
+
+```markdown
+## Behavioral grep audit
+
+Before:
+\`\`\`bash
+$ grep -rnE "<behavior regex>" <tree>
+# N hits
+\`\`\`
+
+After:
+\`\`\`bash
+$ <same grep>
+# 0 hits (or explicit follow-up with #N filed)
+\`\`\`
+```
+
+**Rule of thumb:** Match the pattern body (e.g. `key === 'Tab'` and `shiftKey &&` for focus-trap code), cast wider than the issue's enumeration, and run **twice** — once loose, once tight — to catch the delta.
+
+Full Phase 0d specification and concrete examples: [`skills/batch-implement.md` §Phase 0d](skills/batch-implement.md).
+
+> Violation: Filing a follow-up issue #5410 for 2 dialogs that the original #5371 grep should have surfaced, because #5371 grepped for `handleKeydown` (symbol) instead of `key === 'Tab'` (behavior).

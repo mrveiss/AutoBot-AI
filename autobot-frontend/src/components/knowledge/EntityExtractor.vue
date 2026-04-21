@@ -172,7 +172,6 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('EntityExtractor')
@@ -287,12 +286,11 @@ async function extractEntities(): Promise<void> {
     const messages = parseMessages(textInput.value)
     logger.info(`Extracting entities from ${messages.length} messages`)
 
-    const response = await apiClient.post(`${getApiBase()}/entities/extract`, {
+    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/entities/extract`, {
       conversation_id: conversationId.value.trim(),
       messages
     })
 
-    const parsedResponse = await parseApiResponse(response)
     const result = parsedResponse?.data || parsedResponse
 
     extractionResult.value = { ...result, timestamp: Date.now() }

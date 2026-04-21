@@ -75,9 +75,7 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
-_TEMP_INDICATORS = frozenset(
-    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
-)  # nosec B108
+_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})  # nosec B108
 _SAFE_FILE_TYPES = frozenset(
     {
         ".pid",
@@ -185,9 +183,7 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     Returns:
         True if the value creates a mutable type
     """
-    if isinstance(
-        value, _COLLECTION_AST_TYPES
-    ):  # Issue #380: Use module-level constant
+    if isinstance(value, _COLLECTION_AST_TYPES):  # Issue #380: Use module-level constant
         return True
 
     if not isinstance(value, ast.Call):
@@ -211,9 +207,7 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     return func_name in mutable_constructors
 
 
-def _process_assign_node(
-    node: ast.Assign, global_vars: Dict[str, int], global_mutables: Set[str]
-) -> None:
+def _process_assign_node(node: ast.Assign, global_vars: Dict[str, int], global_mutables: Set[str]) -> None:
     """Process Assign node for global state extraction. (Issue #315 - extracted)"""
     for target in node.targets:
         if isinstance(target, ast.Name):
@@ -222,9 +216,7 @@ def _process_assign_node(
                 global_mutables.add(target.id)
 
 
-def _process_ann_assign_node(
-    node: ast.AnnAssign, global_vars: Dict[str, int], global_mutables: Set[str]
-) -> None:
+def _process_ann_assign_node(node: ast.AnnAssign, global_vars: Dict[str, int], global_mutables: Set[str]) -> None:
     """Process AnnAssign node for global state extraction. (Issue #315 - extracted)"""
     if not node.target or not isinstance(node.target, ast.Name):
         return
@@ -309,8 +301,7 @@ def _check_subscript_modification(
         return _create_race_condition_problem(
             lineno=stmt.lineno,
             description=(
-                f"Unprotected modification of global '{var_name}' "
-                f"in {async_prefix}function '{func_name}'"
+                f"Unprotected modification of global '{var_name}' " f"in {async_prefix}function '{func_name}'"
             ),
             suggestion=f"Use {lock_type} to protect concurrent access to '{var_name}'",
         )
@@ -369,8 +360,7 @@ def _check_mutating_method_call(
     return _create_race_condition_problem(
         lineno=stmt.lineno,
         description=(
-            f"Unprotected '{method_name}()' on global '{var_name}' "
-            f"in {async_prefix}function '{func_name}'"
+            f"Unprotected '{method_name}()' on global '{var_name}' " f"in {async_prefix}function '{func_name}'"
         ),
         suggestion=f"Use {lock_type} to protect concurrent modifications",
     )
@@ -525,9 +515,7 @@ def _is_safe_file_write_context(
     return False
 
 
-def _check_file_write_without_lock(
-    stmt: ast.With, file_path: str = "", func_name: str = ""
-) -> Optional[Dict]:
+def _check_file_write_without_lock(stmt: ast.With, file_path: str = "", func_name: str = "") -> Optional[Dict]:
     """
     Check for file writes without explicit locking.
 
@@ -572,10 +560,7 @@ def _check_file_write_without_lock(
         # This is a potentially risky file write - flag it
         return _create_race_condition_problem(
             lineno=stmt.lineno,
-            description=(
-                "File opened for writing without explicit locking - "
-                "concurrent writes may corrupt data"
-            ),
+            description=("File opened for writing without explicit locking - " "concurrent writes may corrupt data"),
             suggestion="Use file locking (fcntl.flock) or a separate lock for file access",
             severity="medium",
         )
@@ -785,7 +770,47 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
     }
 
 
-def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[Dict]:
+# Issue #5290: canonical severity by hardcode type when the detector
+# doesn't set one explicitly. Consumed by the per-line detectors and by
+# the endpoint-boundary normalizer in stats.py.
+DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
+    "ip": "high",
+    "api_key": "high",
+    "password": "high",
+    "secret": "high",
+    "port": "medium",
+    "url": "medium",
+    "api_path": "low",
+    "config": "low",
+}
+
+
+def _default_severity_for(hardcode_type: str) -> str:
+    return DEFAULT_HARDCODE_SEVERITY.get(hardcode_type, "low")
+
+
+def normalize_hardcode_record(record: dict) -> dict:
+    """Normalize a hardcode record to the canonical shape.
+
+    Issue #5290: ``/hardcodes`` endpoint applies this to legacy records
+    stored in Redis before the producer shape was fixed (``file_path``
+    → ``file`` and severity backfill).
+
+    Issue #5367: promoted from ``endpoints/stats.py`` to be importable
+    by other endpoints (``env-analysis``) for defensive parity — both
+    paths serve the same conceptual records and should return the same
+    shape on the wire.
+    """
+    normalized = dict(record)
+    if "file" not in normalized and "file_path" in normalized:
+        normalized["file"] = normalized["file_path"]
+    normalized.setdefault("file", "")
+    if not normalized.get("severity"):
+        normalized["severity"] = DEFAULT_HARDCODE_SEVERITY.get(normalized.get("type", ""), "low")
+    return normalized
+
+
+def _check_hardcoded_ip(ip: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:
     """Check if IP address is a known infrastructure IP."""
     # Issue #380: Use module-level constant for local IP prefixes
     if not ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
@@ -795,13 +820,13 @@ def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[D
         "type": "ip",
         "value": ip,
         "line": line_num,
+        "file": file_path,
+        "severity": _default_severity_for("ip"),
         "context": line_content.strip(),
     }
 
 
-def _check_hardcoded_port(
-    port: str, line_num: int, line_content: str
-) -> Optional[Dict]:
+def _check_hardcoded_port(port: str, line_num: int, line_content: str, file_path: str) -> Optional[Dict]:
     """Check if port is a known infrastructure port."""
     known_ports = [
         str(NetworkConstants.BACKEND_PORT),
@@ -819,18 +844,24 @@ def _check_hardcoded_port(
         "type": "port",
         "value": port,
         "line": line_num,
+        "file": file_path,
+        "severity": _default_severity_for("port"),
         "context": line_content.strip(),
     }
 
 
-def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
-    """Detect hardcoded values in a single line of code."""
+def _detect_hardcodes_in_line(line_num: int, line: str, file_path: str) -> List[Dict]:
+    """Detect hardcoded values in a single line of code.
+
+    Issue #5290: every emitted record carries canonical ``file`` and
+    ``severity`` keys so the frontend `HardcodedValue` contract holds.
+    """
     hardcodes = []
 
     # Check for IP addresses
     ip_matches = _IP_ADDRESS_RE.findall(line)
     for ip in ip_matches:
-        result = _check_hardcoded_ip(ip, line_num, line)
+        result = _check_hardcoded_ip(ip, line_num, line, file_path)
         if result:
             hardcodes.append(result)
 
@@ -838,22 +869,27 @@ def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
     url_matches = _URL_IN_QUOTES_RE.findall(line)
     for url in url_matches:
         hardcodes.append(
-            {"type": "url", "value": url, "line": line_num, "context": line.strip()}
+            {
+                "type": "url",
+                "value": url,
+                "line": line_num,
+                "file": file_path,
+                "severity": _default_severity_for("url"),
+                "context": line.strip(),
+            }
         )
 
     # Check for ports
     port_matches = _PORT_NUMBER_RE.findall(line)
     for port in port_matches:
-        result = _check_hardcoded_port(port, line_num, line)
+        result = _check_hardcoded_port(port, line_num, line, file_path)
         if result:
             hardcodes.append(result)
 
     return hardcodes
 
 
-def _detect_technical_debt_in_line(
-    line_num: int, line: str, file_path: str
-) -> Tuple[List[Dict], List[Dict]]:
+def _detect_technical_debt_in_line(line_num: int, line: str, file_path: str) -> Tuple[List[Dict], List[Dict]]:
     """Detect technical debt markers in a line. Returns (debt_items, problem_items)."""
     debt_patterns = [
         # Require colon after keyword to avoid false positives (Issue #617)
@@ -1161,9 +1197,7 @@ def _count_js_vue_line_types(content: str) -> Dict[str, int]:
 
     for line in lines:
         stripped = line.strip()
-        line_type, in_multiline_comment = _classify_js_line(
-            stripped, in_multiline_comment
-        )
+        line_type, in_multiline_comment = _classify_js_line(stripped, in_multiline_comment)
         if line_type == "blank":
             blank_lines += 1
         elif line_type == "comment":
@@ -1188,14 +1222,19 @@ async def _merge_llm_results(
 ) -> None:
     """Merge LLM analysis results into existing hardcodes and technical debt lists."""
     try:
-        llm_results = await detect_hardcodes_and_debt_with_llm(
-            content, file_path, language="python"
-        )
+        llm_results = await detect_hardcodes_and_debt_with_llm(content, file_path, language="python")
 
         # Merge LLM hardcodes (avoid duplicates)
+        # Issue #5290: LLM prompt asks for {type, value, line, reason,
+        # severity} but not ``file`` — attach it here so records conform
+        # to the canonical shape without relying on the response-boundary
+        # normalizer.
         existing_values = {h.get("value") for h in hardcodes}
         for llm_hardcode in llm_results.get("hardcodes", []):
             if llm_hardcode.get("value") not in existing_values:
+                llm_hardcode.setdefault("file", file_path)
+                if not llm_hardcode.get("severity"):
+                    llm_hardcode["severity"] = _default_severity_for(llm_hardcode.get("type", ""))
                 hardcodes.append(llm_hardcode)
 
         # Add technical debt from LLM
@@ -1244,9 +1283,7 @@ def _analyze_ast_nodes(
     return functions, classes, imports, problems
 
 
-def _analyze_content_lines(
-    content: str, file_path: str
-) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
     Analyze content line-by-line for hardcodes and technical debt.
 
@@ -1259,8 +1296,8 @@ def _analyze_content_lines(
 
     lines = content.split("\n")
     for i, line in enumerate(lines, 1):
-        # Detect hardcoded values
-        hardcodes.extend(_detect_hardcodes_in_line(i, line))
+        # Detect hardcoded values (Issue #5290: pass file_path into producers)
+        hardcodes.extend(_detect_hardcodes_in_line(i, line, file_path))
 
         # Detect technical debt
         debt_items, problem_items = _detect_technical_debt_in_line(i, line, file_path)
@@ -1310,9 +1347,7 @@ async def detect_hardcodes_and_debt_with_llm(
         return empty_result
 
 
-def _check_async_global_state_issue(
-    node: ast.AsyncFunctionDef, has_async_lock_import: bool
-) -> Optional[Dict]:
+def _check_async_global_state_issue(node: ast.AsyncFunctionDef, has_async_lock_import: bool) -> Optional[Dict]:
     """
     Check if async function uses global state without lock import.
 
@@ -1322,13 +1357,8 @@ def _check_async_global_state_issue(
     if uses_global and not has_async_lock_import:
         return _create_race_condition_problem(
             lineno=node.lineno,
-            description=(
-                f"Async function '{node.name}' uses global state "
-                f"but no asyncio.Lock imported"
-            ),
-            suggestion=(
-                "Consider using asyncio.Lock() to protect shared state in async context"
-            ),
+            description=(f"Async function '{node.name}' uses global state " f"but no asyncio.Lock imported"),
+            suggestion=("Consider using asyncio.Lock() to protect shared state in async context"),
             severity="medium",
         )
     return None
@@ -1350,11 +1380,7 @@ def _analyze_function_for_race_conditions(
     problems = []
 
     # Check for global state modifications
-    problems.extend(
-        _detect_global_state_modifications(
-            node, global_vars, global_mutables, lock_protected_vars
-        )
-    )
+    problems.extend(_detect_global_state_modifications(node, global_vars, global_mutables, lock_protected_vars))
 
     # Check for thread-unsafe singleton patterns
     problems.extend(_detect_singleton_patterns(node, global_vars))
@@ -1442,14 +1468,24 @@ def _extract_js_functions(line: str, line_num: int) -> List[Dict]:
     return functions
 
 
-def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
-    """Extract hardcoded values from a JS/Vue line (Issue #398: extracted)."""
+def _extract_js_hardcodes(line: str, line_num: int, file_path: str) -> List[Dict]:
+    """Extract hardcoded values from a JS/Vue line (Issue #398: extracted).
+
+    Issue #5290: emit canonical ``file`` and ``severity`` keys.
+    """
     hardcodes = []
     context = line.strip()
     # URLs
     for url in _URL_IN_QUOTES_RE.findall(line):
         hardcodes.append(
-            {"type": "url", "value": url, "line": line_num, "context": context}
+            {
+                "type": "url",
+                "value": url,
+                "line": line_num,
+                "file": file_path,
+                "severity": _default_severity_for("url"),
+                "context": context,
+            }
         )
     # API paths
     for api_path in _JS_API_PATH_RE.findall(line):
@@ -1458,6 +1494,8 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
                 "type": "api_path",
                 "value": api_path,
                 "line": line_num,
+                "file": file_path,
+                "severity": _default_severity_for("api_path"),
                 "context": context,
             }
         )
@@ -1465,7 +1503,14 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
     for ip in _IP_ADDRESS_RE.findall(line):
         if ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
             hardcodes.append(
-                {"type": "ip", "value": ip, "line": line_num, "context": context}
+                {
+                    "type": "ip",
+                    "value": ip,
+                    "line": line_num,
+                    "file": file_path,
+                    "severity": _default_severity_for("ip"),
+                    "context": context,
+                }
             )
     return hardcodes
 
@@ -1518,9 +1563,7 @@ def _create_parse_error_result(error_msg: str) -> Metadata:
     return result
 
 
-async def _run_analysis_phases(
-    file_path: str, content: str, tree: ast.AST, use_llm: bool
-) -> Metadata:
+async def _run_analysis_phases(file_path: str, content: str, tree: ast.AST, use_llm: bool) -> Metadata:
     """
     Execute all analysis phases on parsed Python content.
 
@@ -1530,9 +1573,7 @@ async def _run_analysis_phases(
     functions, classes, imports, problems = _analyze_ast_nodes(tree)
 
     # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
-    hardcodes, technical_debt, line_problems = _analyze_content_lines(
-        content, file_path
-    )
+    hardcodes, technical_debt, line_problems = _analyze_content_lines(content, file_path)
     problems.extend(line_problems)
 
     # Phase 3: LLM semantic analysis (optional)
@@ -1548,9 +1589,7 @@ async def _run_analysis_phases(
 
     # Phase 5: Code intelligence analyzers
     # Issue #711: Run in thread pool to prevent event loop blocking.
-    code_intel_problems = await asyncio.to_thread(
-        _run_code_intelligence_analyzers, file_path
-    )
+    code_intel_problems = await asyncio.to_thread(_run_code_intelligence_analyzers, file_path)
     problems.extend(code_intel_problems)
 
     # Phase 6: Count line types (Issue #368)
@@ -1576,7 +1615,7 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
         functions, hardcodes, problems = [], [], []
         for i, line in enumerate(content.splitlines(), 1):
             functions.extend(_extract_js_functions(line, i))
-            hardcodes.extend(_extract_js_hardcodes(line, i))
+            hardcodes.extend(_extract_js_hardcodes(line, i, file_path))
             if problem := _check_js_console_log(line, i):
                 problems.append(problem)
 

@@ -22,6 +22,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+
 if TYPE_CHECKING:
     import aioredis
     import redis
@@ -57,7 +59,7 @@ class MetadataMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
 
     # Redis key patterns
     TEMPLATE_PREFIX = "metadata:template:"
@@ -73,7 +75,7 @@ class MetadataMixin:
         applicable_categories: List[str],
     ) -> Dict[str, Any]:
         """Build template data dictionary (Issue #398: extracted)."""
-        created_at = datetime.utcnow().isoformat()
+        created_at = utc_timestamp()
         return {
             "id": template_id,
             "name": name,
@@ -290,7 +292,7 @@ class MetadataMixin:
             if applicable_categories is not None:
                 template["applicable_categories"] = applicable_categories
 
-            template["updated_at"] = datetime.utcnow().isoformat()
+            template["updated_at"] = utc_timestamp()
             template_key = f"{self.TEMPLATE_PREFIX}{template_id}"
             await asyncio.to_thread(
                 self.redis_client.set, template_key, json.dumps(template)
@@ -420,7 +422,7 @@ class MetadataMixin:
         elif field_type == "date":
             if isinstance(value, str):
                 try:
-                    datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    parse_utc_iso(value)
                 except ValueError:
                     return f"Field '{field_name}' must be a valid ISO date"
             else:

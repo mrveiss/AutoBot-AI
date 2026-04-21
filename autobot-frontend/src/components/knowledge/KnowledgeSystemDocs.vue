@@ -16,11 +16,11 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -69,7 +69,8 @@ const searchQuery = ref('')
 const categories = ref<DocCategory[]>([])
 const selectedCategory = ref<DocCategory | null>(null)
 const selectedDoc = ref<SystemDoc | null>(null)
-const expandedCategories = ref<Set<string>>(new Set())
+const categoryExpansion = useExpansion<string>()
+const expandedCategories = categoryExpansion.expanded
 
 // Export state
 const isExporting = ref(false)
@@ -106,8 +107,7 @@ async function loadDocCategories(): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/system-docs/categories`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/system-docs/categories`)
 
     if (data?.categories) {
       categories.value = data.categories
@@ -129,10 +129,9 @@ async function loadCategoryDocs(category: DocCategory): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get(
+    const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
     )
-    const data = await parseApiResponse(response)
 
     if (data?.docs) {
       category.docs = data.docs
@@ -155,10 +154,9 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get(
+    const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
     )
-    const data = await parseApiResponse(response)
 
     if (data?.doc) {
       doc.content = data.doc.content
@@ -187,15 +185,11 @@ function selectDoc(doc: SystemDoc): void {
 }
 
 function toggleCategory(categoryId: string): void {
-  if (expandedCategories.value.has(categoryId)) {
-    expandedCategories.value.delete(categoryId)
-  } else {
-    expandedCategories.value.add(categoryId)
-  }
+  categoryExpansion.toggle(categoryId)
 }
 
 function isCategoryExpanded(categoryId: string): boolean {
-  return expandedCategories.value.has(categoryId)
+  return categoryExpansion.isExpanded(categoryId)
 }
 
 async function copyToClipboard(): Promise<void> {

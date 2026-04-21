@@ -13,6 +13,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
 
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import BatchConfig, RetryConfig
 
 # =============================================================================
@@ -85,7 +86,7 @@ class ThinkResult:
     confidence: float  # 0.0 to 1.0
     alternatives_considered: list[str] = field(default_factory=list)
     risks_identified: list[str] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
     task_id: Optional[str] = None
 
     def to_dict(self) -> dict:
@@ -121,7 +122,7 @@ class IterationResult:
     think_results: list[ThinkResult] = field(default_factory=list)
     should_continue: bool = True
     error: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for logging/events."""
@@ -226,7 +227,7 @@ class AgentMessage:
     content: str
     options: Optional[list[str]] = None  # For ASK messages
     metadata: dict = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=now_utc)
     task_id: Optional[str] = None
     requires_response: bool = False
 
@@ -258,7 +259,7 @@ class TaskContext:
 
     task_id: str
     description: str
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=now_utc)
     iteration_count: int = 0
     tools_executed: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

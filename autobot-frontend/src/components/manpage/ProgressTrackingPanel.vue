@@ -84,7 +84,7 @@
 import { computed } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 
 interface ProgressMessage {
   text: string
@@ -117,7 +117,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 defineEmits<Emits>()
 
-const { getMessageIcon, formatTime } = useKnowledgeBase()
+const { getMessageIcon, formatTime } = useKnowledgeIcons()
 
 const recentMessages = computed(() => props.state.messages.slice(-5))
 </script>

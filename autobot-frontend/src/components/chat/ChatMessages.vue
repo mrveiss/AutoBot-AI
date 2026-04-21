@@ -508,6 +508,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
@@ -580,7 +581,8 @@ const typingStartTime = ref<number | null>(null)
 const estimatedResponseTime = ref<number | null>(null)
 
 // Issue #249: Citation display state
-const expandedCitations = ref<Set<string>>(new Set())
+const citationExpansion = useExpansion<string>()
+const expandedCitations = citationExpansion.expanded
 
 // Approval state
 const processingApproval = ref(false)
@@ -884,13 +886,7 @@ const hasCodeBlocks = (content: string): boolean => {
 
 // Issue #249: Citation helper functions
 const toggleCitations = (messageId: string) => {
-  if (expandedCitations.value.has(messageId)) {
-    expandedCitations.value.delete(messageId)
-  } else {
-    expandedCitations.value.add(messageId)
-  }
-  // Force reactivity update for Set
-  expandedCitations.value = new Set(expandedCitations.value)
+  citationExpansion.toggle(messageId)
 }
 
 const truncateCitation = (content: string, maxLength: number = 200): string => {

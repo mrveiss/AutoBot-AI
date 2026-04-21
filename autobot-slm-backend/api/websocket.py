@@ -134,7 +134,7 @@ class ConnectionManager:
         last_heartbeat: str = None,
     ) -> None:
         """Send health update to global and node-specific event channels."""
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         message = {
             "type": "health_update",
@@ -144,7 +144,7 @@ class ConnectionManager:
                 "cpu_percent": cpu,
                 "memory_percent": memory,
                 "disk_percent": disk,
-                "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
+                "last_heartbeat": last_heartbeat or datetime.now(timezone.utc).isoformat(),
             },
             "timestamp": asyncio.get_running_loop().time(),
         }

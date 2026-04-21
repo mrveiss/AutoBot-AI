@@ -1,7 +1,16 @@
 <template>
   <teleport to="body">
     <div v-if="visible" class="notif-overlay" @click.self="$emit('close')">
-      <div class="notif-modal" role="dialog" aria-modal="true" :aria-label="$t('workflow.notifications.title')">
+      <div
+        ref="dialogRef"
+        class="notif-modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('workflow.notifications.title')"
+        tabindex="-1"
+        @keydown="onFocusTrapKeydown"
+        @keydown.escape="$emit('close')"
+      >
         <!-- Header -->
         <div class="notif-header">
           <h3><i class="fas fa-bell"></i> {{ $t('workflow.notifications.title') }}</h3>
@@ -116,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, toRef } from 'vue';
 import {
   useNotificationConfig,
   NOTIFICATION_EVENTS,
@@ -124,6 +133,10 @@ import {
   type NotificationEvent,
   type NotificationChannel,
 } from '@/composables/useNotificationConfig';
+import { useFocusTrap } from '@/composables/useFocusTrap';
+import { useFocusRestore } from '@/composables/useFocusRestore';
+import { useInitialFocus } from '@/composables/useInitialFocus';
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
 
 const props = defineProps<{
   visible: boolean;
@@ -134,6 +147,13 @@ const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'saved'): void;
 }>();
+
+const dialogRef = ref<HTMLElement | null>(null);
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
+useFocusRestore(toRef(props, 'visible'));
+useBodyScrollLock(toRef(props, 'visible'));
+const { focusFirst } = useInitialFocus(dialogRef);
+watch(() => props.visible, (open) => { if (open) focusFirst() }, { immediate: true });
 
 const { config, loading, saving, error, fetchConfig, saveConfig } = useNotificationConfig();
 

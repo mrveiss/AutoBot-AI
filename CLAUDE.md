@@ -104,7 +104,7 @@ Before spawning agents or starting worktree work:
 1. **Verify branch isolation:** `git branch --show-current` in main session. Should be `Dev_new_gui`. If on a feature branch, STOP — you'll break parallel worktrees.
 2. **Verify Bash is approved:** Main session must have Bash permission approved — sub-agents inherit from parent. If Bash requires a prompt, approve it once before spawning any agents.
 3. **Create worktrees correctly:** Each issue gets `.worktrees/issue-XXXX/` with dedicated branch. NO shared branches between worktrees.
-4. **Check git status:** `git status` — main session must be clean (no uncommitted changes).
+4. **Check git status:** `git status` — **if any files are dirty, commit or stash them before spawning subagents.** Uncommitted edits are silently discarded when a subagent commits and upstream Dev_new_gui is merged (#4969).
 5. **Verify issue isn't resolved:** Check if issue is already closed or if `Dev_new_gui` already has the fix via `git log origin/Dev_new_gui --oneline --grep="#XXXX"`.
 6. **Confirm approach:** For architectural decisions, state in 1-2 sentences and wait for confirmation.
 
@@ -168,7 +168,7 @@ git add -A && git commit -m "..."
 
 ## Batch Execution Default
 
-When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `/team-implement` on Z" — **launch immediately without asking for scope clarification.** The pattern is well-established.
+When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `/batch-implement` on Z" — **launch immediately without asking for scope clarification.** The pattern is well-established.
 
 Default behavior:
 - Batch size: 3 agents max per round (API rate limit)
@@ -185,13 +185,13 @@ Default behavior:
 
 ## Parallel Agents Strategy
 
-When spawning multiple agents for batch work with `/team-implement`:
+When spawning multiple agents for batch work with `/batch-implement`:
 
 1. **Verify main session isolation:** Main session MUST stay on `Dev_new_gui`. Never switch branches while agents work.
 2. **Agents work in isolated worktrees:** Each agent works in `.worktrees/issue-XXXX/` with its own branch. No cross-contamination.
 3. **Batch size: 3 agents max** to avoid API rate limiting (529 errors). Wait for completion between batches.
 4. **Agents commit locally only** — they do NOT push. Main session handles all pushes (SSH credentials always available).
-5. **Monitor for failures:** After each batch, `/team-implement` auto-detects failures:
+5. **Monitor for failures:** After each batch, `/batch-implement` auto-detects failures:
    - API 529 → wait 60s, retry
    - Merge conflicts → auto-rebase, retry
    - Already resolved → skip
@@ -235,7 +235,7 @@ After ALL PRs merged:
 **Before spawning agents for issue implementation, verify:**
 
 1. **Main session branch check:** `git branch --show-current` — must be `Dev_new_gui`
-2. **Main session clean:** `git status --porcelain` — no uncommitted changes
+2. **Main session clean:** `git status --porcelain` — **if any files are dirty, commit or stash them before spawning agents.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged (#4969).
 3. **Issue not already resolved:** Check if `#<issue>` is already in `origin/Dev_new_gui` commits
 4. **No stale worktrees:** Clean up any existing `.worktrees/issue-<number>/` directories
 5. **Issue preconditions:** Verify issue dependencies are resolved before starting work
@@ -285,7 +285,7 @@ Sub-agents without Bash permissions cannot complete git operations and will stal
 5. **Type Check:** Frontend TypeScript validation
 6. **Linting:** Catches errors (not warnings)
 
-**Integration:** `/team-implement` automatically validates before creating PRs.
+**Integration:** `/batch-implement` automatically validates before creating PRs.
 
 ---
 

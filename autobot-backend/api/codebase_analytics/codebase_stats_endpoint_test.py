@@ -260,9 +260,7 @@ class TestRecreateChromaDBCollection:
             return mock_new_collection
 
         mock_client.delete_collection = MagicMock(side_effect=async_delete_collection)
-        mock_client.get_or_create_collection = MagicMock(
-            side_effect=async_get_or_create
-        )
+        mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
             "utils.chromadb_client.get_async_chromadb_client",
@@ -289,9 +287,7 @@ class TestRecreateChromaDBCollection:
             return mock_new_collection
 
         mock_client.delete_collection = MagicMock(side_effect=async_delete_raises)
-        mock_client.get_or_create_collection = MagicMock(
-            side_effect=async_get_or_create
-        )
+        mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
             "utils.chromadb_client.get_async_chromadb_client",
@@ -357,3 +353,85 @@ class TestNoDataResponse:
         body = json.loads(result.body)
 
         assert body["message"] == "Custom error message"
+
+
+class TestNormalizeHardcodeRecord:
+    """Issue #5313: contract tests for /hardcodes response normalizer.
+
+    Covers the four shape-drift cases fixed by #5290:
+    1. Legacy records with `file_path` upgraded to `file`.
+    2. Missing severity filled from type defaults.
+    3. Explicit severity preserved.
+    4. Unknown types fall back to "low".
+    """
+
+    def test_legacy_file_path_becomes_file(self):
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {
+            "type": "ip",
+            "value": "127.0.0.1",
+            "line": 5,
+            "file_path": "config.py",
+        }
+        normalized = _normalize_hardcode_record(record)
+
+        assert normalized["file"] == "config.py"
+        assert normalized["severity"] == "high"  # ip default
+
+    def test_missing_severity_filled_from_type_default(self):
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {"type": "url", "value": "http://x", "line": 1, "file": "a.py"}
+        normalized = _normalize_hardcode_record(record)
+
+        assert normalized["severity"] == "medium"  # url default
+
+    def test_explicit_severity_preserved(self):
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {
+            "type": "ip",
+            "value": "127.0.0.1",
+            "line": 1,
+            "file": "x.py",
+            "severity": "low",  # override default
+        }
+        normalized = _normalize_hardcode_record(record)
+
+        assert normalized["severity"] == "low"
+
+    def test_unknown_type_falls_back_to_low(self):
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {"type": "unknown_category", "value": "?", "line": 1}
+        normalized = _normalize_hardcode_record(record)
+
+        assert normalized["severity"] == "low"
+        assert normalized["file"] == ""  # missing file defaults empty
+
+    def test_canonical_record_unchanged(self):
+        """Records already in canonical shape should pass through."""
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {
+            "type": "port",
+            "value": "8001",
+            "line": 10,
+            "file": "app.py",
+            "severity": "medium",
+            "context": "PORT = 8001",
+        }
+        normalized = _normalize_hardcode_record(record)
+
+        assert normalized == record
+
+    def test_does_not_mutate_input(self):
+        from api.codebase_analytics.endpoints.stats import _normalize_hardcode_record
+
+        record = {"type": "ip", "value": "x", "line": 1, "file_path": "y"}
+        _normalize_hardcode_record(record)
+
+        # Original record unchanged
+        assert "file" not in record
+        assert record == {"type": "ip", "value": "x", "line": 1, "file_path": "y"}

@@ -16,6 +16,17 @@ import type {
   ConnectorStatus,
   SyncResult
 } from '@/types/knowledgeBase'
+// Issue #5209: canonical request types generated from backend OpenAPI schema.
+// Prefer these over hand-written duplicates for wire-format types.
+// Issue #5248: KB stats + category response types now also come from
+// backend Pydantic schemas via the same OpenAPI pipeline.
+import type {
+  CreateConnectorRequest,
+  UpdateConnectorRequest,
+  KnowledgeStatsBasic,
+  KnowledgeCategoryEntry as ApiKnowledgeCategoryEntry,
+  DetailedKnowledgeStats as ApiDetailedKnowledgeStats
+} from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 
 // Re-export types for convenience
@@ -117,31 +128,48 @@ export interface AddFileOptions {
 }
 
 /**
- * Basic knowledge base statistics
+ * Basic knowledge base statistics as returned by `/api/knowledge_base/stats/basic`.
+ *
+ * Issue #5248: aliased to the backend-generated `KnowledgeStatsBasic` Pydantic
+ * schema (in `autobot-backend/knowledge/schemas/stats.py`) via OpenAPI type-gen.
+ * The #5215 hand-written duplicate has been replaced with this alias so drift
+ * between Python and TS is structurally impossible.
  */
-export interface KnowledgeStats {
-  total_documents: number
-  total_categories: number
-  total_size: number
-  last_updated: string
-  categories: Array<{
-    name: string
-    document_count: number
-  }>
+export type KnowledgeStats = KnowledgeStatsBasic
+
+/**
+ * Size-breakdown block inside `DetailedKnowledgeStats`.
+ *
+ * Issue #5248: kept as a hand-written interface (not in OpenAPI) because it's
+ * referenced directly from callers that want to construct a zero-default
+ * fallback without importing the nested schema.
+ */
+export interface DetailedKnowledgeSizeMetrics {
+  total_content_size: number
+  average_fact_size: number
+  median_fact_size: number
+  largest_fact_size: number
+  smallest_fact_size: number
 }
 
 /**
- * Detailed knowledge base statistics with additional metrics
+ * Detailed knowledge base statistics as returned by
+ * `/api/knowledge_base/detailed_stats`.
+ *
+ * Issue #5248: aliased to the backend-generated `DetailedKnowledgeStats`
+ * Pydantic schema via OpenAPI type-gen. Kept as a local `type` (not re-export)
+ * so existing consumers keep importing `DetailedKnowledgeStats` from this
+ * module unchanged.
  */
-export interface DetailedKnowledgeStats extends KnowledgeStats {
-  documents_by_type: Record<string, number>
-  recent_additions: KnowledgeDocument[]
-  top_categories: Array<{
-    name: string
-    document_count: number
-    total_size: number
-  }>
-}
+export type DetailedKnowledgeStats = ApiDetailedKnowledgeStats
+
+/**
+ * A single category row from `/api/knowledge_base/categories`.
+ *
+ * Issue #5248: aliased to the backend-generated `KnowledgeCategoryEntry`
+ * Pydantic schema via OpenAPI type-gen.
+ */
+export type KnowledgeCategoryEntry = ApiKnowledgeCategoryEntry
 
 /**
  * Raw backend search result (before transformation)
@@ -332,27 +360,75 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get basic knowledge base statistics
+   * Get basic knowledge base statistics from `/api/knowledge_base/stats/basic`.
+   *
+   * Issue #5215 (#5207 audit): the previous declaration was a lie — it
+   * promised `total_documents` / `total_categories` / `total_size` /
+   * `last_updated` and a structured `categories` list, none of which the
+   * backend returns. Nulls in the envelope collapse to a safe empty default
+   * rather than propagating `undefined` into render code.
    */
   async getKnowledgeStats(): Promise<KnowledgeStats> {
     const response = await this.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats/basic`)
-    return response.data
+    const data = response?.data
+    return {
+      total_facts: data?.total_facts ?? 0,
+      total_vectors: data?.total_vectors ?? 0,
+      categories: Array.isArray(data?.categories) ? data.categories : [],
+      status: data?.status ?? 'unknown'
+    }
   }
 
   /**
-   * Get detailed knowledge base statistics
+   * Get detailed knowledge base statistics from
+   * `/api/knowledge_base/detailed_stats`.
+   *
+   * Issue #5215 (#5207 audit): the backend returns a nested envelope
+   * (`basic_stats`, `category_breakdown`, `source_breakdown`,
+   * `type_breakdown`, `size_metrics`, `rag_available`). The previous type
+   * claimed a flat shape with `documents_by_type` / `recent_additions` /
+   * `top_categories` that the backend never emits.
    */
   async getDetailedKnowledgeStats(): Promise<DetailedKnowledgeStats> {
     const response = await this.get<DetailedKnowledgeStats>(`${getApiBase()}/knowledge_base/detailed_stats`)
-    return response.data
+    const data = response?.data
+    return {
+      status: data?.status ?? 'unknown',
+      basic_stats: data?.basic_stats ?? {
+        total_facts: 0,
+        total_vectors: 0,
+        categories: [],
+        status: 'unknown'
+      },
+      category_breakdown: data?.category_breakdown ?? {},
+      source_breakdown: data?.source_breakdown ?? {},
+      type_breakdown: data?.type_breakdown ?? {},
+      size_metrics: data?.size_metrics ?? {
+        total_content_size: 0,
+        average_fact_size: 0,
+        median_fact_size: 0,
+        largest_fact_size: 0,
+        smallest_fact_size: 0
+      },
+      rag_available: data?.rag_available ?? false
+    }
   }
 
   /**
-   * Get all categories in knowledge base
+   * Get all categories in knowledge base from `/api/knowledge_base/categories`.
+   *
+   * Issue #5215: backend returns `{categories: KnowledgeCategoryEntry[], total}`;
+   * the previous declaration promised `string[]`. We unwrap the envelope so
+   * callers (e.g. `KnowledgeController.loadCategories`) receive real
+   * `{name, count, id}` rows instead of having to probe the unexpected shape.
    */
-  async getCategories(): Promise<string[]> {
-    const response = await this.get<string[]>(`${getApiBase()}/knowledge_base/categories`)
-    return response.data
+  async getCategories(): Promise<KnowledgeCategoryEntry[]> {
+    const response = await this.get<{
+      categories: KnowledgeCategoryEntry[]
+      total: number
+    }>(`${getApiBase()}/knowledge_base/categories`)
+    const list = response?.data?.categories
+    return Array.isArray(list) ? list : []
   }
 
   /**
@@ -463,17 +539,36 @@ export class KnowledgeRepository extends ApiRepository {
   // ==========================================================================
 
   /**
-   * Get paginated list of sources pending verification
+   * Get paginated list of sources pending verification.
+   *
+   * Backend (api/knowledge_verification.py) returns
+   * `{status, pending, total, limit, offset, has_more}` — the array field is
+   * `pending` (not `sources`) and pagination is `offset`-based (not `page`).
+   * Unpacked here into the caller-friendly `{sources, total, page}` shape
+   * to preserve the existing component/store API. (#5207 audit)
    */
   async getPendingVerifications(
     page = 1,
     pageSize = 20
   ): Promise<{ sources: PendingSource[]; total: number; page: number }> {
-    const response = await this.get(
-      `${getApiBase()}/knowledge_base/verification/pending?page=${page}&page_size=${pageSize}`,
+    const offset = Math.max(0, (page - 1) * pageSize)
+    const response = await this.get<{
+      status?: string
+      pending?: PendingSource[]
+      total?: number
+      limit?: number
+      offset?: number
+      has_more?: boolean
+    }>(
+      `${getApiBase()}/knowledge_base/verification/pending?limit=${pageSize}&offset=${offset}`,
       { skipCache: true }
     )
-    return response.data as { sources: PendingSource[]; total: number; page: number }
+    const raw = response.data ?? {}
+    return {
+      sources: raw.pending ?? [],
+      total: raw.total ?? 0,
+      page
+    }
   }
 
   /**
@@ -506,14 +601,20 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get current verification configuration
+   * Get current verification configuration.
+   *
+   * Backend returns `{status, config}`; we extract `.config` so callers get a
+   * flat `VerificationConfig` matching the declared return type. (#5207 audit)
    */
   async getVerificationConfig(): Promise<VerificationConfig> {
-    const response = await this.get(
+    const response = await this.get<{
+      status?: string
+      config: VerificationConfig
+    }>(
       `${getApiBase()}/knowledge_base/verification/config`,
       { skipCache: true }
     )
-    return response.data as VerificationConfig
+    return response.data.config
   }
 
   /**
@@ -534,30 +635,48 @@ export class KnowledgeRepository extends ApiRepository {
   // ==========================================================================
 
   /**
-   * List all connectors with their statuses
+   * List all connectors with their statuses.
+   *
+   * Backend returns `{connectors: [{config, status}, ...], total}` — an array
+   * of wrapped pairs. Here we unpack into two parallel structures so the
+   * store and components can key status lookups by `connector_id` (#5200).
    */
   async listConnectors(): Promise<{
     connectors: ConnectorConfig[]
     statuses: Record<string, ConnectorStatus>
   }> {
-    const response = await this.get(
-      `${getApiBase()}/knowledge_base/connectors`,
-      { skipCache: true }
-    )
-    return response.data as { connectors: ConnectorConfig[]; statuses: Record<string, ConnectorStatus> }
+    const response = await this.get<{
+      connectors: Array<{ config: ConnectorConfig; status: ConnectorStatus }>
+      total: number
+    }>(`${getApiBase()}/knowledge_base/connectors`, { skipCache: true })
+
+    const configs: ConnectorConfig[] = []
+    const statuses: Record<string, ConnectorStatus> = {}
+    for (const entry of response.data?.connectors ?? []) {
+      if (!entry?.config?.connector_id) continue
+      configs.push(entry.config)
+      statuses[entry.config.connector_id] = entry.status
+    }
+    return { connectors: configs, statuses }
   }
 
   /**
-   * Create a new connector
+   * Create a new connector.
+   *
+   * Backend returns `{connector_id, config}`; we extract `.config` so callers
+   * get a flat `ConnectorConfig` matching the declared return type (#5200).
+   *
+   * Body type aligns with backend `CreateConnectorRequest` Pydantic schema
+   * (generated — see `@/types/api-contract`).
    */
   async createConnector(
-    config: Partial<ConnectorConfig>
+    config: Partial<ConnectorConfig> | CreateConnectorRequest
   ): Promise<ConnectorConfig> {
-    const response = await this.post(
-      `${getApiBase()}/knowledge_base/connectors`,
-      config
-    )
-    return response.data as ConnectorConfig
+    const response = await this.post<{
+      connector_id: string
+      config: ConnectorConfig
+    }>(`${getApiBase()}/knowledge_base/connectors`, config)
+    return response.data.config
   }
 
   /**
@@ -574,17 +693,26 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Update connector configuration
+   * Update connector configuration.
+   *
+   * Backend returns `{connector_id, config}`; we extract `.config` so callers
+   * get a flat `ConnectorConfig` matching the declared return type (#5200).
+   *
+   * Body type aligns with backend `UpdateConnectorRequest` Pydantic schema
+   * (generated — see `@/types/api-contract`).
    */
   async updateConnector(
     id: string,
-    updates: Partial<ConnectorConfig>
+    updates: Partial<ConnectorConfig> | UpdateConnectorRequest
   ): Promise<ConnectorConfig> {
-    const response = await this.put(
+    const response = await this.put<{
+      connector_id: string
+      config: ConnectorConfig
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}`,
       updates
     )
-    return response.data as ConnectorConfig
+    return response.data.config
   }
 
   /**
@@ -597,42 +725,83 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Test a connector's connection
+   * Test a connector's connection.
+   *
+   * Backend returns `{connector_id, healthy}`; we normalise into the
+   * `{success, message}` shape the UI expects. Message is synthesised from
+   * `healthy` because the backend does not currently expose a diagnostic
+   * string. (#5203, #5207 audit)
    */
   async testConnector(
     id: string
   ): Promise<{ success: boolean; message: string }> {
-    const response = await this.post(
+    const response = await this.post<{
+      connector_id?: string
+      healthy?: boolean
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/test`
     )
-    return response.data as { success: boolean; message: string }
+    const healthy = response.data?.healthy === true
+    return {
+      success: healthy,
+      message: healthy ? 'Connection OK' : 'Connection failed',
+    }
   }
 
   /**
-   * Trigger a sync for a connector
+   * Trigger a sync for a connector.
+   *
+   * The POST endpoint only _starts_ a background sync and returns
+   * `{connector_id, status: "sync_started", incremental}` — it does NOT
+   * return a completed `SyncResult`. Callers that want the actual result
+   * must poll `getConnectorHistory(id)` after sync completes.
+   *
+   * Previously declared `Promise<SyncResult>` which made callers read
+   * `.added/.updated/.deleted` that never existed. (#5204, #5207 audit)
    */
   async syncConnector(
     id: string,
     incremental = true
-  ): Promise<SyncResult> {
-    const response = await this.post(
+  ): Promise<{
+    connector_id: string
+    status: string
+    incremental: boolean
+  }> {
+    const response = await this.post<{
+      connector_id?: string
+      status?: string
+      incremental?: boolean
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/sync?incremental=${incremental}`
     )
-    return response.data as SyncResult
+    return {
+      connector_id: response.data?.connector_id ?? id,
+      status: response.data?.status ?? 'unknown',
+      incremental: response.data?.incremental ?? incremental
+    }
   }
 
   /**
-   * Get sync history for a connector
+   * Get sync history for a connector.
+   *
+   * Backend returns `{connector_id, history, total}`; we extract `.history`
+   * so callers get a flat `SyncResult[]` matching the declared return type.
+   * Previously cast the whole envelope to `SyncResult[]`, which silently
+   * became a non-iterable object. (#5207 audit)
    */
   async getConnectorHistory(
     id: string,
     limit = 20
   ): Promise<SyncResult[]> {
-    const response = await this.get(
+    const response = await this.get<{
+      connector_id?: string
+      history?: SyncResult[]
+      total?: number
+    }>(
       `${getApiBase()}/knowledge_base/connectors/${encodeURIComponent(id)}/history?limit=${limit}`,
       { skipCache: true }
     )
-    return response.data as SyncResult[]
+    return response.data?.history ?? []
   }
 
 

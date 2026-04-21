@@ -12,7 +12,7 @@
  * - /api/workflow-automation/* - Workflow automation management
  */
 
-import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
+import { ref, computed, reactive } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { getAuthToken } from '@/utils/fetchWithAuth';
@@ -1149,7 +1149,7 @@ export function useWorkflowBuilder() {
   // ==================================================================================
   // LIFECYCLE
   // ==================================================================================
-  // useWebSocket calls disconnect() in onUnmounted automatically
+  // useWebSocket calls disconnect() via onScopeDispose automatically
 
   // ==================================================================================
   // RETURN

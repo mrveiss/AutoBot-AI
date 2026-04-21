@@ -47,6 +47,47 @@ const typeBadgeVariant = computed(() => {
   return map[props.config.connector_type] || 'primary'
 })
 
+/**
+ * Issue #4421: readiness tier badge.
+ *   tier 0 → green   "Ready"
+ *   tier 1 → yellow  "Free key needed"
+ *   tier 2 → orange  "Setup required"
+ */
+const tierValue = computed(() => (typeof props.config.tier === 'number' ? props.config.tier : 0))
+
+const tierBadgeVariant = computed<'success' | 'warning' | 'error'>(() => {
+  switch (tierValue.value) {
+    case 2:
+      return 'error'
+    case 1:
+      return 'warning'
+    default:
+      return 'success'
+  }
+})
+
+const tierLabel = computed(() => {
+  switch (tierValue.value) {
+    case 2:
+      return t('knowledge.connectors.tier.setupRequired')
+    case 1:
+      return t('knowledge.connectors.tier.freeKey')
+    default:
+      return t('knowledge.connectors.tier.ready')
+  }
+})
+
+const tierTooltip = computed(() => {
+  switch (tierValue.value) {
+    case 2:
+      return t('knowledge.connectors.tier.setupRequiredTooltip')
+    case 1:
+      return t('knowledge.connectors.tier.freeKeyTooltip')
+    default:
+      return t('knowledge.connectors.tier.readyTooltip')
+  }
+})
+
 const lastSyncDisplay = computed(() => {
   if (!props.status.last_sync_at) return t('knowledge.connectors.status.never')
   return formatTimeAgo(props.status.last_sync_at)
@@ -141,9 +182,19 @@ defineExpose({ resetSyncing })
               :title="status.is_healthy ? $t('knowledge.connectors.status.healthy') : $t('knowledge.connectors.status.unhealthy')"
             ></span>
           </div>
-          <BaseBadge :variant="typeBadgeVariant" size="xs">
-            {{ typeLabel }}
-          </BaseBadge>
+          <div class="badge-row">
+            <BaseBadge :variant="typeBadgeVariant" size="xs">
+              {{ typeLabel }}
+            </BaseBadge>
+            <BaseBadge
+              :variant="tierBadgeVariant"
+              size="xs"
+              :title="tierTooltip"
+              class="tier-badge"
+            >
+              {{ tierLabel }}
+            </BaseBadge>
+          </div>
         </div>
       </div>
 
@@ -300,6 +351,18 @@ defineExpose({ resetSyncing })
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
+}
+
+/* Issue #4421: tier badge row */
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  flex-wrap: wrap;
+}
+
+.tier-badge {
+  cursor: help;
 }
 
 .name-row {

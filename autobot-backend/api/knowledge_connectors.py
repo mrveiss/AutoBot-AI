@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
+from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
@@ -110,6 +111,7 @@ async def _save_connector(cfg: ConnectorConfig) -> None:
         "last_sync_at": cfg.last_sync_at.isoformat() if cfg.last_sync_at else None,
         "include_patterns": cfg.include_patterns,
         "exclude_patterns": cfg.exclude_patterns,
+        "tier": int(getattr(cfg, "tier", 0)),
     }
     await asyncio.to_thread(
         redis.set,
@@ -144,6 +146,7 @@ def _deserialize_connector(raw: Any) -> ConnectorConfig:
         last_sync_at=_parse_dt(data.get("last_sync_at")),
         include_patterns=data.get("include_patterns", []),
         exclude_patterns=data.get("exclude_patterns", []),
+        tier=int(data.get("tier", 0)),
     )
 
 
@@ -256,6 +259,26 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/knowledge_base/connector_types")
+async def list_connector_types():
+    """Return all registered connector types with readiness tier (Issue #4421).
+
+    The frontend uses this to show a "Ready / Free key needed / Setup required"
+    badge on each connector card before the user picks one.  Tier is read from
+    the class attribute on each registered connector.
+    """
+    types = []
+    for type_name, klass in ConnectorRegistry.registered_types().items():
+        types.append(
+            {
+                "connector_type": type_name,
+                "tier": int(getattr(klass, "tier", 0)),
+            }
+        )
+    types.sort(key=lambda t: (t["tier"], t["connector_type"]))
+    return {"connector_types": types, "total": len(types)}
+
+
 @router.get("/knowledge_base/connectors")
 async def list_connectors():
     """Return all connectors with their current status."""
@@ -283,6 +306,12 @@ async def create_connector(request: CreateConnectorRequest):
             detail="connector_type must be one of: %s" % _SUPPORTED_TYPES,
         )
     connector_id = str(uuid.uuid4())
+    klass = ConnectorRegistry.get_registered_class(request.connector_type)
+    if klass is None:
+        raise HTTPException(
+            status_code=422,
+            detail="connector_type '%s' is not registered" % request.connector_type,
+        )
     cfg = ConnectorConfig(
         connector_id=connector_id,
         connector_type=request.connector_type,
@@ -293,6 +322,7 @@ async def create_connector(request: CreateConnectorRequest):
         schedule_cron=request.schedule_cron,
         include_patterns=request.include_patterns,
         exclude_patterns=request.exclude_patterns,
+        tier=int(getattr(klass, "tier", 0)),
     )
     instance = _load_or_create_instance(cfg)
     healthy = await instance.test_connection()
@@ -306,6 +336,54 @@ async def create_connector(request: CreateConnectorRequest):
     await _maybe_schedule(cfg)
     logger.info("Created connector %s (%s)", connector_id, request.connector_type)
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
+
+
+@router.get("/knowledge_base/connectors/health")
+async def connectors_health():
+    """Aggregate test_connection() across all live connectors (Issue #4420).
+
+    Ensures every live instance is hydrated from Redis first so the registry
+    reflects every configured connector, then runs all ``test_connection()``
+    calls concurrently via ``ConnectorRegistry.health_check_all``.
+
+    Returns:
+        Dict with keys ``healthy``, ``unavailable``, ``errors``, ``checked_at``.
+    """
+    await _hydrate_all_instances()
+    return await ConnectorRegistry.health_check_all()
+
+
+async def _hydrate_all_instances() -> None:
+    """Load every persisted connector config into the live registry (Issue #4420).
+
+    The registry only holds instances created via API calls; on cold start or
+    after a restart, the instance map may be empty even though configs exist
+    in Redis.  The health endpoint needs every configured connector to appear
+    in the report, so we hydrate from Redis before aggregating.
+
+    Degrades gracefully (Issue #5054): if Redis is unavailable, hydration
+    returns without raising so the health endpoint can still report on the
+    in-memory registry.  Per-connector load failures (Issue #5055) are
+    isolated so a single corrupted record does not abort hydration of the
+    remaining connectors.
+    """
+    try:
+        ids = await _list_connector_ids()
+    except (RedisError, ConnectionError, TimeoutError, OSError) as exc:
+        logger.warning(
+            "Redis hydration failed — health check runs on in-memory registry only: %s",
+            exc,
+        )
+        return
+
+    for cid in ids:
+        try:
+            cfg = await _load_connector(cid)
+            if cfg is None:
+                continue
+            _load_or_create_instance(cfg)
+        except Exception as exc:  # noqa: BLE001 — isolate bad records per Issue #5055
+            logger.warning("Skipping corrupted connector %s: %s", cid, exc)
 
 
 @router.get("/knowledge_base/connectors/{connector_id}")
@@ -466,7 +544,22 @@ def _cfg_to_dict(cfg: ConnectorConfig) -> Dict[str, Any]:
         "last_sync_at": cfg.last_sync_at.isoformat() if cfg.last_sync_at else None,
         "include_patterns": cfg.include_patterns,
         "exclude_patterns": cfg.exclude_patterns,
+        "tier": _resolve_tier(cfg),
     }
+
+
+def _resolve_tier(cfg: ConnectorConfig) -> int:
+    """Return the readiness tier, preferring the registered class attribute.
+
+    Issue #4421: ``ConnectorConfig.tier`` defaults to 0 on old Redis records
+    (before this field existed).  The class attribute on the registered
+    connector is the source of truth — fall back to ``cfg.tier`` only when the
+    type isn't registered.
+    """
+    klass = ConnectorRegistry.get_registered_class(cfg.connector_type)
+    if klass is not None:
+        return int(getattr(klass, "tier", 0))
+    return int(getattr(cfg, "tier", 0))
 
 
 def _apply_updates(cfg: ConnectorConfig, req: UpdateConnectorRequest) -> None:

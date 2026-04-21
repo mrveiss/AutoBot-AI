@@ -38,6 +38,7 @@ from api.analytics_models import AnalyticsOverview, RealTimeEvent
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
@@ -462,7 +463,7 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
             [
                 call
                 for call in analytics_state["api_call_patterns"]
-                if _parse_timestamp(call["timestamp"])
+                if parse_utc_iso(call["timestamp"])
                 > datetime.now(tz=timezone.utc) - timedelta(minutes=1)
             ]
         ),
@@ -543,19 +544,6 @@ async def track_analytics_event(
     }
 
 
-def _parse_timestamp(timestamp_str: str) -> datetime:
-    """Parse an ISO-format timestamp string and ensure it is UTC-aware.
-
-    Pre-#3615 Redis data may store naive datetime strings. After parsing with
-    fromisoformat(), normalize any naive result to UTC so comparisons with
-    UTC-aware datetimes do not raise TypeError.
-    """
-    dt = datetime.fromisoformat(timestamp_str)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
 def _parse_historical_calls(api_calls: list, cutoff_time: datetime) -> list:
     """Parse and filter historical API calls. (Issue #315 - extracted)
 
@@ -570,7 +558,7 @@ def _parse_historical_calls(api_calls: list, cutoff_time: datetime) -> list:
     for call_json in api_calls:
         try:
             call_data = json.loads(call_json)
-            call_time = _parse_timestamp(call_data["timestamp"])
+            call_time = parse_utc_iso(call_data["timestamp"])
             if call_time > cutoff_time:
                 historical_calls.append(call_data)
         except Exception as e:
@@ -959,7 +947,7 @@ def _get_recent_api_calls(cutoff_seconds: int = 10) -> list:
     return [
         call
         for call in analytics_state["api_call_patterns"]
-        if _parse_timestamp(call["timestamp"]) > cutoff
+        if parse_utc_iso(call["timestamp"]) > cutoff
     ]
 
 

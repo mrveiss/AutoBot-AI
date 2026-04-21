@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
@@ -148,7 +149,7 @@ class FeedbackTracker:
         self.redis_client.zadd(redis_key, {json.dumps(event_data): score})
 
         # Keep only last 30 days
-        cutoff = (datetime.utcnow() - timedelta(days=30)).timestamp()
+        cutoff = (now_utc() - timedelta(days=30)).timestamp()
         self.redis_client.zremrangebyscore(redis_key, 0, cutoff)
 
     def _check_retrain_threshold(self):
@@ -159,7 +160,7 @@ class FeedbackTracker:
             if last_retrain_str:
                 last_retrain = datetime.fromisoformat(last_retrain_str.decode())
             else:
-                last_retrain = datetime.utcnow() - timedelta(days=30)
+                last_retrain = now_utc() - timedelta(days=30)
 
             feedback_count = (
                 db.query(func.count(CompletionFeedback.id))
@@ -247,7 +248,7 @@ class FeedbackTracker:
         """
         with self.SessionLocal() as db:
             # Time window
-            since = datetime.utcnow() - timedelta(days=time_window_days)
+            since = now_utc() - timedelta(days=time_window_days)
 
             # Base query
             query = db.query(CompletionFeedback).filter(
@@ -306,6 +307,6 @@ class FeedbackTracker:
     def mark_retrain_completed(self):
         """Mark that retraining has completed."""
         self.redis_client.set(
-            self.last_retrain_key, datetime.utcnow().isoformat().encode()
+            self.last_retrain_key, utc_timestamp().encode()
         )
         logger.info("Marked retraining as completed")

@@ -7,9 +7,14 @@
  * Modal for sharing secrets with session participants.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
 const { t } = useI18n()
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
@@ -29,21 +34,27 @@ const emit = defineEmits<{
 }>()
 
 // Local state
-const selectedParticipants = ref<Set<string>>(new Set())
 const expiresIn = ref<number>(24) // hours
 const sharing = ref(false)
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'modelValue'))
+useBodyScrollLock(toRef(props, 'modelValue'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.modelValue, (open) => { if (open) focusFirst() }, { immediate: true })
 
 // Available participants (excluding self)
 const participants = computed(() => sessionPresence.value)
 
-// Toggle participant selection
-const toggleParticipant = (userId: string) => {
-  if (selectedParticipants.value.has(userId)) {
-    selectedParticipants.value.delete(userId)
-  } else {
-    selectedParticipants.value.add(userId)
-  }
-}
+// Selection: keyed on userId. The previous bespoke `ref(new Set())` mutated
+// the Set in place via .add()/.delete(), which Vue does not track — clicks
+// failed to update the highlight class. The composable replaces the Set on
+// every mutation, fixing reactivity.
+const selection = useBatchSelection<typeof participants.value[number], string>(
+  participants,
+  (p) => p.userId
+)
 
 // Share secret
 const share = async () => {
@@ -61,7 +72,7 @@ const share = async () => {
 const closeDialog = () => {
   emit('update:modelValue', false)
   setTimeout(() => {
-    selectedParticipants.value.clear()
+    selection.clear()
     expiresIn.value = 24
   }, 300)
 }
@@ -82,9 +93,13 @@ const getInitials = (username: string): string => {
       <Transition name="modal-content">
         <div
           v-if="props.modelValue"
+          ref="dialogRef"
           class="bg-autobot-bg-card rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
           role="dialog"
           aria-modal="true"
+          tabindex="-1"
+          @keydown="onFocusTrapKeydown"
+          @keydown.escape="closeDialog"
         >
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
@@ -119,11 +134,11 @@ const getInitials = (username: string): string => {
                   :key="participant.userId"
                   :class="[
                     'w-full flex items-center gap-3 p-3 rounded-lg transition-colors border',
-                    selectedParticipants.has(participant.userId)
+                    selection.isSelected(participant)
                       ? 'bg-blue-500/20 border-blue-500/30'
                       : 'bg-autobot-bg-secondary border-autobot-border hover:bg-autobot-bg-tertiary'
                   ]"
-                  @click="toggleParticipant(participant.userId)"
+                  @click="selection.toggle(participant)"
                 >
                   <div class="w-8 h-8 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary">
                     {{ getInitials(participant.username) }}
@@ -137,7 +152,7 @@ const getInitials = (username: string): string => {
                     </div>
                   </div>
                   <i
-                    v-if="selectedParticipants.has(participant.userId)"
+                    v-if="selection.isSelected(participant)"
                     class="bi bi-check-circle-fill text-blue-400"
                   />
                 </button>
@@ -181,7 +196,7 @@ const getInitials = (username: string): string => {
             </button>
             <button
               class="px-4 py-2 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 flex items-center gap-2"
-              :disabled="selectedParticipants.size === 0 || sharing"
+              :disabled="selection.selectedCount.value === 0 || sharing"
               @click="share"
             >
               <i v-if="sharing" class="bi bi-arrow-repeat animate-spin" />

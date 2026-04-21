@@ -52,7 +52,9 @@ export type {
   AddTextRequest,
   AddUrlRequest,
   KnowledgeStats,
-  DetailedKnowledgeStats
+  DetailedKnowledgeStats,
+  DetailedKnowledgeSizeMetrics,
+  KnowledgeCategoryEntry
 } from './KnowledgeRepository'
 
 export type {

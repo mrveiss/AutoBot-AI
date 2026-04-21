@@ -17,7 +17,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
@@ -352,7 +352,7 @@ async def get_loop_status(
 
     # Import lazily to avoid hard startup dependency
     try:
-        from services.knowledge.autonomous_loop import get_loop_orchestrator
+        from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
         orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
         status = orchestrator.get_status()
@@ -391,7 +391,7 @@ async def approve_loop_variant(
     Issue #4680.
     """
     from services.rag_config import get_rag_config
-    from services.knowledge.autonomous_loop import get_loop_orchestrator
+    from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
@@ -425,7 +425,7 @@ async def reject_loop_variant(
     Issue #4916.
     """
     from services.rag_config import get_rag_config
-    from services.knowledge.autonomous_loop import get_loop_orchestrator
+    from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
@@ -466,6 +466,24 @@ async def get_rag_stats(
     }
 
 
+class RunBenchmarkRequest(BaseModel):
+    """Request body for POST /rag/benchmark/run.
+
+    Issue #5074: callers must declare which split they are benchmarking
+    against so held-out scores are auditable.
+    """
+
+    split: str = Field(
+        ...,
+        description=(
+            "Which portion of the dataset to run: 'dev' (tuning), 'test' "
+            "(held-out final score), or 'all' (combined — not a held-out score)."
+        ),
+        pattern="^(dev|test|all)$",
+    )
+    k: int = Field(default=5, ge=1, le=50, description="Top-k results per query.")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_rag_benchmark",
@@ -473,7 +491,8 @@ async def get_rag_stats(
 )
 @router.post("/benchmark/run")
 async def run_rag_benchmark(
-    current_user: dict = Depends(get_current_user),
+    request: RunBenchmarkRequest,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Run the RAG precision@k benchmark suite and publish results to RetrievalLearner.
 
@@ -483,10 +502,26 @@ async def run_rag_benchmark(
     RetrievalLearner will pick up these events on its next scheduled consume
     run and update global retrieval patterns accordingly.
 
+    Issue #5018: Admin-gated to prevent unauthenticated users from poisoning
+    the ``__global__`` RetrievalLearner feedback stream.
+
+    Issue #5074: Requires an explicit ``split`` body param (``dev`` | ``test``
+    | ``all``).  Only ``split=test`` produces a ``held_out_score=true`` result.
+
+    **Body:**
+    - **split**: ``dev`` (tune) | ``test`` (held-out) | ``all`` (combined).
+    - **k**: top-k retrieval size (default 5).
+
     **Returns:**
     - **published**: Number of feedback events written to Redis.
     - **total**: Total benchmark queries run.
     - **stream_key**: Redis stream key where events were written.
+    - **split_used**: The split that was actually run.
+    - **dev_size**: Total dev-set queries in the dataset.
+    - **test_size**: Total test-set queries in the dataset.
+    - **tuned_on_dev**: Whether the harness has ever run a tune() pass.
+    - **held_out_score**: True iff split==test AND no dev leakage occurred.
+    - **mean_precision_at_k**: Mean precision@k across the run.
     """
     import asyncio
     from datetime import datetime, timezone
@@ -497,7 +532,10 @@ async def run_rag_benchmark(
     from knowledge.rag_benchmarks import (
         _BENCHMARK_USER,
         _TOPIC_DOCS,
+        BenchmarkHarness,
+        BenchmarkSplit,
         _deterministic_embed,
+        get_default_dataset,
         publish_feedback_events,
         run_benchmark_suite,
     )
@@ -516,38 +554,66 @@ async def run_rag_benchmark(
         metadatas=[{"topic": topic} for _, _, topic in _TOPIC_DOCS],
     )
 
-    # run_benchmark_suite is synchronous (ChromaDB EphemeralClient is sync).
-    loop = asyncio.get_event_loop()
-    results = await loop.run_in_executor(None, run_benchmark_suite, collection, 5)
+    split = BenchmarkSplit(request.split)
+    dataset = get_default_dataset()
+    harness = BenchmarkHarness(dataset=dataset)
+
+    def _runner(ds):
+        return run_benchmark_suite(collection, k=request.k, dataset=ds, split=split)
+
+    loop = asyncio.get_running_loop()
+    report = await loop.run_in_executor(None, harness.run, _runner, split)
 
     try:
         client.delete_collection("benchmark_run")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("benchmark cleanup failed: %s", exc)
 
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
         logger.warning("run_rag_benchmark: Redis unavailable; benchmark events dropped")
+        # Issue #5319 / #5407: emit ops-visible counter alongside the
+        # warning.  reason="redis_down" - analytics Redis unreachable.
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="rag_benchmark", reason="redis_down"
+        ).inc()
         return {
             "published": 0,
-            "total": len(results),
+            "total": len(report.results),
             "stream_key": None,
             "reason": "redis_unavailable",
+            "split_used": report.split_used,
+            "dev_size": report.dev_size,
+            "test_size": report.test_size,
+            "tuned_on_dev": report.tuned_on_dev,
+            "held_out_score": report.held_out_score,
+            "mean_precision_at_k": report.mean_precision_at_k,
         }
 
     date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     stream_key = f"rag:feedback:{_BENCHMARK_USER}:{date_key}"
 
-    published = await publish_feedback_events(redis, results)
+    published = await publish_feedback_events(redis, report.results)
     logger.info(
-        "run_rag_benchmark: published %d/%d benchmark feedback events",
+        "run_rag_benchmark: split=%s published %d/%d feedback events "
+        "(held_out_score=%s)",
+        report.split_used,
         published,
-        len(results),
+        len(report.results),
+        report.held_out_score,
     )
     return {
         "published": published,
-        "total": len(results),
+        "total": len(report.results),
         "stream_key": stream_key,
+        "split_used": report.split_used,
+        "dev_size": report.dev_size,
+        "test_size": report.test_size,
+        "tuned_on_dev": report.tuned_on_dev,
+        "held_out_score": report.held_out_score,
+        "mean_precision_at_k": report.mean_precision_at_k,
     }
 
 

@@ -12,6 +12,7 @@ workflows.
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -55,7 +56,7 @@ class SlackIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Slack connection by calling auth.test endpoint."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if not self.config.token:
             return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
@@ -63,7 +64,7 @@ class SlackIntegration(BaseIntegration):
         headers = {"Authorization": f"Bearer {self.config.token}"}
         result = await self._make_slack_request("POST", url, headers=headers)
 
-        latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+        latency = (time.monotonic() - start_time) * 1000
         if result.get("ok"):
             return self._create_health_response(
                 IntegrationStatus.CONNECTED,
@@ -292,10 +293,10 @@ class TeamsIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Teams connection by validating token or webhook."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if self.webhook_url:
             result = await self._test_webhook()
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (time.monotonic() - start_time) * 1000
             if result.get("success"):
                 return self._create_health_response(IntegrationStatus.CONNECTED, latency, "Webhook configured")
             return self._create_health_response(IntegrationStatus.ERROR, latency, "Webhook test failed")
@@ -306,7 +307,7 @@ class TeamsIntegration(BaseIntegration):
         url = f"{self.graph_url}/me"
         headers = {"Authorization": f"Bearer {self.config.token}"}
         result = await self._make_teams_request("GET", url, headers)
-        latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+        latency = (time.monotonic() - start_time) * 1000
 
         if result.get("status_code") == 200:
             return self._create_health_response(
@@ -441,7 +442,7 @@ class DiscordIntegration(BaseIntegration):
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Discord connection by fetching bot user info."""
-        start_time = datetime.utcnow()
+        start_time = time.monotonic()
         if not self.config.token:
             return self._create_health_response(IntegrationStatus.ERROR, 0, "Bot token not configured")
 
@@ -449,7 +450,7 @@ class DiscordIntegration(BaseIntegration):
         headers = {"Authorization": f"Bot {self.config.token}"}
         result = await self._make_discord_request("GET", url, headers)
 
-        latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+        latency = (time.monotonic() - start_time) * 1000
         if result.get("status_code") == 200:
             body = result.get("body", {})
             return self._create_health_response(

@@ -1843,6 +1843,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "قيم مشفرة ثابتة",
+      "values": "قيم",
+      "totalValues": "إجمالي القيم",
+      "highLabel": "مرتفع",
+      "mediumLabel": "متوسط",
+      "lowLabel": "منخفض",
+      "uniqueTypes": "أنواع فريدة",
+      "variable": "متغير",
+      "value": "قيمة",
+      "suggestedEnvVar": "متغير البيئة المقترح",
+      "showingOf": "عرض {shown} من {total}",
+      "emptyMessage": "لم يتم اكتشاف قيم مشفرة ثابتة",
+      "severityGroups": {
+        "high": "خطورة عالية",
+        "medium": "خطورة متوسطة",
+        "low": "خطورة منخفضة"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",
@@ -6415,7 +6434,11 @@
     "skipToNavigation": "Skip to navigation",
     "profile": "Profile",
     "systemStatus": "System Status",
-    "operations": "العمليات"
+    "operations": "العمليات",
+    "applicationError": "Application Error",
+    "unexpectedError": "An unexpected error occurred",
+    "loadingTimeout": "Loading Timed Out",
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
   },
   "reasoningTrace": {
     "title": "Reasoning trace",

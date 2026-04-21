@@ -15,6 +15,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class SkillHealth(BaseModel):
     status: SkillStatus
     version: str = ""
     message: Optional[str] = None
-    last_checked: datetime = Field(default_factory=datetime.utcnow)
+    last_checked: datetime = Field(default_factory=now_utc)
     config_valid: bool = True
     dependencies_met: bool = True
     details: Dict[str, Any] = Field(default_factory=dict)

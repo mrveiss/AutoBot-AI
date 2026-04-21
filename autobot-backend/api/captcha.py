@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
@@ -86,7 +87,7 @@ async def resolve_captcha(
                 "captcha_id": captcha_id,
                 "status": "solved",
                 "message": "CAPTCHA marked as solved. Research will continue.",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
             media_type="application/json; charset=utf-8",
         )
@@ -141,7 +142,7 @@ async def skip_captcha(
                 "captcha_id": captcha_id,
                 "status": "skipped",
                 "message": "CAPTCHA skipped. Source will be excluded from results.",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 
@@ -173,7 +174,7 @@ async def get_pending_captchas() -> JSONResponse:
                 "success": True,
                 "pending_captchas": pending,
                 "count": len(pending),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 
@@ -204,7 +205,7 @@ async def captcha_health() -> JSONResponse:
                 "service": "captcha_human_loop",
                 "pending_captchas": pending_count,
                 "timeout_seconds": captcha_service.timeout_seconds,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )
 
@@ -216,6 +217,6 @@ async def captcha_health() -> JSONResponse:
                 "status": "unhealthy",
                 "service": "captcha_human_loop",
                 "error": "Internal server error",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
         )

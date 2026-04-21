@@ -2,67 +2,40 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-AutoBot Semantic Chunking Module
+AutoBot Semantic Chunking Module (CPU path).
 
-Implements advanced semantic chunking to replace basic sentence splitting.
-Uses percentile-based semantic distance thresholds for intelligent document
-segmentation.
+Issue #5363: shared pipeline lives in `semantic_chunker_base.py`. This
+module contains only the CPU-specific embedding-compute + model-init
+plus the public factory `get_semantic_chunker()`.
+
+Public API (preserved):
+    - AutoBotSemanticChunker
+    - SemanticChunk (re-exported from base)
+    - get_semantic_chunker()
 """
 
-import os
-
-# CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-os.environ["KERAS_BACKEND"] = "tensorflow"
-
-# Reduce Hugging Face rate limiting and improve caching
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "0"  # Allow downloads but cache aggressively
-os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
-os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
-
-import re
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+import threading
+from typing import List
 
 import numpy as np
 
 from autobot_shared.logging_manager import get_llm_logger
-
-# Import centralized logging
 from constants.threshold_constants import RetryConfig, TimingConstants
+from utils.semantic_chunker_base import SemanticChunk, SemanticChunkerBase
+
+__all__ = ["AutoBotSemanticChunker", "SemanticChunk", "get_semantic_chunker"]
 
 logger = get_llm_logger("semantic_chunker")
 
-# Issue #380: Pre-compiled regex patterns for sentence splitting
-_SENTENCE_ENDINGS_RE = re.compile(r"([.!?]+(?:\s|$))")
-_SENTENCE_ENDING_MATCH_RE = re.compile(r"[.!?]+(?:\s|$)")
-_ABBREVIATIONS_RE = re.compile(
-    r"(?:Mr|Mrs|Dr|Prof|Sr|Jr|vs|etc|Inc|Ltd|Corp|Co|St|Ave|Rd|Blvd|"
-    r"Apt|No|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|"
-    r"Wed|Thu|Fri|Sat|Sun)\.(?!\s*$)"
-)
 
-
-@dataclass
-class SemanticChunk:
-    """Represents a semantically coherent chunk of text."""
-
-    content: str
-    start_index: int
-    end_index: int
-    sentences: List[str]
-    semantic_score: float
-    metadata: Dict[str, Any]
-
-
-class AutoBotSemanticChunker:
+class AutoBotSemanticChunker(SemanticChunkerBase):
     """
-    Advanced semantic chunking implementation for AutoBot.
+    CPU / adaptive-batch semantic chunker.
 
-    Uses sentence-transformer embeddings and percentile-based thresholding
-    to create semantically coherent chunks that maintain contextual
-    relationships.
+    Uses sentence-transformer embeddings with adaptive batch-size and
+    worker-count selection based on CPU load and whether CUDA happens to
+    be available. Falls back through `all-mpnet-base-v2` and
+    `all-MiniLM-L12-v2` if the primary model fails to load.
     """
 
     def __init__(
@@ -73,42 +46,39 @@ class AutoBotSemanticChunker:
         max_chunk_size: int = 1000,
         overlap_sentences: int = 1,
     ):
-        """
-        Initialize the semantic chunker.
-
-        Args:
-            embedding_model: SentenceTransformer model name
-            percentile_threshold: Percentile threshold for semantic breaks
-                (95th percentile)
-            min_chunk_size: Minimum characters per chunk
-            max_chunk_size: Maximum characters per chunk
-            overlap_sentences: Number of sentences to overlap between
-                chunks
-        """
-        self.embedding_model_name = embedding_model
-        self.percentile_threshold = percentile_threshold
-        self.min_chunk_size = min_chunk_size
-        self.max_chunk_size = max_chunk_size
-        self.overlap_sentences = overlap_sentences
-
-        # Initialize embedding model placeholder - will be loaded lazily
-        self._embedding_model = None
-
+        super().__init__(
+            embedding_model=embedding_model,
+            percentile_threshold=percentile_threshold,
+            min_chunk_size=min_chunk_size,
+            max_chunk_size=max_chunk_size,
+            overlap_sentences=overlap_sentences,
+        )
         logger.info("SemanticChunker initialized with model: %s", embedding_model)
 
+    # ------------------------------------------------------------------
+    # Metadata tagging — identifies this backend in chunk metadata
+    # ------------------------------------------------------------------
+
+    def _extra_chunk_metadata(self) -> dict:
+        return {
+            "chunking_method": "semantic_percentile",
+            "percentile_threshold": self.percentile_threshold,
+        }
+
+    # ------------------------------------------------------------------
+    # System / GPU detection helpers (Issue #665)
+    # ------------------------------------------------------------------
+
     def _check_gpu_availability(self) -> bool:
-        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length."""
         import torch
 
         return (
             torch.cuda.is_available()
-            and hasattr(self, "_embedding_model")
             and self._embedding_model is not None
             and next(self._embedding_model.parameters()).device.type == "cuda"
         )
 
     def _get_system_info_for_batching(self) -> tuple[int, float, bool]:
-        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length."""
         import os
 
         import psutil
@@ -118,100 +88,21 @@ class AutoBotSemanticChunker:
         has_gpu = self._check_gpu_availability()
         return cpu_count, cpu_load, has_gpu
 
-    async def _process_embedding_batches(
-        self, sentences: List[str], batch_size: int, max_workers: int
-    ) -> List[np.ndarray]:
-        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length.
-
-        Process sentences in batches and return list of embedding arrays.
-
-        Args:
-            sentences: List of sentence strings to embed.
-            batch_size: Number of sentences per batch.
-            max_workers: Maximum number of worker threads.
-
-        Returns:
-            List of numpy arrays containing embeddings for each batch.
-        """
-        import asyncio
-        import concurrent.futures
-
-        all_embeddings = []
-
-        for i in range(0, len(sentences), batch_size):
-            batch_sentences = sentences[i : i + batch_size]
-
-            # Run embedding computation in thread pool to avoid blocking event loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                embeddings = await asyncio.get_running_loop().run_in_executor(
-                    executor,
-                    lambda: self._embedding_model.encode(
-                        batch_sentences,
-                        convert_to_tensor=False,
-                        show_progress_bar=False,
-                    ),
-                )
-                all_embeddings.append(embeddings)
-
-            # Yield control to event loop after each batch
-            await asyncio.sleep(TimingConstants.YIELD_INTERVAL)  # Allow other coroutines to run
-
-            # Log progress for large batches
-            if len(sentences) > 20:
-                progress = min(100, int((i + batch_size) / len(sentences) * 100))
-                logger.debug("Embedding progress: %d%%", progress)
-
-        return all_embeddings
-
-    def _create_fallback_embeddings(self, num_sentences: int) -> np.ndarray:
-        """Issue #665: Extracted from _compute_sentence_embeddings_async to reduce function length.
-
-        Create zero embeddings as fallback when embedding computation fails.
-
-        Args:
-            num_sentences: Number of sentences to create embeddings for.
-
-        Returns:
-            numpy array of zero embeddings with appropriate dimensions.
-        """
-        try:
-            dim = self._embedding_model.get_sentence_embedding_dimension()
-            return np.zeros((num_sentences, dim))
-        except Exception:
-            # Fallback dimension if model access fails
-            return np.zeros((num_sentences, 384))
-
     def _get_adaptive_batch_params(
         self, num_sentences: int, cpu_load: float, cpu_count: int, has_gpu: bool
     ) -> tuple[int, int]:
-        """
-        Determine adaptive batch size and worker count based on system load.
-
-        Issue #281: Extracted helper to reduce repetition in _compute_sentence_embeddings_async.
-
-        Args:
-            num_sentences: Total number of sentences to process
-            cpu_load: Current CPU load percentage
-            cpu_count: Number of available CPU cores
-            has_gpu: Whether GPU acceleration is available
-
-        Returns:
-            Tuple of (max_workers, batch_size)
-        """
+        """Adaptive (max_workers, batch_size) based on load + hardware (Issue #281)."""
         if has_gpu:
-            # GPU mode: Use larger batches and more CPU workers for preprocessing
             if cpu_load > 80:
-                max_workers = min(4, cpu_count // 4)  # Still use multiple workers
-                batch_size = min(50, num_sentences)  # Larger batches for GPU
+                max_workers = min(4, cpu_count // 4)
+                batch_size = min(50, num_sentences)
             elif cpu_load > 50:
-                max_workers = min(8, cpu_count // 2)  # More workers available
-                batch_size = min(100, num_sentences)  # Bigger batches
+                max_workers = min(8, cpu_count // 2)
+                batch_size = min(100, num_sentences)
             else:
-                # Low CPU load: maximize parallel processing
-                max_workers = min(12, cpu_count)  # Use more of your 22 cores
-                batch_size = min(200, num_sentences)  # Large GPU batches
+                max_workers = min(12, cpu_count)
+                batch_size = min(200, num_sentences)
         else:
-            # CPU-only mode: More conservative batching
             if cpu_load > 80:
                 max_workers = min(2, cpu_count // 8)
                 batch_size = min(10, num_sentences)
@@ -219,13 +110,16 @@ class AutoBotSemanticChunker:
                 max_workers = min(4, cpu_count // 4)
                 batch_size = min(25, num_sentences)
             else:
-                max_workers = min(6, cpu_count // 2)  # Still use good parallelism
+                max_workers = min(6, cpu_count // 2)
                 batch_size = min(50, num_sentences)
 
         return max_workers, batch_size
 
-    def _detect_device(self):
-        """Detect best available device for model loading (Issue #333 - extracted helper)."""
+    # ------------------------------------------------------------------
+    # Model loading (Issue #333)
+    # ------------------------------------------------------------------
+
+    def _detect_device(self) -> str:
         import torch
 
         if torch.cuda.is_available():
@@ -238,7 +132,6 @@ class AutoBotSemanticChunker:
         return "cpu"
 
     def _apply_gpu_precision(self, model, device: str):
-        """Apply GPU precision optimization to model (Issue #333 - extracted helper)."""
         import torch
 
         if device != "cuda":
@@ -270,7 +163,6 @@ class AutoBotSemanticChunker:
                 return model.to(device)
 
     def _load_model_with_retry(self, device: str):
-        """Load model with retry logic for rate limiting (Issue #333 - extracted helper)."""
         import time
 
         from sentence_transformers import SentenceTransformer
@@ -281,7 +173,12 @@ class AutoBotSemanticChunker:
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    logger.info(f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay...")
+                    logger.info(
+                        "Model loading attempt %d/%d after %ss delay...",
+                        attempt + 1,
+                        max_retries,
+                        retry_delay,
+                    )
                     time.sleep(retry_delay)
                     retry_delay *= 2
 
@@ -295,10 +192,7 @@ class AutoBotSemanticChunker:
                     raise
 
                 if attempt >= max_retries - 1:
-                    logger.error(
-                        "Max retries exceeded for HuggingFace rate limiting: %s",
-                        load_error,
-                    )
+                    logger.error("Max retries exceeded for HuggingFace rate limiting: %s", load_error)
                     raise
 
                 logger.warning(
@@ -310,7 +204,6 @@ class AutoBotSemanticChunker:
         raise RuntimeError("Model loading failed after retries")
 
     def _optimize_loaded_model(self, model, device: str):
-        """Optimize loaded model for device (Issue #333 - extracted helper)."""
         from sentence_transformers import SentenceTransformer
 
         try:
@@ -320,9 +213,7 @@ class AutoBotSemanticChunker:
                 self.embedding_model_name,
                 actual_device,
             )
-
-            model = self._apply_gpu_precision(model, device)
-            return model
+            return self._apply_gpu_precision(model, device)
 
         except Exception as model_load_error:
             logger.warning(
@@ -338,8 +229,22 @@ class AutoBotSemanticChunker:
 
             raise
 
-    async def _initialize_model(self):
-        """Lazy initialize the sentence transformer model on first use with GPU acceleration."""
+    async def _try_fallback_models(self) -> None:
+        from sentence_transformers import SentenceTransformer
+
+        for model_name in ("all-mpnet-base-v2", "all-MiniLM-L12-v2"):
+            try:
+                logger.info("Attempting fallback model loading on CPU: %s", model_name)
+                self._embedding_model = SentenceTransformer(model_name)
+                logger.warning("Fallback to %s embedding model on CPU", model_name)
+                return
+            except Exception as fallback_error:
+                logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
+
+        raise RuntimeError("Could not initialize any embedding model")
+
+    async def _initialize_model(self) -> None:
+        """Lazy initialize the sentence-transformer model on first use (async, thread-pool)."""
         if self._embedding_model is not None:
             return
 
@@ -348,7 +253,6 @@ class AutoBotSemanticChunker:
             import concurrent.futures
 
             def load_model():
-                """Load and optimize embedding model on detected device."""
                 device = self._detect_device()
                 model = self._load_model_with_retry(device)
                 return self._optimize_loaded_model(model, device)
@@ -365,31 +269,96 @@ class AutoBotSemanticChunker:
             logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
             await self._try_fallback_models()
 
-    async def _try_fallback_models(self):
-        """Try loading fallback models (Issue #333 - extracted helper)."""
-        from sentence_transformers import SentenceTransformer
+    # ------------------------------------------------------------------
+    # Embedding compute
+    # ------------------------------------------------------------------
 
-        fallback_models = ["all-mpnet-base-v2", "all-MiniLM-L12-v2"]
+    async def _process_embedding_batches(
+        self, sentences: List[str], batch_size: int, max_workers: int
+    ) -> List[np.ndarray]:
+        """Thread-pool-driven batch processing (Issue #665)."""
+        import asyncio
+        import concurrent.futures
 
-        for model_name in fallback_models:
-            try:
-                logger.info("Attempting fallback model loading on CPU: %s", model_name)
-                self._embedding_model = SentenceTransformer(model_name)
-                logger.warning("Fallback to %s embedding model on CPU", model_name)
-                return
-            except Exception as fallback_error:
-                logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
+        all_embeddings: List[np.ndarray] = []
 
-        raise RuntimeError("Could not initialize any embedding model")
+        for i in range(0, len(sentences), batch_size):
+            batch_sentences = sentences[i : i + batch_size]
 
-    def _sync_try_fallback_models(self, device: str):
-        """Try loading fallback models synchronously (Issue #333 - extracted helper)."""
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                embeddings = await asyncio.get_running_loop().run_in_executor(
+                    executor,
+                    lambda: self._embedding_model.encode(
+                        batch_sentences,
+                        convert_to_tensor=False,
+                        show_progress_bar=False,
+                    ),
+                )
+                all_embeddings.append(embeddings)
+
+            await asyncio.sleep(TimingConstants.YIELD_INTERVAL)
+
+            if len(sentences) > 20:
+                progress = min(100, int((i + batch_size) / len(sentences) * 100))
+                logger.debug("Embedding progress: %d%%", progress)
+
+        return all_embeddings
+
+    def _create_fallback_embeddings(self, num_sentences: int) -> np.ndarray:
+        """Zero-embedding fallback when compute fails (Issue #665)."""
+        try:
+            dim = self._embedding_model.get_sentence_embedding_dimension()
+            return np.zeros((num_sentences, dim))
+        except Exception:
+            return np.zeros((num_sentences, 384))
+
+    async def _compute_embeddings(self, sentences: List[str]) -> np.ndarray:
+        """Async embedding compute with adaptive batching (Issue #665)."""
+        await self._initialize_model()
+
+        try:
+            cpu_count, cpu_load, has_gpu = self._get_system_info_for_batching()
+            max_workers, batch_size = self._get_adaptive_batch_params(len(sentences), cpu_load, cpu_count, has_gpu)
+
+            logger.info(
+                "Processing %d sentences with %d workers, batch_size=%d, CPU load=%s%%",
+                len(sentences),
+                max_workers,
+                batch_size,
+                cpu_load,
+            )
+
+            all_embeddings = await self._process_embedding_batches(sentences, batch_size, max_workers)
+
+            if len(all_embeddings) == 1:
+                return np.array(all_embeddings[0])
+            return np.vstack(all_embeddings)
+
+        except Exception as e:
+            logger.error("Error computing sentence embeddings: %s", e)
+            return self._create_fallback_embeddings(len(sentences))
+
+    # Backwards-compatible alias: `npu_semantic_search._generate_embedding_gpu_fallback`
+    # still imports and calls `_compute_sentence_embeddings_async` directly.
+    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
+        return await self._compute_embeddings(sentences)
+
+    # ------------------------------------------------------------------
+    # Synchronous entry points — kept for two live external callers:
+    #   autobot-backend/npu_semantic_search.py:521  (CPU final fallback)
+    #   autobot-infrastructure/.../npu_performance_measurement.py:187/192
+    # ------------------------------------------------------------------
+
+    def _sync_try_fallback_models(self, device: str) -> None:
+        """Try loading fallback models synchronously."""
         from sentence_transformers import SentenceTransformer
 
         self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
 
         if device == "cuda":
             try:
+                import torch
+
                 has_meta_tensors = any(p.device.type == "meta" for p in self._embedding_model.parameters())
                 if has_meta_tensors:
                     self._embedding_model = self._embedding_model.to_empty(device=device)
@@ -398,11 +367,13 @@ class AutoBotSemanticChunker:
             except Exception as device_error:
                 logger.warning("Failed to move model to GPU: %s, using CPU", device_error)
                 device = "cpu"
+                # Reference `torch` to satisfy linters about unused import in the try block.
+                _ = torch
 
         logger.warning("Fallback to all-mpnet-base-v2 embedding model on %s", device)
 
-    def _sync_initialize_model(self):
-        """Synchronous model initialization for fallback cases (blocking)."""
+    def _sync_initialize_model(self) -> None:
+        """Synchronous model initialization for non-async fallback paths (blocking)."""
         if self._embedding_model is not None:
             return
 
@@ -432,300 +403,35 @@ class AutoBotSemanticChunker:
                 logger.error("Failed to load fallback model: %s", fallback_error)
                 raise RuntimeError("Could not initialize any embedding model")
 
-    def _split_into_sentences(self, text: str) -> List[str]:
-        """
-        Split text into sentences using improved sentence boundary detection.
-
-        Args:
-            text: Input text to split
-
-        Returns:
-            List of sentence strings
-        """
-        # Issue #383 - Use regex split instead of character-by-character string building
-        # Issue #380 - Use pre-compiled patterns from module level
-        # Split text by sentence endings, keeping the delimiters
-        raw_splits = _SENTENCE_ENDINGS_RE.split(text)
-
-        # Recombine splits: each sentence is content + delimiter
-        sentences = []
-        current_sentence = ""
-        for i, part in enumerate(raw_splits):
-            current_sentence += part
-            # Check if this part is a sentence ending (odd indices after split with group)
-            if _SENTENCE_ENDING_MATCH_RE.match(part):
-                # Check if this is likely an abbreviation
-                if not _ABBREVIATIONS_RE.search(current_sentence):
-                    stripped = current_sentence.strip()
-                    if stripped:
-                        sentences.append(stripped)
-                    current_sentence = ""
-
-        # Add any remaining text as a sentence
-        if current_sentence.strip():
-            sentences.append(current_sentence.strip())
-
-        # Filter out very short sentences (likely parsing errors)
-        sentences = [s for s in sentences if len(s.split()) >= 3]
-
-        return sentences
-
-    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
-        """Compute embeddings for sentences asynchronously (Issue #665: refactored to <50 lines)."""
-        # Ensure model is loaded before use
-        await self._initialize_model()
-
-        try:
-            # Get system info using extracted helper (Issue #665)
-            cpu_count, cpu_load, has_gpu = self._get_system_info_for_batching()
-
-            # Get adaptive batch parameters (Issue #281)
-            max_workers, batch_size = self._get_adaptive_batch_params(len(sentences), cpu_load, cpu_count, has_gpu)
-
-            logger.info(
-                f"Processing {len(sentences)} sentences with {max_workers} workers, "
-                f"batch_size={batch_size}, CPU load={cpu_load}%"
-            )
-
-            # Process batches using extracted helper (Issue #665)
-            all_embeddings = await self._process_embedding_batches(sentences, batch_size, max_workers)
-
-            # Combine all batch results
-            if len(all_embeddings) == 1:
-                return np.array(all_embeddings[0])
-            return np.vstack(all_embeddings)
-
-        except Exception as e:
-            logger.error("Error computing sentence embeddings: %s", e)
-            return self._create_fallback_embeddings(len(sentences))
-
     def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
-        """
-        Synchronous wrapper for backward compatibility.
+        """Synchronous embedding wrapper for backward compatibility.
 
-        Args:
-            sentences: List of sentence strings
-
-        Returns:
-            numpy array of embeddings
+        Live callers: `npu_semantic_search._generate_fallback_embedding` and
+        `autobot-infrastructure/.../npu_performance_measurement.py`.
         """
         import asyncio
 
         try:
             asyncio.get_running_loop()
-            # A running loop exists — we're in an async context; sync method should not block
+            # Running loop -> sync encode inline (blocking; caller accepted this path)
             logger.warning(
                 "Using sync embedding method in async context. " "Use _compute_sentence_embeddings_async instead."
             )
             logger.warning("WARNING: Model initialization may block event loop - use async method instead")
-            # Fall back to direct computation (blocking)
             if self._embedding_model is None:
                 self._sync_initialize_model()
             embeddings = self._embedding_model.encode(sentences, convert_to_tensor=False)
             return np.array(embeddings)
         except RuntimeError:
-            # No running loop — run the async version synchronously
+            # No running loop -> delegate to async variant
             return asyncio.run(self._compute_sentence_embeddings_async(sentences))
 
-    def _compute_semantic_distances(self, embeddings: np.ndarray) -> List[float]:
-        """
-        Compute semantic distances between consecutive sentences.
-
-        Args:
-            embeddings: Array of sentence embeddings
-
-        Returns:
-            List of cosine distances between consecutive sentences
-        """
-        if len(embeddings) <= 1:
-            return []
-
-        from sklearn.metrics.pairwise import cosine_similarity
-
-        distances = []
-        for i in range(len(embeddings) - 1):
-            # Compute cosine similarity between consecutive sentences
-            similarity = cosine_similarity(embeddings[i].reshape(1, -1), embeddings[i + 1].reshape(1, -1))[0][0]
-            # Convert similarity to distance
-            distance = 1 - similarity
-            distances.append(distance)
-
-        return distances
-
-    def _find_chunk_boundaries(self, distances: List[float]) -> List[int]:
-        """
-        Find chunk boundaries based on percentile threshold.
-
-        Args:
-            distances: List of semantic distances between sentences
-
-        Returns:
-            List of sentence indices where chunks should split
-        """
-        if not distances:
-            return []
-
-        # Calculate percentile threshold
-        threshold = np.percentile(distances, self.percentile_threshold)
-
-        boundaries = []
-        for i, distance in enumerate(distances):
-            if distance > threshold:
-                # +1 because distance[i] is between sentence i and i+1
-                boundaries.append(i + 1)
-
-        return boundaries
-
-    def _merge_with_previous_chunk(
-        self, chunks: List[SemanticChunk], chunk_sentences: List[str], boundary: int
-    ) -> None:
-        """Merge small chunk with previous chunk. Issue #620."""
-        prev_chunk = chunks[-1]
-        merged_sentences = prev_chunk.sentences + chunk_sentences
-        merged_content = " ".join(merged_sentences)
-        chunks[-1] = SemanticChunk(
-            content=merged_content,
-            start_index=prev_chunk.start_index,
-            end_index=boundary,
-            sentences=merged_sentences,
-            semantic_score=0.8,
-            metadata={"merged": True, "original_boundary": boundary},
-        )
-
-    def _create_regular_chunk(
-        self,
-        chunk_content: str,
-        chunk_sentences: List[str],
-        start_idx: int,
-        boundary: int,
-    ) -> SemanticChunk:
-        """Create a regular semantic chunk. Issue #620."""
-        return SemanticChunk(
-            content=chunk_content,
-            start_index=start_idx,
-            end_index=boundary,
-            sentences=chunk_sentences,
-            semantic_score=0.8,
-            metadata={"boundary_type": "semantic"},
-        )
-
-    def _create_chunks_with_boundaries(
-        self, sentences: List[str], boundaries: List[int], distances: List[float]
-    ) -> List[SemanticChunk]:
-        """Create semantic chunks based on identified boundaries. Issue #620: Refactored."""
-        chunks = []
-        start_idx = 0
-        final_boundaries = boundaries + [len(sentences)]
-
-        for boundary in final_boundaries:
-            if boundary <= start_idx:
-                continue
-
-            chunk_sentences = sentences[start_idx:boundary]
-            chunk_content = " ".join(chunk_sentences)
-
-            if len(chunk_content) < self.min_chunk_size and chunks:
-                self._merge_with_previous_chunk(chunks, chunk_sentences, boundary)
-            elif len(chunk_content) > self.max_chunk_size:
-                chunks.extend(self._split_large_chunk(chunk_sentences, start_idx))
-            else:
-                chunks.append(self._create_regular_chunk(chunk_content, chunk_sentences, start_idx, boundary))
-
-            start_idx = boundary - self.overlap_sentences if self.overlap_sentences > 0 else boundary
-
-        return chunks
-
-    def _create_size_constrained_chunk(
-        self,
-        sentences: List[str],
-        sentence_idx: int,
-        is_final: bool = False,
-    ) -> SemanticChunk:
-        """
-        Create a semantic chunk for size-constrained splitting.
-
-        Args:
-            sentences: List of sentences for this chunk
-            sentence_idx: Current sentence index (end of chunk)
-            is_final: Whether this is the final chunk in the split
-
-        Returns:
-            A SemanticChunk with size_constraint metadata. Issue #620.
-        """
-        chunk_content = " ".join(sentences)
-        metadata = {"split_type": "size_constraint"}
-        if is_final:
-            metadata["final_chunk"] = True
-
-        return SemanticChunk(
-            content=chunk_content,
-            start_index=sentence_idx - len(sentences),
-            end_index=sentence_idx,
-            sentences=sentences if is_final else sentences.copy(),
-            semantic_score=0.7,
-            metadata=metadata,
-        )
-
-    def _apply_overlap_reset(self, current_sentences: List[str]) -> tuple[List[str], int]:
-        """
-        Reset sentence accumulator with overlap for next chunk.
-
-        Args:
-            current_sentences: Current accumulated sentences
-
-        Returns:
-            Tuple of (new sentence list, new length). Issue #620.
-        """
-        if self.overlap_sentences > 0:
-            overlap_start = -self.overlap_sentences
-            new_sentences = current_sentences[overlap_start:]
-            return new_sentences, sum(len(s) for s in new_sentences)
-        return [], 0
-
-    def _split_large_chunk(self, sentences: List[str], start_idx: int) -> List[SemanticChunk]:
-        """
-        Split a chunk that exceeds maximum size into smaller chunks.
-
-        Args:
-            sentences: Sentences in the large chunk
-            start_idx: Starting index for sentence numbering
-
-        Returns:
-            List of smaller semantic chunks
-        """
-        chunks = []
-        current_sentences = []
-        current_length = 0
-        sentence_idx = start_idx
-
-        for sentence in sentences:
-            sentence_len = len(sentence)
-
-            if current_length + sentence_len > self.max_chunk_size and current_sentences:
-                chunk = self._create_size_constrained_chunk(current_sentences, sentence_idx)
-                chunks.append(chunk)
-                current_sentences, current_length = self._apply_overlap_reset(current_sentences)
-
-            current_sentences.append(sentence)
-            current_length += sentence_len
-            sentence_idx += 1
-
-        if current_sentences:
-            chunk = self._create_size_constrained_chunk(current_sentences, sentence_idx, is_final=True)
-            chunks.append(chunk)
-
-        return chunks
+    # ------------------------------------------------------------------
+    # Coherence scoring (CPU-only utility — not on hot chunk_text path)
+    # ------------------------------------------------------------------
 
     async def _calculate_chunk_coherence_async(self, sentences: List[str]) -> float:
-        """
-        Calculate semantic coherence score for a chunk.
-
-        Args:
-            sentences: List of sentences in the chunk
-
-        Returns:
-            Coherence score (0-1, higher is more coherent)
-        """
+        """Semantic coherence score for a chunk (0-1, higher is more coherent)."""
         if len(sentences) <= 1:
             return 1.0
 
@@ -736,205 +442,31 @@ class AutoBotSemanticChunker:
 
             from sklearn.metrics.pairwise import cosine_similarity
 
-            # Calculate average pairwise similarity within the chunk
-            similarities = []
+            similarities: List[float] = []
             for i in range(len(embeddings)):
                 for j in range(i + 1, len(embeddings)):
                     similarity = cosine_similarity(embeddings[i].reshape(1, -1), embeddings[j].reshape(1, -1))[0][0]
                     similarities.append(similarity)
 
-            return np.mean(similarities) if similarities else 1.0
+            return float(np.mean(similarities)) if similarities else 1.0
         except Exception as e:
             logger.error("Error calculating chunk coherence: %s", e)
-            return 0.5  # Default neutral score
-
-    def _create_single_sentence_chunk(
-        self, text: str, sentences: List[str], metadata: Optional[Dict[str, Any]]
-    ) -> SemanticChunk:
-        """
-        Create a chunk for single-sentence or empty text. Issue #620.
-
-        Args:
-            text: Original input text
-            sentences: List of sentences (0 or 1 item)
-            metadata: Optional metadata to attach
-
-        Returns:
-            SemanticChunk for the single sentence
-        """
-        return SemanticChunk(
-            content=text,
-            start_index=0,
-            end_index=1,
-            sentences=sentences,
-            semantic_score=1.0,
-            metadata=metadata or {"single_sentence": True},
-        )
-
-    def _enrich_chunks_with_metadata(self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]) -> None:
-        """
-        Add metadata to all chunks including index and model info. Issue #620.
-
-        Args:
-            chunks: List of chunks to enrich
-            metadata: Source metadata to include
-        """
-        for i, chunk in enumerate(chunks):
-            chunk.metadata.update(
-                {
-                    "chunk_index": i,
-                    "total_chunks": len(chunks),
-                    "source_metadata": metadata or {},
-                    "chunking_method": "semantic_percentile",
-                    "embedding_model": self.embedding_model_name,
-                    "percentile_threshold": self.percentile_threshold,
-                }
-            )
-
-    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
-        """
-        Chunk text using semantic analysis. Issue #620: Refactored with helpers.
-
-        Args:
-            text: Input text to chunk
-            metadata: Optional metadata to attach to chunks
-
-        Returns:
-            List of SemanticChunk objects
-        """
-        try:
-            logger.info("Starting semantic chunking of text (%d characters)", len(text))
-
-            sentences = self._split_into_sentences(text)
-            if len(sentences) <= 1:
-                return [self._create_single_sentence_chunk(text, sentences, metadata)]
-
-            logger.debug("Split text into %d sentences", len(sentences))
-
-            embeddings = await self._compute_sentence_embeddings_async(sentences)
-            distances = self._compute_semantic_distances(embeddings)
-            boundaries = self._find_chunk_boundaries(distances)
-
-            logger.debug("Found %d semantic boundaries", len(boundaries))
-
-            chunks = self._create_chunks_with_boundaries(sentences, boundaries, distances)
-            self._enrich_chunks_with_metadata(chunks, metadata)
-
-            avg_coherence = np.mean([c.semantic_score for c in chunks])
-            logger.info(
-                "Created %d semantic chunks with average coherence: %.3f",
-                len(chunks),
-                avg_coherence,
-            )
-
-            return chunks
-
-        except Exception as e:
-            logger.error("Error in semantic chunking: %s", e)
-            return await self._fallback_chunking(text, metadata)
-
-    def _create_fallback_chunk(
-        self,
-        sentences: List[str],
-        start_index: int,
-        end_index: int,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> SemanticChunk:
-        """Create a fallback chunk from a list of sentences. Issue #620."""
-        chunk_content = " ".join(sentences)
-        return SemanticChunk(
-            content=chunk_content,
-            start_index=start_index,
-            end_index=end_index,
-            sentences=sentences.copy() if sentences else [],
-            semantic_score=0.5,
-            metadata={"fallback_chunking": True, **(metadata or {})},
-        )
-
-    async def _fallback_chunking(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
-        """
-        Fallback chunking method when semantic analysis fails.
-
-        Args:
-            text: Input text
-            metadata: Optional metadata
-
-        Returns:
-            List of basic chunks
-        """
-        logger.warning("Using fallback chunking method")
-
-        sentences = self._split_into_sentences(text)
-        chunks: List[SemanticChunk] = []
-        current_sentences: List[str] = []
-        current_length = 0
-
-        for i, sentence in enumerate(sentences):
-            sentence_len = len(sentence)
-
-            if current_length + sentence_len > self.max_chunk_size and current_sentences:
-                chunk = self._create_fallback_chunk(current_sentences, i - len(current_sentences), i, metadata)
-                chunks.append(chunk)
-                current_sentences = []
-                current_length = 0
-
-            current_sentences.append(sentence)
-            current_length += sentence_len
-
-        if current_sentences:
-            chunk = self._create_fallback_chunk(
-                current_sentences,
-                len(sentences) - len(current_sentences),
-                len(sentences),
-                metadata,
-            )
-            chunks.append(chunk)
-
-        return chunks
-
-    async def chunk_document(self, content: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Main interface method compatible with LlamaIndex Document format.
-
-        Args:
-            content: Document content text
-            metadata: Document metadata
-
-        Returns:
-            List of chunk dictionaries compatible with LlamaIndex
-        """
-        semantic_chunks = await self.chunk_text(content, metadata)
-
-        # Convert to LlamaIndex-compatible format
-        documents = []
-        for chunk in semantic_chunks:
-            doc_data = {
-                "text": chunk.content,
-                "metadata": {
-                    **chunk.metadata,
-                    "semantic_score": chunk.semantic_score,
-                    "sentence_count": len(chunk.sentences),
-                    "character_count": len(chunk.content),
-                },
-            }
-            documents.append(doc_data)
-
-        return documents
+            return 0.5
 
 
-# Global instance placeholder - will be created lazily (thread-safe)
-import threading
+# ----------------------------------------------------------------------
+# Public factory (preserves singleton semantics for all 15 CPU callers)
+# ----------------------------------------------------------------------
 
-_semantic_chunker_instance = None
+_semantic_chunker_instance: "AutoBotSemanticChunker | None" = None
 _semantic_chunker_instance_lock = threading.Lock()
 
 
-def get_semantic_chunker():
-    """Get the global semantic chunker instance (lazy initialization, thread-safe)."""
+def get_semantic_chunker() -> AutoBotSemanticChunker:
+    """Get the global semantic chunker instance (lazy, thread-safe)."""
     global _semantic_chunker_instance
     if _semantic_chunker_instance is None:
         with _semantic_chunker_instance_lock:
-            # Double-check after acquiring lock
             if _semantic_chunker_instance is None:
                 _semantic_chunker_instance = AutoBotSemanticChunker()
     return _semantic_chunker_instance

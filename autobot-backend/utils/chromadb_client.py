@@ -52,6 +52,8 @@ __all__ = [
     "get_chromadb_client",
     "get_async_chromadb_client",
     "get_all_paginated",
+    "get_backend_client",
+    "get_async_default_client",
     "AsyncChromaClient",
     "AsyncChromaCollection",
     "wrap_collection_async",
@@ -414,3 +416,50 @@ def get_all_paginated(
             break
         offset += page_size
     return merged
+
+
+def get_backend_client(
+    db_path: str = "",
+    allow_reset: bool = False,
+    anonymized_telemetry: bool = False,
+) -> Any:
+    """Return a backend-agnostic ``BaseClient`` wrapping the ChromaDB client.
+
+    Issue #5062: opt-in seam for callers that want to target the
+    ``knowledge.backends.BaseClient`` ABC instead of ChromaDB directly.
+    Existing callers keep using ``get_chromadb_client`` unchanged.
+
+    Args match ``get_chromadb_client``; see that function for semantics.
+    """
+    # Lazy import to keep the backends package optional at import time.
+    from knowledge.backends.chromadb_adapter import ChromaDBClient
+
+    raw = get_chromadb_client(
+        db_path=db_path,
+        allow_reset=allow_reset,
+        anonymized_telemetry=anonymized_telemetry,
+    )
+    return ChromaDBClient(raw)
+
+
+async def get_async_default_client(
+    db_path: str = "",
+    allow_reset: bool = False,
+    anonymized_telemetry: bool = False,
+) -> Any:
+    """Return an async ``AsyncBaseClient`` wrapping the ChromaDB client.
+
+    Issue #5316: opt-in async seam. Mirrors ``get_backend_client`` but
+    returns an ``AsyncBaseClient`` (see ``knowledge.backends.async_base``)
+    for callers running in async contexts. Existing async callers keep
+    using ``get_async_chromadb_client`` unchanged.
+    """
+    # Lazy import to keep the backends package optional at import time.
+    from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
+
+    raw = await get_async_chromadb_client(
+        db_path=db_path,
+        allow_reset=allow_reset,
+        anonymized_telemetry=anonymized_telemetry,
+    )
+    return AsyncChromaDBClient(raw)

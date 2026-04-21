@@ -36,11 +36,11 @@ from models.infrastructure import (
     DockerDeploymentRequest,
     DockerDeploymentStatus,
 )
-from services.slm.deployment_orchestrator import (
+from services.slm.deployment_bridge import (
     DeploymentContext,
-    DeploymentOrchestrator,
+    DeploymentCoordinator,
     DeploymentStatus,
-    SLMDeploymentOrchestrator,
+    SLMDeploymentBridge,
     get_orchestrator,
 )
 from services.slm_client import get_slm_client
@@ -61,7 +61,7 @@ _VALID_STRATEGIES = {s.value for s in DeploymentStrategy}
 # ---------------------------------------------------------------------------
 
 
-def _require_orchestrator() -> DeploymentOrchestrator:
+def _require_orchestrator() -> DeploymentCoordinator:
     """Return the global orchestrator or raise 503 if not initialised."""
     orch = get_orchestrator()
     if orch is None:
@@ -133,7 +133,7 @@ async def deploy_docker(request: DockerDeploymentRequest) -> DockerDeploymentSta
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="SLM client not initialised",
         )
-    slm_orch = SLMDeploymentOrchestrator(client)
+    slm_orch = SLMDeploymentBridge(client)
     result = await slm_orch.deploy_docker(request)
     logger.info(
         "Docker deployment triggered: %s on node %s",
@@ -155,7 +155,7 @@ async def deploy_docker(request: DockerDeploymentRequest) -> DockerDeploymentSta
 )
 async def create_deployment(
     body: DeploymentCreateRequest,
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Create and queue a new multi-role, multi-node deployment."""
     if body.strategy.value not in _VALID_STRATEGIES:
@@ -175,7 +175,7 @@ async def create_deployment(
 @router.get("", summary="List active deployments")
 async def list_deployments(
     status_filter: Optional[str] = Query(None),
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Return active deployments, optionally filtered by status string."""
     deployments = orch.active_deployments
@@ -195,7 +195,7 @@ async def list_deployments(
 @router.get("/{deployment_id}", summary="Get a deployment by ID")
 async def get_deployment(
     deployment_id: str,
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Return a single deployment context by its ID."""
     ctx = orch.get_deployment(deployment_id)
@@ -210,7 +210,7 @@ async def get_deployment(
 @router.post("/{deployment_id}/execute", summary="Execute a queued deployment")
 async def execute_deployment(
     deployment_id: str,
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Start execution of a deployment that is in QUEUED state."""
     ctx = orch.get_deployment(deployment_id)
@@ -239,7 +239,7 @@ async def execute_deployment(
 @router.post("/{deployment_id}/cancel", summary="Cancel a deployment")
 async def cancel_deployment(
     deployment_id: str,
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Cancel a queued or running deployment."""
     ctx = orch.get_deployment(deployment_id)
@@ -263,7 +263,7 @@ async def cancel_deployment(
 @router.post("/{deployment_id}/rollback", summary="Rollback a deployment")
 async def rollback_deployment(
     deployment_id: str,
-    orch: DeploymentOrchestrator = Depends(_require_orchestrator),
+    orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Trigger rollback for a deployment."""
     ctx = orch.get_deployment(deployment_id)

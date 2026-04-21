@@ -12,7 +12,7 @@
  * - Respecting page visibility (pauses when tab is hidden)
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref, onScopeDispose, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useBackoffPoller')
@@ -162,7 +162,9 @@ export function useBackoffPoller(options: BackoffPollerOptions): BackoffPollerRe
     logger.debug('Poller stopped')
   }
 
-  onUnmounted(stop)
+  if (getCurrentScope()) {
+    onScopeDispose(stop)
+  }
 
   return { start, stop, isCircuitOpen, consecutiveFailures, currentInterval }
 }

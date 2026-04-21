@@ -14,7 +14,11 @@
         </button>
       </div>
     </h3>
-    <div v-if="duplicates && duplicates.length > 0" class="section-content">
+    <div v-if="loading" class="section-loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>{{ $t('analytics.codebase.actions.loading') }}</span>
+    </div>
+    <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -52,7 +56,7 @@
             @click="toggleDuplicateGroup(String(similarity))"
           >
             <div class="header-info">
-              <i :class="expandedDuplicateGroups[similarity] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isGroupExpanded(similarity) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">{{ formatSimilarityGroup(String(similarity)) }}</span>
               <span class="header-count">({{ group.length }})</span>
             </div>
@@ -63,7 +67,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expandedDuplicateGroups[similarity]" class="accordion-items">
+            <div v-if="isGroupExpanded(similarity)" class="accordion-items">
               <div
                 v-for="(duplicate, index) in group.slice(0, 20)"
                 :key="index"
@@ -88,7 +92,7 @@
       </div>
     </div>
     <EmptyState
-      v-else
+      v-else-if="!loading"
       icon="fas fa-check-circle"
       :message="$t('analytics.duplicates.emptyMessage')"
       variant="success"
@@ -109,10 +113,11 @@
  * Issue #184: Split oversized Vue components
  */
 
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
+import { useExpansion } from '@/composables/useExpansion'
 
 const { t } = useI18n()
 
@@ -125,6 +130,8 @@ interface Duplicate {
 
 interface Props {
   duplicates: Duplicate[]
+  /** #5368: render a spinner during the scan instead of empty-state. */
+  loading?: boolean
 }
 
 const props = defineProps<Props>()
@@ -132,7 +139,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expandedDuplicateGroups = ref<Record<string, boolean>>({})
+const groupExpansion = useExpansion<string>()
+const isGroupExpanded = groupExpansion.isExpanded
 
 const duplicatesBySimilarity = computed(() => {
   const groups: Record<string, Duplicate[]> = { high: [], medium: [], low: [] }
@@ -152,7 +160,7 @@ const totalDuplicateLines = useAggregationMemo(
 )
 
 const toggleDuplicateGroup = (similarity: string) => {
-  expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]
+  groupExpansion.toggle(similarity)
 }
 
 const formatSimilarityGroup = (similarity: string): string => {
@@ -186,6 +194,23 @@ const formatSimilarityGroup = (similarity: string): string => {
   background: var(--bg-primary-alpha);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
+}
+
+/* #5368: loading state shown during scan in progress */
+.section-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6);
+  background: var(--bg-primary-alpha);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.section-loading i {
+  color: var(--color-info);
 }
 
 .summary-cards {

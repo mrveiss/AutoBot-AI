@@ -11,11 +11,12 @@ All Redis calls are patched so the suite runs without a live Redis instance.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from security.enterprise.threat_detection.learner import (
     _EMA_ALPHA,
     _INACTIVE_DAYS,
@@ -245,7 +246,7 @@ class TestConsolidate:
         key = self._make_key("old_pattern")
         mock_redis.keys.return_value = [key]
 
-        old_ts = (datetime.utcnow() - timedelta(days=_INACTIVE_DAYS + 1)).isoformat()
+        old_ts = (now_utc() - timedelta(days=_INACTIVE_DAYS + 1)).isoformat()
         mock_redis.hmget.return_value = [b"5", b"0", old_ts.encode()]
 
         summary = learner.consolidate()
@@ -258,7 +259,7 @@ class TestConsolidate:
         key = self._make_key("recent_pattern")
         mock_redis.keys.return_value = [key]
 
-        recent_ts = datetime.utcnow().isoformat()
+        recent_ts = utc_timestamp()
         mock_redis.hmget.return_value = [b"10", b"0", recent_ts.encode()]
 
         summary = learner.consolidate()
@@ -270,7 +271,7 @@ class TestConsolidate:
         key = self._make_key("noisy_pattern")
         mock_redis.keys.return_value = [key]
 
-        recent_ts = datetime.utcnow().isoformat()
+        recent_ts = utc_timestamp()
         # 2 tp, 8 fp → precision 0.2, below _HIGH_FP_THRESHOLD
         mock_redis.hmget.return_value = [b"2", b"8", recent_ts.encode()]
 
@@ -283,7 +284,7 @@ class TestConsolidate:
         key = self._make_key("sparse_pattern")
         mock_redis.keys.return_value = [key]
 
-        recent_ts = datetime.utcnow().isoformat()
+        recent_ts = utc_timestamp()
         # Only 4 observations total — below _MIN_OBSERVATIONS
         mock_redis.hmget.return_value = [b"1", b"3", recent_ts.encode()]
 
@@ -295,8 +296,8 @@ class TestConsolidate:
         keys = [self._make_key("p1"), self._make_key("p2"), self._make_key("p3")]
         mock_redis.keys.return_value = keys
 
-        old_ts = (datetime.utcnow() - timedelta(days=_INACTIVE_DAYS + 5)).isoformat()
-        recent_ts = datetime.utcnow().isoformat()
+        old_ts = (now_utc() - timedelta(days=_INACTIVE_DAYS + 5)).isoformat()
+        recent_ts = utc_timestamp()
 
         # p1 → inactive (prune); p2 → high FP (flag); p3 → healthy
         mock_redis.hmget.side_effect = [

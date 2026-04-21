@@ -54,7 +54,7 @@ AutoBot uses a multi-agent orchestration system where specialized agents handle 
 ## 📂 Agent Categories
 
 ### 1. **Orchestration & Coordination**
-- [Agent Orchestrator](./orchestration/agent_orchestrator.md) - Central routing and coordination
+- [Distributed Agent Coordinator](./orchestration/distributed_agent_coordinator.md) - Central routing and coordination
 - [Base Agent](./orchestration/base_agent.md) - Abstract base class for all agents
 
 ### 2. **Knowledge Management**

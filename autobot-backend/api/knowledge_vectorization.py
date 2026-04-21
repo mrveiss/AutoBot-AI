@@ -20,6 +20,7 @@ from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
 from knowledge.pipeline.base import PipelineContext
@@ -312,6 +313,11 @@ async def _perform_uncached_batch_check(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_vectorization_status_batch",
+    error_code_prefix="KNOWLEDGE",
+)
 @router.post("/vectorization_status")
 async def check_vectorization_status_batch(
     request: dict, req: Request, _user: dict = Depends(get_current_user)
@@ -374,7 +380,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
         Tuple of (all_fact_data, fact_ids, vector_exists_map)
     """
     # Batch fetch all fact data using pipeline - eliminates N+1 queries
-    async with kb.aioredis_client.pipeline() as pipe:
+    async with kb.redis().pipeline() as pipe:
         for fact_key in batch:
             await pipe.hgetall(fact_key)
         all_fact_data = await pipe.execute()
@@ -387,7 +393,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
     # If skip_existing, also batch check vector existence
     vector_exists = {}
     if skip_existing:
-        async with kb.aioredis_client.pipeline() as pipe:
+        async with kb.redis().pipeline() as pipe:
             for fact_id in fact_ids:
                 await pipe.exists(f"llama_index/vector_{fact_id}")
             exists_results = await pipe.execute()
@@ -584,6 +590,11 @@ def _build_vectorization_response(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vectorize_existing_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 @router.post("/vectorize_facts")
 async def vectorize_existing_facts(
     req: Request,
@@ -1691,7 +1702,7 @@ async def _reindex_with_context_task(
     _reindex_state["is_running"] = True
     _reindex_state["enriched_count"] = 0
     _reindex_state["total_count"] = 0
-    _reindex_state["started_at"] = datetime.utcnow().isoformat()
+    _reindex_state["started_at"] = utc_timestamp()
     _reindex_state["completed_at"] = None
     _reindex_state["error"] = None
     try:
@@ -1701,7 +1712,7 @@ async def _reindex_with_context_task(
         logger.exception("Reindex task failed")
     finally:
         _reindex_state["is_running"] = False
-        _reindex_state["completed_at"] = datetime.utcnow().isoformat()
+        _reindex_state["completed_at"] = utc_timestamp()
 
 
 async def _run_reindex(collection_name: str, batch_size: int) -> None:

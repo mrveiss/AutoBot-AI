@@ -31,17 +31,13 @@ logger = logging.getLogger(__name__)
 # NPU-ACCELERATED EMBEDDING GENERATION (Issue #165)
 # =============================================================================
 # Cached state to avoid repeated imports and availability checks
+# Note: Issue #5105 — duplicate embedding logic was removed; this module now
+# delegates all embedding generation to services.npu_client which is the
+# canonical NPU-first / Ollama-fallback path. The warmup helpers below are
+# retained because lifespan.py calls them at startup (Issue #165).
 _npu_client_cache: Optional[Any] = None
 _npu_available_cache: Optional[bool] = None
 _npu_cache_timestamp: float = 0.0
-_NPU_CACHE_TTL: float = 30.0  # Cache availability for 30 seconds
-
-# Metrics counters for observability
-_npu_embedding_count: int = 0
-_fallback_embedding_count: int = 0
-
-# Bounded concurrency for fallback to prevent overwhelming Ollama
-_FALLBACK_MAX_CONCURRENT: int = 5
 
 # Warmup state tracking
 _npu_warmup_complete: bool = False
@@ -171,178 +167,87 @@ def get_npu_warmup_status() -> Dict[str, Any]:
     }
 
 
-async def _get_npu_client_cached() -> tuple:
-    """
-    Get cached NPU client and availability status.
-
-    Issue #165: Caches client instance and availability check to reduce
-    overhead on repeated embedding calls.
-
-    Returns:
-        Tuple of (client, is_available)
-    """
-    global _npu_client_cache, _npu_available_cache, _npu_cache_timestamp
-
-    import time
-
-    current_time = time.time()
-
-    # Check if cache is still valid
-    if (
-        _npu_client_cache is not None
-        and _npu_available_cache is not None
-        and (current_time - _npu_cache_timestamp) < _NPU_CACHE_TTL
-    ):
-        return _npu_client_cache, _npu_available_cache
-
-    # Refresh cache
-    try:
-        from services.npu_client import get_npu_client
-
-        _npu_client_cache = get_npu_client()
-        _npu_available_cache = await _npu_client_cache.is_available()
-        _npu_cache_timestamp = current_time
-        return _npu_client_cache, _npu_available_cache
-    except Exception as e:
-        logger.debug("Failed to get NPU client: %s", e)
-        _npu_available_cache = False
-        _npu_cache_timestamp = current_time
-        return None, False
-
-
-def get_embedding_metrics() -> Dict[str, int]:
-    """
-    Get metrics on NPU vs fallback embedding usage.
-
-    Returns:
-        Dict with npu_count and fallback_count
-    """
-    return {
-        "npu_count": _npu_embedding_count,
-        "fallback_count": _fallback_embedding_count,
-    }
-
-
 async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
-    """
-    Generate embedding using NPU worker with fallback to LlamaIndex.
+    """Generate a single embedding via the canonical NPU-fallback path.
 
-    Issue #165: Uses NPU worker for hardware-accelerated
-    embedding generation. Falls back to LlamaIndex's embed_model if NPU
-    is unavailable.
+    Issue #5105: Thin shim — delegates to
+    ``services.npu_client.generate_embedding_with_fallback`` which is the
+    single source of truth for NPU-first / Ollama-fallback embedding
+    generation. Prometheus counter
+    ``autobot_embedding_generated_total{backend, status}`` is emitted by
+    the canonical helper.
 
-    Optimizations:
-    - Caches NPU client and availability to reduce overhead
-    - Tracks metrics for observability
-
-    Args:
-        text: Text content to embed
-
-    Returns:
-        Embedding vector as list of floats
-    """
-    global _npu_embedding_count, _fallback_embedding_count
-
-    client, is_available = await _get_npu_client_cached()
-
-    if is_available and client:
-        try:
-            embedding = await client.generate_embedding(text)
-            if embedding:
-                _npu_embedding_count += 1
-                logger.debug("Generated embedding via NPU worker")
-                return embedding
-            logger.warning("NPU worker returned empty embedding, falling back")
-        except Exception as e:
-            logger.debug("NPU embedding failed, falling back: %s", e)
-
-    # Fallback to LlamaIndex embed_model
-    from llama_index.core import Settings
-
-    embedding = await asyncio.to_thread(Settings.embed_model.get_text_embedding, text)
-    _fallback_embedding_count += 1
-    logger.debug("Generated embedding via LlamaIndex fallback")
-    return embedding
-
-
-async def _try_npu_batch_embeddings(
-    texts: List[str], client: Any
-) -> Optional[List[List[float]]]:
-    """Try to generate batch embeddings via NPU worker. Issue #620.
+    Retained as a re-export so existing callers and unit tests that patch
+    ``knowledge.facts._generate_embedding_with_npu_fallback`` keep working.
 
     Args:
-        texts: List of text contents to embed
-        client: NPU client instance
+        text: Text content to embed.
 
     Returns:
-        List of embeddings if successful, None otherwise
+        Embedding vector. Empty list if all backends fail (callers downstream
+        in this module already tolerate empty/None embeddings via try/except).
     """
-    global _npu_embedding_count
+    from services.npu_client import generate_embedding_with_fallback
 
-    try:
-        result = await client.generate_embeddings(texts)
-        if result and len(result.embeddings) == len(texts):
-            _npu_embedding_count += len(texts)
-            logger.info(
-                "Generated %d embeddings via NPU worker in %.2fms",
-                len(texts),
-                result.processing_time_ms,
-            )
-            return result.embeddings
-        logger.warning("NPU batch returned incomplete results, falling back")
-    except Exception as e:
-        logger.debug("NPU batch failed, falling back: %s", e)
-    return None
-
-
-async def _generate_embeddings_fallback(texts: List[str]) -> List[List[float]]:
-    """Generate embeddings via LlamaIndex fallback. Issue #620.
-
-    Args:
-        texts: List of text contents to embed
-
-    Returns:
-        List of embedding vectors
-    """
-    global _fallback_embedding_count
-    from llama_index.core import Settings
-
-    semaphore = asyncio.Semaphore(_FALLBACK_MAX_CONCURRENT)
-
-    async def embed_one(text: str) -> List[float]:
-        async with semaphore:
-            return await asyncio.to_thread(
-                Settings.embed_model.get_text_embedding, text
-            )
-
-    embeddings = await asyncio.gather(*[embed_one(t) for t in texts])
-    _fallback_embedding_count += len(texts)
-    logger.debug("Generated %d embeddings via LlamaIndex fallback", len(texts))
-    return list(embeddings)
+    embedding = await generate_embedding_with_fallback(text)
+    return embedding or []
 
 
 async def _generate_embeddings_batch_with_npu_fallback(
     texts: List[str],
 ) -> List[List[float]]:
-    """Generate batch embeddings with NPU worker and fallback. Issue #620.
+    """Generate batch embeddings via the canonical NPU-fallback path.
+
+    Issue #5105: Thin shim — delegates to
+    ``services.npu_client.generate_embeddings_batch_with_fallback``.
+    Filters ``None`` results out (canonical helper returns
+    ``List[Optional[List[float]]]`` to preserve index alignment; callers
+    of this batch helper expect concrete vectors only).
 
     Args:
-        texts: List of text contents to embed
+        texts: List of text contents to embed.
 
     Returns:
-        List of embedding vectors
+        List of embedding vectors (failed items dropped).
     """
     if not texts:
         return []
 
-    client, is_available = await _get_npu_client_cached()
+    from services.npu_client import generate_embeddings_batch_with_fallback
 
-    if is_available and client:
-        embeddings = await _try_npu_batch_embeddings(texts, client)
-        if embeddings:
-            return embeddings
+    raw = await generate_embeddings_batch_with_fallback(texts)
+    return [vec for vec in raw if vec is not None]
 
-    return await _generate_embeddings_fallback(texts)
+
+def get_embedding_metrics() -> Dict[str, int]:
+    """Return embedding-generation counts by backend.
+
+    Issue #5105: Counters are now owned by ``services.npu_client`` and
+    exposed via Prometheus (``autobot_embedding_generated_total``). This
+    helper reads them from the registry for backwards compatibility with
+    callers and tests that expect a plain dict.
+
+    Returns:
+        Dict with ``npu_count`` and ``fallback_count``. Returns zeros when
+        ``prometheus_client`` is unavailable.
+    """
+    npu_count = 0
+    fallback_count = 0
+    try:
+        from services import npu_client as _npu
+
+        counter = getattr(_npu, "_embedding_generated", None)
+        if counter is not None and hasattr(counter, "_metrics"):
+            for label_values, child in counter._metrics.items():
+                backend = label_values[0] if label_values else ""
+                value = int(child._value.get())
+                if backend == "npu":
+                    npu_count += value
+                elif backend == "ollama":
+                    fallback_count += value
+    except Exception:
+        logger.debug("get_embedding_metrics: registry read failed", exc_info=True)
+    return {"npu_count": npu_count, "fallback_count": fallback_count}
 
 
 def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
@@ -427,7 +332,7 @@ class FactsMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
     vector_store: "ChromaVectorStore"
     vector_index: "VectorStoreIndex"
     initialized: bool
@@ -958,7 +863,7 @@ class FactsMixin:
 
             # Batch fetch facts
             facts = []
-            pipeline = self.aioredis_client.pipeline()
+            pipeline = self.redis().pipeline()
             for key in fact_keys:
                 pipeline.hgetall(key)
             facts_data = await pipeline.execute()
@@ -1301,7 +1206,7 @@ class FactsMixin:
 
         try:
             # Use pipeline for batch fetch
-            pipeline = self.aioredis_client.pipeline()
+            pipeline = self.redis().pipeline()
             for fact_id in fact_ids:
                 pipeline.hgetall("fact:%s" % fact_id)
 

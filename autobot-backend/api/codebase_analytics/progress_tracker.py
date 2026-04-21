@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.redis_client import get_async_redis_client
 
-from .storage import get_redis_connection_async
+from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ async def _file_needs_reindex(
 async def _save_task_to_redis(task_id: str, indexing_tasks: Dict) -> None:
     """Persist task state to Redis so all uvicorn workers can read it (#1179)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if redis:
             state = indexing_tasks.get(task_id)
             if state:
@@ -158,7 +158,7 @@ async def _save_task_to_redis(task_id: str, indexing_tasks: Dict) -> None:
 async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
     """Load task state from Redis (#1179: cross-worker visibility)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if redis:
             data = await redis.get(f"{_TASK_REDIS_PREFIX}{task_id}")
             if data:
@@ -178,7 +178,7 @@ async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
 async def _persist_queue_entry(entry: Dict) -> None:
     """Append a queue entry to Redis list (#1717)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if redis:
             await redis.rpush(_QUEUE_REDIS_KEY, json.dumps(entry, default=str))
     except Exception as e:
@@ -188,7 +188,7 @@ async def _persist_queue_entry(entry: Dict) -> None:
 async def _pop_queue_entry_redis() -> None:
     """Remove the front entry from the Redis queue (#1717)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if redis:
             await redis.lpop(_QUEUE_REDIS_KEY)
     except Exception as e:
@@ -198,7 +198,7 @@ async def _pop_queue_entry_redis() -> None:
 async def _remove_queue_entries_redis(source_id: str) -> None:
     """Remove all Redis queue entries matching *source_id* (#1717)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if not redis:
             return
         raw_items = await redis.lrange(_QUEUE_REDIS_KEY, 0, -1)
@@ -217,7 +217,7 @@ async def _remove_queue_entries_redis(source_id: str) -> None:
 async def _load_queue_from_redis() -> List[Dict]:
     """Load all queued entries from Redis (#1717: startup recovery)."""
     try:
-        redis = await get_redis_connection_async()
+        redis = await get_async_redis_client(database="analytics")
         if not redis:
             return []
         raw_items = await redis.lrange(_QUEUE_REDIS_KEY, 0, -1)

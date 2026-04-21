@@ -170,14 +170,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useFakeProgress } from '@/composables/useFakeProgress'
 
 const logger = createLogger('KnowledgeAdvanced')
 const { t } = useI18n()
@@ -210,9 +210,37 @@ const statusMessages = ref<Array<{
   timestamp: number
 }>>([])
 
-// Progress tracking
-let progressInterval: number | null = null
+// Progress tracking — fake-progress counter drives itemsProcessed
+// (#5237: extracted from manual setInterval simulating backend progress)
+const fakeProgress = useFakeProgress({ intervalMs: 100, step: 1 })
 const startTime = ref(0)
+
+// Mirror fake-progress counter into itemsProcessed and derive percentage + ETA
+watch(fakeProgress.progress, (value) => {
+  const total = totalItems.value
+  itemsProcessed.value = value
+  if (total <= 0) {
+    progressPercentage.value = 0
+    estimatedTimeRemaining.value = ''
+    return
+  }
+  progressPercentage.value = Math.round((value / total) * 100)
+
+  const elapsed = Date.now() - startTime.value
+  if (value <= 0 || elapsed <= 0) {
+    estimatedTimeRemaining.value = ''
+    return
+  }
+  const rate = value / elapsed
+  const remaining = (total - value) / rate
+  if (remaining > 60000) {
+    estimatedTimeRemaining.value = `${Math.ceil(remaining / 60000)}m`
+  } else if (remaining > 1000) {
+    estimatedTimeRemaining.value = `${Math.ceil(remaining / 1000)}s`
+  } else {
+    estimatedTimeRemaining.value = '<1s'
+  }
+})
 
 // Computed
 const progressText = computed(() => {
@@ -271,41 +299,17 @@ const startProgress = (operation: string, total: number) => {
   itemsProcessed.value = 0
   progressPercentage.value = 0
   startTime.value = Date.now()
-
-  // Simulate progress updates (in real implementation, this would be driven by actual progress)
-  progressInterval = setInterval(() => {
-    if (itemsProcessed.value < totalItems.value) {
-      itemsProcessed.value++
-      progressPercentage.value = Math.round((itemsProcessed.value / totalItems.value) * 100)
-
-      // Calculate ETA
-      const elapsed = Date.now() - startTime.value
-      const rate = itemsProcessed.value / elapsed
-      const remaining = (totalItems.value - itemsProcessed.value) / rate
-
-      if (remaining > 60000) {
-        estimatedTimeRemaining.value = `${Math.ceil(remaining / 60000)}m`
-      } else if (remaining > 1000) {
-        estimatedTimeRemaining.value = `${Math.ceil(remaining / 1000)}s`
-      } else {
-        estimatedTimeRemaining.value = '<1s'
-      }
-    }
-  }, 100)
+  fakeProgress.start({ target: total })
 }
 
 const stopProgress = () => {
+  fakeProgress.reset()
   showProgress.value = false
   currentOperation.value = ''
   progressPercentage.value = 0
   itemsProcessed.value = 0
   totalItems.value = 0
   estimatedTimeRemaining.value = ''
-
-  if (progressInterval) {
-    clearInterval(progressInterval)
-    progressInterval = null
-  }
 }
 
 const populateSystemCommands = async () => {
@@ -318,8 +322,7 @@ const populateSystemCommands = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingSystemCommands'), 150)
     progressDetails.value = t('knowledge.advanced.progressAddingCommands')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -357,8 +360,7 @@ const populateManPages = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingManPages'), 50)
     progressDetails.value = t('knowledge.advanced.progressAddingManPages')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -396,8 +398,7 @@ const populateAutoBotDocs = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingAutobotDocs'), 30)
     progressDetails.value = t('knowledge.advanced.progressAddingAutobotDocs')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -450,8 +451,7 @@ const clearAllKnowledge = async () => {
     startProgress(t('knowledge.advanced.progressClearingKB'), 1)
     progressDetails.value = t('knowledge.advanced.progressRemovingEntries')
 
-    const apiResponse = await ApiClient.post(`${getApiBase()}/knowledge_base/clear_all`, {})
-    const response = await parseApiResponse(apiResponse)
+    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/clear_all`, {})
 
     if (response.status === 'success') {
       addStatusMessage('success', t('knowledge.advanced.clearSuccess'),
@@ -478,13 +478,6 @@ const clearAllKnowledge = async () => {
     stopProgress()
   }
 }
-
-// Cleanup on unmount
-onUnmounted(() => {
-  if (progressInterval) {
-    clearInterval(progressInterval)
-  }
-})
 
 // Initial load
 onMounted(() => {

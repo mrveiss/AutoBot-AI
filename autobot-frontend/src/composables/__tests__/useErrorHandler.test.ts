@@ -11,11 +11,10 @@
  * - useAsyncHandler - Edge Cases (9 tests)
  * - useErrorState - Basic (6 tests)
  * - useErrorState - Auto-Clear (6 tests)
- * - useLoadingState - Basic (6 tests)
  * - retryOperation - Utility (6 tests)
  * - Component Lifecycle (5 tests)
  *
- * Total Tests: 88 (100% passing)
+ * Total Tests: 82 (100% passing)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
@@ -24,7 +23,6 @@ import { mount } from '@vue/test-utils'
 import {
   useAsyncHandler,
   useErrorState,
-  useLoadingState,
   retryOperation,
   useErrorBoundary
 } from '../useErrorHandler'
@@ -1707,141 +1705,6 @@ describe('useErrorHandler Composable', () => {
       await nextTick()
 
       expect(wrapper.vm.error).toBeNull()
-    })
-  })
-
-  // ========================================
-  // useLoadingState - Basic
-  // ========================================
-
-  describe('useLoadingState - Basic', () => {
-    it('should start loading manually', () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, startLoading } = useLoadingState()
-          return { loading, startLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      expect(wrapper.vm.loading).toBe(false)
-
-      wrapper.vm.startLoading()
-
-      expect(wrapper.vm.loading).toBe(true)
-    })
-
-    it('should stop loading manually', () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, startLoading, stopLoading } = useLoadingState()
-          return { loading, startLoading, stopLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      wrapper.vm.startLoading()
-      expect(wrapper.vm.loading).toBe(true)
-
-      wrapper.vm.stopLoading()
-      expect(wrapper.vm.loading).toBe(false)
-    })
-
-    it('should wrap operation with withLoading', async () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, withLoading } = useLoadingState()
-          return { loading, withLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      const operation = async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        return 'done'
-      }
-
-      expect(wrapper.vm.loading).toBe(false)
-
-      const promise = wrapper.vm.withLoading(operation)
-      await nextTick()
-
-      expect(wrapper.vm.loading).toBe(true)
-
-      vi.advanceTimersByTime(100)
-      await promise
-
-      expect(wrapper.vm.loading).toBe(false)
-    })
-
-    it('should set loading true during operation', async () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, withLoading } = useLoadingState()
-          return { loading, withLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      const promise = wrapper.vm.withLoading(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      })
-
-      await nextTick()
-      expect(wrapper.vm.loading).toBe(true)
-
-      vi.advanceTimersByTime(100)
-      await promise
-    })
-
-    it('should set loading false after operation', async () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, withLoading } = useLoadingState()
-          return { loading, withLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      const promise = wrapper.vm.withLoading(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        return 'complete'
-      })
-
-      vi.advanceTimersByTime(100)
-      await promise
-
-      expect(wrapper.vm.loading).toBe(false)
-    })
-
-    it('should set loading false on operation error', async () => {
-      const TestComponent = defineComponent({
-        setup() {
-          const { loading, withLoading } = useLoadingState()
-          return { loading, withLoading }
-        },
-        template: '<div></div>'
-      })
-
-      const wrapper = mount(TestComponent)
-
-      const promise = wrapper.vm.withLoading(async () => {
-        throw new Error('Operation failed')
-      })
-
-      await expect(promise).rejects.toThrow('Operation failed')
-
-      expect(wrapper.vm.loading).toBe(false)
     })
   })
 

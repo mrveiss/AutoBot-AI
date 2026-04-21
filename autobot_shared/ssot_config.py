@@ -1240,6 +1240,32 @@ class AutoBotConfig(BaseSettings):
         ),
     )
 
+    # Knowledge base cleanup — issue #4455
+    knowledge_orphan_cleanup_schedule: str = Field(
+        default="0 3 * * *",
+        alias="AUTOBOT_KNOWLEDGE_ORPHAN_CLEANUP_SCHEDULE",
+        description=(
+            "Cron schedule for cleanup_orphan_documents task. "
+            "Default 03:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
+    knowledge_generated_files_cleanup_schedule: str = Field(
+        default="0 4 * * *",
+        alias="AUTOBOT_KNOWLEDGE_GENERATED_FILES_CLEANUP_SCHEDULE",
+        description=(
+            "Cron schedule for cleanup_generated_files task. "
+            "Default 04:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
+    knowledge_cache_ttl_days: int = Field(
+        default=7,
+        alias="AUTOBOT_KNOWLEDGE_CACHE_TTL_DAYS",
+        description=(
+            "Max age (days) for generated knowledge cache/temp files before "
+            "cleanup_generated_files deletes them. Default 7 days."
+        ),
+    )
+
     # Issue #858: Handle PORT env var from uvicorn without breaking port config
     @field_validator("port", mode="before")
     @classmethod

@@ -12,7 +12,7 @@ Issue #3286: Comprehensive Theming System
   <form class="preferences-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <i class="fas fa-sliders-h" aria-hidden="true"></i>
+        <Icon name="sliders-h" size="md" />
         {{ t('ui.preferences.title') }}
       </h3>
       <button
@@ -21,7 +21,7 @@ Issue #3286: Comprehensive Theming System
         type="button"
         :aria-label="t('ui.preferences.resetAll')"
       >
-        <i class="fas fa-undo" aria-hidden="true"></i>
+        <Icon name="undo" size="sm" />
         {{ t('ui.preferences.reset') }}
       </button>
     </div>
@@ -30,7 +30,7 @@ Issue #3286: Comprehensive Theming System
       <!-- Theme Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-paint-brush" aria-hidden="true"></i>
+          <Icon name="paint-brush" size="sm" />
           {{ t('ui.preferences.theme') }}
         </legend>
         <div class="theme-options">
@@ -41,7 +41,7 @@ Issue #3286: Comprehensive Theming System
       <!-- Font Size Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-font" aria-hidden="true"></i>
+          <Icon name="font" size="sm" />
           {{ t('ui.preferences.fontSize') }}
         </legend>
         <div class="option-group" role="radiogroup" :aria-label="t('ui.preferences.fontSizeOptions')">
@@ -64,7 +64,7 @@ Issue #3286: Comprehensive Theming System
       <!-- Accent Color Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-palette" aria-hidden="true"></i>
+          <Icon name="palette" size="sm" />
           {{ t('ui.preferences.accentColor') }}
         </legend>
         <div class="color-grid" role="radiogroup" :aria-label="t('ui.preferences.accentColorOptions')">
@@ -89,7 +89,7 @@ Issue #3286: Comprehensive Theming System
       <!-- Layout Density Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
-          <i class="fas fa-th" aria-hidden="true"></i>
+          <Icon name="th" size="sm" />
           {{ t('ui.preferences.layoutDensity') }}
         </legend>
         <div class="option-group" role="radiogroup" :aria-label="t('ui.preferences.layoutDensityOptions')">
@@ -123,6 +123,7 @@ import { useI18n } from 'vue-i18n'
 import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('PreferencesPanel')
 const { t } = useI18n()
@@ -216,7 +217,7 @@ function handleReset() {
   width: 1px;
   height: 1px;
   padding: var(--spacing-0);
-  margin: -1px;
+  margin: var(--spacing-neg-px);
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;

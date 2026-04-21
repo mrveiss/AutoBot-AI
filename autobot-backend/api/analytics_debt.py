@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
@@ -494,13 +495,6 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
         debt_redis.set(f"{DEBT_PREFIX}latest", key)
     except Exception as e:
         logger.warning("Failed to store debt calculation: %s", e)
-
-
-def _decode_redis_value(value: Any) -> Optional[str]:
-    """Decode Redis value to string if bytes (Issue #315 - extracted helper)."""
-    if value is None:
-        return None
-    return value.decode("utf-8") if isinstance(value, bytes) else value
 
 
 def _get_latest_debt_data() -> Optional[Dict[str, Any]]:

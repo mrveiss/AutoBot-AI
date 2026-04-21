@@ -239,7 +239,8 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
-import { formatAuditTimestamp, formatAuditRelativeTime, AUDIT_RESULT_CONFIG } from '@/types/audit'
+import { AUDIT_RESULT_CONFIG } from '@/types/audit'
+import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
 
 interface Props {
   entries: AuditEntry[]
@@ -296,11 +297,11 @@ const hasDetails = computed(() => {
 })
 
 function formatTimestamp(timestamp: string): string {
-  return formatAuditTimestamp(timestamp)
+  return formatDateTime(timestamp)
 }
 
 function formatRelativeTime(timestamp: string): string {
-  return formatAuditRelativeTime(timestamp)
+  return formatTimeAgo(timestamp)
 }
 
 function formatOperationName(operation: string): string {

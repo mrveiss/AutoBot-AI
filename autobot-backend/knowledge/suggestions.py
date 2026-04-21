@@ -48,7 +48,7 @@ class SuggestionsMixin:
 
     # Type hints for attributes from base class
     redis_client: "redis.Redis"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
     vector_store: "ChromaVectorStore"
     initialized: bool
 

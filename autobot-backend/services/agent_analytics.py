@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
@@ -244,7 +245,7 @@ class AgentAnalytics:
             task_id=task_id,
             task_name=task_name,
             status=TaskStatus.RUNNING.value,
-            started_at=datetime.utcnow().isoformat(),
+            started_at=utc_timestamp(),
             input_size=input_size,
             metadata=metadata or {},
         )
@@ -635,7 +636,7 @@ class AgentAnalytics:
                 tasks = await self.get_agent_history(agent_id, limit=1000)
             else:
                 tasks = await self.get_recent_tasks(limit=5000)
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = now_utc() - timedelta(days=days)
             filtered_tasks = [
                 t for t in tasks if datetime.fromisoformat(t["started_at"]) > cutoff
             ]

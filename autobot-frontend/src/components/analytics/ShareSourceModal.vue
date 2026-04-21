@@ -3,10 +3,14 @@
     <Transition name="modal-fade">
       <div v-if="visible" class="modal-overlay" @click.self="$emit('close')">
         <div
+          ref="dialogRef"
           class="modal-dialog"
           role="dialog"
           aria-modal="true"
           :aria-label="$t('analytics.sources.shareSource')"
+          tabindex="-1"
+          @keydown="onFocusTrapKeydown"
+          @keydown.escape="$emit('close')"
         >
           <!-- Header -->
           <div class="modal-header">
@@ -121,8 +125,12 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -147,6 +155,13 @@ const emit = defineEmits<{
   (e: 'saved', source: CodeSource): void
   (e: 'close'): void
 }>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'visible'))
+useBodyScrollLock(toRef(props, 'visible'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.visible, (open) => { if (open) focusFirst() }, { immediate: true })
 
 // ---- Constants ------------------------------------------------------------
 
@@ -472,7 +487,7 @@ watch(() => props.source, (source) => {
   width: 1px;
   height: 1px;
   padding: var(--spacing-0);
-  margin: -1px;
+  margin: var(--spacing-neg-px);
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;

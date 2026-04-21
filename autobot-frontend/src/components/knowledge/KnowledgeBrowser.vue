@@ -4,6 +4,7 @@
     <KnowledgeMainCategories
       :categories="mainCategories"
       :population-states="populationStates"
+      :kb-connected="kbConnected"
       @select="selectMainCategory"
       @populate="handlePopulate"
       @import="() => router.push('/knowledge/upload')"
@@ -186,6 +187,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -193,8 +195,11 @@ import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for KnowledgeBrowser
 const logger = createLogger('KnowledgeBrowser')
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
+import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
+import { useManPages } from '@/composables/knowledge/useManPages'
+import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { usePagination } from '@/composables/usePagination'
@@ -207,18 +212,11 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
 
-// Use the shared composables
-const {
-  formatCategoryName,
-  getFileIcon: getFileIconUtil,
-  formatFileSize,
-  formatDateOnly: formatDate,
-  getCategoryIcon,
-  populateAutoBotDocs,
-  refreshSystemKnowledge,
-  getCategorizedFacts,
-  buildCategoryFilterOptions
-} = useKnowledgeBase()
+// Domain composables (migrated from useKnowledgeBase BC shim in #5193)
+const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
+const { getCategorizedFacts, buildCategoryFilterOptions } = useKnowledgeCategories()
+const { refreshSystemKnowledge } = useMachineKnowledge()
+const { populateAutoBotDocs } = useManPages()
 
 const {
   documentStates,
@@ -260,7 +258,8 @@ interface CategoryOption {
 
 // State
 const treeData = ref<TreeNode[]>([])
-const expandedNodes = ref<Set<string>>(new Set())
+const nodeExpansion = useExpansion<string>()
+const expandedNodes = nodeExpansion.expanded
 const selectedFile = ref<TreeNode | null>(null)
 const fileContent = ref('')
 const searchQuery = ref('')
@@ -271,6 +270,11 @@ const updateDebouncedSearch = useDebounce((value: string) => {
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
 const mainCategories = ref<any[]>([])
+// Issue #5201: track backend KB connectivity so the UI can distinguish
+// "empty KB" (all counts 0, kb_connected=true) from "broken KB"
+// (kb_connected=false). Defaults to true so we don't flash the error
+// banner before the first fetch completes.
+const kbConnected = ref<boolean>(true)
 const categoryCounts = ref<Record<string, number>>({})
 const isVectorizing = ref(false)
 const showProgressModal = ref(false)
@@ -307,8 +311,7 @@ const fetchEntries = async (cursor: string) => {
     limit: '100',
     cursor: cursor || '0'
   })
-  const response = await apiClient.get(`${getApiBase()}/knowledge_base/entries?${params}`)
-  const data = await parseApiResponse(response)
+  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/entries?${params}`)
 
   // Handle both cursor-based and offset-based formats
   if (data.next_cursor !== undefined) {
@@ -459,7 +462,7 @@ const filteredTree = computed(() => {
 
         // Auto-expand matching folders
         if (node.type === 'folder' && (matches || children.length > 0)) {
-          expandedNodes.value.add(node.id)
+          nodeExpansion.expand(node.id)
         }
       }
 
@@ -569,14 +572,20 @@ const selectMainCategory = (mainCatId: string) => {
 
 const loadMainCategories = async () => {
   try {
-    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
 
     if (data && data.categories) {
       mainCategories.value = data.categories
+      // Issue #5201: surface backend connectivity flag. Treat missing
+      // field as "connected" (true) to stay compatible with older
+      // backends that predate the field.
+      kbConnected.value = data.kb_connected !== false
     }
   } catch (err) {
     logger.error('Failed to load main categories:', err)
+    // Fetch itself failed — treat as broken KB so the UI shows the
+    // distinct error panel (#5201).
+    kbConnected.value = false
     // Set default categories if API fails
     mainCategories.value = [
       {
@@ -654,8 +663,7 @@ const refreshVectorizationStatus = async () => {
 // Load main knowledge tree with useAsyncOperation wrapper
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
-  const response = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
-  const data = await parseApiResponse(response)
+  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
 
   if (data && data.categories) {
     // Build tree structure from categories
@@ -753,11 +761,9 @@ const buildTreeFromEntries = (entries: any[]) => {
 }
 
 const toggleNode = (nodeId: string) => {
-  if (expandedNodes.value.has(nodeId)) {
-    expandedNodes.value.delete(nodeId)
-  } else {
-    expandedNodes.value.add(nodeId)
-
+  const wasExpanded = nodeExpansion.isExpanded(nodeId)
+  nodeExpansion.toggle(nodeId)
+  if (!wasExpanded) {
     // Load folder contents if not already loaded
     const node = findNode(treeData.value, nodeId)
     if (node && node.type === 'folder' && (!node.children || node.children.length === 0)) {
@@ -934,12 +940,11 @@ const handleImport = () => {
 const loadFolderContents = async (folder: TreeNode) => {
   try {
     // Load files for this category
-    const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/search`, {
       query: '',
       category: folder.category,
       n_results: 100
     })
-    const data = await parseApiResponse(response)
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -973,8 +978,7 @@ const loadFileContent = async (file: TreeNode) => {
 
       if (factKey) {
         // Fetch full fact data from backend
-        const apiResponse = await apiClient.get(`${getApiBase()}/knowledge_base/fact/${factKey}`)
-        const response = await parseApiResponse(apiResponse)
+        const response = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/fact/${factKey}`)
 
         if (response && response.content) {
           fileContent.value = response.content
@@ -1038,7 +1042,7 @@ const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => 
   }
 
   restorePaths(nodes)
-  expandedNodes.value = newExpandedIds
+  nodeExpansion.expandAll(newExpandedIds)
 }
 
 const clearSelection = () => {
@@ -1056,13 +1060,13 @@ const clearSearch = () => {
   searchQuery.value = ''
   debouncedSearchQuery.value = ''
   updateDebouncedSearch.cancel()
-  expandedNodes.value.clear()
+  nodeExpansion.collapseAll()
 }
 
 // Utility functions (now using composable)
 const getFileIcon = (node: TreeNode): string => {
   if (node.type === 'folder') {
-    return expandedNodes.value.has(node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
+    return nodeExpansion.isExpanded(node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
   }
 
   return getFileIconUtil(node.name, false)
@@ -1089,7 +1093,7 @@ watch(() => props.mode, () => {
   resetPagination()
   loadKnowledgeTree(loadKnowledgeTreeFn)
   clearSelection()
-  expandedNodes.value.clear()
+  nodeExpansion.collapseAll()
 })
 </script>
 

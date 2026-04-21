@@ -9,83 +9,109 @@
 // Configuration Models (matching backend/models/settings.py)
 // ============================================================================
 
-export interface LLMSettings {
-  default_llm: string
-  orchestrator_llm: string
-  task_llm: string
-  ollama_host: string
-  ollama_port: number
-  ollama_model: string
-  ollama_base_url: string
-  openai_api_key?: string | null
-  openai_model: string
-  huggingface_api_key?: string | null
-  huggingface_model: string
+// Interfaces mirror the shape returned by GET /api/settings/ (section-keyed
+// JSON persisted by the backend SettingsManager). Rewritten for #5214 after
+// the #5207 audit found the prior declaration (llm/redis/data/diagnostics/
+// orchestrator/environment/debug) did not correspond to any backend payload.
+export interface MessageDisplaySettings {
+  show_thoughts: boolean
+  show_json: boolean
+  show_utility: boolean
+  show_planning: boolean
+  show_debug: boolean
 }
 
-export interface RedisSettings {
-  enabled: boolean
-  host: string
-  port: number
-  db: number
-  password?: string | null
+export interface ChatSettings {
+  auto_scroll: boolean
+  max_messages: number
+  message_retention_days: number
 }
 
-export interface DataSettings {
-  base_directory: string
-  chat_history_file: string
-  chats_directory: string
-  long_term_db_path: string
-  reliability_stats_file: string
-  knowledge_base_db: string
-  chromadb_path: string
+// Nested LLM config embedded under `backend.llm` in the settings payload.
+// Fields are persisted as free-form JSON; typed loosely to avoid over-fitting.
+export interface BackendLLMSettings {
+  ollama?: Record<string, unknown>
+  unified?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface BackendSettings {
+  api_endpoint: string
   server_host: string
   server_port: number
-  api_endpoint: string
+  chat_data_dir: string
+  chat_history_file: string
+  knowledge_base_db: string
+  reliability_stats_file: string
+  audit_log_file: string
   cors_origins: string[]
-  reload: boolean
-  log_level: 'debug' | 'info' | 'warning' | 'error' | 'critical'
+  timeout: number
+  max_retries: number
+  streaming: boolean
+  llm: BackendLLMSettings
+}
+
+export interface UISettings {
+  theme: string
+  font_size: string
+  language: string
+  animations: boolean
+  developer_mode: boolean
 }
 
 export interface SecuritySettings {
-  enable_auth: boolean
-  audit_log_file: string
-  allowed_users: Record<string, string>
-  roles: Record<string, Record<string, unknown>>
+  enable_encryption: boolean
+  session_timeout_minutes: number
 }
 
-export interface DiagnosticsSettings {
+export interface LoggingSettings {
+  level: string
+  log_levels: string[]
+  console: boolean
+  file: boolean
+  max_file_size: number
+  log_requests: boolean
+  log_sql: boolean
+  log_file_path: string
+}
+
+export interface KnowledgeBaseSettings {
   enabled: boolean
-  use_llm_for_analysis: boolean
-  use_web_search_for_analysis: boolean
-  auto_apply_fixes: boolean
+  update_frequency_days: number
+}
+
+export interface VoiceInterfaceSettings {
+  enabled: boolean
+  voice: string
+  speech_rate: number
 }
 
 export interface MemorySettings {
-  retention_days: number
-  max_entries_per_category: number
+  long_term: { enabled: boolean; retention_days: number }
+  short_term: { enabled: boolean; duration_minutes: number }
+  vector_storage: { enabled: boolean; update_frequency_days: number }
+  chromadb: { enabled: boolean; path: string; collection_name: string }
+  redis: { enabled: boolean; host: string; port: number }
 }
 
-export interface OrchestratorSettings {
-  use_langchain: boolean
-  task_transport: 'local' | 'redis'
-  max_concurrent_tasks: number
+export interface DeveloperSettings {
+  enabled: boolean
+  enhanced_errors: boolean
+  endpoint_suggestions: boolean
+  debug_logging: boolean
 }
 
 export interface AutoBotSettings {
-  llm: LLMSettings
-  redis: RedisSettings
-  data: DataSettings
+  message_display: MessageDisplaySettings
+  chat: ChatSettings
   backend: BackendSettings
+  ui: UISettings
   security: SecuritySettings
-  diagnostics: DiagnosticsSettings
+  logging: LoggingSettings
+  knowledge_base: KnowledgeBaseSettings
+  voice_interface: VoiceInterfaceSettings
   memory: MemorySettings
-  orchestrator: OrchestratorSettings
-  environment: string
-  debug: boolean
+  developer: DeveloperSettings
 }
 
 // ============================================================================
@@ -207,14 +233,17 @@ export interface KnowledgeCategory {
 // System Models
 // ============================================================================
 
-export interface SystemMetrics {
-  cpu_usage: number
-  memory_usage: number
-  disk_usage: number
-  uptime: number
-  active_connections: number
-  last_updated: string
-}
+/**
+ * Deprecated re-export alias for backwards compatibility (#5212).
+ *
+ * The previous flat shape (`cpu_usage`, `memory_usage`, `disk_usage`,
+ * `active_connections`, `last_updated`) described fields the backend never
+ * returned. The authoritative shape now lives in
+ * `@/models/repositories/SystemRepository` as `SystemMetricsResponse`.
+ *
+ * @deprecated Import `SystemMetricsResponse` from `@/models/repositories/SystemRepository` instead.
+ */
+export type { SystemMetricsResponse as SystemMetrics } from '@/models/repositories/SystemRepository'
 
 export interface LLMStatus {
   status: 'connected' | 'disconnected' | 'error'
@@ -458,8 +487,8 @@ export interface WorkflowResponse {
 // MessageSender re-exported from '@/types/api' above (Issue #2066)
 export type TaskStatus = AgentTask['status']
 export type TaskPriority = AgentTask['priority']
-export type LogLevel = BackendSettings['log_level']
-export type TransportType = OrchestratorSettings['task_transport']
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
+export type TransportType = 'local' | 'redis'
 export type SystemHealth = DiagnosticsReport['system_health']
 export type IssueSeverity = DiagnosticIssue['severity']
 

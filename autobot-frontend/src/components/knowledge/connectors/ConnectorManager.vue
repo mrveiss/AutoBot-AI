@@ -89,12 +89,12 @@ function openEdit(id: string) {
 async function handleSync(id: string) {
   try {
     const result = await knowledgeRepository.syncConnector(id)
+    // syncConnector only acks start; real sync result appears in history. (#5204/#5207)
     logger.info(
-      'Sync completed for %s: added=%d updated=%d deleted=%d',
+      'Sync triggered for %s: status=%s incremental=%s',
       id,
-      result.added,
-      result.updated,
-      result.deleted
+      result.status,
+      result.incremental
     )
     // Refresh the connector to get updated status
     await refreshConnectorStatus(id)

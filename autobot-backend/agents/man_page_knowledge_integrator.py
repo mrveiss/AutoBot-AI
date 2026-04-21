@@ -18,6 +18,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 import aiofiles
 import yaml
 
+from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
 
@@ -93,7 +94,7 @@ class ManPageParser:
             options=options,
             examples=examples,
             see_also=see_also,
-            last_updated=time.strftime("%Y-%m-%dT%H:%M:%S"),
+            last_updated=utc_timestamp(),
         )
 
     def _split_into_sections(self, content: str) -> Dict[str, str]:

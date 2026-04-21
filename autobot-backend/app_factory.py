@@ -59,6 +59,7 @@ def _register_routers(app: FastAPI) -> None:
     Register core and optional routers with the FastAPI app.
 
     Issue #665: Extracted from create_fastapi_app to reduce function length.
+    Issue #4447: Also registers OpenAI-compatible router under /v1.
 
     Args:
         app: FastAPI application instance
@@ -79,6 +80,17 @@ def _register_routers(app: FastAPI) -> None:
             logger.info("✅ Registered optional router: %s at /api%s", name, prefix)
         except Exception as e:
             logger.warning("⚠️ Failed to register optional router %s: %s", name, e)
+
+    # Issue #4447: OpenAI-compatible endpoints at /v1 (not /api/v1) so that
+    # third-party clients (Cursor, Continue, LibreChat, etc.) can point directly
+    # at AutoBot without any path rewriting.
+    try:
+        from api.openai_compat import router as openai_compat_router
+
+        app.include_router(openai_compat_router, prefix="/v1")
+        logger.info("✅ Registered OpenAI-compat router at /v1")
+    except Exception as e:
+        logger.warning("⚠️ Failed to register OpenAI-compat router: %s", e)
 
     logger.info("✅ API routes configured with optional AI Stack integration")
 

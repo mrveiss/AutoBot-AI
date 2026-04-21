@@ -11,7 +11,6 @@
  * @module apiErrorHandler
  */
 
-import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for apiErrorHandler
@@ -269,96 +268,6 @@ export async function handleApiCall<T>(
 
   // Should not reach here, but return error just in case
   return { success: false, error: lastError || parseError(new Error('Unknown error')) }
-}
-
-/**
- * Create a composable for API loading states
- *
- * @returns Loading state refs and helpers
- *
- * @example
- * ```typescript
- * const { loading, error, startLoading, stopLoading, setError, clearError } = useApiLoading()
- *
- * async function fetchData() {
- *   startLoading()
- *   try {
- *     const data = await apiClient.get('/api/data')
- *     // ... process data
- *   } catch (err) {
- *     setError(parseError(err))
- *   } finally {
- *     stopLoading()
- *   }
- * }
- * ```
- */
-export function useApiLoading() {
-  const loading: Ref<boolean> = ref(false)
-  const error: Ref<ApiError | null> = ref(null)
-
-  return {
-    loading,
-    error,
-    startLoading: () => {
-      loading.value = true
-      error.value = null
-    },
-    stopLoading: () => {
-      loading.value = false
-    },
-    setError: (err: ApiError) => {
-      error.value = err
-      loading.value = false
-    },
-    clearError: () => {
-      error.value = null
-    },
-    isLoading: () => loading.value,
-    hasError: () => error.value !== null
-  }
-}
-
-/**
- * Create a composable that wraps API calls with loading state
- *
- * @returns API call wrapper with built-in loading state
- *
- * @example
- * ```typescript
- * const { loading, error, execute } = useApiRequest()
- *
- * const result = await execute(
- *   () => apiClient.get('/api/users'),
- *   { componentName: 'UserList' }
- * )
- * ```
- */
-export function useApiRequest<T = unknown>() {
-  const { loading, error, startLoading, stopLoading, setError, clearError } = useApiLoading()
-
-  async function execute(
-    apiCall: () => Promise<T>,
-    options: ErrorHandlerOptions = {}
-  ): Promise<ApiResult<T>> {
-    startLoading()
-    clearError()
-
-    const result = await handleApiCall(apiCall, options)
-
-    if (!result.success && result.error) {
-      setError(result.error)
-    }
-
-    stopLoading()
-    return result
-  }
-
-  return {
-    loading,
-    error,
-    execute
-  }
 }
 
 // Export default options for customization

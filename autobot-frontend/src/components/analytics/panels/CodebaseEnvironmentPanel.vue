@@ -39,8 +39,8 @@
     <!-- AI Filtering Toggle (#633) -->
     <div
       class="ai-filter-controls"
-      style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2);
-             border-radius: 6px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;"
+      style="margin-bottom: var(--spacing-4); padding: 10px; background: rgba(0,0,0,0.2);
+             border-radius: 6px; display: flex; align-items: center; gap: var(--spacing-4); flex-wrap: wrap;"
     >
       <label
         class="toggle-label"
@@ -213,16 +213,8 @@
 
 <script setup lang="ts">
 import EmptyState from '@/components/ui/EmptyState.vue'
-
-interface HardcodedValue {
-  file: string
-  line: number
-  variable_name?: string
-  value: string
-  type: string
-  severity: string
-  suggested_env_var: string
-}
+// #5311: canonical HardcodedValue from analyticsTypes — was inline-duplicated here.
+import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
 interface EnvRecommendation {
   env_var_name: string

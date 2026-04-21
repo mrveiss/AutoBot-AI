@@ -47,6 +47,9 @@ from knowledge.search_components.helpers import (
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
 
+# Issue #5064: prompt-injection sanitizer applied pre-embedding.
+from knowledge.query_sanitizer import sanitize_query as _sanitize_query
+
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
 from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
 from knowledge.vector_search_engine import get_vector_search_engine
@@ -90,7 +93,7 @@ class SearchMixin:
 
     # Type hints for attributes from base class
     vector_store: "ChromaVectorStore"
-    aioredis_client: "aioredis.Redis"
+    _aioredis_client: "aioredis.Redis"
     redis_client: "redis.Redis"
     initialized: bool
 
@@ -106,14 +109,14 @@ class SearchMixin:
     def _get_tag_filter(self) -> TagFilter:
         """Lazy initialization of tag filter."""
         if self._tag_filter is None:
-            self._tag_filter = TagFilter(getattr(self, "aioredis_client", None))
+            self._tag_filter = TagFilter(getattr(self, "_aioredis_client", None))
         return self._tag_filter
 
     def _get_keyword_searcher(self) -> KeywordSearcher:
         """Lazy initialization of keyword searcher."""
         if self._keyword_searcher is None:
             self._keyword_searcher = KeywordSearcher(
-                getattr(self, "aioredis_client", None)
+                getattr(self, "_aioredis_client", None)
             )
         return self._keyword_searcher
 
@@ -134,6 +137,28 @@ class SearchMixin:
             logger.warning("Vector store not available for search")
             return []
         return None  # Valid inputs
+
+    @staticmethod
+    def _sanitize_search_query(query: str) -> Optional[str]:
+        """Sanitize a search query against prompt-injection payloads (Issue #5064).
+
+        Returns the sanitized string, or ``None`` if the query was rejected by
+        a REJECT-action rule and must not be embedded or run against the KB.
+        """
+        sanitizer_result = _sanitize_query(query)
+        if sanitizer_result.rejected:
+            logger.warning(
+                "Query rejected by sanitizer: %s (query prefix: %r)",
+                sanitizer_result.reason,
+                query[:80],
+            )
+            return None
+        if sanitizer_result.hits:
+            logger.info(
+                "Query sanitized; rules triggered: %s",
+                list(sanitizer_result.hits.keys()),
+            )
+        return sanitizer_result.sanitized_text
 
     async def _execute_vector_search(
         self,
@@ -178,6 +203,12 @@ class SearchMixin:
         invalid_result = self._validate_search_inputs(query)
         if invalid_result is not None:
             return invalid_result
+
+        # Issue #5064: sanitize query before embedding to block prompt injection.
+        sanitized = self._sanitize_search_query(query)
+        if sanitized is None:
+            return []
+        query = sanitized
 
         try:
             engine = await get_vector_search_engine()
@@ -496,6 +527,17 @@ class SearchMixin:
         self.ensure_initialized()
         if not query.strip():
             return self._build_empty_query_response()
+
+        # Issue #5064: sanitize query before preprocessing / embedding.
+        sanitized = self._sanitize_search_query(query)
+        if sanitized is None:
+            return {
+                "success": False,
+                "results": [],
+                "total_count": 0,
+                "error": "Query rejected by prompt-injection filter",
+            }
+        query = sanitized
 
         try:
             processed_query = self._preprocess_query(query)
@@ -822,6 +864,17 @@ class SearchMixin:
         params = self._extract_search_params(ctx)
         if not params["query"].strip():
             return self._build_empty_query_response()
+
+        # Issue #5064: sanitize query before preprocessing / embedding.
+        sanitized = self._sanitize_search_query(params["query"])
+        if sanitized is None:
+            return {
+                "success": False,
+                "results": [],
+                "total_count": 0,
+                "error": "Query rejected by prompt-injection filter",
+            }
+        params["query"] = sanitized
 
         start_time = time.time()
 

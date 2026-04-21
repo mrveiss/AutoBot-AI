@@ -19,7 +19,6 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -148,8 +147,7 @@ async function loadPrompts(): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get(`${getApiBase()}/prompts`)
-    const data = await parseApiResponse(response)
+    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/prompts`)
 
     if (data?.prompts) {
       prompts.value = data.prompts
@@ -183,11 +181,10 @@ async function savePrompt(): Promise<void> {
   successMessage.value = null
 
   try {
-    const response = await apiClient.put(
+    const data = await apiClient.put<Record<string, any>>(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
       { content: editedContent.value }
     )
-    const data = await parseApiResponse(response)
 
     if (data?.status === 'success') {
       // Update local state
@@ -222,10 +219,9 @@ async function loadHistory(): Promise<void> {
   showHistoryModal.value = true
 
   try {
-    const response = await apiClient.get(
+    const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
     )
-    const data = await parseApiResponse(response)
 
     if (data?.versions) {
       promptHistory.value = data.versions
@@ -248,11 +244,10 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
   isSaving.value = true
 
   try {
-    const response = await apiClient.post(
+    const data = await apiClient.post<Record<string, any>>(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
       { version: version.version }
     )
-    const data = await parseApiResponse(response)
 
     if (data?.status === 'success') {
       selectedPrompt.value.content = version.content

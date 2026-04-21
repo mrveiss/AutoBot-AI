@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import (
     BatchConfig,
     LLMDefaults,
@@ -643,7 +644,7 @@ Output ONLY valid JSON in this format:
             {
                 "version": plan.version,
                 "reason": reason,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
                 "previous_steps": [s.to_dict() for s in plan.steps],
             }
         )

@@ -45,7 +45,7 @@
             <i class="fas fa-check-square me-1"></i>{{ $t('common.select') }}
           </BaseButton>
           <div v-else class="flex items-center gap-2">
-            <span class="text-xs text-autobot-text-secondary">{{ $t('chat.sidebar.nSelected', { count: selectedSessions.size }) }}</span>
+            <span class="text-xs text-autobot-text-secondary">{{ $t('chat.sidebar.nSelected', { count: sessionSelection.selectedCount.value }) }}</span>
             <BaseButton
               @click="cancelSelection"
               variant="ghost"
@@ -68,7 +68,7 @@
               selectionMode ? 'cursor-default' : 'cursor-pointer',
               store.currentSessionId === session.id && !selectionMode
                 ? 'bg-electric-100 border border-electric-200'
-                : selectedSessions.has(session.id)
+                : sessionSelection.isSelected(session)
                 ? 'bg-red-50 border border-red-200'
                 : 'bg-autobot-bg-card hover:bg-autobot-bg-secondary border border-autobot-border'
             ]"
@@ -83,8 +83,8 @@
             <div v-if="selectionMode" class="absolute inset-s-1 top-1">
               <input
                 type="checkbox"
-                :checked="selectedSessions.has(session.id)"
-                @click.stop="toggleSelection(session.id)"
+                :checked="sessionSelection.isSelected(session)"
+                @click.stop="sessionSelection.toggle(session)"
                 class="w-4 h-4 rounded border-autobot-border text-red-600 focus:ring-red-500"
               />
             </div>
@@ -195,11 +195,11 @@
             size="xs"
             class="w-full py-2"
             @click="deleteSelectedSessions()"
-            :disabled="selectedSessions.size === 0"
+            :disabled="sessionSelection.selectedCount.value === 0"
             :aria-label="$t('chat.sidebar.deleteSelected')"
           >
             <i class="fas fa-trash me-1.5"></i>
-            {{ $t('chat.sidebar.deleteNSelected', { count: selectedSessions.size }) }}
+            {{ $t('chat.sidebar.deleteNSelected', { count: sessionSelection.selectedCount.value }) }}
           </BaseButton>
         </div>
       </section>
@@ -308,6 +308,7 @@ const emit = defineEmits<{ 'close-mobile': [] }>()
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import ShareConversationDialog from './ShareConversationDialog.vue'
@@ -339,7 +340,10 @@ const systemStatus = ref(t('status.ready'))
 
 // Multi-select state
 const selectionMode = ref(false)
-const selectedSessions = ref(new Set<string>())
+const sessionSelection = useBatchSelection<ChatSession, string>(
+  () => store.sessions,
+  (s) => s.id
+)
 
 // Keyboard navigation state
 const focusedIndex = ref(0)
@@ -357,7 +361,7 @@ const handleSessionClick = (session: ChatSession, index: number) => {
   focusedIndex.value = index
 
   if (selectionMode.value) {
-    toggleSelection(session.id)
+    sessionSelection.toggle(session)
   } else {
     controller.switchToSession(session.id)
     // #1804: close mobile overlay after selecting a session
@@ -633,33 +637,27 @@ const reloadSystem = async () => {
 // Multi-select functions
 const enableSelectionMode = () => {
   selectionMode.value = true
-  selectedSessions.value = new Set()
+  sessionSelection.clear()
 }
 
 const cancelSelection = () => {
   selectionMode.value = false
-  selectedSessions.value = new Set()
+  sessionSelection.clear()
 }
 
 const toggleSelection = (sessionId: string) => {
-  if (selectedSessions.value.has(sessionId)) {
-    selectedSessions.value.delete(sessionId)
-  } else {
-    selectedSessions.value.add(sessionId)
-  }
-  // Force reactivity update
-  selectedSessions.value = new Set(selectedSessions.value)
+  sessionSelection.toggleByKey(sessionId)
 }
 
 const deleteSelectedSessions = async () => {
-  if (selectedSessions.value.size === 0) return
+  if (sessionSelection.selectedCount.value === 0) return
 
-  const confirmed = confirm(t('chat.sidebar.confirmDeleteSelected', { count: selectedSessions.value.size }))
+  const confirmed = confirm(t('chat.sidebar.confirmDeleteSelected', { count: sessionSelection.selectedCount.value }))
   if (!confirmed) return
 
   // Delete all selected sessions in parallel - eliminates N+1 sequential API calls
   await Promise.allSettled(
-    Array.from(selectedSessions.value).map(sessionId =>
+    Array.from(sessionSelection.selected.value).map(sessionId =>
       controller.deleteChatSession(sessionId)
     )
   )

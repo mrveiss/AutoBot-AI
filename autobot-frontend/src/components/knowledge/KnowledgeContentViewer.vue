@@ -61,7 +61,8 @@
 
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { formatDate, formatFileSize } from '@/utils/formatHelpers'
 
 interface TreeNode {
   id: string
@@ -94,7 +95,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 defineEmits<Emits>()
 
-const { formatFileSize, formatDateOnly: formatDate, getFileIcon: getFileIconUtil } = useKnowledgeBase()
+const { getFileIcon: getFileIconUtil } = useKnowledgeIcons()
 
 const fileIcon = computed(() => {
   if (!props.selectedFile) return 'fas fa-file'

@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, validator
 from agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
 
@@ -461,8 +462,6 @@ async def entity_extraction_health(
 
     Issue #744 (auth). Returns status of extractor/graph/agent components.
     """
-    from datetime import datetime
-
     try:
         # Check component health
         components = {
@@ -490,7 +489,7 @@ async def entity_extraction_health(
             content={
                 "status": overall_status,
                 "components": components,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             },
             media_type="application/json; charset=utf-8",
         )
@@ -502,7 +501,7 @@ async def entity_extraction_health(
             content={
                 "status": "unhealthy",
                 "components": {},
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
                 "error": "Internal server error",
             },
             media_type="application/json; charset=utf-8",

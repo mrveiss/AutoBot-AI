@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
 from type_defs.common import Metadata
 
@@ -482,10 +483,8 @@ async def get_rum_status():
             today = datetime.now(tz=timezone.utc).date()
 
             for session_data in rum_sessions.values():
-                last_activity = datetime.fromisoformat(
-                    session_data["last_activity"].replace("Z", "+00:00")
-                )
-                if (datetime.now(tz=timezone.utc) - last_activity.replace(tzinfo=None)) < timedelta(
+                last_activity = parse_utc_iso(session_data["last_activity"])
+                if (datetime.now(tz=timezone.utc) - last_activity) < timedelta(
                     minutes=30
                 ):
                     active_sessions += 1

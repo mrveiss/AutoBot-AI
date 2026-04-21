@@ -150,8 +150,17 @@
       </button>
     </div>
 
-    <!-- 2D Cytoscape Graph Container -->
+    <!-- 2D Cytoscape Graph Container (#5234: lazy-loaded on demand) -->
     <div v-else-if="viewMode === '2d'" class="graph-container">
+      <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
+        <div class="loading-spinner"></div>
+        <span>{{ $t('knowledge.graph.loadingVisualization', 'Loading visualization library...') }}</span>
+      </div>
+      <div v-else-if="cytoscapeError" class="chart-error">
+        <span class="error-icon">!</span>
+        <span>{{ cytoscapeError }}</span>
+        <button @click="retryCytoscape" class="btn-link">{{ $t('knowledge.graph.retry', 'Retry') }}</button>
+      </div>
       <div ref="cytoscapeContainer" class="cytoscape-container"></div>
 
       <!-- Zoom Controls (2D only) -->
@@ -378,22 +387,19 @@
 // Author: mrveiss
 
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
-import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
-// @ts-expect-error - cytoscape-fcose has no type declarations
-import fcose from 'cytoscape-fcose'
+// Type-only imports — runtime load handled by the shared composable (#5234).
+import type cytoscape from 'cytoscape'
+import type { Core, NodeSingular } from 'cytoscape'
+import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
-const KnowledgeGraph3D = defineAsyncComponent(() => 
+const KnowledgeGraph3D = defineAsyncComponent(() =>
   import('@/components/knowledge/KnowledgeGraph3D.vue')
 )
-
-// Register fcose layout
-cytoscape.use(fcose)
 
 const logger = createLogger('KnowledgeGraph')
 
@@ -473,6 +479,24 @@ const newEntity = ref<NewEntity>({
 // Cytoscape instance - using shallowRef for non-reactive external library instance
 const cytoscapeContainer = ref<HTMLElement | null>(null)
 const cy = shallowRef<Core | null>(null)
+
+// Cytoscape lazy-load state is owned by the shared composable (#5234).
+// The `onReady` callback performs 2D init once the library is available.
+// Previously this file eagerly `import cytoscape + fcose` at module load,
+// adding the entire cytoscape bundle to whichever chunk this component
+// landed in. Now code-split like FunctionCallGraph/ImportTreeChart.
+const {
+  loading: cytoscapeLoading,
+  error: cytoscapeError,
+  cytoscapeModule,
+  ensureReady: ensureCytoscapeReady,
+  retry: retryCytoscape,
+} = useCytoscapeLibrary(() => {
+  if (viewMode.value === '2d' && !cy.value && cytoscapeContainer.value) {
+    initCytoscape()
+    updateCytoscapeElements()
+  }
+})
 
 // ============================================================================
 // Utilities
@@ -612,9 +636,9 @@ function formatDate(timestamp: number): string {
  * Sets up event handlers for node selection, hover effects, and zoom tracking
  */
 function initCytoscape(): void {
-  if (!cytoscapeContainer.value) return
+  if (!cytoscapeModule.value || !cytoscapeContainer.value) return
 
-  cy.value = cytoscape({
+  cy.value = cytoscapeModule.value({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -867,12 +891,10 @@ async function refreshGraph(): Promise<void> {
 
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
-    const unifiedResponse = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
-    const unifiedData = await parseApiResponse(unifiedResponse)
+    const unifiedData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
 
     // Also fetch memory entities for backward compatibility
-    const memoryResponse = await apiClient.get(`${getApiBase()}/memory/entities/all`)
-    const memoryData = await parseApiResponse(memoryResponse)
+    const memoryData = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/all`)
 
     // Merge entities from both sources
     const unifiedEntities = unifiedData?.data?.entities || []
@@ -899,12 +921,15 @@ async function refreshGraph(): Promise<void> {
     // Wait for DOM to render the graph container (it's conditionally rendered)
     await nextTick()
 
-    // Initialize Cytoscape if not already done (2D mode only, container now exists)
+    // Initialize Cytoscape if not already done (2D mode only, container now exists).
+    // #5234: delegates to useCytoscapeLibrary so the library is lazy-loaded
+    // and the onReady callback runs init + updateCytoscapeElements. If the
+    // container isn't mounted yet (3D mode), ensureReady is a no-op init.
     if (viewMode.value === '2d' && !cy.value && cytoscapeContainer.value) {
-      initCytoscape()
+      await ensureCytoscapeReady()
+    } else {
+      updateCytoscapeElements()
     }
-
-    updateCytoscapeElements()
 
     // Emit refresh event with statistics
     emit('graph-refreshed', {
@@ -932,8 +957,7 @@ async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
 
   const relationResults = await Promise.allSettled(
     memoryEntities.map(async (entity) => {
-      const response = await apiClient.get(`${getApiBase()}/memory/entities/${entity.id}/relations`)
-      const parsedResponse = await parseApiResponse(response)
+      const parsedResponse = await apiClient.get<Record<string, any>>(`${getApiBase()}/memory/entities/${entity.id}/relations`)
       return { entity, parsedResponse }
     })
   )
@@ -989,13 +1013,12 @@ async function createEntity(): Promise<void> {
       .map(o => o.trim())
       .filter(o => o.length > 0)
 
-    const response = await apiClient.post(`${getApiBase()}/memory/entities`, {
+    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/memory/entities`, {
       name: newEntity.value.name,
       entity_type: newEntity.value.type,
       observations
     })
 
-    const parsedResponse = await parseApiResponse(response)
     const responseData = parsedResponse?.data || parsedResponse
 
     let createdEntity: Entity | null = null
@@ -1173,11 +1196,14 @@ function toggleViewMode(): void {
     // Double nextTick: first tick commits the v-if DOM change; second tick guarantees
     // the container has non-zero dimensions before Cytoscape initialises (Issue #3400)
     nextTick(() => {
-      nextTick(() => {
+      nextTick(async () => {
         if (!cy.value && cytoscapeContainer.value) {
-          initCytoscape()
+          // #5234: ensureCytoscapeReady lazy-loads the library then fires
+          // the onReady callback which does init + updateCytoscapeElements.
+          await ensureCytoscapeReady()
+        } else {
+          updateCytoscapeElements()
         }
-        updateCytoscapeElements()
       })
     })
   }
@@ -1589,6 +1615,63 @@ watch(layoutMode, () => {
   right: 0;
   bottom: 0;
   min-height: 400px;
+}
+
+/* #5234: lazy-load states for the cytoscape library */
+.cytoscape-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
+  z-index: 2;
+}
+
+.chart-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
+  z-index: 2;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-default, var(--border-subtle));
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.12));
+  color: var(--color-error, #ef4444);
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: var(--text-xl);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: var(--text-sm);
+  padding: 0;
 }
 
 /* Zoom Controls */

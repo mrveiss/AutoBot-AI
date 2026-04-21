@@ -116,7 +116,6 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
-import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -197,14 +196,13 @@ const runDryScan = async () => {
     scanResult.value = null
     statusMessage.value = null
 
-    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/cleanup`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/cleanup`, {
       remove_empty: options.value.removeEmpty,
       remove_orphaned_tags: options.value.removeOrphanedTags,
       fix_metadata: options.value.fixMetadata,
       dry_run: true
     })
 
-    const data = await parseApiResponse(response)
 
     if (data.success !== false) {
       scanResult.value = {
@@ -242,14 +240,13 @@ const runCleanup = async () => {
   try {
     isCleaning.value = true
 
-    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/cleanup`, {
+    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/cleanup`, {
       remove_empty: options.value.removeEmpty,
       remove_orphaned_tags: options.value.removeOrphanedTags,
       fix_metadata: options.value.fixMetadata,
       dry_run: false
     })
 
-    const data = await parseApiResponse(response)
 
     if (data.success !== false) {
       const total =

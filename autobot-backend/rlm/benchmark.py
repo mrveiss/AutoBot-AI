@@ -26,8 +26,6 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-import httpx
-
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
@@ -143,26 +141,17 @@ async def _generate(
 ) -> str:
     """Call Ollama generate and return the raw text."""
     from autobot_shared.ssot_config import get_config
+    from llm_providers.ollama_helpers import call_ollama_generate
 
     ssot = get_config()
-    url = f"{ssot.ollama_url}/api/generate"
-
-    async with httpx.AsyncClient(timeout=timeout_s) as client:
-        resp = await client.post(
-            url,
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                },
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("response", "")
+    return await call_ollama_generate(
+        prompt=prompt,
+        model=model,
+        base_url=ssot.ollama_url,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        timeout_ms=int(timeout_s * 1000),
+    )
 
 
 # -----------------------------------------------------------------------

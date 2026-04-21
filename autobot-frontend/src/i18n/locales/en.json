@@ -50,7 +50,8 @@
       "dataError": "Some data is missing or corrupted. Reloading may help.",
       "chunkLoadError": "Application update detected. Please reload the page to get the latest version.",
       "resizeObserverError": "Display refresh needed. This error is usually harmless.",
-      "component": "Component error"
+      "component": "Component error",
+      "resizeError": "Display resize error. Please reload the page."
     },
     "permissionDenied": {
       "title": "Access Denied",
@@ -217,6 +218,18 @@
       "failedToInit": "Failed to initialize",
       "sessionNoMessages": "Session {sessionId} - No messages yet",
       "sessionInfo": "Session {sessionId} - {count} messages, last at {time}"
+    },
+    "compare": {
+      "toggleTitle": "Compare models",
+      "panelLabel": "Multi-model comparison",
+      "selectModels": "Models:",
+      "promptPlaceholder": "Enter a prompt to compare across models…",
+      "promptLabel": "Comparison prompt",
+      "sendLabel": "Send comparison prompt",
+      "send": "Compare",
+      "streaming": "Streaming…",
+      "done": "Done",
+      "error": "Error"
     },
     "input": {
       "retryUpload": "Retry upload",
@@ -646,6 +659,10 @@
       "storeInKbHint": "Save research results to the knowledge base",
       "anonymizeHint": "Anonymize requests before sending to search engines",
       "filterAdultHint": "Filter adult content from search results"
+    },
+    "connection": {
+      "title": "Connection",
+      "desc": "Configure backend connection settings"
     }
   },
   "voice": {
@@ -1068,6 +1085,7 @@
       },
       "notify": {
         "codeIntelComplete": "Code Intelligence analysis complete: {count} suggestions",
+        "codeIntelPartial": "Code Intelligence analysis partially complete: {count} suggestions (some scans failed — check console)",
         "codeIntelFailed": "Code Intelligence analysis failed",
         "fileScanComplete": "File scan complete: {count} result(s)",
         "fileScanNoIssues": "No issues found in file scan",
@@ -1452,7 +1470,13 @@
       "syncing": "Syncing...",
       "syncNow": "Sync Now",
       "edit": "Edit",
-      "share": "Share",
+      "share": {
+        "userIds": "User IDs",
+        "userIdsHint": "comma-separated",
+        "userIdsHelp": "Enter user IDs to grant access to this source.",
+        "currentlySharedWith": "Currently shared with",
+        "updateAccess": "Update Access"
+      },
       "deleteTitle": "Delete",
       "indexingRunning": "Indexing running",
       "removeFromQueue": "Remove from queue",
@@ -1856,6 +1880,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "Hardcoded Values",
+      "values": "values",
+      "totalValues": "Total Values",
+      "highLabel": "High",
+      "mediumLabel": "Medium",
+      "lowLabel": "Low",
+      "uniqueTypes": "Unique Types",
+      "variable": "Variable",
+      "value": "Value",
+      "suggestedEnvVar": "Suggested Env Var",
+      "showingOf": "Showing {shown} of {total}",
+      "emptyMessage": "No hardcoded values detected",
+      "severityGroups": {
+        "high": "High Severity",
+        "medium": "Medium Severity",
+        "low": "Low Severity"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",
@@ -2145,6 +2188,15 @@
   },
   "knowledge": {
     "title": "Knowledge Base",
+    "emptyState": {
+      "title": "Your knowledge base is empty",
+      "description": "Each category shows 0 facts because nothing has been indexed yet.",
+      "hint": "Click 'Populate' on any category card to seed it, or upload documents under User Knowledge."
+    },
+    "categoriesError": {
+      "title": "Knowledge base is unreachable",
+      "description": "Redis connection failed. Check that the backend has Redis running."
+    },
     "search": {
       "aiSynthesis": "Ai synthesis",
       "allCategories": "All categories",
@@ -2808,6 +2860,14 @@
         "confirm": "Confirm",
         "cancel": "Cancel"
       },
+      "tier": {
+        "ready": "Ready",
+        "readyTooltip": "Zero-config connector — works immediately, no credentials required.",
+        "freeKey": "Free key needed",
+        "freeKeyTooltip": "Needs a free API key or environment variable (for example a Notion integration token).",
+        "setupRequired": "Setup required",
+        "setupRequiredTooltip": "Needs credentials, OAuth, a cookie, or a private connection string."
+      },
       "config": {
         "editTitle": "Edit Connector",
         "addTitle": "Add Connector",
@@ -2883,7 +2943,10 @@
         "commonToAll": "Common to all selected",
         "typeTagsToRemove": "Or type tags to remove...",
         "willRemove": "Will remove:",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "changeScope": "Change Scope",
+        "changeScopeDesc": "Change the visibility scope for {count} selected entries",
+        "visibilityScope": "Visibility Scope"
       },
       "categoryEdit": {
         "editTitle": "Edit Category: {name}",
@@ -3263,7 +3326,11 @@
       "title": "Title",
       "toDeleteCount": "To delete count",
       "toKbCount": "To kb count",
-      "topicLabel": "Topic label"
+      "topicLabel": "Topic label",
+      "decisionsApplied": "{count} decision(s) applied successfully",
+      "compiledSuccess": "Chat compiled successfully",
+      "failedToLoad": "Failed to load knowledge items",
+      "decisionsApplyFailed": "Failed to apply decisions"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Generate vector embeddings for all knowledge base entries to enable semantic search",
@@ -3374,7 +3441,14 @@
       "scanNow": "Scan now",
       "scanTitle": "Scan title",
       "scanning": "Scanning",
-      "title": "Title"
+      "title": "Title",
+      "allActive": "All {count} entities are active — no orphans found",
+      "confirmCleanup": "Delete {count} orphaned entities? This cannot be undone.",
+      "deleteSuccess": "Deleted {count} orphaned entities",
+      "foundOrphans": "Found {count} orphaned entities",
+      "partialDelete": "Deleted {deleted} entities; {failed} failed",
+      "cleanupError": "Cleanup failed",
+      "scanError": "Scan failed"
     },
     "promptEditor": {
       "allCategories": "All categories",
@@ -3399,7 +3473,18 @@
       "unsavedChanges": "Unsaved changes",
       "variables": "Variables",
       "versionHistory": "Version history",
-      "versionNumber": "Version number"
+      "versionNumber": "Version number",
+      "confirmRevert": "Revert to version {version}? Unsaved changes will be lost.",
+      "confirmDiscardChanges": "Discard unsaved changes?",
+      "categoryAgents": "Agents",
+      "categorySystem": "System",
+      "categoryTemplates": "Templates",
+      "errorLoadPrompts": "Failed to load prompts",
+      "errorRevert": "Failed to revert prompt",
+      "errorSavePrompt": "Failed to save prompt",
+      "successReverted": "Prompt reverted successfully",
+      "successSaved": "Prompt saved successfully",
+      "unknown": "Unknown"
     },
     "qualityScore": {
       "title": "Title"
@@ -3422,7 +3507,24 @@
       "rejected": "Rejected",
       "searching": "Searching",
       "startQuery": "Start query",
-      "waitingBrowser": "Waiting browser"
+      "waitingBrowser": "Waiting browser",
+      "boardLabel": "Research Board",
+      "statusAssessed": "Assessed {domain} — relevance: {score}",
+      "statusExtracted": "Extracted content from {domain}",
+      "statusStored": "Stored result from {domain}",
+      "errorConnect": "Failed to connect to research service",
+      "errorGeneric": "An error occurred during research",
+      "errorWebSocket": "WebSocket connection failed",
+      "liveBrowserView": "Live Browser View",
+      "statusConnecting": "Connecting...",
+      "statusDisconnected": "Disconnected",
+      "statusDone": "Done",
+      "statusError": "Error",
+      "statusFound": "Source found",
+      "statusReady": "Ready",
+      "statusSearching": "Searching...",
+      "statusStarting": "Starting...",
+      "statusStopped": "Stopped"
     },
     "scopeSelector": {
       "group": "Group",
@@ -3457,7 +3559,14 @@
       "scanTitle": "Scan title",
       "scanning": "Scanning",
       "title": "Title",
-      "withSessionTracking": "With session tracking"
+      "withSessionTracking": "With session tracking",
+      "allActive": "All {count} facts are active — no orphans found",
+      "confirmCleanup": "Delete {count} orphaned facts across {sessions} session(s)? This cannot be undone.",
+      "deleteSuccess": "Removed {count} orphaned fact(s){preserved}",
+      "foundOrphans": "Found {count} orphaned facts across {sessions} session(s)",
+      "preservedSuffix": "; {count} preserved",
+      "cleanupError": "Cleanup failed",
+      "scanError": "Scan failed"
     },
     "share": {
       "admin": "Admin",
@@ -3927,7 +4036,10 @@
       "noModel": "no model",
       "defaultModel": "default",
       "moreCount": "+{count} more",
-      "summaryStats": "{backend} backend • {specialized} specialized agents"
+      "summaryStats": "{backend} backend • {specialized} specialized agents",
+      "modelLabel": "Model",
+      "providerErrors": "Provider errors: {providers}",
+      "someProvidersUnavailable": "Some providers unavailable"
     },
     "settings": {
       "tabTitle": "Settings",
@@ -5044,7 +5156,8 @@
       "fontSizeChanged": "Font size changed to {size}",
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
-      "preferencesReset": "All preferences reset to defaults"
+      "preferencesReset": "All preferences reset to defaults",
+      "theme": "Theme"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -5481,7 +5594,8 @@
       "tooManyAttempts": "Too many login attempts. Please try again later.",
       "serverError": "Server error. Please try again later.",
       "unexpectedError": "An unexpected error occurred",
-      "footer": "© 2026 AutoBot. All rights reserved."
+      "footer": "© 2026 AutoBot. All rights reserved.",
+      "usernameTooShort": "Username must be at least 3 characters"
     }
   },
   "browser": {
@@ -5526,7 +5640,10 @@
       "onlineCount": "{count} online",
       "secretsCount": "{count} secret(s)",
       "noRecentActivity": "No recent activity",
-      "activitiesWillAppear": "Activities from collaborators will appear here"
+      "activitiesWillAppear": "Activities from collaborators will appear here",
+      "justNow": "Just now",
+      "minutesAgo": "{count} minute(s) ago",
+      "hoursAgo": "{count} hour(s) ago"
     },
     "activityTimeline": {
       "title": "Activity Timeline",
@@ -5611,7 +5728,15 @@
       "searchUsers": "Search users",
       "sendInvitation": "Send invitation",
       "sending": "Sending...",
-      "title": "Invite Collaborators"
+      "title": "Invite Collaborators",
+      "failedToLoadUsers": "Failed to load users",
+      "genericError": "An unexpected error occurred",
+      "roleEditor": "Editor",
+      "roleEditorDesc": "Can edit and contribute to the session",
+      "roleViewer": "Viewer",
+      "roleViewerDesc": "Can view but not modify the session",
+      "selectUserError": "Please select a user to invite",
+      "sendFailed": "Failed to send invitation"
     },
     "participants": {
       "changeRoleFor": "Change role for",
@@ -5624,7 +5749,11 @@
       "noParticipants": "No participants yet",
       "remove": "Remove",
       "title": "Participants",
-      "you": "You"
+      "you": "You",
+      "removeConfirm": "Remove this participant from the session?",
+      "roleEditor": "Editor",
+      "roleOwner": "Owner",
+      "roleViewer": "Viewer"
     },
     "presence": {
       "collaboratorTooltip": "Collaborator",
@@ -5755,7 +5884,12 @@
       "noSecretsSearch": "Try a different search",
       "noSecretsHint": "Add a secret to get started",
       "deleteBtn": "Delete",
-      "loading": "Loading..."
+      "loading": "Loading secrets...",
+      "copiedSuccess": "Copied to clipboard",
+      "errorNoValue": "No value available to copy",
+      "loadError": "Failed to load secrets",
+      "revokeError": "Failed to revoke secret",
+      "revokeSuccess": "Secret revoked successfully"
     },
     "share": {
       "title": "Share Secret",
@@ -6567,7 +6701,26 @@
       "modeLogOnly": "Log Only",
       "modeEnforced": "Enforced",
       "actionUpdated": "Configuration was updated"
-    }
+    },
+    "loading": "Loading feature flags...",
+    "retry": "Retry",
+    "loadError": "Failed to load feature flags",
+    "failedToLoadStatus": "Failed to load enforcement status",
+    "failedToUpdateMode": "Failed to update enforcement mode",
+    "modeUpdatedSuccess": "Enforcement mode updated successfully",
+    "updateModeError": "Error updating enforcement mode",
+    "failedToAddOverride": "Failed to add endpoint override",
+    "overrideAddedSuccess": "Override added successfully",
+    "addOverrideError": "Error adding override",
+    "failedToUpdateOverride": "Failed to update endpoint override",
+    "overrideUpdatedSuccess": "Override updated successfully",
+    "updateOverrideError": "Error updating override",
+    "failedToRemoveOverride": "Failed to remove endpoint override",
+    "overrideRemovedSuccess": "Override removed successfully",
+    "removeOverrideError": "Error removing override",
+    "failedToLoadMetrics": "Failed to load access metrics",
+    "metricsRefreshed": "Metrics refreshed",
+    "refreshMetricsError": "Error refreshing metrics"
   },
   "audit": {
     "filters": {
@@ -6851,12 +7004,26 @@
     "applicationError": "Application Error",
     "unexpectedError": "An unexpected error occurred",
     "loadingTimeout": "Loading Timed Out",
-    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing.",
+    "more": "More",
+    "moreItems": "More navigation items"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
     "toggleLabel": "Toggle reasoning trace panel",
     "success": "Success",
     "error": "Error"
+  },
+  "commands": {
+    "search": "Search commands...",
+    "noResults": "No commands found",
+    "newTask": "New Task",
+    "newTaskDesc": "Create a new task agent",
+    "newResearch": "New Research",
+    "newResearchDesc": "Start a research session",
+    "newCode": "New Code Agent",
+    "newCodeDesc": "Start a code analysis session",
+    "newAnalysis": "New Analysis",
+    "newAnalysisDesc": "Start an analysis session"
   }
 }

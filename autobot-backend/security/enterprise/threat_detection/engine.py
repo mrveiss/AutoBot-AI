@@ -25,6 +25,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -618,7 +619,7 @@ class ThreatDetectionEngine:
                 len(event.get("action", "")),
                 len(event.get("resource", "")),
                 datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
+                    event.get("timestamp", utc_timestamp())
                 ).hour,
                 1 if event.get("outcome") == "success" else 0,
                 len(event.get("details", {})),
@@ -645,18 +646,18 @@ class ThreatDetectionEngine:
         """Clean up old data and maintain performance"""
         try:
             # Clean up old user sessions
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = now_utc() - timedelta(hours=24)
             expired_sessions = []
 
             for session_id, session_data in self.user_sessions.items():
-                if session_data.get("last_activity", datetime.utcnow()) < cutoff_time:
+                if session_data.get("last_activity", now_utc()) < cutoff_time:
                     expired_sessions.append(session_id)
 
             for session_id in expired_sessions:
                 del self.user_sessions[session_id]
 
             # Reset daily statistics
-            if datetime.utcnow().hour == 0:  # Midnight
+            if now_utc().hour == 0:  # Midnight
                 self.stats["threats_by_category"] = defaultdict(int)
                 self.stats["threats_by_level"] = defaultdict(int)
 

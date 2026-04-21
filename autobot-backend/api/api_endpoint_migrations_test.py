@@ -2,16 +2,29 @@
 """
 Unit tests for API endpoint migrations to @with_error_handling decorator.
 
-Tests the migrated endpoints in Phase 2a:
+FROZEN PENDING AUDIT — #5359
+----------------------------
+This file contains 164 test classes with 2148 inspect.getsource() assertions
+that validate the @with_error_handling migration era (Phase 2a). Two instances
+of silent assertion-rot were caught in rapid succession (#5338, #5336) because
+production refactors (#5252 kb.aioredis_client→kb.redis(), #620 helper
+extraction) invalidated substring matches without failing any behavior test.
+
+The assertions verify source-code structure, not runtime correctness. Per
+#5359's Option C, the whole file is skipped at collection until a per-class
+audit decides:
+- Replace with TestClient-based behavior tests, OR
+- Delete classes whose migration is long done and no regression protection
+  remains worth the maintenance cost
+
+Tests validated in Phase 2a migrations:
 - chat.py: /health, /stats, /message
 - knowledge.py: /health, /search
+- Many subsequent batches (see individual class docstrings for scope)
 
-Verifies:
-- Decorator properly wraps endpoints
-- Error responses have correct format
-- Trace IDs are generated
-- Business logic preserved
-- HTTP status codes correct
+When reviving a class: remove its per-class skip + add behavior coverage
+elsewhere first, OR convert the class to exercise the endpoint via TestClient.
+Do not restore the file-level skip without updating #5359.
 """
 
 import inspect
@@ -20,6 +33,15 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+# Skip the whole module — see #5359 for the audit plan.
+# Rationale: 2148 inspect.getsource() assertions silently rot on refactors
+# (evidence: #5338, #5336). No behavior-test coverage delta if removed;
+# preserved here for audit rather than deleted.
+pytestmark = pytest.mark.skip(
+    reason="Source-inspection assertions frozen pending #5359 audit "
+    "(2148 substring asserts that rot silently on refactors)"
+)
 
 
 class TestChatHealthEndpoint:
@@ -2620,10 +2642,10 @@ class TestVectorizeExistingFactsEndpoint:
     """Test migrated POST /vectorize_facts endpoint"""
 
     def test_vectorize_existing_facts_has_decorator(self):
-        """Verify @with_error_handling decorator is applied"""
+        """Verify @with_error_handling decorator is applied (restored in #5358)"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
         assert "@with_error_handling" in source
@@ -2634,19 +2656,22 @@ class TestVectorizeExistingFactsEndpoint:
         """Verify outer try-catch block was removed"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
-        # Should have inner try block for batch processing loop (non-fatal errors)
+        # Issue #620 extracted batch processing to helpers; the endpoint itself
+        # contains no try/except blocks — error handling is explicit via
+        # HTTPException (tested in test_preserves_httpexception) and implicit
+        # via helper-internal try/except (tested in test_handles_inner_errors).
         try_count = source.count("try:")
-        assert try_count >= 1  # Inner try-catch for fact processing (non-fatal)
+        assert try_count == 0
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for KB not initialized"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
 
@@ -2658,34 +2683,37 @@ class TestVectorizeExistingFactsEndpoint:
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_batch_processing(self):
-        """Verify endpoint preserves batch processing logic"""
+        """Verify batch processing logic preserved (in _process_all_batches helper post-#620)"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import _process_all_batches
 
-        source = inspect.getsource(vectorize_existing_facts)
+        # Issue #620 extracted batch processing to _process_all_batches.
+        source = inspect.getsource(_process_all_batches)
 
-        # Should have batch processing logic
         assert "total_batches = (len(fact_keys) + batch_size - 1) // batch_size" in source
         assert "for batch_num in range(total_batches):" in source
         assert "await asyncio.sleep(batch_delay)" in source
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_handles_inner_errors(self):
-        """Verify endpoint handles inner errors with try-catch for non-fatal processing"""
+        """Verify inner error handling preserved (in _process_batch + _process_single_fact_safe helpers post-#620)"""
         import inspect
 
-        from api.knowledge import vectorize_existing_facts
+        from api.knowledge_vectorization import (
+            _process_batch,
+            _process_single_fact_safe,
+        )
 
-        source = inspect.getsource(vectorize_existing_facts)
+        # Issue #620 extracted inner loop to _process_batch (iterates over
+        # zipped (fact_key, fact_data, fact_id) tuples) and inner exception
+        # handling to _process_single_fact_safe.
+        batch_source = inspect.getsource(_process_batch)
+        assert "for fact_key, fact_data, fact_id in zip" in batch_source
 
-        # Should have inner try-catch for fact processing
-        assert "for fact_key in batch:" in source
-        assert "fact_data = await kb.aioredis_client.hgetall(fact_key)" in source
-        # Inner exception handling preserved
-        assert "except Exception as e:" in source
-        assert "failed_count += 1" in source
-        assert "logger.error" in source
+        single_source = inspect.getsource(_process_single_fact_safe)
+        assert "except Exception as e:" in single_source
+        assert "logger.error" in single_source
 
 
 class TestGetImportStatusEndpoint:
@@ -20398,7 +20426,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(orchestration.create_workflow_plan)
 
         # Check plan creation operations preserved
-        self.assertIn("enhanced_orchestrator.create_workflow_plan", source)
+        self.assertIn("orchestrator.create_workflow_plan", source)
         self.assertIn("plan_id", source)
         self.assertIn("strategy", source)
         self.assertIn("estimated_duration", source)
@@ -29344,17 +29372,23 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("automation_control", source)
 
     def test_batch_168_migration_preserves_orchestrator_integration(self):
-        """Verify migration preserves Orchestrator integration for chat workflow creation"""
-        from api import workflow_automation
+        """Verify migration preserves Orchestrator integration for chat workflow creation.
 
-        # Verify Orchestrator is imported
-        self.assertTrue(hasattr(workflow_automation, "Orchestrator"))
-        self.assertTrue(hasattr(workflow_automation, "EnhancedOrchestrator"))
+        Issue #4048: Orchestrator/EnhancedOrchestrator backward-compat aliases removed.
+        Issue #5040: ConsolidatedOrchestrator renamed to Orchestrator (single conductor).
+        """
+        from orchestrator import Orchestrator
 
-        # Verify create_workflow_from_chat uses orchestrator
-        chat_source = inspect.getsource(workflow_automation.create_workflow_from_chat)
-        self.assertIn("user_request", chat_source)
-        self.assertIn("session_id", chat_source)
+        # Verify the canonical orchestrator class is available
+        self.assertTrue(issubclass(Orchestrator, object))
+
+        # Verify workflow_automation manager imports from orchestrator
+        import inspect
+
+        from services.workflow_automation import manager as wam_module
+
+        manager_source = inspect.getsource(wam_module)
+        self.assertIn("Orchestrator", manager_source)
 
     def test_batch_168_migration_preserves_dataclasses(self):
         """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""

@@ -11,10 +11,10 @@
  * Issues #1133, #1710, #2228, #2230: Extracted from CodebaseAnalytics.vue
  */
 
-import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
 
@@ -40,8 +40,10 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
   const rootPath = ref(savedPath || '/opt/autobot')
 
-  // Issue #1133: Source registry state
-  const sources = ref<CodeSource[]>([])
+  // Issue #1133: Source registry state. #5276: `sources` + `loadSources`
+  // delegated to the shared `useSourcesListEndpoint` composable (was
+  // duplicated across this file and `CodebaseAnalyticsLanding.vue`).
+  const { sources, loadSources } = useSourcesListEndpoint()
   const selectedSource = ref<CodeSource | null>(null)
   const showSourceManager = ref(false)
   const showAddSourceModal = ref(false)
@@ -73,24 +75,6 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
       return sid ? { source_id: sid } : {}
     },
   )
-
-  // Issue #1133: Source registry functions
-  async function loadSources() {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/sources`,
-      )
-      if (!response.ok) return
-      const data = await response.json()
-      sources.value = data.sources ?? []
-    } catch (err: unknown) {
-      logger.warn(
-        'Failed to load sources:',
-        err instanceof Error ? err.message : String(err),
-      )
-    }
-  }
 
   function handleSelectSource(source: CodeSource) {
     selectedSource.value = source
@@ -140,37 +124,37 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     showShareSourceModal.value = true
   }
 
+  // #5153 B: migrated to useFetchEndpoint with POST body factory.
+  // onError surfaces the user-visible toast; onSuccess hides the opt-in
+  // banner and emits the success toast.
+  const addKnowledgeBaseEndpoint = useFetchEndpoint<
+    Record<string, unknown>,
+    true
+  >({
+    path: '/api/analytics/codebase/index',
+    method: 'POST',
+    body: () => ({ root_path: rootPath.value }),
+    pickData: () => true, // endpoint returns status; presence = success
+    onSuccess: () => {
+      showKnowledgeBaseOptIn.value = false
+      notify(t('analytics.codebase.notify.knowledgeBaseAdded'), 'success')
+    },
+    onError: () => {
+      notify(t('analytics.codebase.notify.knowledgeBaseFailed'), 'error')
+    },
+    onResponse: async (response) => {
+      // Preserve the original "HTTP N: <body-text>" error shape.
+      const text = await response.text().catch(() => '')
+      return `HTTP ${response.status}${text ? `: ${text}` : ''}`
+    },
+    label: 'Add to knowledge base',
+  })
+
   async function addToKnowledgeBase() {
     if (!rootPath.value) return
     knowledgeBaseAdding.value = true
     try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/index`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ root_path: rootPath.value }),
-        },
-      )
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`HTTP ${response.status}: ${text}`)
-      }
-      showKnowledgeBaseOptIn.value = false
-      notify(
-        t('analytics.codebase.notify.knowledgeBaseAdded'),
-        'success',
-      )
-    } catch (err: unknown) {
-      logger.error(
-        'Failed to add to knowledge base:',
-        err instanceof Error ? err.message : String(err),
-      )
-      notify(
-        t('analytics.codebase.notify.knowledgeBaseFailed'),
-        'error',
-      )
+      await addKnowledgeBaseEndpoint.load()
     } finally {
       knowledgeBaseAdding.value = false
     }

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -37,31 +38,27 @@ def _parse_timestamp(ts_value: Any) -> Optional[datetime]:
         return None
     try:
         if isinstance(ts_value, str):
-            return datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
+            return parse_utc_iso(ts_value)
         return ts_value
     except (ValueError, TypeError):
         return None
 
 
-def _parse_session_timestamp(created: Any) -> Optional[datetime]:
-    """Parse session timestamp from various formats (Issue #315)."""
-    if not created:
-        return None
-    try:
-        if isinstance(created, str):
-            return datetime.fromisoformat(created.replace("Z", "+00:00"))
-        return created
-    except (ValueError, TypeError):
-        return None
-
-
 def _is_session_in_range(session: Dict[str, Any], cutoff: datetime) -> bool:
-    """Check if session is within the time range (Issue #315)."""
+    """Check if session is within the time range (Issue #315).
+
+    Both ``ts`` (from ``parse_utc_iso`` via ``_parse_timestamp``) and
+    ``cutoff`` (from ``datetime.now(tz=timezone.utc) - timedelta(...)``)
+    are tz-aware UTC. The previous ``ts.replace(tzinfo=None)`` workaround
+    is removed post-#5414 — when the parser switched to always-aware
+    output, stripping tzinfo started producing naive>=aware TypeErrors
+    (#5420).
+    """
     created = session.get("created_at") or session.get("timestamp")
-    ts = _parse_session_timestamp(created)
+    ts = _parse_timestamp(created)
     if ts is None:
         return True  # Include if can't parse date
-    return ts.replace(tzinfo=None) >= cutoff
+    return ts >= cutoff
 
 
 # ============================================================================
@@ -492,7 +489,7 @@ class ConversationAnalyzer:
         try:
             ts_str = messages[0]["timestamp"]
             if isinstance(ts_str, str):
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                ts = parse_utc_iso(ts_str)
                 hourly_dist[ts.strftime("%H:00")] += 1
         except (ValueError, TypeError, KeyError) as e:
             logger.debug("Failed to parse conversation timestamp: %s", e)

@@ -19,6 +19,7 @@ from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.chat import router as chat_router
+from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
@@ -55,6 +56,7 @@ from api.knowledge_grounding import router as knowledge_grounding_router
 from api.knowledge_search_aggregator import (
     router as knowledge_search_aggregator_router,
 )
+from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
 from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
@@ -94,6 +96,7 @@ def _get_system_routers() -> list:
         (auth_router, "/auth", ["auth"], "auth"),
         (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
+        (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
@@ -268,6 +271,13 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-vectorization"],
             "knowledge_vectorization",
+        ),
+        # Issue #4453: document sync queue admin endpoints
+        (
+            knowledge_sync_queue_router,
+            "",
+            ["knowledge-sync-queue"],
+            "knowledge_sync_queue",
         ),
     ]
 

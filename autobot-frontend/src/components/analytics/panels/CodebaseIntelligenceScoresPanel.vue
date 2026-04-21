@@ -852,7 +852,7 @@ function formatTimestamp(timestamp: string): string {
 .score-card .score-loading {
   display: flex;
   justify-content: center;
-  padding: 30px;
+  padding: var(--spacing-8);
   color: var(--color-info-light);
   font-size: 1.5em;
 }
@@ -912,7 +912,7 @@ function formatTimestamp(timestamp: string): string {
 .score-card .score-empty {
   display: flex;
   justify-content: center;
-  padding: 30px;
+  padding: var(--spacing-8);
   color: var(--text-tertiary);
   font-style: italic;
 }

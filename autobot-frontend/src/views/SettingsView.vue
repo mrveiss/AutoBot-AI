@@ -325,7 +325,7 @@ function onApiKeysSaved(): void {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: var(--spacing-neg-2px);
   cursor: pointer;
   transition: color var(--duration-150), border-color var(--duration-150);
 }
@@ -371,6 +371,22 @@ function onApiKeysSaved(): void {
 
   .section-content {
     padding: var(--spacing-md);
+  }
+
+  /* Prevent tab bar overflow on narrow screens */
+  .settings-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    gap: 0;
+  }
+
+  .settings-tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    /* Ensure min 44px touch target height */
+    min-height: 44px;
+    padding: var(--spacing-2) var(--spacing-3);
   }
 }
 .open-wizard-btn {

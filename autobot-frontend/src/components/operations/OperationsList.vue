@@ -131,10 +131,10 @@ import {
   STATUS_CONFIG,
   OPERATION_TYPE_LABELS,
   OPERATION_TYPE_ICONS,
-  formatRelativeTime,
   canCancel,
   canResume
 } from '@/types/operations'
+import { formatTimeAgo as formatRelativeTime } from '@/utils/formatHelpers'
 import OperationProgress from './OperationProgress.vue'
 import OperationFilters from './OperationFilters.vue'
 

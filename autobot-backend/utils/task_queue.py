@@ -15,9 +15,11 @@ import time
 import traceback
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+
+from autobot_shared.time_utils import parse_utc_iso
 
 try:
     from redis.exceptions import RedisError
@@ -94,9 +96,9 @@ class TaskResult:
         if "status" in data:
             data["status"] = TaskStatus(data["status"])
         if "started_at" in data and data["started_at"]:
-            data["started_at"] = datetime.fromisoformat(data["started_at"])
+            data["started_at"] = parse_utc_iso(data["started_at"])
         if "completed_at" in data and data["completed_at"]:
-            data["completed_at"] = datetime.fromisoformat(data["completed_at"])
+            data["completed_at"] = parse_utc_iso(data["completed_at"])
         return cls(**data)
 
 
@@ -122,7 +124,7 @@ class Task:
         if self.kwargs is None:
             self.kwargs = {}
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(tz=timezone.utc)
         if self.metadata is None:
             self.metadata = {}
 
@@ -144,11 +146,11 @@ class Task:
         if "priority" in data:
             data["priority"] = TaskPriority(data["priority"])
         if "created_at" in data:
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
+            data["created_at"] = parse_utc_iso(data["created_at"])
         if "scheduled_at" in data and data["scheduled_at"]:
-            data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
+            data["scheduled_at"] = parse_utc_iso(data["scheduled_at"])
         if "expires_at" in data and data["expires_at"]:
-            data["expires_at"] = datetime.fromisoformat(data["expires_at"])
+            data["expires_at"] = parse_utc_iso(data["expires_at"])
         return cls(**data)
 
 
@@ -249,11 +251,11 @@ class TaskQueue:
         """
         scheduled_at = None
         if delay:
-            scheduled_at = datetime.utcnow() + timedelta(seconds=delay)
+            scheduled_at = datetime.now(tz=timezone.utc) + timedelta(seconds=delay)
 
         expires_at = None
         if expires_in:
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
 
         return scheduled_at, expires_at
 
@@ -272,7 +274,7 @@ class TaskQueue:
         Issue #620.
         """
         try:
-            if scheduled_at and scheduled_at > datetime.utcnow():
+            if scheduled_at and scheduled_at > datetime.now(tz=timezone.utc):
                 score = scheduled_at.timestamp()
                 await self.redis.zadd(self.scheduled_key, {task_id: score})
             else:
@@ -367,7 +369,7 @@ class TaskQueue:
 
         self.is_running = True
         async with self._stats_lock:
-            self.stats["started_at"] = datetime.utcnow()
+            self.stats["started_at"] = datetime.now(tz=timezone.utc)
 
         # Start task workers
         for i in range(self.max_workers):
@@ -511,7 +513,7 @@ class TaskQueue:
         """
         result.status = TaskStatus.COMPLETED
         result.result = task_result
-        result.completed_at = datetime.utcnow()
+        result.completed_at = datetime.now(tz=timezone.utc)
         result.execution_time = time.time() - start_time
 
         async with self._stats_lock:
@@ -540,7 +542,7 @@ class TaskQueue:
         result.error = error
         if error_traceback:
             result.error_traceback = error_traceback
-        result.completed_at = datetime.utcnow()
+        result.completed_at = datetime.now(tz=timezone.utc)
         result.execution_time = time.time() - start_time
 
     def _check_task_expired(self, task: Task) -> bool:
@@ -555,7 +557,7 @@ class TaskQueue:
 
         Issue #620.
         """
-        return task.expires_at is not None and datetime.utcnow() > task.expires_at
+        return task.expires_at is not None and datetime.now(tz=timezone.utc) > task.expires_at
 
     async def _execute_task_with_timeout(self, task: Task, result: TaskResult, start_time: float) -> None:
         """
@@ -607,7 +609,7 @@ class TaskQueue:
 
         self.logger.info("Worker %s processing task %s: %s", worker_name, task_id, task.function_name)
 
-        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow())
+        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.now(tz=timezone.utc))
 
         try:
             await self._execute_task_with_timeout(task, result, start_time)
@@ -652,7 +654,7 @@ class TaskQueue:
         result.status = TaskStatus.RETRY
 
         retry_delay = task.retry_delay * (2**result.retry_count)
-        retry_time = datetime.utcnow() + timedelta(seconds=retry_delay)
+        retry_time = datetime.now(tz=timezone.utc) + timedelta(seconds=retry_delay)
 
         if task.metadata:
             task.metadata["retry_count"] = result.retry_count
@@ -744,7 +746,7 @@ class TaskQueue:
             result = TaskResult(
                 task_id=task_id,
                 status=TaskStatus.CANCELLED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(tz=timezone.utc),
             )
 
             result_data = json.dumps(result.to_dict())
@@ -792,7 +794,7 @@ class TaskQueue:
         }
 
         if started_at:
-            uptime = datetime.utcnow() - started_at
+            uptime = datetime.now(tz=timezone.utc) - started_at
             stats["uptime_seconds"] = uptime.total_seconds()
 
         return stats

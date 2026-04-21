@@ -381,33 +381,18 @@ class MemoryGraphQueryProcessor:
 
     async def _generate_embedding(self, text: str) -> List[float]:
         """
-        Generate a vector embedding via Ollama.
+        Generate a vector embedding via the canonical NPU/Ollama fallback helper.
 
         Returns an empty list if the embedding service is unavailable.
         """
         if not text:
             return []
-        try:
-            import aiohttp  # local import to avoid hard dependency at module level
+        from services.npu_client import generate_embedding_with_fallback
 
-            ollama_host = getattr(ssot_config, "ollama_host", "http://localhost:11434")
-            url = f"{ollama_host}/api/embeddings"
-            payload = {"model": self._embedding_model, "prompt": text}
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    if resp.status != 200:
-                        logger.warning(
-                            "Embedding service returned HTTP %d", resp.status
-                        )
-                        return []
-                    data = await resp.json()
-                    return data.get("embedding", [])
-        except Exception as exc:
-            logger.warning("Embedding generation failed: %s", exc)
-            return []
+        embedding = await generate_embedding_with_fallback(
+            text, model_name=self._embedding_model
+        )
+        return embedding or []
 
     # ------------------------------------------------------------------
     # Stage 4 — Redis candidate retrieval

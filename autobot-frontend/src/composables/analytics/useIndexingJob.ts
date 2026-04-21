@@ -15,6 +15,7 @@
 import { ref, type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useIndexingJob')
@@ -81,6 +82,65 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   const jobPhases = ref<JobPhasesData | null>(null)
   const jobBatches = ref<JobBatchesData | null>(null)
   const jobStats = ref<JobStatsData | null>(null)
+
+  // --- Endpoints (#5257) ---------------------------------------------------
+  // Shared by pollJobStatus + checkCurrentIndexingJob (same URL, different
+  // response-handling). `/index/current` and `/index/cancel` are NOT
+  // source-scoped (backend has a single module-level current-task slot).
+
+  interface CurrentJobRaw {
+    has_active_job?: boolean
+    task_id?: string
+    status?: string
+    progress?: { step?: string; percent?: number }
+    error?: string
+  }
+
+  const currentJobEndpoint = useFetchEndpoint<CurrentJobRaw, CurrentJobRaw>({
+    path: '/api/analytics/codebase/index/current',
+    pickData: (r) => r, // caller reads endpoint.data.value directly
+    label: 'Current indexing job',
+  })
+
+  const problemsPollEndpoint = useFetchEndpoint<
+    { problems?: unknown[] },
+    unknown[]
+  >(
+    {
+      path: '/api/analytics/codebase/problems',
+      scopeToSource: true,
+      pickData: (r) => r.problems ?? [],
+      onSuccess: (list) => {
+        deps.problemsReport.value = list
+      },
+    },
+    { withSourceId: deps.withSourceId },
+  )
+
+  const statsPollEndpoint = useFetchEndpoint<
+    { stats?: Record<string, unknown> },
+    Record<string, unknown>
+  >(
+    {
+      path: '/api/analytics/codebase/stats',
+      scopeToSource: true,
+      pickData: (r) => r.stats ?? null,
+      onSuccess: (stats) => {
+        deps.codebaseStats.value = stats
+      },
+    },
+    { withSourceId: deps.withSourceId },
+  )
+
+  const cancelEndpoint = useFetchEndpoint<
+    { success?: boolean; message?: string },
+    { success: boolean; message?: string }
+  >({
+    path: '/api/analytics/codebase/index/cancel',
+    method: 'POST',
+    pickData: (r) => ({ success: r.success ?? false, message: r.message }),
+    label: 'Index cancel',
+  })
 
   // --- Polling ---
 
@@ -156,87 +216,61 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   }
 
   const pollJobStatus = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/index/current`,
-      )
-      if (!response.ok) return
+    await currentJobEndpoint.load()
+    if (currentJobEndpoint.error.value) {
+      logger.warn('Job polling error:', currentJobEndpoint.error.value)
+      return
+    }
+    const data = currentJobEndpoint.data.value
+    if (!data) return
 
-      const data = await response.json()
-      currentJobStatus.value = data.status
-
-      if (data.has_active_job) {
-        _updateActiveJobProgress(data)
-        await pollIntermediateResults()
-      } else {
-        await _handleJobFinished(data.status, data.error)
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn('Job polling error:', errorMessage)
+    currentJobStatus.value = data.status ?? null
+    if (data.has_active_job) {
+      _updateActiveJobProgress(data as Record<string, unknown>)
+      await pollIntermediateResults()
+    } else {
+      await _handleJobFinished(data.status ?? '', data.error)
     }
   }
 
   const pollIntermediateResults = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-
-      const problemsResponse = await fetchWithAuth(
-        deps.withSourceId(`${backendUrl}/api/analytics/codebase/problems`),
-      )
-      if (problemsResponse.ok) {
-        const problemsData = await problemsResponse.json()
-        deps.problemsReport.value = problemsData.problems || []
-      }
-
-      const statsResponse = await fetchWithAuth(
-        deps.withSourceId(`${backendUrl}/api/analytics/codebase/stats`),
-      )
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
-        if (statsData.stats) {
-          deps.codebaseStats.value = statsData.stats
-        }
-      }
-    } catch {
-      // Silent - don't interrupt polling
-    }
+    // Silent: both endpoints write to deps refs via onSuccess, and errors
+    // are logged internally by the composable.
+    await Promise.all([problemsPollEndpoint.load(), statsPollEndpoint.load()])
   }
 
   // --- Public API ---
 
   const checkCurrentIndexingJob = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/index/current`,
+    await currentJobEndpoint.load()
+    if (currentJobEndpoint.error.value) {
+      logger.warn(
+        'Could not check for running job:',
+        currentJobEndpoint.error.value,
       )
-      if (response.ok) {
-        const data = await response.json()
-        if (data.has_active_job) {
-          currentJobId.value = data.task_id
-          currentJobStatus.value = data.status
-          deps.analyzing.value = true
-          deps.progressStatus.value =
-            data.progress?.step ||
-            deps.t('analytics.codebase.status.indexingInProgress')
-          deps.progressPercent.value = data.progress?.percent || 20
-          startJobPolling()
-          deps.notify(
-            deps.t('analytics.codebase.notify.indexingAlreadyRunning'),
-            'info',
-          )
-        } else if (data.task_id && data.status !== 'idle') {
-          deps.progressStatus.value = deps.t(
-            'analytics.codebase.status.lastJob',
-            { status: data.status },
-          )
-        }
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.warn('Could not check for running job:', errorMessage)
+      return
+    }
+    const data = currentJobEndpoint.data.value
+    if (!data) return
+
+    if (data.has_active_job) {
+      currentJobId.value = data.task_id ?? null
+      currentJobStatus.value = data.status ?? null
+      deps.analyzing.value = true
+      deps.progressStatus.value =
+        data.progress?.step ||
+        deps.t('analytics.codebase.status.indexingInProgress')
+      deps.progressPercent.value = data.progress?.percent || 20
+      startJobPolling()
+      deps.notify(
+        deps.t('analytics.codebase.notify.indexingAlreadyRunning'),
+        'info',
+      )
+    } else if (data.task_id && data.status !== 'idle') {
+      deps.progressStatus.value = deps.t(
+        'analytics.codebase.status.lastJob',
+        { status: data.status },
+      )
     }
   }
 
@@ -246,46 +280,46 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
       return
     }
 
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/index/cancel`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      )
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          deps.analyzing.value = false
-          stopJobPolling()
-          currentJobId.value = null
-          deps.progressStatus.value = deps.t(
-            'analytics.codebase.status.indexingCancelledByUser',
-          )
-          deps.notify(
-            deps.t('analytics.codebase.notify.indexingJobCancelled'),
-            'success',
-          )
-        } else {
-          deps.notify(
-            data.message ||
-              deps.t('analytics.codebase.notify.couldNotCancel'),
-            'warning',
-          )
-        }
-      } else {
-        deps.notify(deps.t('analytics.codebase.notify.cancelFailed'), 'error')
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+    await cancelEndpoint.load()
+    if (cancelEndpoint.error.value) {
       deps.notify(
-        deps.t('analytics.codebase.notify.cancelError', { error: errorMessage }),
+        deps.t('analytics.codebase.notify.cancelError', {
+          error: cancelEndpoint.error.value,
+        }),
         'error',
+      )
+      return
+    }
+
+    const data = cancelEndpoint.data.value
+    if (data?.success) {
+      deps.analyzing.value = false
+      stopJobPolling()
+      currentJobId.value = null
+      deps.progressStatus.value = deps.t(
+        'analytics.codebase.status.indexingCancelledByUser',
+      )
+      deps.notify(
+        deps.t('analytics.codebase.notify.indexingJobCancelled'),
+        'success',
+      )
+    } else {
+      deps.notify(
+        data?.message || deps.t('analytics.codebase.notify.couldNotCancel'),
+        'warning',
       )
     }
   }
 
-  /** Send an index request with retry on 502/503. */
+  /**
+   * Send an index request with retry on 502/503.
+   *
+   * #5257: intentionally NOT migrated to useFetchEndpoint. The composable
+   * has no retry hook today (adding one for a single consumer would be
+   * speculative surface area), and the 502/503 handling here is
+   * domain-specific (backend-warmup vs real error). Keeping this one
+   * hand-rolled; the other 4 fetchers in this file migrated cleanly.
+   */
   const _sendIndexRequest = async (
     endpoint: string,
     body: string,

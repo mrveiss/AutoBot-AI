@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = logging.getLogger(__name__)
@@ -626,7 +627,11 @@ class DocIndexerService:
 
     COLLECTION_NAME = "autobot_docs"
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(
+        self,
+        llm_service: Optional[Any] = None,
+        org_id: Optional[str] = None,
+    ):
         self._client = None
         self._collection = None
         self._embed_model = None
@@ -634,6 +639,9 @@ class DocIndexerService:
         self._root_dir = PATH.PROJECT_ROOT
         # Issue #4564: optional LLM service for KB synthesis
         self._llm_service = llm_service
+        # Issue #4451: per-org embedding model selection (None => __default__)
+        self._org_id = org_id
+        self.embedding_model_name: Optional[str] = None
         self.synthesis_schema: SynthesisSchema = self._load_schema()
 
     def _load_schema(self) -> SynthesisSchema:
@@ -677,17 +685,31 @@ class DocIndexerService:
             )
 
             ollama_url = get_ollama_url()
+
+            # Issue #4451: per-org embedding model config, SSOT fallback.
+            from services.knowledge.org_knowledge_config import (
+                get_org_knowledge_config_service,
+            )
+
+            effective = await get_org_knowledge_config_service().get_effective(
+                self._org_id
+            )
+            embed_model_name = effective.embedding_model or "nomic-embed-text"
+            self.embedding_model_name = embed_model_name
+
             self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=ollama_url
+                model_name=embed_model_name, base_url=ollama_url
             )
 
             doc_count = self._collection.count()
             logger.info(
                 "DocIndexerService initialized: collection='%s', "
-                "existing_vectors=%d, ollama=%s",
+                "existing_vectors=%d, ollama=%s, embed_model=%s, org_id=%s",
                 self.COLLECTION_NAME,
                 doc_count,
                 ollama_url,
+                embed_model_name,
+                self._org_id or "__default__",
             )
             self._initialized = True
             return True
@@ -909,6 +931,8 @@ class DocIndexerService:
         import asyncio
 
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
+        # Issue #5064: sanitize ingested content before chunking / embedding.
+        body = _sanitize_document(body, source="doc_indexer").sanitized_text
         chunks = _chunk_markdown(body, file_str)
         if not chunks:
             return 0, 0
@@ -991,6 +1015,8 @@ class DocIndexerService:
                 return
 
             body, fm_tags, fm_aliases = _parse_frontmatter(content)
+            # Issue #5064: sanitize ingested content before chunking / embedding.
+            body = _sanitize_document(body, source="doc_indexer").sanitized_text
             chunks = _chunk_markdown(body, file_path)
             if not chunks:
                 result.skipped += 1
@@ -1159,6 +1185,29 @@ class DocIndexerService:
         )
 
         return total_result
+
+    async def enqueue_reindex(
+        self,
+        document_path: str,
+        reason: "SyncReason | str" = "manual",
+    ) -> "SyncQueueEntry":
+        """Persist a re-indexing work item instead of re-embedding in-line.
+
+        Issue #4453: routing re-indexing through :class:`DocumentSyncQueue`
+        gives us retry, priority ordering, and crash-safety that the old
+        fire-and-forget path lacked.  Callers that need an immediate synchronous
+        index should continue to use :meth:`index_file` directly.
+
+        ``reason`` accepts either a :class:`SyncReason` enum value or the
+        string form (``content_changed`` / ``model_updated`` / ``manual``).
+        """
+        from services.knowledge.sync_queue import (
+            SyncReason,
+            get_document_sync_queue,
+        )
+
+        reason_enum = reason if isinstance(reason, SyncReason) else SyncReason(reason)
+        return await get_document_sync_queue().enqueue_sync(document_path, reason_enum)
 
     async def search(self, query: str, n_results: int = 5) -> List[Any]:
         """Query the autobot_docs ChromaDB collection.

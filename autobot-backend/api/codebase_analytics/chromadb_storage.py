@@ -16,11 +16,12 @@ from typing import Dict, List, Optional
 
 from utils.file_categorization import FILE_CATEGORY_CODE
 
+from autobot_shared.redis_client import get_async_redis_client
+
 from .progress_tracker import FILE_HASH_REDIS_PREFIX
 from .storage import (
     get_code_collection_async,
     get_redis_connection,
-    get_redis_connection_async,
 )
 
 logger = logging.getLogger(__name__)
@@ -343,7 +344,7 @@ async def _clear_redis_codebase_cache(
     Issue #1710: When source_id is provided, only clear keys for that source.
     """
     try:
-        redis_client = await get_redis_connection_async()
+        redis_client = await get_async_redis_client(database="analytics")
         if redis_client:
             # Scope key pattern to source_id when provided (#1710)
             if source_id:

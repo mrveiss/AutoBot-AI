@@ -75,7 +75,10 @@ def _make_app(fake_redis: _FakeRedis) -> FastAPI:
     """Build a minimal FastAPI app with the boards router wired up."""
 
     class _FakeKB:
-        aioredis_client = fake_redis
+        _aioredis_client = fake_redis
+
+        def redis(self):
+            return self._aioredis_client
 
     async def _fake_get_kb(app, force_refresh=False):  # noqa: ANN001
         return _FakeKB()

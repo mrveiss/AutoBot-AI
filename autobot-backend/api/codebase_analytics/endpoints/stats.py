@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.chromadb_client import get_all_paginated
 
+from ..analyzers import normalize_hardcode_record
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -325,6 +326,11 @@ def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
     return results
 
 
+# Issue #5367: promoted to ``analyzers.normalize_hardcode_record`` so
+# other endpoints (env-analysis) can share the same boundary contract.
+_normalize_hardcode_record = normalize_hardcode_record
+
+
 @router.get("/hardcodes")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -340,6 +346,10 @@ async def get_hardcoded_values(
 
     Issue #620: Refactored to use helper functions.
     Issue #1710: source_id scopes to per-project data.
+    Issue #5290: response boundary normalizes legacy records so the
+    frontend receives canonical ``file`` + ``severity`` keys regardless
+    of whether the data was scanned before or after producers were
+    updated.
     """
     redis_client = await get_redis_connection()
 
@@ -365,17 +375,19 @@ async def get_hardcoded_values(
             }
         )
 
+    # Issue #5290: normalize before sorting/returning so legacy and new
+    # records share one shape on the wire.
+    all_hardcodes = [_normalize_hardcode_record(h) for h in all_hardcodes]
+
     # Sort by file and line number
-    all_hardcodes.sort(key=lambda x: (x.get("file_path", ""), x.get("line", 0)))
+    all_hardcodes.sort(key=lambda x: (x.get("file", ""), x.get("line", 0)))
 
     return JSONResponse(
         {
             "status": "success",
             "hardcodes": all_hardcodes,
             "total_count": len(all_hardcodes),
-            "hardcode_types": list(
-                set(h.get("type", "unknown") for h in all_hardcodes)
-            ),
+            "hardcode_types": list(set(h.get("type", "unknown") for h in all_hardcodes)),
             "storage_type": storage_type,
         }
     )
@@ -428,9 +440,7 @@ def _fetch_problems_from_chromadb(
         if problem_type:
             where_filter["problem_type"] = problem_type
 
-    results = get_all_paginated(
-        code_collection, where=where_filter, include=["metadatas"]
-    )
+    results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
@@ -438,9 +448,7 @@ def _fetch_problems_from_chromadb(
     return filter_problems_by_file_existence(problems, root)
 
 
-async def _fetch_problems_from_redis(
-    problem_type: Optional[str], source_id: Optional[str] = None
-) -> tuple:
+async def _fetch_problems_from_redis(problem_type: Optional[str], source_id: Optional[str] = None) -> tuple:
     """Fetch problems from Redis. Returns (problems, success).
 
     Issue #315: Extracted helper.
@@ -618,9 +626,7 @@ async def get_codebase_problems(
             )
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:
-            logger.warning(
-                "ChromaDB query failed: %s, falling back to Redis", chroma_error
-            )
+            logger.warning("ChromaDB query failed: %s, falling back to Redis", chroma_error)
             code_collection = None
 
     # Issue #1759: Problems are stored to ChromaDB only (not Redis).
