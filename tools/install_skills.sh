@@ -21,12 +21,18 @@ set -euo pipefail
 # worktree checkouts (e.g. /home/user/repo/.git for both cases).
 # Its parent directory is the canonical repo root.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if ! GIT_COMMON_DIR="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null)"; then
+# `git rev-parse --git-common-dir` returns a path that may be relative to
+# git's invocation directory (SCRIPT_DIR here) — e.g. "../.git", ".git",
+# or an absolute path depending on context. Resolve to absolute by
+# `cd SCRIPT_DIR` first, so relative paths resolve against a known base.
+if ! GIT_COMMON_DIR_RAW="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null)"; then
   echo "ERROR: not inside a git repository (no .git found from $SCRIPT_DIR)" >&2
   exit 1
 fi
-# Normalize to absolute path (git-common-dir can return a relative path)
-GIT_COMMON_DIR="$(cd "$GIT_COMMON_DIR" && pwd)"
+case "$GIT_COMMON_DIR_RAW" in
+  /*) GIT_COMMON_DIR="$GIT_COMMON_DIR_RAW" ;;
+  *)  GIT_COMMON_DIR="$(cd "$SCRIPT_DIR" && cd "$GIT_COMMON_DIR_RAW" && pwd)" ;;
+esac
 REPO_ROOT="$(dirname "$GIT_COMMON_DIR")"
 echo "Resolved REPO_ROOT: $REPO_ROOT"
 SKILLS_SRC="$REPO_ROOT/docs/developer/skills"
