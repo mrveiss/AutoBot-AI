@@ -302,13 +302,22 @@ export function useKnowledgeVectorization() {
   const toggleDocumentSelection = (documentId: string) => selection.toggle(documentId)
   const selectDocument = (documentId: string) => selection.select(documentId)
   const deselectDocument = (documentId: string) => selection.deselect(documentId)
+  /**
+   * Add the given document IDs to the current selection. Additive (existing
+   * selections are preserved). Uses a single `setSelected()` assignment so the
+   * cost is O(n + m) rather than O(n · m) — a per-id `selection.select()` loop
+   * copies the backing Set on every call, which makes 10k-id selections take
+   * ~12 s (#5412).
+   */
   const selectAll = (documentIds: string[]) => {
-    // #5366: use `setSelected` for O(n) bulk assignment. The previous
-    // `forEach(id => selection.select(id))` was O(n²) — each `select`
-    // creates a new Set of growing size — blowing the 10s vitest
-    // timeout at 10k IDs. `setSelected` replaces the selection Set
-    // once in a single pass.
-    selection.setSelected(documentIds)
+    // #5412: O(n+m) additive bulk-add. Docstring says "existing selections
+    // preserved" — so we merge the new ids into the existing selection
+    // and assign once. (#5366's prior fix was also O(n) but silently
+    // changed selectAll to replacement semantics, which violates the
+    // docstring and may break callers that rely on incremental selection.)
+    const merged = new Set<string>(selection.selected.value)
+    for (const id of documentIds) merged.add(id)
+    selection.setSelected(merged)
   }
   const deselectAll = () => selection.clear()
   const isDocumentSelected = (documentId: string): boolean => selection.isSelected(documentId)
