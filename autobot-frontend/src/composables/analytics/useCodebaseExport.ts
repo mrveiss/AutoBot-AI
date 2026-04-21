@@ -361,8 +361,6 @@ export function useCodebaseExport(deps: {
   sectionData: Record<SectionType, Ref<unknown>>
   exportingReport: Ref<boolean>
   progressStatus: Ref<string>
-  fetchWithAuth: typeof fetch
-  getBackendUrl: () => Promise<string>
   /**
    * URL wrapper that appends `?source_id=<id>` for per-project scoping.
    * #5266: previously missing \u2014 both `/report` and `/env-analysis/export`
@@ -444,36 +442,45 @@ export function useCodebaseExport(deps: {
 
   /**
    * Fetch environment export data with fallback to cached display data.
+   *
    * Issue #631: Uses dedicated export endpoint to avoid truncation.
+   * Issue #5389: routed through useFetchEndpoint's fallbackData hook.
+   * The composable's old strict error model required bespoke
+   * try/catch + notify branches. Now:
+   *   - onSuccess logs total_in_export / total_in_analysis.
+   *   - onError fires the "using cached data" warning toast.
+   *   - fallbackData returns the cached snapshot on failure, keeping
+   *     error.value empty so downstream export code proceeds with
+   *     the stale data rather than aborting.
    */
   const _fetchEnvironmentExportData = async (
     cachedData: unknown,
   ): Promise<unknown> => {
-    try {
-      const backendUrl = await deps.getBackendUrl()
-      // #5266: wrap with withSourceId \u2014 same rationale as exportReport.
-      const response = await deps.fetchWithAuth(
-        deps.withSourceId(
-          `${backendUrl}/api/analytics/codebase/env-analysis/export`,
-        ),
-        { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-      )
-      if (response.ok) {
-        const data = await response.json()
-        logger.info('Environment export: fetched full data', {
-          total_in_export: (data as { total_in_export?: number }).total_in_export,
-          total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
-        })
-        return data
-      }
-      logger.warn('Environment export: endpoint failed, using display data')
-      deps.notify(deps.t('analytics.codebase.notify.usingCachedData'), 'warning')
-      return cachedData
-    } catch (err) {
-      logger.warn('Environment export: fetch failed, using display data', err)
-      deps.notify(deps.t('analytics.codebase.notify.exportEndpointUnavailable'), 'warning')
-      return cachedData
-    }
+    const endpoint = useFetchEndpoint<unknown, unknown>(
+      {
+        path: '/api/analytics/codebase/env-analysis/export',
+        scopeToSource: true,
+        pickData: (raw) => raw,
+        onSuccess: (data) => {
+          logger.info('Environment export: fetched full data', {
+            total_in_export: (data as { total_in_export?: number }).total_in_export,
+            total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
+          })
+        },
+        onError: (_msg, err) => {
+          logger.warn('Environment export: using display data', err)
+          deps.notify(
+            deps.t('analytics.codebase.notify.exportEndpointUnavailable'),
+            'warning',
+          )
+        },
+        fallbackData: cachedData,
+        label: 'Environment export',
+      },
+      { withSourceId: deps.withSourceId },
+    )
+    await endpoint.load()
+    return endpoint.data.value
   }
 
   /**
