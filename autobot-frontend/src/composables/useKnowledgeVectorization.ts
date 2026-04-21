@@ -303,7 +303,12 @@ export function useKnowledgeVectorization() {
   const selectDocument = (documentId: string) => selection.select(documentId)
   const deselectDocument = (documentId: string) => selection.deselect(documentId)
   const selectAll = (documentIds: string[]) => {
-    documentIds.forEach(id => selection.select(id))
+    // #5366: use `setSelected` for O(n) bulk assignment. The previous
+    // `forEach(id => selection.select(id))` was O(n²) — each `select`
+    // creates a new Set of growing size — blowing the 10s vitest
+    // timeout at 10k IDs. `setSelected` replaces the selection Set
+    // once in a single pass.
+    selection.setSelected(documentIds)
   }
   const deselectAll = () => selection.clear()
   const isDocumentSelected = (documentId: string): boolean => selection.isSelected(documentId)
