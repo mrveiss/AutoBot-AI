@@ -9,11 +9,11 @@ for fair agent performance comparison.
 """
 
 import json
-from datetime import datetime
 from unittest.mock import patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
 from services.confounder_control_analyzer import (
     ConfounderControlAnalyzer,
     StratifiedComparison,
@@ -45,8 +45,8 @@ def _create_task_record(
         "task_id": task_id,
         "task_name": f"task_{task_id}",
         "status": status,
-        "started_at": datetime.utcnow().isoformat(),
-        "completed_at": datetime.utcnow().isoformat(),
+        "started_at": utc_timestamp(),
+        "completed_at": utc_timestamp(),
         "duration_ms": duration_ms,
         "input_size": 100,
         "output_size": 200,

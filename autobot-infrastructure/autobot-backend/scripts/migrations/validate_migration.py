@@ -20,7 +20,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
@@ -29,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -420,7 +420,7 @@ class MigrationValidator:
         report = []
         report.append("=" * 70)
         report.append("MIGRATION VALIDATION REPORT")
-        report.append(f"Generated: {datetime.utcnow().isoformat()}")
+        report.append(f"Generated: {utc_timestamp()}")
         report.append("=" * 70)
         report.append("")
 

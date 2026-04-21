@@ -18,7 +18,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -27,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -149,7 +149,7 @@ class ActivityBackfiller:
 
                         # Update message
                         message["user_id"] = user_id
-                        message["backfilled_at"] = datetime.utcnow().isoformat()
+                        message["backfilled_at"] = utc_timestamp()
 
                         if self.dry_run:
                             logger.debug(f"[DRY RUN] Would update message in " f"{session_id} with user_id: {user_id}")
@@ -252,7 +252,7 @@ class ActivityBackfiller:
 
                     # Update activity
                     await self.redis_client.hset(activity_key, "user_id", session_owner)
-                    await self.redis_client.hset(activity_key, "backfilled_at", datetime.utcnow().isoformat())
+                    await self.redis_client.hset(activity_key, "backfilled_at", utc_timestamp())
                     updated_count += 1
 
                 except Exception as e:
