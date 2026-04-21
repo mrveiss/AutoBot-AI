@@ -185,7 +185,17 @@
 
       <!-- Agent-Loop Tool Approval Dialog (#4952) -->
       <!-- Shown when the agent loop publishes APPROVAL_REQUIRED for a sensitive tool -->
-      <div v-if="pendingToolApproval" class="tool-approval-overlay" role="dialog" aria-modal="true" :aria-label="$t('chat.interface.toolApprovalTitle')">
+      <div
+        v-if="pendingToolApproval"
+        ref="toolApprovalDialogRef"
+        class="tool-approval-overlay"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('chat.interface.toolApprovalTitle')"
+        tabindex="-1"
+        @keydown="onToolApprovalKeydown"
+        @keydown.escape="onToolDenied()"
+      >
         <div class="tool-approval-dialog">
           <div class="tool-approval-header">
             <i class="fas fa-shield-exclamation" aria-hidden="true"></i>
@@ -262,6 +272,9 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -358,6 +371,15 @@ watch(pendingToolApproval, (approval: PendingToolApproval | null) => {
     _stopCountdown()
   }
 }, { immediate: false })
+
+// Tool-approval dialog a11y kit (#5410). Escape denies (safer default
+// for a security prompt — avoids accidental approval via keyboard).
+const toolApprovalDialogRef = ref<HTMLElement | null>(null)
+const isToolApprovalOpen = computed(() => pendingToolApproval.value !== null)
+const { onKeydown: onToolApprovalKeydown } = useFocusTrap(toolApprovalDialogRef)
+useFocusRestore(isToolApprovalOpen)
+const { focusFirst: focusToolApprovalFirst } = useInitialFocus(toolApprovalDialogRef)
+watch(isToolApprovalOpen, (open) => { if (open) focusToolApprovalFirst() })
 
 const onToolApproved = async (comment?: string): Promise<void> => {
   _stopCountdown()

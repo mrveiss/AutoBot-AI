@@ -7,10 +7,13 @@
  * Modal for sharing secrets with session participants.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 
 const { t } = useI18n()
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
@@ -32,6 +35,12 @@ const emit = defineEmits<{
 // Local state
 const expiresIn = ref<number>(24) // hours
 const sharing = ref(false)
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'modelValue'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.modelValue, (open) => { if (open) focusFirst() })
 
 // Available participants (excluding self)
 const participants = computed(() => sessionPresence.value)
@@ -82,9 +91,13 @@ const getInitials = (username: string): string => {
       <Transition name="modal-content">
         <div
           v-if="props.modelValue"
+          ref="dialogRef"
           class="bg-autobot-bg-card rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
           role="dialog"
           aria-modal="true"
+          tabindex="-1"
+          @keydown="onFocusTrapKeydown"
+          @keydown.escape="closeDialog"
         >
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">

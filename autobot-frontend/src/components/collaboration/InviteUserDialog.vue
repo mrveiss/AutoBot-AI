@@ -11,10 +11,11 @@
  * Fetches real users from the /user-management/users API endpoint.
  */
 
-import { ref, computed, onMounted, toRef } from 'vue'
+import { ref, computed, onMounted, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
 import { useDebounce } from '@/composables/useDebounce'
@@ -42,6 +43,8 @@ const emit = defineEmits<{
 const dialogRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 useFocusRestore(toRef(props, 'modelValue'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.modelValue, (open) => { if (open) focusFirst() })
 
 // Types
 interface User {

@@ -140,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
@@ -148,6 +148,7 @@ import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
 import { createLogger } from '@/utils/debugUtils'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 
 const logger = createLogger('DocumentsView')
 
@@ -162,6 +163,8 @@ const deleteDialogRef = ref<HTMLElement | null>(null)
 const isDeleteDialogOpen = computed(() => deleteTarget.value !== null)
 const { onKeydown: onDeleteDialogKeydown } = useFocusTrap(deleteDialogRef)
 useFocusRestore(isDeleteDialogOpen)
+const { focusFirst: focusDeleteFirst } = useInitialFocus(deleteDialogRef)
+watch(isDeleteDialogOpen, (open) => { if (open) focusDeleteFirst() })
 const errorMessage = ref<string | null>(null)
 
 // ---------------------------------------------------------------------------

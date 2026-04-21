@@ -183,6 +183,7 @@ import { ref, watch, onUnmounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -220,6 +221,8 @@ const emit = defineEmits<{
 const dialogRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 useFocusRestore(toRef(props, 'visible'))
+const { focusFirst } = useInitialFocus(dialogRef)
+watch(() => props.visible, (open) => { if (open) focusFirst() })
 
 // ---- State ----------------------------------------------------------------
 
