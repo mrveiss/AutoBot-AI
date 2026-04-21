@@ -17,7 +17,7 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class SeqLogForwarder:
 
         # Seq log format
         log_entry = {
-            "@t": datetime.utcnow().isoformat() + "Z",
+            "@t": datetime.now(timezone.utc).isoformat(),
             "@l": level,
             "@mt": message,
             "Source": source,

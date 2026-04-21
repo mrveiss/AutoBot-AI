@@ -12,7 +12,7 @@ import os
 import platform
 import socket
 import subprocess  # nosec B404 - required for systemctl interaction
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import psutil
@@ -53,7 +53,7 @@ class HealthCollector:
     def collect(self) -> Dict:
         """Collect all health metrics."""
         health = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "hostname": self.hostname,
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,
