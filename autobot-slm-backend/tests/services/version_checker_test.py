@@ -6,7 +6,7 @@ Tests for Background Version Checker (Issue #741).
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -78,7 +78,7 @@ class TestVersionCheckTask:
                             "has_update": False,
                             "local_commit": "abc123",
                             "remote_commit": "abc123",
-                            "last_fetch": datetime.utcnow().isoformat(),
+                            "last_fetch": datetime.now(timezone.utc).isoformat(),
                         }
                     )
                     mock_get_tracker.return_value = mock_tracker
@@ -114,7 +114,7 @@ class TestVersionCheckTask:
                             "has_update": False,
                             "local_commit": "abc123",
                             "remote_commit": "abc123",
-                            "last_fetch": datetime.utcnow().isoformat(),
+                            "last_fetch": datetime.now(timezone.utc).isoformat(),
                         }
                     )
                     mock_get_tracker.return_value = mock_tracker
@@ -181,7 +181,7 @@ class TestVersionCheckTask:
                         "has_update": False,
                         "local_commit": "abc123",
                         "remote_commit": "abc123",
-                        "last_fetch": datetime.utcnow().isoformat(),
+                        "last_fetch": datetime.now(timezone.utc).isoformat(),
                     },
                 ]
             )
@@ -212,7 +212,7 @@ class TestVersionCheckTask:
                                 "has_update": True,
                                 "local_commit": "abc123",
                                 "remote_commit": "def456",
-                                "last_fetch": datetime.utcnow().isoformat(),
+                                "last_fetch": datetime.now(timezone.utc).isoformat(),
                             }
                         )
                         mock_get_tracker.return_value = mock_tracker

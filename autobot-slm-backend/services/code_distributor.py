@@ -13,7 +13,7 @@ import io
 import logging
 import os
 import tarfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -100,7 +100,7 @@ class CodeDistributor:
                 tar.add(agent_path, arcname="agent")
 
                 # Create and add version.json
-                built_at = datetime.utcnow().isoformat()
+                built_at = datetime.now(timezone.utc).isoformat()
                 version_content = f'{{"commit": "{commit_hash}", "built_at": "{built_at}"}}'
                 version_bytes = version_content.encode("utf-8")
                 version_info = tarfile.TarInfo(name="version.json")
@@ -298,7 +298,7 @@ class CodeDistributor:
         """
         version_json = (
             f'{{"commit": "{commit_hash}", '
-            f'"synced_at": "{datetime.utcnow().isoformat()}", '
+            f'"synced_at": "{datetime.now(timezone.utc).isoformat()}", '
             f'"source": "fleet-sync"}}'
         )
         version_cmd = self._build_ssh_command(ssh_port)

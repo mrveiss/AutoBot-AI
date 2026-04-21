@@ -24,7 +24,7 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -190,7 +190,7 @@ class ComprehensiveLogAggregator:
             properties = {}
 
         log_entry = {
-            "@t": datetime.utcnow().isoformat() + "Z",
+            "@t": datetime.now(timezone.utc).isoformat(),
             "@l": level,
             "@mt": message,
             "Source": source,
@@ -417,7 +417,7 @@ class ComprehensiveLogAggregator:
             level="Information",
             source="LogAggregator",
             properties={
-                "StartupTime": datetime.utcnow().isoformat(),
+                "StartupTime": datetime.now(timezone.utc).isoformat(),
                 "LogType": "System",
                 "Event": "Startup",
             },
@@ -439,7 +439,7 @@ class ComprehensiveLogAggregator:
                 level=level,
                 source="LogAggregator-Test",
                 properties={
-                    "TestRun": datetime.utcnow().isoformat(),
+                    "TestRun": datetime.now(timezone.utc).isoformat(),
                     "LogType": "Test",
                 },
             )

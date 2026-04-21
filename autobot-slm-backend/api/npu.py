@@ -8,7 +8,7 @@ Endpoints for managing NPU worker nodes and load balancing.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -195,7 +195,7 @@ async def trigger_npu_detection(
 
     # Query the NPU worker health endpoint (Issue #813)
     capabilities, error_msg = await _detect_npu_capabilities(node.ip_address, node.ssh_port or 8081)
-    result_data = {"last_health_check": datetime.utcnow().isoformat()}
+    result_data = {"last_health_check": datetime.now(timezone.utc).isoformat()}
     if capabilities:
         result_data.update(detection_status="completed", capabilities=capabilities.model_dump())
     else:

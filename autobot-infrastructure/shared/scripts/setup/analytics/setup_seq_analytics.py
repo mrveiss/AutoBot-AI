@@ -21,7 +21,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -293,7 +293,7 @@ class SeqAnalyticsSetup:
 
     def _build_test_log_entries(self):
         """Build test log entries for analytics verification (#1792)."""
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat()
         base = {"Application": "AutoBot"}
 
         def _entry(level, message, source, **extra):

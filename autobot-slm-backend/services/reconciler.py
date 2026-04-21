@@ -13,7 +13,7 @@ import asyncio
 import logging
 import ssl
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy import select
@@ -917,7 +917,7 @@ class ReconcilerService:
                 **(deployment.extra_data or {}),
                 "auto_rollback_attempted": True,
                 "auto_rollback_reason": f"Node status: {node.status}",
-                "auto_rollback_time": datetime.utcnow().isoformat(),
+                "auto_rollback_time": datetime.now(timezone.utc).isoformat(),
             }
 
             # Remove deployed roles from node

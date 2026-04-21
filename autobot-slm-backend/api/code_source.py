@@ -12,7 +12,7 @@ import logging
 import os
 import tarfile
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -483,7 +483,7 @@ async def _broadcast_commit_notification(notification: CodeNotification, outdate
                     "message": notification.message,
                     "node_id": notification.node_id,
                     "outdated_nodes": outdated_count,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             }
         )

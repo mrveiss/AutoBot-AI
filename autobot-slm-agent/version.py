@@ -9,7 +9,7 @@ Manages version tracking for the SLM agent code.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -102,7 +102,7 @@ class AgentVersion:
         version_info = {
             "commit": commit,
             "built_at": built_at.isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if extra_data:
