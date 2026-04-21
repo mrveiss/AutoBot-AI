@@ -185,3 +185,42 @@ def test_parse_utc_iso_invalid_raises() -> None:
     import pytest
     with pytest.raises(ValueError):
         parse_utc_iso("not-a-date")
+
+
+def test_parse_utc_iso_non_string_raises_value_error() -> None:
+    """#5464: non-str input raises ValueError — NOT AttributeError.
+
+    Pre-#5464, ``parse_utc_iso(123)`` raised ``AttributeError`` from the
+    inner ``.replace()`` call, escaping the common
+    ``except (ValueError, TypeError)`` adopter pattern. The 13+ call sites
+    across PRs #5377, #5414, #5434, #5453, #5462 all kept the migration-
+    preserving exception handler expecting compatibility with
+    ``datetime.fromisoformat``'s ``TypeError``/``ValueError`` surface.
+
+    Post-#5464, the isinstance guard raises ``ValueError`` so adopters'
+    handlers catch it uniformly.
+    """
+    import pytest
+
+    for bad_input in (123, 12.5, {"a": 1}, [1, 2, 3], None):
+        with pytest.raises(ValueError, match="expected str"):
+            parse_utc_iso(bad_input)  # type: ignore[arg-type]
+
+
+def test_parse_utc_iso_non_string_does_not_raise_attribute_error() -> None:
+    """Explicit regression guard: the failure mode must NOT be AttributeError.
+
+    This is the exact escape path that prompted #5464 — if the isinstance
+    check is ever removed, this test fails with AttributeError leaking.
+    """
+    import pytest
+
+    try:
+        parse_utc_iso(123)  # type: ignore[arg-type]
+    except AttributeError:
+        pytest.fail(
+            "parse_utc_iso must not raise AttributeError on non-str input "
+            "(that's the #5464 bug — adopters' except clauses don't catch it)"
+        )
+    except ValueError:
+        pass  # expected

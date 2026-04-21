@@ -90,7 +90,17 @@ def parse_utc_iso(value: str) -> datetime:
     when the input string may originate from external sources or legacy
     producers. Avoids the ``TypeError: can't compare offset-naive and
     offset-aware datetimes`` class flagged in #5350.
+
+    Raises ``ValueError`` on non-string or malformed input — matches the
+    ``datetime.fromisoformat`` exception surface adopters expect (#5464).
+    Non-string inputs previously escaped as ``AttributeError`` from the
+    inner ``.replace()`` call, slipping past the common
+    ``except (ValueError, TypeError)`` adopter pattern.
     """
+    if not isinstance(value, str):
+        raise ValueError(
+            f"parse_utc_iso: expected str, got {type(value).__name__}"
+        )
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
