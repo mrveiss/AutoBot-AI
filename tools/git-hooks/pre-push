@@ -3,8 +3,8 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# pre-push: enforce Phase 0c (verify before push) + Phase 6 (no duplicate
-# PR for already-merged issue) from the team-implement skill.
+# pre-push: enforce Phase 0c (verify before push + no duplicate PR for
+# already-merged issue) from the batch-implement skill.
 #
 # Issues #5142 (verification mandate) and #5143 (pre-push duplicate check).
 #

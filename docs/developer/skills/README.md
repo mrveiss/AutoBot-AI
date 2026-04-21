@@ -21,10 +21,16 @@ incident.
 
 | File | Role |
 |---|---|
-| `team-implement.md` | Drives `/team-implement <issues>` — parallel multi-issue PR workflow with self-healing retry + Phase 0c verification mandate + Phase 6 amendment safety |
+| `batch-implement.md` | Drives `/batch-implement <issues>` — full implement→review→merge→close→discover loop with self-healing retry, Phase 0c verification mandate, and Phase 0d behavioral grep for extraction PRs |
 
 Other skills (e.g. `commit`, `pr`, `issue`) are not yet mirrored here. Add
 them as they need updates worth reviewing.
+
+`team-implement.md` was consolidated into `batch-implement.md` in #5454 —
+the two skills' scopes overlapped (both did parallel-issue implementation),
+and the methodology rules (Phase 0c, Phase 0d) were silently living in
+the wrong file. Consolidation makes `batch-implement` the single source
+of truth for the end-to-end workflow.
 
 ## Setup (one-time per developer)
 
@@ -47,7 +53,7 @@ directory are picked up on Claude's next read — no resync needed.
 
 ## Skill-authoring guidelines
 
-- One skill = one responsibility. If `team-implement.md` grows past ~700
+- One skill = one responsibility. If `batch-implement.md` grows past ~700
   lines, consider splitting (e.g., extract `pre-merge-validate` into its
   own skill).
 - Use clearly-numbered phase headings (`## Phase 0`, `## Phase 1`, …) so

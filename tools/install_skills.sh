@@ -10,10 +10,25 @@
 # silently refreshed; existing regular files (a previous in-place install)
 # are backed up to *.bak before the symlink is created.
 #
-# Issue #5094.
+# Issues #5094, #5447.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve the canonical primary-checkout root via git-common-dir — this is
+# stable across worktree creation/removal, unlike the script's physical
+# location (which would capture a transient worktree path).
+#
+# git-common-dir returns the primary .git directory for both primary and
+# worktree checkouts (e.g. /home/user/repo/.git for both cases).
+# Its parent directory is the canonical repo root.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! GIT_COMMON_DIR="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null)"; then
+  echo "ERROR: not inside a git repository (no .git found from $SCRIPT_DIR)" >&2
+  exit 1
+fi
+# Normalize to absolute path (git-common-dir can return a relative path)
+GIT_COMMON_DIR="$(cd "$GIT_COMMON_DIR" && pwd)"
+REPO_ROOT="$(dirname "$GIT_COMMON_DIR")"
+echo "Resolved REPO_ROOT: $REPO_ROOT"
 SKILLS_SRC="$REPO_ROOT/docs/developer/skills"
 SKILLS_DEST="$HOME/.claude/skills"
 
@@ -63,5 +78,29 @@ for src_file in "$SKILLS_SRC"/*.md; do
   INSTALLED=$((INSTALLED + 1))
 done
 
+# Clean up stale symlinks for skills that no longer exist in the repo
+# (e.g. after a consolidation like #5454 — team-implement removed).
+# Only touch symlinks that already point to files under $SKILLS_SRC; leave
+# hand-edited local skills alone.
+STALE=0
+for skill_dir in "$SKILLS_DEST"/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_target="$skill_dir/SKILL.md"
+  [ -L "$skill_target" ] || continue
+
+  current="$(readlink "$skill_target")"
+  # Only prune symlinks that resolve into our skills source tree
+  case "$current" in
+    "$SKILLS_SRC"/*)
+      if [ ! -e "$current" ]; then
+        echo "PRUNE $(basename "$skill_dir")(dangling -> $current)"
+        rm "$skill_target"
+        rmdir "$skill_dir" 2>/dev/null || true
+        STALE=$((STALE + 1))
+      fi
+      ;;
+  esac
+done
+
 echo ""
-echo "Installed: $INSTALLED  Refreshed: $SKIPPED  Backed up: $BACKED_UP"
+echo "Installed: $INSTALLED  Refreshed: $SKIPPED  Backed up: $BACKED_UP  Pruned: $STALE"
