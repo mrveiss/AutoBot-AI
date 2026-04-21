@@ -81,6 +81,10 @@ const mockController = {
   updateSessionTitle: vi.fn(),
   getSessionFacts: vi.fn().mockResolvedValue([]),
   preserveSessionFacts: vi.fn().mockResolvedValue({}),
+  // #5366 / Issue #4431: sync flow pushes local-only sessions before
+  // reconciling with backend. Must be mocked or `initializeChatInterface`
+  // throws `controller.pushLocalOnlySessions is not a function`.
+  pushLocalOnlySessions: vi.fn().mockResolvedValue(undefined),
   // Message handling
   sendMessage: vi.fn().mockResolvedValue(undefined),
   // Settings
@@ -234,7 +238,12 @@ describe('ChatInterface', () => {
 
       // i18n keys render as-is since test i18n has empty messages
       await waitFor(() => {
-        expect(screen.getByText('chat.sidebar.chatHistory')).toBeInTheDocument()
+        // #5366: ChatSidebar renders the label twice (mobile + desktop
+        // variants) — both present in jsdom because CSS media queries
+        // (`lg:hidden` / `hidden lg:flex`) don't apply. Use getAllByText
+        // so the assertion succeeds regardless of which variant the
+        // viewport reports.
+        expect(screen.getAllByText('chat.sidebar.chatHistory').length).toBeGreaterThan(0)
       })
       expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
       expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
@@ -246,7 +255,12 @@ describe('ChatInterface', () => {
       renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
-        expect(screen.getByText('chat.sidebar.chatHistory')).toBeInTheDocument()
+        // #5366: ChatSidebar renders the label twice (mobile + desktop
+        // variants) — both present in jsdom because CSS media queries
+        // (`lg:hidden` / `hidden lg:flex`) don't apply. Use getAllByText
+        // so the assertion succeeds regardless of which variant the
+        // viewport reports.
+        expect(screen.getAllByText('chat.sidebar.chatHistory').length).toBeGreaterThan(0)
       })
 
       // The collapse button aria-label depends on sidebarCollapsed state
@@ -519,7 +533,12 @@ describe('ChatInterface', () => {
 
       await waitFor(() => {
         // Should handle empty state - sidebar title still renders
-        expect(screen.getByText('chat.sidebar.chatHistory')).toBeInTheDocument()
+        // #5366: ChatSidebar renders the label twice (mobile + desktop
+        // variants) — both present in jsdom because CSS media queries
+        // (`lg:hidden` / `hidden lg:flex`) don't apply. Use getAllByText
+        // so the assertion succeeds regardless of which variant the
+        // viewport reports.
+        expect(screen.getAllByText('chat.sidebar.chatHistory').length).toBeGreaterThan(0)
       })
     })
   })
