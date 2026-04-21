@@ -159,6 +159,69 @@ If the issue is closed AND the merged commit supersedes your work: close your lo
 
 ---
 
+## Phase 0d: Behavioral Grep Audit (NEW — #5372, extraction PRs only)
+
+**Applies only to "extract a primitive / composable" issues** — PRs that pull a duplicated pattern from N sites into a shared utility + migrate those sites.
+
+**The problem this prevents:** The original issue body enumerates sites by grepping for a **symbol** (e.g. `handleKeydown`). Between filing and implementation, the set of sites that share the *behavior* (e.g. `key === 'Tab' && shiftKey && ...`) drifts from that enumeration:
+
+- **Over-counted** (some listed sites already migrated via sibling PRs)
+- **Under-counted** (other sites have the same behavior under a different symbol name, or were added to the codebase after the issue was filed)
+
+**This is not hypothetical.** Four instances this session:
+
+| Issue | Listed sites | Real sites | Gap type |
+|---|---|---|---|
+| #5247 | 5 | 2 | Over-count (3 already migrated) |
+| #5283 | 4 (explicit defer of BaseTable) | 5 | BaseTable was late-added |
+| #5371 | 8 | 10 (#5410 added 2) | Under-count — grep missed two different-symbol dialogs |
+| #5411 | 11 | 13 (#5410 doubled up) | Under-count — grep used symbol not behavior |
+
+Miss rate: **50% of extraction PRs this session shipped an incomplete migration.** Every miss required a follow-up PR.
+
+### The rule
+
+For extraction PRs, the PR description **must** include a **"Behavioral grep audit"** section with before / after hit counts:
+
+```markdown
+## Behavioral grep audit
+
+Before:
+\`\`\`bash
+$ grep -rnE "key\s*[=!]==\s*['\"]Tab|shiftKey\s*&&.*focus" autobot-frontend/src --include="*.vue"
+# 3 hits — BaseModal, HostSelectionDialog, EntityDetail
+\`\`\`
+
+After:
+\`\`\`bash
+$ <same grep>
+# 0 hits — all sites migrated to useFocusTrap
+\`\`\`
+```
+
+**Three rules for the regex:**
+1. **Match the behavior, not the symbol.** `handleKeydown` can be renamed; `key === 'Tab'` cannot.
+2. **Cast wider than the issue's enumeration.** If the issue listed 3 sites, grep for the pattern across *the whole relevant tree* to surface sites the filer missed.
+3. **The after-count must be 0** (or explicitly documented non-zero with a follow-up issue filed). Non-zero with no follow-up blocks merge.
+
+**When in doubt, grep two ways:**
+- A loose regex covering the pattern's core behavior
+- A tight regex for a unique fingerprint (e.g. a specific CSS selector string, an unusual attribute combination)
+
+If the two return different counts, investigate the delta — it's often the miss.
+
+### What to write in the PR
+
+A standard "Behavioral grep audit" block, as shown above, immediately after the "Summary" section. This is a merge gate — a missing audit section blocks review.
+
+**Concrete examples from merged PRs:**
+- [PR #5343](https://github.com/mrveiss/AutoBot-AI/pull/5343) — useFocusTrap extraction; amended post-merge to include the audit
+- [PR #5390](https://github.com/mrveiss/AutoBot-AI/pull/5390) — 8-dialog a11y sweep
+- [PR #5417](https://github.com/mrveiss/AutoBot-AI/pull/5417) — useInitialFocus + full kit for 2 missed dialogs
+- [PR #5433](https://github.com/mrveiss/AutoBot-AI/pull/5433) — useBodyScrollLock + immediate: true fix
+
+---
+
 ## Phase 1: Create Isolated Worktrees (idempotent)
 
 **For each issue in WORK_QUEUE:**
