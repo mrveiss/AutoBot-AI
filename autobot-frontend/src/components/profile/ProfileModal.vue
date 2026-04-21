@@ -229,6 +229,7 @@ import { usePreferences } from '@/composables/usePreferences'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
 const props = defineProps<{
   isOpen: boolean
@@ -237,8 +238,9 @@ const props = defineProps<{
 const dialogRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 useFocusRestore(toRef(props, 'isOpen'))
+useBodyScrollLock(toRef(props, 'isOpen'))
 const { focusFirst } = useInitialFocus(dialogRef)
-watch(() => props.isOpen, (open) => { if (open) focusFirst() })
+watch(() => props.isOpen, (open) => { if (open) focusFirst() }, { immediate: true })
 
 const emit = defineEmits<{
   close: []

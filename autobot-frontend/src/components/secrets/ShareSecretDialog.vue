@@ -14,6 +14,7 @@ import { useBatchSelection } from '@/composables/useBatchSelection'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
 const { t } = useI18n()
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
@@ -39,8 +40,9 @@ const sharing = ref(false)
 const dialogRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 useFocusRestore(toRef(props, 'modelValue'))
+useBodyScrollLock(toRef(props, 'modelValue'))
 const { focusFirst } = useInitialFocus(dialogRef)
-watch(() => props.modelValue, (open) => { if (open) focusFirst() })
+watch(() => props.modelValue, (open) => { if (open) focusFirst() }, { immediate: true })
 
 // Available participants (excluding self)
 const participants = computed(() => sessionPresence.value)

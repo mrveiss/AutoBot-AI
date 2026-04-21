@@ -136,6 +136,7 @@ import {
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { getEntityTypeColor as getTypeColor } from '../constants'
 import RelationshipViewer from './RelationshipViewer.vue'
 
@@ -151,6 +152,8 @@ defineEmits<{
 const panelRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(panelRef)
 useFocusRestore()
+// Mount-lifecycle = always-active. Component is v-if'd by parent on open/close.
+useBodyScrollLock(ref(true))
 const { focusFirst } = useInitialFocus(panelRef)
 
 const propertyEntries = computed(() => {

@@ -275,6 +275,7 @@ import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -378,8 +379,9 @@ const toolApprovalDialogRef = ref<HTMLElement | null>(null)
 const isToolApprovalOpen = computed(() => pendingToolApproval.value !== null)
 const { onKeydown: onToolApprovalKeydown } = useFocusTrap(toolApprovalDialogRef)
 useFocusRestore(isToolApprovalOpen)
+useBodyScrollLock(isToolApprovalOpen)
 const { focusFirst: focusToolApprovalFirst } = useInitialFocus(toolApprovalDialogRef)
-watch(isToolApprovalOpen, (open) => { if (open) focusToolApprovalFirst() })
+watch(isToolApprovalOpen, (open) => { if (open) focusToolApprovalFirst() }, { immediate: true })
 
 const onToolApproved = async (comment?: string): Promise<void> => {
   _stopCountdown()

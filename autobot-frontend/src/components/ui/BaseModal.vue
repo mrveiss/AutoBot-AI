@@ -3,7 +3,6 @@
     <Transition
       name="modal-fade"
       @after-enter="onAfterEnter"
-      @after-leave="onAfterLeave"
     >
       <div
         v-if="modelValue"
@@ -53,11 +52,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, useId, toRef } from 'vue'
+import { ref, computed, useId, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import Icon from './Icon.vue'
 
 /**
@@ -129,6 +129,7 @@ const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 // onAfterEnter focuses the first focusable, so the saved reference is
 // the trigger element (correct).
 useFocusRestore(toRef(props, 'modelValue'))
+useBodyScrollLock(toRef(props, 'modelValue'))
 
 const { focusFirst } = useInitialFocus(dialogRef)
 
@@ -159,22 +160,8 @@ const handleOverlayClick = () => {
   }
 }
 
-// Focus trap implementation — focus restore handled by useFocusRestore above.
-const onAfterEnter = async () => {
-  await focusFirst()
-  // Lock body scroll
-  document.body.style.overflow = 'hidden'
-}
-
-const onAfterLeave = () => {
-  // Unlock body scroll (focus restore handled by useFocusRestore watcher)
-  document.body.style.overflow = ''
-}
-
-// Cleanup on unmount
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
+// Focus, restore, and scroll-lock all driven by composables above.
+const onAfterEnter = () => focusFirst()
 </script>
 
 <style scoped>
