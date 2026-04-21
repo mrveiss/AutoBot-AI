@@ -294,21 +294,9 @@ def test_non_python_argv_silently_skipped(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# .worktrees exclusion (#5394) — full-repo scan must skip parallel worktrees
+# .worktrees exclusion (#5394) + full-scan directory exclusions live in
+# tools/lint/_scan_helpers_test.py after #5449 extracted the shared helper.
 # ---------------------------------------------------------------------------
-
-
-def test_worktrees_directory_excluded_from_full_scan(tmp_path: Path) -> None:
-    # Simulate the repo layout: .worktrees/issue-XXXX/ contains a violation
-    # that would fire if scanned. Full-scan mode (no argv) must skip it.
-    worktree_file = tmp_path / ".worktrees" / "issue-9999" / "leaked.py"
-    worktree_file.parent.mkdir(parents=True)
-    worktree_file.write_text(
-        "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",
-        encoding="utf-8",
-    )
-    files = list(hook._iter_target_files([], tmp_path))
-    assert worktree_file not in files, ".worktrees/ must be excluded from full scan"
 
 
 # ---------------------------------------------------------------------------
