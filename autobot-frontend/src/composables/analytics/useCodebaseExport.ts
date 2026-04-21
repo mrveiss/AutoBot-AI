@@ -7,6 +7,7 @@
  * Author: mrveiss
  */
 import type { Ref } from 'vue'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
 
@@ -375,38 +376,67 @@ export function useCodebaseExport(deps: {
 }) {
   /**
    * Export full codebase analysis report (quick or full).
+   *
+   * #5388: routed through `useFetchEndpoint` via the `parseResponse`
+   * hook (#5276) so the `text/markdown` response goes through the
+   * same loading/error/source-scoping pipeline as every other
+   * analytics fetcher. The old hand-rolled try/catch + manual
+   * exportingReport flag + status-string juggling collapses to hooks.
    */
+  let _currentReportType: 'quick' | 'full' = 'quick'
+  const reportEndpoint = useFetchEndpoint<string, string>(
+    {
+      path: '/api/analytics/codebase/report',
+      scopeToSource: true,
+      parseResponse: async (r) => await r.text(),
+      pickData: (raw) => raw,
+      onSuccess: (content) => {
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, '-')
+          .slice(0, 19)
+        _downloadFile(
+          content,
+          `code-analysis-report-${_currentReportType}-${timestamp}.md`,
+          'text/markdown;charset=utf-8',
+        )
+        deps.notify(deps.t('analytics.codebase.notify.reportExported'), 'success')
+        deps.progressStatus.value = deps.t(
+          'analytics.codebase.status.reportExported',
+        )
+      },
+      onError: (msg) => {
+        deps.notify(
+          deps.t('analytics.codebase.notify.reportExportFailed', { error: msg }),
+          'error',
+        )
+        deps.progressStatus.value = deps.t(
+          'analytics.codebase.status.reportExportFailed',
+        )
+      },
+      onResponse: async (response) => {
+        // Preserve the original "Status N: <body-text>" error shape.
+        const text = await response.text().catch(() => '')
+        return `Status ${response.status}${text ? `: ${text}` : ''}`
+      },
+      label: 'Report export',
+    },
+    { withSourceId: deps.withSourceId },
+  )
+
+  // The Vue template binds to `deps.exportingReport` (component-owned).
+  // Keep the bridge so consumers see the single flag they already wire.
   const exportReport = async (quick: boolean = true): Promise<void> => {
+    _currentReportType = quick ? 'quick' : 'full'
     deps.exportingReport.value = true
     deps.progressStatus.value = quick
       ? deps.t('analytics.codebase.status.generatingQuickReport')
       : deps.t('analytics.codebase.status.generatingFullReport')
-
     try {
-      const backendUrl = await deps.getBackendUrl()
-      // #5266: wrap with withSourceId so per-project exports hit the
-      // scoped doc instead of the backend's get_default_source_id() fallback.
-      const url = deps.withSourceId(
-        `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`,
-      )
-      const response = await deps.fetchWithAuth(url, {
-        method: 'GET',
-        headers: { 'Accept': 'text/markdown' },
+      await reportEndpoint.load({
+        format: 'markdown',
+        quick: String(quick),
       })
-      if (!response.ok) {
-        throw new Error(`Status ${response.status}: ${await response.text()}`)
-      }
-      const reportContent = await response.text()
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-      const reportType = quick ? 'quick' : 'full'
-      _downloadFile(reportContent, `code-analysis-report-${reportType}-${timestamp}.md`, 'text/markdown;charset=utf-8')
-      deps.notify(deps.t('analytics.codebase.notify.reportExported'), 'success')
-      deps.progressStatus.value = deps.t('analytics.codebase.status.reportExported')
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error)
-      logger.error('Report export failed:', error)
-      deps.notify(deps.t('analytics.codebase.notify.reportExportFailed', { error: msg }), 'error')
-      deps.progressStatus.value = deps.t('analytics.codebase.status.reportExportFailed')
     } finally {
       deps.exportingReport.value = false
     }
