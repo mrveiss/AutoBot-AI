@@ -650,14 +650,14 @@ class ThreatDetectionEngine:
             expired_sessions = []
 
             for session_id, session_data in self.user_sessions.items():
-                if session_data.get("last_activity", datetime.utcnow()) < cutoff_time:
+                if session_data.get("last_activity", now_utc()) < cutoff_time:
                     expired_sessions.append(session_id)
 
             for session_id in expired_sessions:
                 del self.user_sessions[session_id]
 
             # Reset daily statistics
-            if datetime.utcnow().hour == 0:  # Midnight
+            if now_utc().hour == 0:  # Midnight
                 self.stats["threats_by_category"] = defaultdict(int)
                 self.stats["threats_by_level"] = defaultdict(int)
 
