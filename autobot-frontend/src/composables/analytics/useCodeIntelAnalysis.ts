@@ -138,9 +138,19 @@ export function useCodeIntelAnalysis(
     try {
       // #5365: fire the analyze endpoints so securityFindings,
       // performanceFindings, and redisOptimizations (scores sub-composable)
-      // are populated. The adapter computeds below re-expose them under
+      // are populated. The adapter computeds above re-expose them under
       // the legacy `codeIntel*Findings` names for the panel.
-      await Promise.all([
+      //
+      // #5387: use `Promise.allSettled` so one failing endpoint doesn't
+      // discard the other 4 successful results. `fetched` flags + toast
+      // reflect per-endpoint outcome (all-success / partial / all-fail).
+      const [
+        ,
+        ,
+        securityResult,
+        performanceResult,
+        redisResult,
+      ] = await Promise.allSettled([
         codeIntelAnalyzeCode({ code: rootPath.value }),
         codeIntelGetSuggestions(rootPath.value),
         scores.loadSecurityFindings(),
@@ -148,22 +158,43 @@ export function useCodeIntelAnalysis(
         scores.loadRedisOptimizations(),
       ])
       codeIntelFindingsFetched.value = {
-        security: true,
-        performance: true,
-        redis: true,
+        security: securityResult.status === 'fulfilled',
+        performance: performanceResult.status === 'fulfilled',
+        redis: redisResult.status === 'fulfilled',
       }
-      notify(
-        t('analytics.codebase.notify.codeIntelComplete', {
-          count: codeIntelTotalFindings.value,
-        }),
-        'success',
-      )
-    } catch (e) {
-      logger.error('Code Intelligence analysis failed:', e)
-      notify(
-        t('analytics.codebase.notify.codeIntelFailed'),
-        'error',
-      )
+      const findingFailures = [
+        securityResult,
+        performanceResult,
+        redisResult,
+      ].filter((r) => r.status === 'rejected')
+      if (findingFailures.length === 0) {
+        notify(
+          t('analytics.codebase.notify.codeIntelComplete', {
+            count: codeIntelTotalFindings.value,
+          }),
+          'success',
+        )
+      } else if (findingFailures.length < 3) {
+        // Partial success: surface a warning so the user knows which
+        // tabs have data. Successful arrays still render via the
+        // computed adapters (codeIntel*Findings above).
+        logger.warn(
+          'Code Intelligence analysis: partial failure',
+          findingFailures.map((r) => (r as PromiseRejectedResult).reason),
+        )
+        notify(
+          t('analytics.codebase.notify.codeIntelPartial', {
+            count: codeIntelTotalFindings.value,
+          }),
+          'warning',
+        )
+      } else {
+        logger.error(
+          'Code Intelligence analysis failed:',
+          findingFailures.map((r) => (r as PromiseRejectedResult).reason),
+        )
+        notify(t('analytics.codebase.notify.codeIntelFailed'), 'error')
+      }
     } finally {
       codeIntelFindingsLoading.value = false
     }
