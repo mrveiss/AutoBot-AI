@@ -274,6 +274,14 @@ async def get_knowledge_stats(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit ops-visible
+        # counter + warning so operators see the degradation.
+        logger.warning("get_knowledge_stats: KB uninitialized - returning offline stats")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="stats", reason="kb_uninit"
+        ).inc()
         return {
             "total_documents": 0,
             "total_chunks": 0,
@@ -341,6 +349,15 @@ async def get_knowledge_stats_basic(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_stats_basic: KB uninitialized - returning offline stats"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="stats_basic", reason="kb_uninit"
+        ).inc()
         return KnowledgeStatsBasic(
             status="offline",
             total_facts=0,
@@ -445,15 +462,17 @@ async def get_main_categories(
         redis_client is not None,
     )
     if redis_client is None:
-        # Issue #5319: surface kb_connected=false as a log line + Prometheus
-        # counter so operators see the outage, not just the frontend banner.
+        # Issue #5319 / #5407: surface kb_connected=false as a log line +
+        # Prometheus counter so operators see the outage, not just the
+        # frontend banner.  reason="redis_down" - KB instance exists but
+        # its Redis connection is unreachable (infra page).
         logger.warning(
             "KB categories returning kb_connected=false - Redis unreachable"
         )
-        from knowledge.metrics import autobot_kb_redis_unreachable_total
+        from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_redis_unreachable_total.labels(
-            endpoint="categories_main"
+        autobot_kb_degradation_total.labels(
+            endpoint="categories_main", reason="redis_down"
         ).inc()
 
     category_counts = {
@@ -498,6 +517,15 @@ async def get_knowledge_categories(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_categories: KB uninitialized - returning empty list"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="categories", reason="kb_uninit"
+        ).inc()
         return KnowledgeCategoriesResponse(categories=[], total=0)
 
     # Get stats - await async method
@@ -664,6 +692,13 @@ async def add_text_to_knowledge(
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_text_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="add_text", reason="kb_uninit"
+        ).inc()
         raise InternalError(
             "Knowledge base not initialized - please check logs for errors"
         )
@@ -916,6 +951,13 @@ async def add_facts_to_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_facts_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="facts_add", reason="kb_uninit"
+        ).inc()
         raise InternalError(
             "Knowledge base not initialized - please check logs for errors"
         )
@@ -1003,6 +1045,13 @@ async def add_url_to_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("add_url_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="url_add", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     try:
@@ -1180,6 +1229,13 @@ async def upload_file_to_knowledge(
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("upload_file_to_knowledge: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="upload", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1370,6 +1426,13 @@ async def ingest_audio_url(
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("ingest_audio_url: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audio", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     logger.info(
@@ -1420,6 +1483,13 @@ async def upload_audio_file(
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized - emit counter before 500.
+        logger.warning("upload_audio_file: KB uninitialized - raising 500")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="audio_upload", reason="kb_uninit"
+        ).inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1499,6 +1569,15 @@ async def get_knowledge_health(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_knowledge_health: KB uninitialized - returning unhealthy status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="health", reason="kb_uninit"
+        ).inc()
         return {
             "status": "unhealthy",
             "initialized": False,
@@ -1580,6 +1659,13 @@ async def get_knowledge_entries(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("get_knowledge_entries: KB uninitialized - returning empty list")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="entries", reason="kb_uninit"
+        ).inc()
         return _empty_entries_response(message="Knowledge base not initialized")
 
     logger.info("Getting knowledge entries: limit=%s, cursor=%s", limit, cursor)
@@ -1681,6 +1767,13 @@ async def get_detailed_stats(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("get_detailed_stats: KB uninitialized - returning offline stats")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="detailed_stats", reason="kb_uninit"
+        ).inc()
         return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
@@ -1774,6 +1867,15 @@ async def get_man_pages_summary(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "get_man_pages_summary: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_summary", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1846,6 +1948,15 @@ async def initialize_machine_knowledge(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "initialize_machine_knowledge: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="machine_knowledge_initialize", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1889,6 +2000,15 @@ async def integrate_man_pages(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning(
+            "integrate_man_pages: KB uninitialized - returning error status"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_integrate", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1925,6 +2045,13 @@ async def search_man_pages(
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("search_man_pages: KB uninitialized - returning empty results")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="man_pages_search", reason="kb_uninit"
+        ).inc()
         return {"results": [], "total_results": 0, "query": query}
 
     logger.info("Searching man pages: '%s' (limit=%s)", query, limit)
@@ -1986,6 +2113,13 @@ async def clear_all_knowledge(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized.
+        logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="clear_all", reason="kb_uninit"
+        ).inc()
         return {
             "status": "error",
             "items_removed": 0,
@@ -2229,6 +2363,13 @@ async def get_facts_by_category(
     """
     kb = await get_or_create_knowledge_base(req.app)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_facts_by_category: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="facts_by_category", reason="kb_uninit"
+        ).inc()
         _raise_kb_unavailable()
 
     cached_result, cache_key = await _check_facts_cache(kb, category, limit)
@@ -2668,6 +2809,13 @@ async def browse_documentation(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("browse_documentation: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_browse", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2721,6 +2869,15 @@ async def get_documentation_categories(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning(
+            "get_documentation_categories: KB uninitialized - raising 503"
+        )
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_categories", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2782,6 +2939,13 @@ async def get_documentation_stats(
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
+        # Issue #5407: KB instance not initialized - emit counter before 503.
+        logger.warning("get_documentation_stats: KB uninitialized - raising 503")
+        from knowledge.metrics import autobot_kb_degradation_total
+
+        autobot_kb_degradation_total.labels(
+            endpoint="docs_stats", reason="kb_uninit"
+        ).inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     all_docs = await _get_indexed_docs_from_redis(kb)
