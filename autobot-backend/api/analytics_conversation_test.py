@@ -1,16 +1,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Regression tests for analytics_conversation timestamp helpers (#5420).
+"""Regression tests for analytics_conversation timestamp helpers (#5420, #5427).
 
-PR #5414 (#5398) migrated `_parse_session_timestamp` from
+PR #5414 (#5398) migrated the parser from
 `datetime.fromisoformat(s.replace("Z", "+00:00"))` to `parse_utc_iso(s)`,
 making the parsed value always tz-aware. The downstream consumer
 `_is_session_in_range` still stripped tzinfo with `.replace(tzinfo=None)`,
-which produced `naive >= aware` and TypeError'd unconditionally.
+producing `naive >= aware` TypeError unconditionally (#5420).
 
-This test pins the fix: both `ts` and `cutoff` are aware, comparison
-must work cleanly without TypeError.
+#5427 also deleted the duplicate `_parse_session_timestamp` wrapper —
+only `_parse_timestamp` remains. These tests exercise the unified helper.
 """
 from __future__ import annotations
 
@@ -18,28 +18,27 @@ from datetime import datetime, timedelta, timezone
 
 from api.analytics_conversation import (
     _is_session_in_range,
-    _parse_session_timestamp,
     _parse_timestamp,
 )
 
 
-def test_parse_session_timestamp_returns_aware_for_offset_input() -> None:
+def test_parse_timestamp_returns_aware_for_offset_input() -> None:
     """+00:00 input → aware datetime."""
-    parsed = _parse_session_timestamp("2026-04-20T12:00:00+00:00")
+    parsed = _parse_timestamp("2026-04-20T12:00:00+00:00")
     assert parsed is not None
     assert parsed.tzinfo is not None
 
 
-def test_parse_session_timestamp_returns_aware_for_z_suffix() -> None:
+def test_parse_timestamp_returns_aware_for_z_suffix() -> None:
     """Z suffix input → aware datetime (parse_utc_iso handles this)."""
-    parsed = _parse_session_timestamp("2026-04-20T12:00:00Z")
+    parsed = _parse_timestamp("2026-04-20T12:00:00Z")
     assert parsed is not None
     assert parsed.tzinfo is not None
 
 
-def test_parse_session_timestamp_returns_aware_for_naive_input() -> None:
+def test_parse_timestamp_returns_aware_for_naive_input() -> None:
     """Naive input → aware datetime (parse_utc_iso assumes UTC)."""
-    parsed = _parse_session_timestamp("2026-04-20T12:00:00")
+    parsed = _parse_timestamp("2026-04-20T12:00:00")
     assert parsed is not None
     assert parsed.tzinfo is not None, (
         "parse_utc_iso must promote naive input to aware to keep "
@@ -47,20 +46,20 @@ def test_parse_session_timestamp_returns_aware_for_naive_input() -> None:
     )
 
 
-def test_parse_session_timestamp_returns_passthrough_for_datetime_object() -> None:
+def test_parse_timestamp_returns_passthrough_for_datetime_object() -> None:
     """Datetime object input is returned unchanged (existing contract)."""
     dt = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
-    assert _parse_session_timestamp(dt) is dt
+    assert _parse_timestamp(dt) is dt
 
 
-def test_parse_session_timestamp_returns_none_for_falsy_input() -> None:
-    assert _parse_session_timestamp(None) is None
-    assert _parse_session_timestamp("") is None
+def test_parse_timestamp_returns_none_for_falsy_input() -> None:
+    assert _parse_timestamp(None) is None
+    assert _parse_timestamp("") is None
 
 
-def test_parse_session_timestamp_returns_none_on_invalid_input() -> None:
+def test_parse_timestamp_returns_none_on_invalid_input() -> None:
     """Malformed string returns None (existing contract)."""
-    assert _parse_session_timestamp("not-a-date") is None
+    assert _parse_timestamp("not-a-date") is None
 
 
 def test_is_session_in_range_aware_vs_aware_no_typeerror() -> None:
@@ -109,16 +108,3 @@ def test_is_session_in_range_uses_timestamp_fallback() -> None:
     cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=24)
     session = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
     assert _is_session_in_range(session, cutoff) is True
-
-
-def test_parse_timestamp_returns_aware_for_offset_input() -> None:
-    """Sibling helper _parse_timestamp also produces aware via parse_utc_iso."""
-    parsed = _parse_timestamp("2026-04-20T12:00:00+00:00")
-    assert parsed is not None
-    assert parsed.tzinfo is not None
-
-
-def test_parse_timestamp_returns_passthrough_for_datetime_object() -> None:
-    """Datetime object input returned unchanged."""
-    dt = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
-    assert _parse_timestamp(dt) is dt
