@@ -19,7 +19,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from encryption_service import encrypt_data, is_encryption_enabled
 
 # Configure logging
@@ -271,7 +271,7 @@ class SecretsMigrator:
             metadata = {}
 
         metadata["owner"] = owner_id
-        metadata["migrated_at"] = datetime.utcnow().isoformat()
+        metadata["migrated_at"] = utc_timestamp()
         await self.redis_client.hset(key, "metadata", json.dumps(metadata))
 
         # Register in user's secrets index

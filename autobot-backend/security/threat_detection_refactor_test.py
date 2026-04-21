@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from security.enterprise.threat_detection import (
     AnalysisContext,
     EventHistory,
@@ -32,7 +33,7 @@ def sample_event():
         "source_ip": "192.168.1.100",
         "action": "api_request",
         "resource": "/api/users",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_timestamp(),
         "outcome": "success",
         "details": {
             "command": "ls",
@@ -48,7 +49,7 @@ def sample_event():
 @pytest.fixture
 def sample_events_list():
     """Create a list of sample events"""
-    base_time = datetime.utcnow()
+    base_time = now_utc()
     events = []
 
     # Create variety of events
@@ -83,7 +84,7 @@ def sample_events_list():
 
     # Add off-hours activity
     for i in range(5):
-        early_morning = datetime.utcnow().replace(hour=3, minute=i)
+        early_morning = now_utc().replace(hour=3, minute=i)
         events.append(
             {
                 "user_id": "test_user",
@@ -132,7 +133,7 @@ class TestSecurityEvent:
             "user_id": "user1",
             "action": "authentication",
             "outcome": "failure",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
         event = SecurityEvent(raw_event=auth_event)
 
@@ -144,7 +145,7 @@ class TestSecurityEvent:
         file_event = {
             "user_id": "user1",
             "action": "file_upload",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
         }
         event = SecurityEvent(raw_event=file_event)
 
@@ -165,7 +166,7 @@ class TestEventHistory:
                     "source_ip": "10.0.0.1",
                     "action": "authentication",
                     "outcome": "failure",
-                    "timestamp": (datetime.utcnow() - timedelta(minutes=i)).isoformat(),
+                    "timestamp": (now_utc() - timedelta(minutes=i)).isoformat(),
                 }
             )
 
@@ -202,7 +203,7 @@ class TestEventHistory:
             {
                 "user_id": "other_user",
                 "action": "login",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_timestamp(),
             }
         ]
         events = deque(sample_events_list + other_user_events, maxlen=10000)
@@ -393,7 +394,7 @@ class TestThreatDetectionEngineBackwardCompatibility:
             "source_ip": "10.0.0.1",
             "action": "command",
             "resource": "/bin/bash",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_timestamp(),
             "outcome": "success",
             "details": {"command": "rm", "args": "-rf /"},
         }
@@ -416,7 +417,7 @@ class TestThreatDetectionEngineBackwardCompatibility:
                 "source_ip": "10.0.0.1",
                 "action": "authentication",
                 "resource": "login",
-                "timestamp": (datetime.utcnow() - timedelta(minutes=i)).isoformat(),
+                "timestamp": (now_utc() - timedelta(minutes=i)).isoformat(),
                 "outcome": "failure",
                 "details": {},
             }

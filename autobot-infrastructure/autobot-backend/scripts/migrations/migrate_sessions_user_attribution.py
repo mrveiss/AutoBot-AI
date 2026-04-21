@@ -18,7 +18,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -27,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -172,11 +172,11 @@ class SessionMigrator:
 
             session_data["metadata"]["owner"] = owner_id
             session_data["metadata"]["user_id"] = owner_id
-            session_data["metadata"]["migrated_at"] = datetime.utcnow().isoformat()
+            session_data["metadata"]["migrated_at"] = utc_timestamp()
 
             if "created_at" not in session_data:
                 # Use lastModified if available, else now
-                created_at = session_data.get("lastModified", datetime.utcnow().isoformat())
+                created_at = session_data.get("lastModified", utc_timestamp())
                 session_data["created_at"] = created_at
 
             # Generate rollback SQL
