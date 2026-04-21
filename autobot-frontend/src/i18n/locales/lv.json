@@ -1843,6 +1843,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "Kodētas vērtības",
+      "values": "vērtības",
+      "totalValues": "Vērtības kopā",
+      "highLabel": "Augsts",
+      "mediumLabel": "Vidējs",
+      "lowLabel": "Zems",
+      "uniqueTypes": "Unikāli tipi",
+      "variable": "Mainīgais",
+      "value": "Vērtība",
+      "suggestedEnvVar": "Ieteiktais vides mainīgais",
+      "showingOf": "Rādīts {shown} no {total}",
+      "emptyMessage": "Kodētas vērtības nav atrastas",
+      "severityGroups": {
+        "high": "Augsta nopietnība",
+        "medium": "Vidēja nopietnība",
+        "low": "Zema nopietnība"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",

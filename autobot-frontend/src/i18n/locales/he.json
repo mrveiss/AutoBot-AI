@@ -1382,6 +1382,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "ערכים קשיחים",
+      "values": "ערכים",
+      "totalValues": "סך הערכים",
+      "highLabel": "גבוה",
+      "mediumLabel": "בינוני",
+      "lowLabel": "נמוך",
+      "uniqueTypes": "סוגים ייחודיים",
+      "variable": "משתנה",
+      "value": "ערך",
+      "suggestedEnvVar": "משתנה סביבה מוצע",
+      "showingOf": "מציג {shown} מתוך {total}",
+      "emptyMessage": "לא זוהו ערכים קשיחים",
+      "severityGroups": {
+        "high": "חומרה גבוהה",
+        "medium": "חומרה בינונית",
+        "low": "חומרה נמוכה"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",

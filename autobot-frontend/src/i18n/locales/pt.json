@@ -1843,6 +1843,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "Valores codificados",
+      "values": "valores",
+      "totalValues": "Total de valores",
+      "highLabel": "Alto",
+      "mediumLabel": "Médio",
+      "lowLabel": "Baixo",
+      "uniqueTypes": "Tipos únicos",
+      "variable": "Variável",
+      "value": "Valor",
+      "suggestedEnvVar": "Variável de ambiente sugerida",
+      "showingOf": "Mostrando {shown} de {total}",
+      "emptyMessage": "Nenhum valor codificado detectado",
+      "severityGroups": {
+        "high": "Gravidade alta",
+        "medium": "Gravidade média",
+        "low": "Gravidade baixa"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",

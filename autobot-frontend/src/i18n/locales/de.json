@@ -1843,6 +1843,25 @@
         "low": "Niedrige Ähnlichkeit"
       }
     },
+    "hardcodes": {
+      "title": "Hartcodierte Werte",
+      "values": "Werte",
+      "totalValues": "Werte insgesamt",
+      "highLabel": "Hoch",
+      "mediumLabel": "Mittel",
+      "lowLabel": "Niedrig",
+      "uniqueTypes": "Eindeutige Typen",
+      "variable": "Variable",
+      "value": "Wert",
+      "suggestedEnvVar": "Vorgeschlagene Umgebungsvariable",
+      "showingOf": "Zeige {shown} von {total}",
+      "emptyMessage": "Keine hartcodierten Werte gefunden",
+      "severityGroups": {
+        "high": "Hohe Priorität",
+        "medium": "Mittlere Priorität",
+        "low": "Niedrige Priorität"
+      }
+    },
     "problems": {
       "title": "Probleme",
       "total": "Gesamt",
