@@ -270,7 +270,7 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
     try:
         # Store snapshot with timestamp-based key
         key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
+        timestamp_score = parse_utc_iso(
             snapshot.timestamp.replace("Z", "+00:00")
         ).timestamp()
 
@@ -301,7 +301,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 
     try:
         key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
-        timestamp_score = datetime.fromisoformat(
+        timestamp_score = parse_utc_iso(
             snapshot.timestamp.replace("Z", "+00:00")
         ).timestamp()
         timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
@@ -323,12 +323,12 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
     """Parse date range to timestamps (Issue #398: extracted)."""
     start_ts = (
-        datetime.fromisoformat(start_date).timestamp()
+        parse_utc_iso(start_date).timestamp()
         if start_date
         else (datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp()
     )
     end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
+        parse_utc_iso(end_date).timestamp()
         if end_date
         else datetime.now(tz=timezone.utc).timestamp()
     )
@@ -756,9 +756,9 @@ def _parse_export_date_range(
     start_date: Optional[str], end_date: Optional[str]
 ) -> tuple:
     """Parse export date range with defaults (Issue #398: extracted)."""
-    start_ts = datetime.fromisoformat(start_date).timestamp() if start_date else 0
+    start_ts = parse_utc_iso(start_date).timestamp() if start_date else 0
     end_ts = (
-        datetime.fromisoformat(end_date).timestamp()
+        parse_utc_iso(end_date).timestamp()
         if end_date
         else datetime.now(tz=timezone.utc).timestamp()
     )
@@ -1059,11 +1059,11 @@ def _generate_demo_timeline(
     TEST ONLY - Not used in production responses (Issue #543).
     """
     start = (
-        datetime.fromisoformat(start_date)
+        parse_utc_iso(start_date)
         if start_date
         else datetime.now(tz=timezone.utc) - timedelta(days=30)
     )
-    end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
+    end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
     step = _get_granularity_step(granularity)
 
     timeline = []
@@ -1288,10 +1288,10 @@ async def trigger_evolution_analysis(
 
         # Parse dates
         start_date = (
-            datetime.fromisoformat(request.start_date) if request.start_date else None
+            parse_utc_iso(request.start_date) if request.start_date else None
         )
         end_date = (
-            datetime.fromisoformat(request.end_date) if request.end_date else None
+            parse_utc_iso(request.end_date) if request.end_date else None
         )
 
         # Run analysis in thread pool to avoid blocking

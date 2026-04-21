@@ -15,7 +15,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 
 class StepStatus(Enum):
@@ -104,12 +104,12 @@ class PlanStep:
             depends_on=data.get("depends_on", []),
             blocks=data.get("blocks", []),
             started_at=(
-                datetime.fromisoformat(data["started_at"])
+                parse_utc_iso(data["started_at"])
                 if data.get("started_at")
                 else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"])
+                parse_utc_iso(data["completed_at"])
                 if data.get("completed_at")
                 else None
             ),
@@ -284,17 +284,17 @@ class ExecutionPlan:
             status=PlanStatus(data.get("status", "planning")),
             current_step_number=data.get("current_step_number", 0),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
+                parse_utc_iso(data["created_at"])
                 if data.get("created_at")
                 else datetime.utcnow()
             ),
             started_at=(
-                datetime.fromisoformat(data["started_at"])
+                parse_utc_iso(data["started_at"])
                 if data.get("started_at")
                 else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"])
+                parse_utc_iso(data["completed_at"])
                 if data.get("completed_at")
                 else None
             ),

@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import yaml
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -209,23 +209,23 @@ class SecurityPolicyManager:
                     policy_data = json.load(f)
 
                 # Convert datetime strings back to objects
-                policy_data["created_at"] = datetime.fromisoformat(
+                policy_data["created_at"] = parse_utc_iso(
                     policy_data["created_at"]
                 )
-                policy_data["updated_at"] = datetime.fromisoformat(
+                policy_data["updated_at"] = parse_utc_iso(
                     policy_data["updated_at"]
                 )
 
                 if policy_data.get("approved_at"):
-                    policy_data["approved_at"] = datetime.fromisoformat(
+                    policy_data["approved_at"] = parse_utc_iso(
                         policy_data["approved_at"]
                     )
                 if policy_data.get("effective_date"):
-                    policy_data["effective_date"] = datetime.fromisoformat(
+                    policy_data["effective_date"] = parse_utc_iso(
                         policy_data["effective_date"]
                     )
                 if policy_data.get("expiry_date"):
-                    policy_data["expiry_date"] = datetime.fromisoformat(
+                    policy_data["expiry_date"] = parse_utc_iso(
                         policy_data["expiry_date"]
                     )
 
