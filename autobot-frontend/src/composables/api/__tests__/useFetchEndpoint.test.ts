@@ -101,3 +101,71 @@ describe('useFetchEndpoint parseResponse hook (#5276)', () => {
     expect(ep.error.value).toContain('500')
   })
 })
+
+describe('useFetchEndpoint fallbackData hook (#5389)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  it('on fetch failure, data.value is set to fallbackData and error stays empty', async () => {
+    mockFetch.mockResolvedValue(mkResponse('err', { ok: false, status: 500 }))
+    const ep = useFetchEndpoint<{ items: string[] }, { items: string[] }>({
+      path: '/api/x',
+      pickData: (r) => r,
+      fallbackData: { items: ['cached'] },
+    })
+    await ep.load()
+    expect(ep.data.value).toEqual({ items: ['cached'] })
+    expect(ep.error.value).toBe('')
+  })
+
+  it('fallbackData factory is called lazily', async () => {
+    mockFetch.mockRejectedValue(new Error('network'))
+    const factory = vi.fn(() => ({ items: ['fresh'] }))
+    const ep = useFetchEndpoint<{ items: string[] }, { items: string[] }>({
+      path: '/api/x',
+      pickData: (r) => r,
+      fallbackData: factory,
+    })
+    await ep.load()
+    expect(factory).toHaveBeenCalledOnce()
+    expect(ep.data.value).toEqual({ items: ['fresh'] })
+  })
+
+  it('onError still fires when fallbackData is provided', async () => {
+    mockFetch.mockRejectedValue(new Error('boom'))
+    const onError = vi.fn()
+    const ep = useFetchEndpoint<string, string>({
+      path: '/api/x',
+      pickData: (r) => r,
+      fallbackData: 'stale',
+      onError,
+    })
+    await ep.load()
+    expect(onError).toHaveBeenCalledWith('boom', expect.any(Error))
+    expect(ep.data.value).toBe('stale')
+    expect(ep.error.value).toBe('')
+  })
+
+  it('without fallbackData, errors behave as before (data=null, error set)', async () => {
+    mockFetch.mockRejectedValue(new Error('boom'))
+    const ep = useFetchEndpoint<string, string>({
+      path: '/api/x',
+      pickData: (r) => r,
+    })
+    await ep.load()
+    expect(ep.data.value).toBe(null)
+    expect(ep.error.value).toBe('boom')
+  })
+
+  it('successful fetch bypasses fallbackData entirely', async () => {
+    mockFetch.mockResolvedValue(mkResponse('{"items": ["live"]}'))
+    const ep = useFetchEndpoint<{ items: string[] }, { items: string[] }>({
+      path: '/api/x',
+      pickData: (r) => r,
+      fallbackData: { items: ['cached'] },
+    })
+    await ep.load()
+    expect(ep.data.value).toEqual({ items: ['live'] })
+  })
+})

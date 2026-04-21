@@ -98,6 +98,23 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
    * through the same loading/error/assign plumbing as JSON fetchers.
    */
   parseResponse?: (response: Response) => Promise<TRaw>
+  /**
+   * Graceful-degradation value returned when the fetch fails. When
+   * provided:
+   *   - On any failure (network error, `!ok`, parser throw, etc.)
+   *     `data.value` is set to `fallbackData` (or its factory result).
+   *   - `error.value` remains empty (no user-visible error).
+   *   - `onError` still fires so callers can log or surface a warning.
+   *
+   * Useful for export endpoints where a stale cached value is
+   * preferable to a user-visible error (see
+   * `useCodebaseExport._fetchEnvironmentExportData`).
+   *
+   * Default absence preserves the existing strict error behavior.
+   *
+   * Introduced in #5389.
+   */
+  fallbackData?: TOut | (() => TOut)
   /** Human-readable label used only for log messages. */
   label?: string
 }
@@ -208,9 +225,22 @@ export function useFetchEndpoint<TRaw, TOut>(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to load ${label}:`, err)
-      error.value = message
-      data.value = null
       opts.onError?.(message, err)
+      // #5389: when a fallback value is configured, return it as the
+      // effective result instead of exposing the error. Callers opting
+      // into this explicitly accept "success with stale/default data"
+      // over "user-visible error" semantics.
+      if (opts.fallbackData !== undefined) {
+        const fallback =
+          typeof opts.fallbackData === 'function'
+            ? (opts.fallbackData as () => TOut)()
+            : opts.fallbackData
+        data.value = fallback
+        error.value = ''
+      } else {
+        error.value = message
+        data.value = null
+      }
     } finally {
       loading.value = false
     }
