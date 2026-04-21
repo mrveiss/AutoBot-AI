@@ -174,18 +174,21 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
+        :loading="loadingProgress.duplicates"
         @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
 
       <!-- Function Declarations (#1469, #184) -->
       <DeclarationsSection
         :declarations="declarationsForPanel"
+        :loading="loadingProgress.declarations"
         @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
       />
 
       <!-- Hardcoded Values (#5277: wire orphan data flow) -->
       <HardcodesSection
         :hardcodes="hardcodeAnalysis"
+        :loading="loadingProgress.hardcodes"
         @export="(fmt: string) => exportSection('hardcodes', fmt as 'md' | 'json')"
       />
 
@@ -543,6 +546,7 @@ const {
   duplicateAnalysis,
   declarationAnalysis,
   hardcodeAnalysis,
+  loadingProgress,
   chartData,
   chartDataLoading,
   chartDataError,

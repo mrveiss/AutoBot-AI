@@ -14,7 +14,11 @@
         </button>
       </div>
     </h3>
-    <div v-if="declarations && declarations.length > 0" class="section-content">
+    <div v-if="loading" class="section-loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>{{ $t('analytics.codebase.actions.loading') }}</span>
+    </div>
+    <div v-else-if="declarations && declarations.length > 0" class="section-content">
       <!-- Type Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -77,7 +81,7 @@
       </div>
     </div>
     <EmptyState
-      v-else
+      v-else-if="!loading"
       icon="fas fa-code"
       :message="$t('analytics.declarations.emptyMessage')"
     />
@@ -116,6 +120,8 @@ interface Declaration {
 
 interface Props {
   declarations: Declaration[]
+  /** #5368: render a spinner during the scan instead of empty-state. */
+  loading?: boolean
 }
 
 const props = defineProps<Props>()
@@ -192,6 +198,23 @@ const getDeclarationTypeClass = (type: string): string => {
   background: var(--bg-active);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
+}
+
+/* #5368: loading state shown during scan in progress */
+.section-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6);
+  background: var(--bg-active);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.section-loading i {
+  color: var(--color-info);
 }
 
 .summary-cards {

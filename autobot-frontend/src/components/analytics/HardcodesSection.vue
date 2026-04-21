@@ -14,7 +14,11 @@
         </button>
       </div>
     </h3>
-    <div v-if="hardcodes && hardcodes.length > 0" class="section-content">
+    <div v-if="loading" class="section-loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>{{ $t('analytics.codebase.actions.loading') }}</span>
+    </div>
+    <div v-else-if="hardcodes && hardcodes.length > 0" class="section-content">
       <!-- Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -96,7 +100,7 @@
       </div>
     </div>
     <EmptyState
-      v-else
+      v-else-if="!loading"
       icon="fas fa-check-circle"
       :message="$t('analytics.hardcodes.emptyMessage')"
       variant="success"
@@ -125,6 +129,11 @@ const { t } = useI18n()
 
 interface Props {
   hardcodes: HardcodedValue[]
+  /**
+   * #5368: when true, render a spinner in place of the empty-state
+   * message so users don't misread a running scan as "no results".
+   */
+  loading?: boolean
 }
 
 const props = defineProps<Props>()
@@ -184,6 +193,23 @@ const formatSeverityGroup = (severity: string): string => {
   background: var(--bg-primary-alpha);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
+}
+
+/* #5368: loading state shown during scan in progress */
+.section-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6);
+  background: var(--bg-primary-alpha);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.section-loading i {
+  color: var(--color-warning);
 }
 
 .summary-cards {
