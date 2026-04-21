@@ -127,7 +127,6 @@
 import {
   computed,
   onMounted,
-  onUnmounted,
   ref,
   nextTick,
 } from 'vue'
@@ -136,6 +135,7 @@ import {
   type Entity,
 } from '@/composables/useKnowledgeGraph'
 import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 import { getEntityTypeColor as getTypeColor } from '../constants'
 import RelationshipViewer from './RelationshipViewer.vue'
 
@@ -150,13 +150,7 @@ defineEmits<{
 
 const panelRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(panelRef)
-let previouslyFocused: Element | null = null
-
-onUnmounted(() => {
-  if (previouslyFocused instanceof HTMLElement) {
-    previouslyFocused.focus()
-  }
-})
+useFocusRestore()
 
 const propertyEntries = computed(() => {
   return Object.entries(props.entity.properties || {})
@@ -169,7 +163,6 @@ function formatValue(value: unknown): string {
 }
 
 onMounted(async () => {
-  previouslyFocused = document.activeElement
   await nextTick()
   panelRef.value?.focus()
 })

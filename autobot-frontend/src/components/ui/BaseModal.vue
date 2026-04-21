@@ -53,9 +53,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted, useId } from 'vue'
+import { ref, computed, nextTick, onUnmounted, useId, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap, FOCUSABLE_SELECTOR } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 import Icon from './Icon.vue'
 
 /**
@@ -121,7 +122,12 @@ const { t } = useI18n()
 // Refs
 const dialogRef = ref<HTMLElement | null>(null)
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
-let previousActiveElement: HTMLElement | null = null
+
+// Save activeElement on open, restore on close — driven by modelValue.
+// Note: this fires immediately on the prop change, before BaseModal's
+// onAfterEnter focuses the first focusable, so the saved reference is
+// the trigger element (correct).
+useFocusRestore(toRef(props, 'modelValue'))
 
 // Stable unique IDs for ARIA labeling (Vue 3.5+ useId)
 const _uid = useId()
@@ -150,11 +156,8 @@ const handleOverlayClick = () => {
   }
 }
 
-// Focus trap implementation
+// Focus trap implementation — focus restore handled by useFocusRestore above.
 const onAfterEnter = async () => {
-  // Store element that had focus before modal opened
-  previousActiveElement = document.activeElement as HTMLElement
-
   await nextTick()
 
   // Focus the dialog or first focusable element
@@ -173,12 +176,7 @@ const onAfterEnter = async () => {
 }
 
 const onAfterLeave = () => {
-  // Restore focus to element that opened modal
-  if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-    previousActiveElement.focus()
-  }
-
-  // Unlock body scroll
+  // Unlock body scroll (focus restore handled by useFocusRestore watcher)
   document.body.style.overflow = ''
 }
 
