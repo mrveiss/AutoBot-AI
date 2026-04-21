@@ -35,7 +35,13 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
+
+# tools/lint/ is not a Python package; ensure sibling module is importable
+# regardless of invocation mode (script / importlib from tests).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _scan_helpers import iter_python_files  # noqa: E402
 
 # Files allowed to reference the attribute directly.
 #
@@ -144,42 +150,9 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
     return hits
 
 
-def _iter_target_files(args: List[str], repo_root: Path) -> Iterable[Path]:
-    """Yield target files: explicit argv if given, else all repo .py files."""
-    if args:
-        for a in args:
-            p = Path(a)
-            if not p.is_absolute():
-                p = repo_root / p
-            if p.is_file() and p.suffix == ".py":
-                yield p
-        return
-    # Default: scan all repo .py files. Pre-commit will pass changed
-    # files via argv, so this branch only runs in manual / CI mode.
-    for p in repo_root.rglob("*.py"):
-        # Skip vendored / generated / external / vcs-ignored locations
-        parts = p.relative_to(repo_root).parts
-        if any(
-            part
-            in {
-                ".venv",
-                "venv",
-                "node_modules",
-                "__pycache__",
-                ".git",
-                "dist",
-                "build",
-                ".worktrees",  # #5418: parallel-work git worktrees, not vendored code
-            }
-            for part in parts
-        ):
-            continue
-        yield p
-
-
 def main(argv: List[str]) -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    files = list(_iter_target_files(argv[1:], repo_root))
+    files = list(iter_python_files(argv[1:], repo_root))
     total_hits = 0
     for path in files:
         for line_no, pattern_id, message in _scan(path, repo_root):
