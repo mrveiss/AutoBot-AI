@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -665,7 +666,7 @@ class AdvancedAPMSystem:
                 [
                     m
                     for m in api_metrics
-                    if (datetime.now(timezone.utc) - datetime.fromisoformat(m.timestamp.replace("Z", "+00:00"))).seconds
+                    if (datetime.now(timezone.utc) - parse_utc_iso(m.timestamp)).seconds
                     < 60
                 ]
             ),

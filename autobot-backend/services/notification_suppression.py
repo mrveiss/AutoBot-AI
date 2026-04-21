@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,7 +133,7 @@ class NotificationSuppressionManager:
 
         # Calculate age
         try:
-            updated = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            updated = parse_utc_iso(updated_at)
             now = datetime.now(updated.tzinfo)
             age_days = (now - updated).days
         except (ValueError, TypeError):

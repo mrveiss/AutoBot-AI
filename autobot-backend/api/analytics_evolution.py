@@ -29,6 +29,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -977,7 +978,7 @@ def _aggregate_by_granularity(
             continue
 
         try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = parse_utc_iso(ts)
 
             if granularity == "weekly":
                 # Use ISO week

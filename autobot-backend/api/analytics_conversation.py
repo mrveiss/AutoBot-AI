@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ def _parse_timestamp(ts_value: Any) -> Optional[datetime]:
         return None
     try:
         if isinstance(ts_value, str):
-            return datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
+            return parse_utc_iso(ts_value)
         return ts_value
     except (ValueError, TypeError):
         return None
@@ -49,7 +50,7 @@ def _parse_session_timestamp(created: Any) -> Optional[datetime]:
         return None
     try:
         if isinstance(created, str):
-            return datetime.fromisoformat(created.replace("Z", "+00:00"))
+            return parse_utc_iso(created)
         return created
     except (ValueError, TypeError):
         return None
@@ -492,7 +493,7 @@ class ConversationAnalyzer:
         try:
             ts_str = messages[0]["timestamp"]
             if isinstance(ts_str, str):
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                ts = parse_utc_iso(ts_str)
                 hourly_dist[ts.strftime("%H:00")] += 1
         except (ValueError, TypeError, KeyError) as e:
             logger.debug("Failed to parse conversation timestamp: %s", e)

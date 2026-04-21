@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
+from autobot_shared.time_utils import parse_utc_iso
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,7 +103,7 @@ class BranchMetricsCollector:
 
         if code == 0 and timestamp_out:
             try:
-                return datetime.fromisoformat(timestamp_out.replace("Z", "+00:00"))
+                return parse_utc_iso(timestamp_out)
             except (ValueError, AttributeError):
                 logger.warning("Failed to parse activity time: %s", timestamp_out)
 
