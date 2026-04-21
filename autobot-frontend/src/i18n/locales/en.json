@@ -1085,6 +1085,7 @@
       },
       "notify": {
         "codeIntelComplete": "Code Intelligence analysis complete: {count} suggestions",
+        "codeIntelPartial": "Code Intelligence analysis partially complete: {count} suggestions (some scans failed — check console)",
         "codeIntelFailed": "Code Intelligence analysis failed",
         "fileScanComplete": "File scan complete: {count} result(s)",
         "fileScanNoIssues": "No issues found in file scan",
