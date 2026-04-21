@@ -25,7 +25,7 @@
  * ```
  */
 
-import { ref, computed, onMounted, onScopeDispose, getCurrentScope } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useThumbnailWorker')

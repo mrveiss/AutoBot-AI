@@ -8,7 +8,7 @@
  * For the global singleton WebSocket, use useGlobalWebSocket instead.
  */
 
-import { ref, computed, onUnmounted, watch, unref, type Ref } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for useWebSocket
@@ -356,10 +356,12 @@ export function useWebSocket(
     connect()
   }
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    disconnect()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disconnect()
+    })
+  }
 
   return {
     // State

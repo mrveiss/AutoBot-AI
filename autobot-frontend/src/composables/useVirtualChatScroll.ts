@@ -12,7 +12,9 @@ import {
   watch,
   nextTick,
   onMounted,
-  onUnmounted,
+  onScopeDispose,
+  getCurrentInstance,
+  getCurrentScope,
   type Ref,
   type ComputedRef,
 } from 'vue'
@@ -97,21 +99,25 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
   }
 
   // --- Mount: locate external scroll container ---
-  onMounted(() => {
-    const el = messagesContainerRef.value?.closest(
-      '.overflow-y-auto',
-    ) as HTMLElement | null
-    scrollContainerRef.value = el
-    if (el) {
-      el.addEventListener('scroll', onScroll, { passive: true })
-    }
-    // Initial scroll to bottom
-    nextTick(scrollToBottom)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      const el = messagesContainerRef.value?.closest(
+        '.overflow-y-auto',
+      ) as HTMLElement | null
+      scrollContainerRef.value = el
+      if (el) {
+        el.addEventListener('scroll', onScroll, { passive: true })
+      }
+      // Initial scroll to bottom
+      nextTick(scrollToBottom)
+    })
+  }
 
-  onUnmounted(() => {
-    scrollContainerRef.value?.removeEventListener('scroll', onScroll)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      scrollContainerRef.value?.removeEventListener('scroll', onScroll)
+    })
+  }
 
   // --- Session change: reset stick-to-bottom ---
   watch(currentSessionId, () => {

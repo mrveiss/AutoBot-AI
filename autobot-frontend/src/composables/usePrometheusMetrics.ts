@@ -11,7 +11,7 @@
  * Resolved: Issue #76 - Replaced mockup data with real backend metrics
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
@@ -474,22 +474,26 @@ export function usePrometheusMetrics(
 
   // ===== Lifecycle =====
 
-  onMounted(() => {
-    if (autoFetch) {
-      fetchAll()
-    }
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (autoFetch) {
+        fetchAll()
+      }
 
-    if (enableWebSocket) {
-      connectWebSocket()
-    } else if (pollInterval > 0) {
-      startPolling()
-    }
-  })
+      if (enableWebSocket) {
+        connectWebSocket()
+      } else if (pollInterval > 0) {
+        startPolling()
+      }
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-    // useWebSocket handles WebSocket cleanup via its own onUnmounted
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+      // useWebSocket handles WebSocket cleanup via its own scope-dispose hook
+    })
+  }
 
   return {
     // State
@@ -571,13 +575,17 @@ export function useSystemMetrics(pollInterval = 10000) {
     }
   }
 
-  onMounted(() => {
-    startPolling()
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      startPolling()
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     metrics,
@@ -642,13 +650,17 @@ export function useServiceHealth(pollInterval = 15000) {
     }
   }
 
-  onMounted(() => {
-    startPolling()
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      startPolling()
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     services,
@@ -733,13 +745,17 @@ export function useAlerts(pollInterval = 30000) {
     }
   }
 
-  onMounted(() => {
-    startPolling()
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      startPolling()
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     alerts,

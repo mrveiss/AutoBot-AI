@@ -76,3 +76,36 @@ describe('useNetworkStatus - browser events', () => {
     wrapper.unmount()
   })
 })
+
+// ========================================
+// Scope-aware lifecycle (#5406)
+// ========================================
+
+describe('useNetworkStatus — scope-aware lifecycle (#5406)', () => {
+  it('does not warn when used inside an effectScope (no component)', async () => {
+    const { useNetworkStatus } = await import('../useNetworkStatus')
+    const { effectScope } = await import('vue')
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = effectScope()
+    scope.run(() => {
+      useNetworkStatus()
+    })
+    scope.stop()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('no active component')
+    )
+    warn.mockRestore()
+  })
+
+  it('does not warn when called with no active scope at all', async () => {
+    const { useNetworkStatus } = await import('../useNetworkStatus')
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    useNetworkStatus()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('no active component')
+    )
+    warn.mockRestore()
+  })
+})

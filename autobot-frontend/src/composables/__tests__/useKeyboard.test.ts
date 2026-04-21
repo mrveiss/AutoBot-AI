@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { defineComponent, ref, nextTick } from 'vue'
+import { defineComponent, effectScope, ref, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   useKeyPress,
@@ -1072,5 +1072,50 @@ describe('useKeyboard - Integration Tests', () => {
 
     dispatchKey(document, 'keydown', 's', { ctrl: true })
     expect(saveCallback).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ========================================
+// Scope-aware lifecycle (#5406)
+// ========================================
+
+describe('useKeyboard — scope-aware lifecycle (#5406)', () => {
+  it('useKeyPress does not warn in effectScope', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = effectScope()
+    scope.run(() => {
+      useKeyPress('Escape', () => {})
+    })
+    scope.stop()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('no active component')
+    )
+    warn.mockRestore()
+  })
+
+  it('useKeyboardShortcut does not warn in effectScope', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = effectScope()
+    scope.run(() => {
+      useKeyboardShortcut('ctrl+s', () => {})
+    })
+    scope.stop()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('no active component')
+    )
+    warn.mockRestore()
+  })
+
+  it('useArrowKeys does not warn in effectScope', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = effectScope()
+    scope.run(() => {
+      useArrowKeys({ up: () => {}, down: () => {} })
+    })
+    scope.stop()
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('no active component')
+    )
+    warn.mockRestore()
   })
 })

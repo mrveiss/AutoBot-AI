@@ -7,7 +7,7 @@
  * Issue #899 - Code Intelligence Tools
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -354,15 +354,17 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
 
   // ===== Lifecycle =====
 
-  onMounted(() => {
-    if (autoFetch) {
-      clearErrors()
-      Promise.all([
-        getSecurityScoreCached(),
-        getAnalysisHistory(),
-      ])
-    }
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (autoFetch) {
+        clearErrors()
+        Promise.all([
+          getSecurityScoreCached(),
+          getAnalysisHistory(),
+        ])
+      }
+    })
+  }
 
   return {
     // State

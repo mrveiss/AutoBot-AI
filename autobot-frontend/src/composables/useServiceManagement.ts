@@ -10,7 +10,7 @@
  * TypeScript migration of useServiceManagement.js (#819).
  */
 
-import { ref, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
 import { NetworkConstants } from '@/constants/network'
 import redisServiceAPI, {
   type ServiceOperationResult,
@@ -294,13 +294,17 @@ export function useServiceManagement(
 
   // ---- Lifecycle hooks ----
 
-  onMounted(() => {
-    refreshStatus()
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      refreshStatus()
+    })
+  }
 
-  onUnmounted(() => {
-    unsubscribeFromUpdates()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      unsubscribeFromUpdates()
+    })
+  }
 
   // ---- Public API ----
 

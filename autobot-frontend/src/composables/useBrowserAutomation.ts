@@ -7,7 +7,7 @@
  * Issue #900 - Browser Automation Dashboard
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -304,18 +304,22 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   // ===== Lifecycle =====
 
-  onMounted(() => {
-    if (autoFetch) {
-      Promise.all([fetchWorkerStatus(), fetchSessions()])
-    }
-    if (pollInterval > 0) {
-      startPolling()
-    }
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (autoFetch) {
+        Promise.all([fetchWorkerStatus(), fetchSessions()])
+      }
+      if (pollInterval > 0) {
+        startPolling()
+      }
+    })
+  }
 
-  onUnmounted(() => {
-    stopPolling()
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     // State

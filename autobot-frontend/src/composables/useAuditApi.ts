@@ -7,7 +7,7 @@
  * Issue #578 - Audit Logging Dashboard GUI Integration
  */
 
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import type {
@@ -577,10 +577,12 @@ export function useAuditState() {
     URL.revokeObjectURL(url)
   }
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    stopPolling()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopPolling()
+    })
+  }
 
   return {
     // State

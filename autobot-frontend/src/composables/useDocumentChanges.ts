@@ -11,7 +11,7 @@
  * - Change history and statistics
  */
 
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -336,10 +336,12 @@ export function useDocumentChanges() {
     }, null, 2)
   }
 
-  // Lifecycle
-  onUnmounted(() => {
-    stopAutoRefresh()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopAutoRefresh()
+    })
+  }
 
   return {
     // State
