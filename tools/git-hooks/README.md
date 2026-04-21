@@ -1,9 +1,9 @@
 # tools/git-hooks
 
-Git hooks that enforce the `team-implement` skill's Phase 0c (verification
-mandate) and Phase 6 (pre-push duplicate check) automatically. Without these,
-the skill rules are advisory text — easy to skip when you're in a hurry.
-With them, git won't let you push something that fails the rules.
+Git hooks that enforce the `batch-implement` skill's Phase 0c (verification
+mandate + pre-push duplicate check) automatically. Without these, the skill
+rules are advisory text — easy to skip when you're in a hurry. With them,
+git won't let you push something that fails the rules.
 
 This directory exists because of #5142 (verification mandate) and #5143
 (pre-push duplicate check), both filed after I personally caused two
