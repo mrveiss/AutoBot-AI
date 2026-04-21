@@ -160,7 +160,17 @@ def _iter_target_files(args: List[str], repo_root: Path) -> Iterable[Path]:
         # Skip vendored / generated / external / vcs-ignored locations
         parts = p.relative_to(repo_root).parts
         if any(
-            part in {".venv", "venv", "node_modules", "__pycache__", ".git", "dist", "build"}
+            part
+            in {
+                ".venv",
+                "venv",
+                "node_modules",
+                "__pycache__",
+                ".git",
+                "dist",
+                "build",
+                ".worktrees",  # #5418: parallel-work git worktrees, not vendored code
+            }
             for part in parts
         ):
             continue

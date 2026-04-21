@@ -44,30 +44,18 @@ def _parse_timestamp(ts_value: Any) -> Optional[datetime]:
         return None
 
 
-def _parse_session_timestamp(created: Any) -> Optional[datetime]:
-    """Parse session timestamp from various formats (Issue #315)."""
-    if not created:
-        return None
-    try:
-        if isinstance(created, str):
-            return parse_utc_iso(created)
-        return created
-    except (ValueError, TypeError):
-        return None
-
-
 def _is_session_in_range(session: Dict[str, Any], cutoff: datetime) -> bool:
     """Check if session is within the time range (Issue #315).
 
-    Both ``ts`` (from ``parse_utc_iso`` via ``_parse_session_timestamp``)
-    and ``cutoff`` (from ``datetime.now(tz=timezone.utc) - timedelta(...)``)
+    Both ``ts`` (from ``parse_utc_iso`` via ``_parse_timestamp``) and
+    ``cutoff`` (from ``datetime.now(tz=timezone.utc) - timedelta(...)``)
     are tz-aware UTC. The previous ``ts.replace(tzinfo=None)`` workaround
     is removed post-#5414 — when the parser switched to always-aware
     output, stripping tzinfo started producing naive>=aware TypeErrors
     (#5420).
     """
     created = session.get("created_at") or session.get("timestamp")
-    ts = _parse_session_timestamp(created)
+    ts = _parse_timestamp(created)
     if ts is None:
         return True  # Include if can't parse date
     return ts >= cutoff
