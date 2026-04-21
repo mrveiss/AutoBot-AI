@@ -22,7 +22,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 
 if TYPE_CHECKING:
     import aioredis
@@ -422,7 +422,7 @@ class MetadataMixin:
         elif field_type == "date":
             if isinstance(value, str):
                 try:
-                    datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    parse_utc_iso(value)
                 except ValueError:
                     return f"Field '{field_name}' must be a valid ISO date"
             else:

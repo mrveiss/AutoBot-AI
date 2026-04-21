@@ -309,7 +309,8 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
     Helper for cleanup_organization_knowledge. Ref: #1088.
     """
     import json
-    from datetime import datetime
+
+    from autobot_shared.time_utils import parse_utc_iso
 
     deleted_count = 0
     for fact_id in fact_ids:
@@ -330,7 +331,7 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
             continue
 
         try:
-            created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            created_at = parse_utc_iso(created_at_str)
             if created_at < cutoff_date:
                 await kb.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
                 await kb.redis().delete(f"fact:{fact_id}")

@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -138,7 +138,7 @@ def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
         return None
     try:
         if "T" in msg_ts_str:
-            return datetime.fromisoformat(msg_ts_str.replace("Z", "+00:00"))
+            return parse_utc_iso(msg_ts_str)
         return datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
         return None
