@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted, watch, useId } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted, watch, useId, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
@@ -189,6 +189,7 @@ import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useFocusTrap } from '@/composables/useFocusTrap';
+import { useFocusRestore } from '@/composables/useFocusRestore';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -244,7 +245,7 @@ const hostListLabelId = `host-list-label-${_uid}`;
 // Focus management
 const dialogRef = ref<HTMLElement | null>(null);
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
-let previousActiveElement: HTMLElement | null = null;
+useFocusRestore(toRef(props, 'show'));
 
 // State
 const showDialog = ref(false);
@@ -419,17 +420,13 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 };
 
-// Watchers
+// Watchers — focus save/restore handled by useFocusRestore above.
 watch(() => props.show, async (newValue) => {
   showDialog.value = newValue;
   if (newValue) {
-    previousActiveElement = document.activeElement as HTMLElement;
     loadHosts();
     await nextTick();
     dialogRef.value?.focus();
-  } else {
-    previousActiveElement?.focus();
-    previousActiveElement = null;
   }
 }, { immediate: true });
 
