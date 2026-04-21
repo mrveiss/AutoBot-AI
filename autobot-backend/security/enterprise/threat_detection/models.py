@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
 from .types import FILE_OPERATION_ACTIONS, ThreatCategory, ThreatLevel
 
@@ -50,7 +50,7 @@ class SecurityEvent:
     def timestamp(self) -> datetime:
         """Get event timestamp as datetime object."""
         timestamp_str = self.raw_event.get("timestamp", utc_timestamp())
-        return datetime.fromisoformat(timestamp_str)
+        return parse_utc_iso(timestamp_str)
 
     @property
     def details(self) -> Dict:
@@ -144,7 +144,7 @@ class EventHistory:
         count = 0
 
         for event in reversed(self.events):
-            event_time = datetime.fromisoformat(
+            event_time = parse_utc_iso(
                 event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
@@ -169,7 +169,7 @@ class EventHistory:
         count = 0
 
         for event in reversed(self.events):
-            event_time = datetime.fromisoformat(
+            event_time = parse_utc_iso(
                 event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
@@ -189,7 +189,7 @@ class EventHistory:
         count = 0
 
         for event in reversed(self.events):
-            event_time = datetime.fromisoformat(
+            event_time = parse_utc_iso(
                 event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
@@ -207,7 +207,7 @@ class EventHistory:
         count = 0
 
         for event in reversed(self.events):
-            event_time = datetime.fromisoformat(
+            event_time = parse_utc_iso(
                 event.get("timestamp", utc_timestamp())
             )
             if event_time < cutoff_time:
@@ -245,7 +245,7 @@ class EventHistory:
             1
             for event in self.events
             if event.get("user_id") == user_id
-            and datetime.fromisoformat(
+            and parse_utc_iso(
                 event.get("timestamp", utc_timestamp())
             ).hour
             < 6
@@ -347,7 +347,7 @@ class UserProfile:
                 self.api_usage_patterns.get(event.resource, 0) + 1
             )
 
-        self.last_updated = datetime.utcnow()
+        self.last_updated = now_utc()
 
     def calculate_risk_score(self, event_history: EventHistory) -> float:
         """Calculate risk score based on recent behavior from event history"""
@@ -386,7 +386,7 @@ class UserProfile:
                 if self.risk_score > 0.7
                 else "medium" if self.risk_score > 0.4 else "low"
             ),
-            "profile_age_days": (datetime.utcnow() - self.last_updated).days,
+            "profile_age_days": (now_utc() - self.last_updated).days,
             "total_actions": sum(self.baseline_actions.values()),
             "unique_actions": len(self.baseline_actions),
             "typical_access_hours": sorted(self.typical_hours),

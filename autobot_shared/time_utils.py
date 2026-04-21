@@ -77,6 +77,26 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def parse_utc_iso(value: str) -> datetime:
+    """Parse an ISO-8601 timestamp string and return a tz-aware UTC datetime.
+
+    Accepts three forms:
+    - ``+00:00`` offset (canonical, produced by :func:`utc_timestamp`)
+    - ``Z`` suffix (legacy, produced by :func:`utc_timestamp_z`)
+    - **Naive** (no offset/suffix) — assumed UTC and tagged as such
+
+    Use this in consumer code that compares parsed timestamps against
+    aware ``datetime`` values (e.g. ``cutoff = now_utc() - timedelta(...)``)
+    when the input string may originate from external sources or legacy
+    producers. Avoids the ``TypeError: can't compare offset-naive and
+    offset-aware datetimes`` class flagged in #5350.
+    """
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def utc_timestamp_z() -> str:
     """Return current UTC time as ISO-8601 with ``Z`` suffix. **DEPRECATED.**
 

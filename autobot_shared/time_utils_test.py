@@ -7,7 +7,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from autobot_shared.time_utils import now_utc, utc_timestamp, utc_timestamp_z
+from autobot_shared.time_utils import (
+    now_utc,
+    parse_utc_iso,
+    utc_timestamp,
+    utc_timestamp_z,
+)
 
 
 _Z_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -139,3 +144,44 @@ def test_now_utc_round_trip_via_utc_timestamp() -> None:
     parsed = datetime.fromisoformat(s)
     # Both should be in UTC (offset 0)
     assert dt.utcoffset() == parsed.utcoffset() == timedelta(0)
+
+
+# ---------------------------------------------------------------------------
+# parse_utc_iso() — defensive parser for #5350 cutoff/since consumers
+# ---------------------------------------------------------------------------
+
+
+def test_parse_utc_iso_canonical_offset() -> None:
+    """+00:00 form (canonical) round-trips and stays aware."""
+    parsed = parse_utc_iso("2026-04-21T12:34:56.789012+00:00")
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == timedelta(0)
+
+
+def test_parse_utc_iso_z_suffix() -> None:
+    """Z suffix (legacy) is accepted and becomes aware UTC."""
+    parsed = parse_utc_iso("2026-04-21T12:34:56Z")
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == timedelta(0)
+
+
+def test_parse_utc_iso_naive_string_assumed_utc() -> None:
+    """Naive input (no offset/suffix) is tagged as UTC — prevents TypeError vs aware."""
+    parsed = parse_utc_iso("2026-04-21T12:34:56")
+    assert parsed.tzinfo is not None, "naive input must be promoted to aware"
+    assert parsed.utcoffset() == timedelta(0)
+
+
+def test_parse_utc_iso_comparable_with_now_utc() -> None:
+    """The whole point: parsed value compares cleanly against now_utc() — no TypeError."""
+    parsed = parse_utc_iso("2026-04-21T12:34:56")  # naive input
+    cutoff = now_utc()
+    # Must not raise TypeError: can't compare offset-naive and offset-aware datetimes
+    assert (parsed < cutoff) or (parsed >= cutoff)
+
+
+def test_parse_utc_iso_invalid_raises() -> None:
+    """Malformed input raises ValueError (caller handles)."""
+    import pytest
+    with pytest.raises(ValueError):
+        parse_utc_iso("not-a-date")
