@@ -270,9 +270,7 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
     try:
         # Store snapshot with timestamp-based key
         key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
-        timestamp_score = parse_utc_iso(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_snapshot():
@@ -301,9 +299,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 
     try:
         key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
-        timestamp_score = parse_utc_iso(
-            snapshot.timestamp.replace("Z", "+00:00")
-        ).timestamp()
+        timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
         timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
 
         # Issue #361: Execute sync Redis ops in thread pool
