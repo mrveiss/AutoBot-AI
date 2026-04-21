@@ -286,7 +286,7 @@ class ExecutionPlan:
             created_at=(
                 parse_utc_iso(data["created_at"])
                 if data.get("created_at")
-                else datetime.utcnow()
+                else now_utc()
             ),
             started_at=(
                 parse_utc_iso(data["started_at"])
