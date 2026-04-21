@@ -14,6 +14,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
 
@@ -39,8 +40,10 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
   const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
   const rootPath = ref(savedPath || '/opt/autobot')
 
-  // Issue #1133: Source registry state
-  const sources = ref<CodeSource[]>([])
+  // Issue #1133: Source registry state. #5276: `sources` + `loadSources`
+  // delegated to the shared `useSourcesListEndpoint` composable (was
+  // duplicated across this file and `CodebaseAnalyticsLanding.vue`).
+  const { sources, loadSources } = useSourcesListEndpoint()
   const selectedSource = ref<CodeSource | null>(null)
   const showSourceManager = ref(false)
   const showAddSourceModal = ref(false)
@@ -72,25 +75,6 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
       return sid ? { source_id: sid } : {}
     },
   )
-
-  // Issue #1133: Source registry functions (#5153 B: routed through useFetchEndpoint)
-  const sourcesEndpoint = useFetchEndpoint<
-    { sources?: CodeSource[] },
-    CodeSource[]
-  >({
-    path: '/api/analytics/codebase/sources',
-    label: 'Sources list',
-    pickData: (r) => r.sources ?? [],
-    onSuccess: (list) => {
-      sources.value = list
-    },
-    // Silent on failure: the composable's internal logger.error already
-    // logs, and the template has no error UI for this read.
-  })
-
-  async function loadSources() {
-    await sourcesEndpoint.load()
-  }
 
   function handleSelectSource(source: CodeSource) {
     selectedSource.value = source
