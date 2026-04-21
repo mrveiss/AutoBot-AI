@@ -1382,6 +1382,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "مقادیر کدنویسی‌شده",
+      "values": "مقدار",
+      "totalValues": "تعداد کل مقادیر",
+      "highLabel": "بالا",
+      "mediumLabel": "متوسط",
+      "lowLabel": "پایین",
+      "uniqueTypes": "انواع یکتا",
+      "variable": "متغیر",
+      "value": "مقدار",
+      "suggestedEnvVar": "متغیر محیطی پیشنهادی",
+      "showingOf": "نمایش {shown} از {total}",
+      "emptyMessage": "هیچ مقدار کدنویسی‌شده‌ای یافت نشد",
+      "severityGroups": {
+        "high": "شدت بالا",
+        "medium": "شدت متوسط",
+        "low": "شدت پایین"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",

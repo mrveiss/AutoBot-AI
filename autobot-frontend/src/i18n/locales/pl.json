@@ -1843,6 +1843,25 @@
         "low": "Low Similarity"
       }
     },
+    "hardcodes": {
+      "title": "Wartości zakodowane",
+      "values": "wartości",
+      "totalValues": "Wartości razem",
+      "highLabel": "Wysoki",
+      "mediumLabel": "Średni",
+      "lowLabel": "Niski",
+      "uniqueTypes": "Unikalne typy",
+      "variable": "Zmienna",
+      "value": "Wartość",
+      "suggestedEnvVar": "Sugerowana zmienna środowiskowa",
+      "showingOf": "Wyświetlanie {shown} z {total}",
+      "emptyMessage": "Nie wykryto zakodowanych wartości",
+      "severityGroups": {
+        "high": "Wysoka istotność",
+        "medium": "Średnia istotność",
+        "low": "Niska istotność"
+      }
+    },
     "problems": {
       "title": "Problems Report",
       "total": "Total",
