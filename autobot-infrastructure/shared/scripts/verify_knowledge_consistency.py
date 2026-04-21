@@ -31,7 +31,6 @@ from utils.redis_client import get_redis_client
 
 # Initialize unified config
 config = ConfigManager()
-# from utils.semantic_chunker import SemanticChunker  # Skip if not available
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
