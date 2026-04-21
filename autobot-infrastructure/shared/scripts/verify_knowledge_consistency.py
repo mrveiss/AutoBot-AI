@@ -36,7 +36,7 @@ from utils.redis_client import get_redis_client
 # deployment).
 try:
     from utils.semantic_chunker import AutoBotSemanticChunker as SemanticChunker
-except Exception:  # pragma: no cover - deployment-topology dependent
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - deployment-topology dependent
     SemanticChunker = None
 
 # Initialize unified config
@@ -182,7 +182,11 @@ class KnowledgeConsistencyVerifier:
                         "✅ Semantic chunker consistency: %s",
                         chunker_model or "no embedding_model_name attr",
                     )
-                except Exception as e:
+                except (ImportError, AttributeError, RuntimeError, OSError) as e:
+                    # SemanticChunker() can raise on missing config,
+                    # failed model load, or Redis-init failure.
+                    # Log + continue instead of aborting the whole
+                    # consistency script (#5441).
                     logger.warning("Could not verify semantic chunker: %s", e)
 
             # 4. Check Redis vector schema consistency
