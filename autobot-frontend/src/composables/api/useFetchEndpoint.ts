@@ -85,6 +85,19 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
   onResponse?: (
     response: Response,
   ) => string | undefined | Promise<string | undefined>
+  /**
+   * Custom response parser. Defaults to `(r) => r.json()`. Override to
+   * handle non-JSON responses — e.g. `text/markdown` exports (see
+   * `useCodebaseExport.exportReport`), CSV exports, blobs, etc.
+   *
+   * The returned value is passed verbatim to `pickData(raw)`, so the
+   * `TRaw` type parameter should reflect whatever shape the custom
+   * parser yields.
+   *
+   * Introduced in #5276 so fetchers returning non-JSON can route
+   * through the same loading/error/assign plumbing as JSON fetchers.
+   */
+  parseResponse?: (response: Response) => Promise<TRaw>
   /** Human-readable label used only for log messages. */
   label?: string
 }
@@ -181,7 +194,9 @@ export function useFetchEndpoint<TRaw, TOut>(
           overrideMsg ?? `${label} returned ${response.status}`,
         )
       }
-      const raw = (await response.json()) as TRaw
+      const raw = opts.parseResponse
+        ? await opts.parseResponse(response)
+        : ((await response.json()) as TRaw)
       const picked = opts.pickData(raw)
       if (picked === null) {
         data.value = null

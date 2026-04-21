@@ -1,5 +1,15 @@
 # Composable Fetcher Boilerplate Audit (Issue #5154)
 
+> **Final-state update (#5276, Apr 2026):** the analytics-namespace
+> migration is **complete**. See the "Final state of analytics namespace"
+> section at the bottom for the per-file outcome (migrated vs. SKIP, with
+> documented verdicts for each remaining hand-rolled fetcher).
+>
+> **New composable surface (#5276):** `useFetchEndpoint` gained an
+> optional `parseResponse` hook so non-JSON fetchers (e.g. `text/markdown`
+> exports) can route through the same loading/error/assign pipeline.
+> `exportReport` in `useCodebaseExport` is the first intended caller.
+
 > **Rehome update (#5168, #5174, Apr 2026):** the composable is now at
 > [`autobot-frontend/src/composables/api/useFetchEndpoint.ts`](../../../autobot-frontend/src/composables/api/useFetchEndpoint.ts)
 > with `deps` optional and `scopeToSource` defaulting to **false**.
@@ -416,3 +426,97 @@ All exported function names, signatures, and return types are unchanged. Verifie
 **LOC delta (`wc -l`):** 251 LOC -> 337 LOC = +86. The migration grew the file because the per-endpoint configuration ceremony for `useAnalyticsEndpoint` (12 lines x N endpoints + bridge `watch()` + path-parameterised factories + `noScope` shim) outweighed the per-fetcher boilerplate savings for a 6-fetcher file. See "POC migration measurement" above for the critical-mass analysis.
 
 **Why ship the POC anyway:** it answers the design questions in #5154 with empirical data. Specifically: (a) it proves the composable WORKS outside analytics, (b) it surfaces the two ergonomic gaps (`scopeToSource` default, `deps` mandatory) that must be fixed when rehoming, (c) it sets a critical-mass expectation for follow-up migrations. Reverting the POC would leave the design questions unanswered and the architectural team would re-derive these findings from first principles next time.
+
+---
+
+## Final state of analytics namespace (#5276, Apr 2026)
+
+Snapshot after the full migration wave (#5137 \u2192 #5168 \u2192 #5174 \u2192 #5187
+\u2192 #5206 \u2192 #5208 \u2192 #5232 \u2192 #5234 \u2192 #5235 \u2192 #5251 \u2192 #5253 \u2192 #5257
+\u2192 #5265 \u2192 #5266 \u2192 #5271). Records the per-file verdict so future
+readers don't have to re-derive why certain hand-rolled fetchers stayed.
+
+### Migrated to `useFetchEndpoint` (GET + POST + DELETE)
+
+| File | Fetchers | Migration PR |
+|---|---|---|
+| `composables/analytics/useAnalyticsDataFetchers.ts` | 14 GETs | #5137 (seed), #5187 (rehome-followup), #5208 |
+| `composables/analytics/useSourceRegistry.ts` | 2 (GET sources list, POST index) | #5251, #5276 (DRY `sources` via `useSourcesListEndpoint`) |
+| `composables/analytics/useCodeSmellAnalysis.ts` | 3 POSTs | #5157, #5187 |
+| `composables/analytics/useCodeIntelScores.ts` | 4 (GET + 3 POST analyze) | #5187, #5232, #5235 |
+| `composables/analytics/useCrossLanguageAnalysis.ts` | 2 GETs | #5253 \u2192 PR #5256 |
+| `composables/analytics/useApiEndpointAnalysis.ts` | 1 GET | #5208 |
+| `composables/analytics/useConfigDuplicates.ts` | 1 GET | #5208 |
+| `composables/analytics/useIndexingJob.ts` | 2 (GET status, DELETE cache) | #5257 \u2192 PR #5265 |
+| `composables/analytics/useDashboardLoaders.ts` | 1 GET | #5257 \u2192 PR #5265 |
+| `composables/analytics/useOwnershipAnalysis.ts` | 1 GET | #5232 |
+| `components/analytics/CodebaseAnalyticsLanding.vue` | 3 (GET sources, GET summaries, per-source sync POST) | #5251, #5276 (DRY `sources`) |
+
+### SKIP (hand-rolled, with recorded verdicts)
+
+| File | Fetcher(s) | Reason for SKIP |
+|---|---|---|
+| `composables/analytics/useEnvironmentAnalysis.ts` | 2 POSTs + 1 GET | Below critical mass + one endpoint uses `SSE` streaming that doesn't fit the `useFetchEndpoint` single-response shape. Migration would be LOC-negative. |
+| `composables/analytics/useBugPrediction.ts` | Composable facade built on `useCodeIntelligence`'s `ApiClient` wrapper | Already routed through a higher-level client; no direct `fetchWithAuth` calls. Out-of-scope for this audit. |
+| `composables/analytics/useAnalyticsDebug.ts` | Debug-only, single endpoint | Tool-only, not user-facing; migration would only add ceremony. |
+| `composables/analytics/useCodebaseExport.ts::exportReport` | GET that returns `text/markdown` | Required the `parseResponse` hook (#5276) before routing through `useFetchEndpoint`. **Now migratable \u2014 future cleanup.** |
+| `composables/analytics/useCodebaseExport.ts::_fetchEnvironmentExportData` | GET that returns JSON but passes through a try/catch fallback to `cachedData` if the network call fails | The fallback semantics don't map cleanly onto `useFetchEndpoint`'s error model (throws into `error.value`, doesn't return a default). Keep hand-rolled until a `fallbackData` option is added. |
+
+### Composable surface summary
+
+Post-migration, the analytics namespace exercises every major `useFetchEndpoint` capability:
+
+- `scopeToSource: true` + `withSourceId` wrap (the #5111 bug-prevention axis)
+- `method: 'POST'` + `body` factory (code-smells analyze, security/performance/redis analyze)
+- `method: 'DELETE'` + optional body (cache clear in `useIndexingJob`)
+- `onResponse` hook (#5235) for status-specific error copy (504 timeout, `{ detail }` body parsing)
+- `reset()` (#5235) for cache clearing
+- `parseResponse` hook (#5276) for non-JSON responses \u2014 pending migration of `exportReport`
+- `onSuccess` / `onNoData` / `onError` lifecycle hooks across all migrated fetchers
+
+---
+
+## Final state of analytics namespace (#5276, Apr 2026)
+
+Snapshot after the full migration wave (#5137 → #5168 → #5174 → #5187
+→ #5206 → #5208 → #5232 → #5234 → #5235 → #5251 → #5253 → #5257
+→ #5265 → #5266 → #5271). Records the per-file verdict so future
+readers don't have to re-derive why certain hand-rolled fetchers stayed.
+
+### Migrated to `useFetchEndpoint` (GET + POST + DELETE)
+
+| File | Fetchers | Migration PR |
+|---|---|---|
+| `composables/analytics/useAnalyticsDataFetchers.ts` | 14 GETs | #5137 (seed), #5187 (rehome-followup), #5208 |
+| `composables/analytics/useSourceRegistry.ts` | 2 (GET sources list, POST index) | #5251, #5276 (DRY `sources` via `useSourcesListEndpoint`) |
+| `composables/analytics/useCodeSmellAnalysis.ts` | 3 POSTs | #5157, #5187 |
+| `composables/analytics/useCodeIntelScores.ts` | 4 (GET + 3 POST analyze) | #5187, #5232, #5235 |
+| `composables/analytics/useCrossLanguageAnalysis.ts` | 2 GETs | #5253 → PR #5256 |
+| `composables/analytics/useApiEndpointAnalysis.ts` | 1 GET | #5208 |
+| `composables/analytics/useConfigDuplicates.ts` | 1 GET | #5208 |
+| `composables/analytics/useIndexingJob.ts` | 2 (GET status, DELETE cache) | #5257 → PR #5265 |
+| `composables/analytics/useDashboardLoaders.ts` | 1 GET | #5257 → PR #5265 |
+| `composables/analytics/useOwnershipAnalysis.ts` | 1 GET | #5232 |
+| `components/analytics/CodebaseAnalyticsLanding.vue` | 3 (GET sources, GET summaries, per-source sync POST) | #5251, #5276 (DRY `sources`) |
+
+### SKIP (hand-rolled, with recorded verdicts)
+
+| File | Fetcher(s) | Reason for SKIP |
+|---|---|---|
+| `composables/analytics/useEnvironmentAnalysis.ts` | 2 POSTs + 1 GET | Below critical mass + one endpoint uses SSE streaming that doesn't fit the `useFetchEndpoint` single-response shape. Migration would be LOC-negative. |
+| `composables/analytics/useBugPrediction.ts` | Facade built on `useCodeIntelligence`'s `ApiClient` wrapper | Already routed through a higher-level client; no direct `fetchWithAuth` calls. Out-of-scope for this audit. |
+| `composables/analytics/useAnalyticsDebug.ts` | Debug-only, single endpoint | Tool-only, not user-facing; migration would only add ceremony. |
+| `composables/analytics/useCodebaseExport.ts::exportReport` | GET that returns `text/markdown` | Required the `parseResponse` hook (#5276) before routing through `useFetchEndpoint`. **Now migratable — future cleanup.** |
+| `composables/analytics/useCodebaseExport.ts::_fetchEnvironmentExportData` | GET returning JSON with a try/catch fallback to `cachedData` | Fallback semantics don't map cleanly onto `useFetchEndpoint`'s error model (throws into `error.value`, doesn't return a default). Keep hand-rolled until a `fallbackData` option is added. |
+
+### Composable surface summary
+
+Post-migration, the analytics namespace exercises every major `useFetchEndpoint` capability:
+
+- `scopeToSource: true` + `withSourceId` wrap (the #5111 bug-prevention axis).
+- `method: 'POST'` + `body` factory (code-smells analyze, security/performance/redis analyze).
+- `method: 'DELETE'` + optional body (cache clear in `useIndexingJob`).
+- `onResponse` hook (#5235) for status-specific error copy (504 timeout, `{ detail }` body parsing).
+- `reset()` (#5235) for cache clearing.
+- `parseResponse` hook (#5276) for non-JSON responses — pending migration of `exportReport`.
+- `onSuccess` / `onNoData` / `onError` lifecycle hooks across all migrated fetchers.

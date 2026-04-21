@@ -178,6 +178,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 
@@ -202,7 +203,14 @@ interface SourceSummary {
 
 // ---- State ----------------------------------------------------------------
 
-const sources = ref<CodeSource[]>([])
+// #5276: `sources` + `loadSources` delegated to the shared
+// `useSourcesListEndpoint` composable (was duplicated with
+// `useSourceRegistry.ts`).
+const {
+  sources,
+  loadSources: _loadSourcesEndpoint,
+  error: sourcesEndpointError,
+} = useSourcesListEndpoint()
 const summaries = ref<Record<string, SourceSummary>>({})
 const loading = ref(false)
 const showAddModal = ref(false)
@@ -216,18 +224,6 @@ const POLL_INTERVAL_MS = 4000
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 // ---- Endpoint composables (#5153 B) --------------------------------------
-
-const sourcesEndpoint = useFetchEndpoint<
-  { sources?: CodeSource[] },
-  CodeSource[]
->({
-  path: '/api/analytics/codebase/sources',
-  label: 'Sources list',
-  pickData: (r) => r.sources ?? [],
-  onSuccess: (list) => {
-    sources.value = list
-  },
-})
 
 const summariesEndpoint = useFetchEndpoint<
   { summaries?: Record<string, SourceSummary> },
@@ -246,7 +242,7 @@ const summariesEndpoint = useFetchEndpoint<
 async function loadSources() {
   loading.value = true
   try {
-    await sourcesEndpoint.load()
+    await _loadSourcesEndpoint()
     await loadSummaries()
   } finally {
     loading.value = false
@@ -376,13 +372,14 @@ async function _pollTick(): Promise<void> {
     _stopPolling()
     return
   }
-  // #5153 B: reuses `sourcesEndpoint` so the poll shares the single fetch
-  // path and error handling. sources.value is updated via the endpoint's
-  // onSuccess hook; we only need to react to the syncing state afterwards.
-  // Errors are already logged inside the composable — no extra try/catch.
-  await sourcesEndpoint.load()
-  if (sourcesEndpoint.error.value) {
-    logger.warn('Poll request failed:', sourcesEndpoint.error.value)
+  // #5276: reuses the shared `useSourcesListEndpoint` loader so the
+  // poll shares one fetch path and error handling. sources.value is
+  // updated via the endpoint's onSuccess hook; we only react to the
+  // syncing state afterwards. Errors are already logged inside the
+  // composable — no extra try/catch.
+  await _loadSourcesEndpoint()
+  if (sourcesEndpointError.value) {
+    logger.warn('Poll request failed:', sourcesEndpointError.value)
     return
   }
   if (!_hasSyncingSource()) {
