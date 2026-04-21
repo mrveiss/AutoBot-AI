@@ -10,7 +10,7 @@
  * @copyright 2025 mrveiss
  */
 
-import { ref, computed, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onScopeDispose, getCurrentScope, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -385,11 +385,13 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     connect()
   }
 
-  // useWebSocket registers onUnmounted cleanup automatically;
-  // we also reset isProcessing on unmount
-  onUnmounted(() => {
-    isProcessing.value = false
-  })
+  // useWebSocket registers scope-dispose cleanup automatically;
+  // we also reset isProcessing on unmount/scope disposal
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      isProcessing.value = false
+    })
+  }
 
   return {
     // State

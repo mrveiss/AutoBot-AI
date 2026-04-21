@@ -6,8 +6,8 @@
  * Unit tests for useFocusRestore composable (#5356).
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { defineComponent, h, nextTick, ref, type Ref } from 'vue'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { defineComponent, effectScope, h, nextTick, ref, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useFocusRestore } from '../useFocusRestore'
 
@@ -239,5 +239,33 @@ describe('useFocusRestore', () => {
     // Should not throw — element.focus() on a detached node is silently
     // ignored by browsers (and jsdom matches that behavior).
     expect(() => wrapper.unmount()).not.toThrow()
+  })
+
+  // ========================================
+  // Scope-aware lifecycle (#5406)
+  // ========================================
+
+  describe('scope-aware lifecycle (#5406)', () => {
+    it('does not warn when used inside an effectScope (no component)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useFocusRestore()
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('does not warn when called with no active scope at all', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      useFocusRestore()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
   })
 })

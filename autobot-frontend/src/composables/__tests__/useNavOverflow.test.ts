@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ref, nextTick, createApp, defineComponent } from 'vue'
+import { ref, nextTick, createApp, defineComponent, effectScope } from 'vue'
 import { useNavOverflow } from '../useNavOverflow'
 
 let observeCallback: ((entries: any[]) => void) | null = null
@@ -130,5 +130,26 @@ describe('useNavOverflow', () => {
     expect(result.visibleCount.value).toBe(3)
 
     app.unmount()
+  })
+
+  // ========================================
+  // Scope-aware lifecycle (#5406)
+  // ========================================
+
+  describe('scope-aware lifecycle (#5406)', () => {
+    it('does not warn when used inside an effectScope (no component)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const container = makeContainer(400, [100, 100])
+      const itemCount = ref(2)
+      const scope = effectScope()
+      scope.run(() => {
+        useNavOverflow(ref(container), itemCount)
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
   })
 })

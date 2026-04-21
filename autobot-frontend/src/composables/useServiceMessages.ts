@@ -7,7 +7,7 @@
  * Wraps /api/service-messages/* endpoints.
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref, onScopeDispose, getCurrentScope } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -159,7 +159,9 @@ export function useServiceMessages() {
     isPolling.value = false
   }
 
-  onUnmounted(() => stopPolling())
+  if (getCurrentScope()) {
+    onScopeDispose(() => stopPolling())
+  }
 
   return {
     messages,

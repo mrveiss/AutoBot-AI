@@ -22,7 +22,7 @@
  * ```
  */
 
-import { ref, computed, onMounted, onUnmounted, watch, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
@@ -533,39 +533,41 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
   }
 
   // Subscribe to WebSocket messages on mount
-  onMounted(() => {
-    // Subscribe to collaboration messages
-    const unsubMessage = globalWebSocketService.subscribe('collaboration', handleCollaborationMessage as (data: unknown) => void)
-    unsubscribers.push(unsubMessage)
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      // Subscribe to collaboration messages
+      const unsubMessage = globalWebSocketService.subscribe('collaboration', handleCollaborationMessage as (data: unknown) => void)
+      unsubscribers.push(unsubMessage)
 
-    // Also subscribe to specific message types that might come separately
-    const messageTypes: CollaborationMessageType[] = [
-      'session_join',
-      'session_leave',
-      'presence_update',
-      'activity_broadcast',
-      'invitation_send',
-      'invitation_response',
-      'secret_shared',
-      'secret_revoked',
-      'cursor_move'
-    ]
+      // Also subscribe to specific message types that might come separately
+      const messageTypes: CollaborationMessageType[] = [
+        'session_join',
+        'session_leave',
+        'presence_update',
+        'activity_broadcast',
+        'invitation_send',
+        'invitation_response',
+        'secret_shared',
+        'secret_revoked',
+        'cursor_move'
+      ]
 
-    messageTypes.forEach(type => {
-      const unsub = globalWebSocketService.subscribe(type, (rawData: unknown) => {
-        const data = rawData as Record<string, unknown>
-        handleCollaborationMessage({
-          type,
-          sessionId: data.sessionId as string,
-          payload: data,
-          timestamp: data.timestamp as string || new Date().toISOString()
+      messageTypes.forEach(type => {
+        const unsub = globalWebSocketService.subscribe(type, (rawData: unknown) => {
+          const data = rawData as Record<string, unknown>
+          handleCollaborationMessage({
+            type,
+            sessionId: data.sessionId as string,
+            payload: data,
+            timestamp: data.timestamp as string || new Date().toISOString()
+          })
         })
+        unsubscribers.push(unsub)
       })
-      unsubscribers.push(unsub)
-    })
 
-    logger.debug('[Issue #608] Session collaboration initialized')
-  })
+      logger.debug('[Issue #608] Session collaboration initialized')
+    })
+  }
 
   // Watch for session changes
   watch(
@@ -581,12 +583,14 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     }
   )
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    leaveSession()
-    unsubscribers.forEach(unsub => unsub())
-    unsubscribers = []
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      leaveSession()
+      unsubscribers.forEach(unsub => unsub())
+      unsubscribers = []
+    })
+  }
 
   return {
     myPresence,

@@ -7,7 +7,7 @@
  * Issue #902 - Developer Speedup Tools
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -255,11 +255,13 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
 
   // ===== Lifecycle =====
 
-  onMounted(() => {
-    if (autoFetch) {
-      Promise.all([fetchTemplates(), fetchHistory()])
-    }
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      if (autoFetch) {
+        Promise.all([fetchTemplates(), fetchHistory()])
+      }
+    })
+  }
 
   return {
     // State

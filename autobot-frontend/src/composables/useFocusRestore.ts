@@ -25,7 +25,7 @@
  *      but doesn't always behave like an HTMLElement; safer to skip)
  */
 
-import { onMounted, onUnmounted, watch, type Ref } from 'vue'
+import { onMounted, onScopeDispose, watch, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
 
 /**
  * @param activeWhen  Optional Ref<boolean>. When provided, the composable
@@ -57,7 +57,11 @@ export function useFocusRestore(activeWhen?: Ref<boolean>): void {
       else if (!isActive && wasActive) restore()
     }, { immediate: true })
   } else {
-    onMounted(save)
-    onUnmounted(restore)
+    if (getCurrentInstance()) {
+      onMounted(save)
+    }
+    if (getCurrentScope()) {
+      onScopeDispose(restore)
+    }
   }
 }

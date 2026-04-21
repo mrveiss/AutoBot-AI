@@ -1,4 +1,4 @@
-import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue'
+import { ref, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, nextTick, type Ref } from 'vue'
 
 const MORE_BUTTON_WIDTH = 90
 const GAP = 16
@@ -44,13 +44,15 @@ export function useNavOverflow(
     visibleCount.value = Math.max(1, count)
   }
 
-  onMounted(async () => {
-    await nextTick()
-    measureNaturalWidths()
-    recalculate()
-    ro = new ResizeObserver(recalculate)
-    if (containerRef.value) ro.observe(containerRef.value)
-  })
+  if (getCurrentInstance()) {
+    onMounted(async () => {
+      await nextTick()
+      measureNaturalWidths()
+      recalculate()
+      ro = new ResizeObserver(recalculate)
+      if (containerRef.value) ro.observe(containerRef.value)
+    })
+  }
 
   watch(itemCount, async () => {
     await nextTick()
@@ -59,7 +61,9 @@ export function useNavOverflow(
     recalculate()
   })
 
-  onUnmounted(() => ro?.disconnect())
+  if (getCurrentScope()) {
+    onScopeDispose(() => ro?.disconnect())
+  }
 
   return { visibleCount }
 }

@@ -19,7 +19,7 @@
  * ```
  */
 
-import { ref, computed, watch, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
 
 export interface UseVirtualScrollOptions<T = any> {
   /**
@@ -241,14 +241,18 @@ export function useVirtualScroll<T = any>(options: UseVirtualScrollOptions<T>) {
   }
 
   // Measure container size on mount and resize
-  onMounted(() => {
-    updateContainerSize()
-    window.addEventListener('resize', updateContainerSize)
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      updateContainerSize()
+      window.addEventListener('resize', updateContainerSize)
+    })
+  }
 
-  onUnmounted(() => {
-    window.removeEventListener('resize', updateContainerSize)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      window.removeEventListener('resize', updateContainerSize)
+    })
+  }
 
   // Watch for container ref changes
   watch(containerRef, () => {

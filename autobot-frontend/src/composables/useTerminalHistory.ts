@@ -35,7 +35,7 @@
  * ```
  */
 
-import { ref, onUnmounted, computed } from 'vue'
+import { ref, onScopeDispose, getCurrentScope, computed } from 'vue'
 import terminalService from '@/services/TerminalService'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -272,12 +272,14 @@ export function useTerminalHistory(sessionId: string) {
     logger.debug('[HISTORY] Received search results', { matchCount: searchMatches.value.length })
   }
 
-  // Cleanup on unmount
-  onUnmounted(() => {
-    history.value = []
-    historyIndex.value = -1
-    exitSearchMode()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      history.value = []
+      historyIndex.value = -1
+      exitSearchMode()
+    })
+  }
 
   return {
     // State

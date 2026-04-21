@@ -16,7 +16,7 @@
  *   - 'prefers-network'  — works offline with degraded output (analytics sync)
  */
 
-import { ref, readonly, onMounted, onUnmounted } from 'vue'
+import { ref, readonly, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -108,23 +108,29 @@ export function isFeatureAvailable(
 }
 
 export function useNetworkStatus() {
-  onMounted(() => {
-    _refCount++
-    if (_refCount === 1) {
-      window.addEventListener('online', _handleOnline)
-      window.addEventListener('offline', _handleOffline)
-      _startProbeLoop()
-    }
-  })
+  // Refcount must stay balanced: only register both hooks when we have a
+  // component instance (so onMounted runs), then tie cleanup to scope-dispose.
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      _refCount++
+      if (_refCount === 1) {
+        window.addEventListener('online', _handleOnline)
+        window.addEventListener('offline', _handleOffline)
+        _startProbeLoop()
+      }
+    })
 
-  onUnmounted(() => {
-    _refCount--
-    if (_refCount === 0) {
-      window.removeEventListener('online', _handleOnline)
-      window.removeEventListener('offline', _handleOffline)
-      _stopProbeLoop()
+    if (getCurrentScope()) {
+      onScopeDispose(() => {
+        _refCount--
+        if (_refCount === 0) {
+          window.removeEventListener('online', _handleOnline)
+          window.removeEventListener('offline', _handleOffline)
+          _stopProbeLoop()
+        }
+      })
     }
-  })
+  }
 
   return {
     isOnline: readonly(_isOnline),

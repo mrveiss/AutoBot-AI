@@ -17,7 +17,7 @@
  *   setTheme('dark')  // or 'light', 'system'
  */
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue'
 
 /** Available theme options */
 export type Theme = 'dark' | 'light' | 'system'
@@ -183,9 +183,11 @@ export function useTheme() {
   }
 
   // Initialize on mount if in browser context
-  onMounted(() => {
-    initTheme()
-  })
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      initTheme()
+    })
+  }
 
   // Also initialize immediately if document exists (for SSR compatibility)
   if (typeof document !== 'undefined' && !isInitialized) {
