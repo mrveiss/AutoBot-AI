@@ -1,24 +1,26 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Regression tests for background_task_manager.py datetime arithmetic (#5419 P0).
+"""Regression tests for background_task_manager.py datetime arithmetic
+(#5419 P0 + #5463 Redis-path coverage).
 
-Pre-fix, three sites did ``(now_aware - datetime.fromisoformat(started))`` where
-``started`` from Redis could be naive ISO. ``aware - naive`` raised TypeError,
-caught by ``except (ValueError, TypeError): pass`` — silently skipping timeout
-detection on every tick. Timed-out tasks never got marked failed; orphaned
-tasks never got cleaned up.
+Pre-fix, three sites did ``(now_aware - datetime.fromisoformat(started))``
+where ``started`` from Redis could be naive ISO. ``aware - naive`` raised
+TypeError, caught by ``except (ValueError, TypeError): pass`` — silently
+skipping timeout detection on every tick.
 
-After fix, ``parse_utc_iso(started)`` always returns aware UTC regardless of
-input format, so the subtraction works cleanly.
+After #5462 fix, ``parse_utc_iso(started)`` always returns aware UTC.
 
-These tests exercise the in-memory cleanup path (_cleanup_stuck) which is the
-simplest to reach without Redis mocking. The other two sites (_clear_orphaned,
-_load_from_redis-based get_task) share the same bug class and the same fix.
+This test file covers all three fixed sites:
+- ``_cleanup_stuck`` — in-memory dict (8 tests, #5419 P0)
+- ``_mark_orphans`` — Redis-backed cleanup (5 tests, #5463)
+- ``get_status`` — Redis-backed auto-recovery (3 tests, #5463)
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -180,3 +182,278 @@ def test_cleanup_stuck_non_running_tasks_untouched(
     assert cleaned == 0
     assert manager._tasks["t8"]["status"] == "pending"
     assert manager._tasks["t9"]["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# _mark_orphans — Redis-backed cleanup path (#5463)
+#
+# RedisCache is patched at the module level to return a fake instance whose
+# get_json/set_json methods use an in-memory dict. This mirrors the shape
+# the real cache exposes without requiring a running Redis.
+# ---------------------------------------------------------------------------
+
+
+class _FakeCache:
+    """Minimal RedisCache stand-in backed by an in-memory dict."""
+
+    def __init__(self, storage: dict[str, dict]):
+        self._storage = storage
+
+    async def get_json(self, key: str):
+        return self._storage.get(key)
+
+    async def set_json(self, key: str, value: dict):
+        self._storage[key] = value
+
+
+def _make_cache_factory(storage: dict[str, dict]):
+    """Return a patch target that always yields _FakeCache(storage)."""
+    def _factory(*_args, **_kwargs):
+        return _FakeCache(storage)
+    return _factory
+
+
+@pytest.mark.asyncio
+async def test_mark_orphans_with_naive_iso_beyond_timeout_marks_failed(
+    manager: BackgroundTaskManager,
+) -> None:
+    """#5463: naive-ISO started_at beyond timeout — orphan cleanup runs cleanly.
+
+    Pre-#5462: aware - naive = TypeError, silently caught → EVERY orphan-check
+    skipped the timeout gate and marked the task failed regardless of age.
+    Post-#5462: elapsed check actually runs; only truly-expired tasks marked.
+    """
+    past_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    storage = {
+        "test_task:orphan1": {
+            "status": "running",
+            "started_at": past_naive,
+        }
+    }
+    fake_redis = MagicMock()
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        marked = await manager._mark_orphans(fake_redis, ["test_task:orphan1"])
+
+    assert marked == 1
+    assert storage["test_task:orphan1"]["status"] == "failed"
+    assert storage["test_task:orphan1"]["reason"] == "orphaned"
+
+
+@pytest.mark.asyncio
+async def test_mark_orphans_with_naive_iso_within_timeout_keeps_running(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Naive-ISO started_at within timeout — NOT marked orphaned.
+
+    This is the second half of the #5462 fix: pre-fix the TypeError caused
+    false-positive orphan marking for recent naive-timestamp tasks.
+    """
+    recent_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=10))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    storage = {
+        "test_task:orphan2": {
+            "status": "running",
+            "started_at": recent_naive,
+        }
+    }
+    fake_redis = MagicMock()
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        marked = await manager._mark_orphans(fake_redis, ["test_task:orphan2"])
+
+    assert marked == 0, (
+        "recent naive-timestamp task must not be marked orphaned — "
+        "pre-fix the silent TypeError caused false positives"
+    )
+    assert storage["test_task:orphan2"]["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_mark_orphans_skips_in_memory_tasks(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Tasks currently tracked in self._tasks (any worker) are not orphaned."""
+    past_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    # Task in self._tasks — another worker might be running it
+    manager._tasks["orphan3"] = {"status": "running", "started_at": past_naive}
+
+    storage = {
+        "test_task:orphan3": {"status": "running", "started_at": past_naive}
+    }
+    fake_redis = MagicMock()
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        marked = await manager._mark_orphans(fake_redis, ["test_task:orphan3"])
+
+    assert marked == 0
+    assert storage["test_task:orphan3"]["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_mark_orphans_skips_non_running_tasks(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Only ``status == 'running'`` Redis tasks are considered."""
+    past_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    storage = {
+        "test_task:done": {"status": "completed", "started_at": past_naive},
+    }
+    fake_redis = MagicMock()
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        marked = await manager._mark_orphans(fake_redis, ["test_task:done"])
+
+    assert marked == 0
+    assert storage["test_task:done"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_mark_orphans_with_aware_iso_beyond_timeout_marks_failed(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Sanity: aware +00:00 ISO also works (post-fix behavior unchanged)."""
+    past_aware = (
+        datetime.now(tz=timezone.utc) - timedelta(seconds=120)
+    ).isoformat()
+    storage = {
+        "test_task:aware": {"status": "running", "started_at": past_aware}
+    }
+    fake_redis = MagicMock()
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        marked = await manager._mark_orphans(fake_redis, ["test_task:aware"])
+
+    assert marked == 1
+    assert storage["test_task:aware"]["status"] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# get_status auto-recovery — Redis-backed zombie detection (#5463)
+#
+# The third fixed site at line 327. When a running-status task is loaded
+# from Redis and has exceeded the timeout, auto-mark it failed.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_status_auto_recovers_timed_out_naive_task(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Timed-out task with naive started_at → auto-marked failed in Redis.
+
+    Pre-#5462: TypeError silently caught → task kept reporting "running"
+    indefinitely. The frontend would see infinite spinner.
+    """
+    past_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    storage = {
+        "test_task:zombie": {"status": "running", "started_at": past_naive}
+    }
+
+    async def _fake_load(task_id: str):
+        return storage.get(f"{manager._prefix}{task_id}")
+
+    async def _fake_get_redis():
+        return MagicMock()  # truthy so cache.set_json path fires
+
+    manager._load_from_redis = _fake_load  # type: ignore[method-assign]
+    manager._get_redis = _fake_get_redis  # type: ignore[method-assign]
+
+    with patch(
+        "utils.background_task_manager.RedisCache",
+        side_effect=_make_cache_factory(storage),
+    ):
+        result = await manager.get_status("zombie")
+
+    assert result is not None
+    assert result["status"] == "failed"
+    assert result["reason"] == "timeout"
+    # Verify the fix was persisted back to Redis via set_json
+    assert storage["test_task:zombie"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_get_status_keeps_recent_naive_task_running(
+    manager: BackgroundTaskManager,
+) -> None:
+    """Recent task (within timeout) with naive started_at stays running."""
+    recent_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=10))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    storage = {
+        "test_task:fresh": {"status": "running", "started_at": recent_naive}
+    }
+
+    async def _fake_load(task_id: str):
+        return storage.get(f"{manager._prefix}{task_id}")
+
+    manager._load_from_redis = _fake_load  # type: ignore[method-assign]
+
+    result = await manager.get_status("fresh")
+
+    assert result is not None
+    assert result["status"] == "running", (
+        "recent task must not be auto-recovered — pre-fix the TypeError "
+        "would also have left status=running but for the wrong reason "
+        "(elapsed check skipped entirely)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_status_returns_in_memory_task_without_auto_recovery(
+    manager: BackgroundTaskManager,
+) -> None:
+    """In-memory tasks bypass Redis + auto-recovery entirely."""
+    past_naive = (
+        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+    manager._tasks["inmem"] = {
+        "status": "running",
+        "started_at": past_naive,
+        "params": {"secret": "hidden"},
+    }
+
+    result = await manager.get_status("inmem")
+
+    # Still "running" (no Redis path taken), params stripped
+    assert result is not None
+    assert result["status"] == "running"
+    assert "params" not in result
