@@ -355,10 +355,11 @@
 <script setup lang="ts">
 // Issue #929 - Plugin Manager UI
 // Issue #1359: i18n string extraction
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 
 const { t } = useI18n()
@@ -389,6 +390,8 @@ const detailDialogRef = ref<HTMLElement | null>(null)
 const isDetailOpen = computed(() => selectedPlugin.value !== null)
 const { onKeydown: onDetailKeydown } = useFocusTrap(detailDialogRef)
 useFocusRestore(isDetailOpen)
+const { focusFirst: focusDetailFirst } = useInitialFocus(detailDialogRef)
+watch(isDetailOpen, (open) => { if (open) focusDetailFirst() })
 const pluginConfig = ref<Record<string, unknown> | null>(null)
 const configLoading = ref(false)
 const editingConfig = ref(false)

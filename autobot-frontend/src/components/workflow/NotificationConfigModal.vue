@@ -135,6 +135,7 @@ import {
 } from '@/composables/useNotificationConfig';
 import { useFocusTrap } from '@/composables/useFocusTrap';
 import { useFocusRestore } from '@/composables/useFocusRestore';
+import { useInitialFocus } from '@/composables/useInitialFocus';
 
 const props = defineProps<{
   visible: boolean;
@@ -149,6 +150,8 @@ const emit = defineEmits<{
 const dialogRef = ref<HTMLElement | null>(null);
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
 useFocusRestore(toRef(props, 'visible'));
+const { focusFirst } = useInitialFocus(dialogRef);
+watch(() => props.visible, (open) => { if (open) focusFirst() });
 
 const { config, loading, saving, error, fetchConfig, saveConfig } = useNotificationConfig();
 

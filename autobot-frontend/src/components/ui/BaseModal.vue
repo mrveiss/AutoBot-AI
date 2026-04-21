@@ -53,10 +53,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted, useId, toRef } from 'vue'
+import { ref, computed, onUnmounted, useId, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useFocusTrap, FOCUSABLE_SELECTOR } from '@/composables/useFocusTrap'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
+import { useInitialFocus } from '@/composables/useInitialFocus'
 import Icon from './Icon.vue'
 
 /**
@@ -129,6 +130,8 @@ const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
 // the trigger element (correct).
 useFocusRestore(toRef(props, 'modelValue'))
 
+const { focusFirst } = useInitialFocus(dialogRef)
+
 // Stable unique IDs for ARIA labeling (Vue 3.5+ useId)
 const _uid = useId()
 const titleId = computed(() => `modal-title-${_uid}`)
@@ -158,19 +161,7 @@ const handleOverlayClick = () => {
 
 // Focus trap implementation — focus restore handled by useFocusRestore above.
 const onAfterEnter = async () => {
-  await nextTick()
-
-  // Focus the dialog or first focusable element
-  if (dialogRef.value) {
-    const firstFocusable = dialogRef.value.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
-
-    if (firstFocusable) {
-      firstFocusable.focus()
-    } else {
-      dialogRef.value.focus()
-    }
-  }
-
+  await focusFirst()
   // Lock body scroll
   document.body.style.overflow = 'hidden'
 }

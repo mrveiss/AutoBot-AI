@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted, watch, useId, toRef } from 'vue';
+import { ref, onMounted, onUnmounted, watch, useId, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
@@ -190,6 +190,7 @@ import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useFocusTrap } from '@/composables/useFocusTrap';
 import { useFocusRestore } from '@/composables/useFocusRestore';
+import { useInitialFocus } from '@/composables/useInitialFocus';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -246,6 +247,7 @@ const hostListLabelId = `host-list-label-${_uid}`;
 const dialogRef = ref<HTMLElement | null>(null);
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
 useFocusRestore(toRef(props, 'show'));
+const { focusFirst } = useInitialFocus(dialogRef);
 
 // State
 const showDialog = ref(false);
@@ -420,13 +422,13 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 };
 
-// Watchers — focus save/restore handled by useFocusRestore above.
+// Watchers — focus save/restore handled by useFocusRestore above,
+// initial focus by useInitialFocus.
 watch(() => props.show, async (newValue) => {
   showDialog.value = newValue;
   if (newValue) {
     loadHosts();
-    await nextTick();
-    dialogRef.value?.focus();
+    await focusFirst();
   }
 }, { immediate: true });
 
