@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiosqlite
 
+from autobot_shared.time_utils import parse_utc_iso
+
 from ..enums import TaskPriority, TaskStatus
 from ..models import TaskExecutionRecord
 
@@ -293,17 +295,17 @@ class TaskStorage:
             status=TaskStatus(row["status"]),
             priority=TaskPriority(row["priority"]),
             created_at=(
-                datetime.fromisoformat(row["created_at"])
+                parse_utc_iso(row["created_at"])
                 if isinstance(row["created_at"], str)
                 else row["created_at"]
             ),
             started_at=(
-                datetime.fromisoformat(row["started_at"])
+                parse_utc_iso(row["started_at"])
                 if row["started_at"] and isinstance(row["started_at"], str)
                 else row["started_at"]
             ),
             completed_at=(
-                datetime.fromisoformat(row["completed_at"])
+                parse_utc_iso(row["completed_at"])
                 if row["completed_at"] and isinstance(row["completed_at"], str)
                 else row["completed_at"]
             ),

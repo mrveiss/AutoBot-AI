@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
+
 try:
     from redis.exceptions import RedisError
 
@@ -94,9 +96,9 @@ class TaskResult:
         if "status" in data:
             data["status"] = TaskStatus(data["status"])
         if "started_at" in data and data["started_at"]:
-            data["started_at"] = datetime.fromisoformat(data["started_at"])
+            data["started_at"] = parse_utc_iso(data["started_at"])
         if "completed_at" in data and data["completed_at"]:
-            data["completed_at"] = datetime.fromisoformat(data["completed_at"])
+            data["completed_at"] = parse_utc_iso(data["completed_at"])
         return cls(**data)
 
 
@@ -144,11 +146,11 @@ class Task:
         if "priority" in data:
             data["priority"] = TaskPriority(data["priority"])
         if "created_at" in data:
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
+            data["created_at"] = parse_utc_iso(data["created_at"])
         if "scheduled_at" in data and data["scheduled_at"]:
-            data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
+            data["scheduled_at"] = parse_utc_iso(data["scheduled_at"])
         if "expires_at" in data and data["expires_at"]:
-            data["expires_at"] = datetime.fromisoformat(data["expires_at"])
+            data["expires_at"] = parse_utc_iso(data["expires_at"])
         return cls(**data)
 
 

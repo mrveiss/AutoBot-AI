@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Union
 
 import aiosqlite
 
+from autobot_shared.time_utils import parse_utc_iso
+
 from ..enums import MemoryCategory
 from ..models import MemoryEntry
 
@@ -220,7 +222,7 @@ class GeneralStorage:
             content=row["content"],
             metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else {},
             timestamp=(
-                datetime.fromisoformat(row["timestamp"])
+                parse_utc_iso(row["timestamp"])
                 if isinstance(row["timestamp"], str)
                 else row["timestamp"]
             ),

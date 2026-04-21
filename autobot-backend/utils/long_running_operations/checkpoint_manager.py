@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import redis.asyncio as redis
 
+from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -182,7 +183,7 @@ class OperationCheckpointManager:
                         return OperationCheckpoint(
                             checkpoint_id=checkpoint_data["checkpoint_id"],
                             operation_id=checkpoint_data["operation_id"],
-                            checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
+                            checkpoint_time=parse_utc_iso(checkpoint_data["checkpoint_time"]),
                             progress_percent=checkpoint_data["progress_percent"],
                             state_data=checkpoint_data["state_data"],
                             metadata=checkpoint_data.get("metadata", {}),
@@ -198,7 +199,7 @@ class OperationCheckpointManager:
                 return OperationCheckpoint(
                     checkpoint_id=checkpoint_data["checkpoint_id"],
                     operation_id=checkpoint_data["operation_id"],
-                    checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
+                    checkpoint_time=parse_utc_iso(checkpoint_data["checkpoint_time"]),
                     progress_percent=checkpoint_data["progress_percent"],
                     state_data=checkpoint_data["state_data"],
                     metadata=checkpoint_data.get("metadata", {}),
@@ -221,7 +222,7 @@ class OperationCheckpointManager:
         return OperationCheckpoint(
             checkpoint_id=checkpoint_data["checkpoint_id"],
             operation_id=checkpoint_data["operation_id"],
-            checkpoint_time=datetime.fromisoformat(checkpoint_data["checkpoint_time"]),
+            checkpoint_time=parse_utc_iso(checkpoint_data["checkpoint_time"]),
             progress_percent=checkpoint_data["progress_percent"],
             state_data=checkpoint_data["state_data"],
             metadata=checkpoint_data.get("metadata", {}),
