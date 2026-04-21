@@ -12,7 +12,7 @@ import json
 import logging
 import threading
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -525,8 +525,8 @@ class SecurityPolicyManager:
             enforcement_mode=enforcement_mode,
             rules=rules,
             metadata=metadata or {},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(tz=timezone.utc),
+            updated_at=datetime.now(tz=timezone.utc),
             version="1.0",
             author=author,
             approval_required=self.config.get("policy_management", {}).get(
@@ -571,7 +571,7 @@ class SecurityPolicyManager:
                 setattr(policy, key, value)
 
         policy.version = new_version
-        policy.updated_at = datetime.utcnow()
+        policy.updated_at = datetime.now(tz=timezone.utc)
         policy.author = author
 
         # Reset approval if significant changes
@@ -597,10 +597,10 @@ class SecurityPolicyManager:
 
         policy.status = PolicyStatus.ACTIVE
         policy.approved_by = approver
-        policy.approved_at = datetime.utcnow()
+        policy.approved_at = datetime.now(tz=timezone.utc)
 
         if not policy.effective_date:
-            policy.effective_date = datetime.utcnow()
+            policy.effective_date = datetime.now(tz=timezone.utc)
 
         self._save_policy(policy)
         self._update_policy_statistics()
@@ -617,7 +617,7 @@ class SecurityPolicyManager:
 
         policy = self.policies[policy_id]
         policy.status = PolicyStatus.INACTIVE
-        policy.updated_at = datetime.utcnow()
+        policy.updated_at = datetime.now(tz=timezone.utc)
 
         self._save_policy(policy)
         self._update_policy_statistics()
@@ -637,7 +637,7 @@ class SecurityPolicyManager:
             action=context.get("action", ""),
             violation_type=check_result["violation_type"],
             severity=check_result["severity"],
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(tz=timezone.utc),
             details=check_result["details"],
         )
 
@@ -778,7 +778,7 @@ class SecurityPolicyManager:
             if rule["name"] == "idle_timeout_minutes":
                 last_activity = session_data.get("last_activity")
                 if last_activity:
-                    idle_time = (datetime.utcnow() - last_activity).total_seconds() / 60
+                    idle_time = (datetime.now(tz=timezone.utc) - last_activity).total_seconds() / 60
                     if idle_time > rule["value"]:
                         result["compliant"] = False
                         result["violation_type"] = "session_idle_timeout"
@@ -1014,7 +1014,7 @@ class SecurityPolicyManager:
                 [
                     v
                     for v in self.policy_violations
-                    if (datetime.utcnow() - v.timestamp).days <= 30
+                    if (datetime.now(tz=timezone.utc) - v.timestamp).days <= 30
                 ]
             ),
         }

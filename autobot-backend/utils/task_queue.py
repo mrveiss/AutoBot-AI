@@ -15,7 +15,7 @@ import time
 import traceback
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -124,7 +124,7 @@ class Task:
         if self.kwargs is None:
             self.kwargs = {}
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(tz=timezone.utc)
         if self.metadata is None:
             self.metadata = {}
 
@@ -251,11 +251,11 @@ class TaskQueue:
         """
         scheduled_at = None
         if delay:
-            scheduled_at = datetime.utcnow() + timedelta(seconds=delay)
+            scheduled_at = datetime.now(tz=timezone.utc) + timedelta(seconds=delay)
 
         expires_at = None
         if expires_in:
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
 
         return scheduled_at, expires_at
 
@@ -274,7 +274,7 @@ class TaskQueue:
         Issue #620.
         """
         try:
-            if scheduled_at and scheduled_at > datetime.utcnow():
+            if scheduled_at and scheduled_at > datetime.now(tz=timezone.utc):
                 score = scheduled_at.timestamp()
                 await self.redis.zadd(self.scheduled_key, {task_id: score})
             else:
@@ -369,7 +369,7 @@ class TaskQueue:
 
         self.is_running = True
         async with self._stats_lock:
-            self.stats["started_at"] = datetime.utcnow()
+            self.stats["started_at"] = datetime.now(tz=timezone.utc)
 
         # Start task workers
         for i in range(self.max_workers):
@@ -513,7 +513,7 @@ class TaskQueue:
         """
         result.status = TaskStatus.COMPLETED
         result.result = task_result
-        result.completed_at = datetime.utcnow()
+        result.completed_at = datetime.now(tz=timezone.utc)
         result.execution_time = time.time() - start_time
 
         async with self._stats_lock:
@@ -542,7 +542,7 @@ class TaskQueue:
         result.error = error
         if error_traceback:
             result.error_traceback = error_traceback
-        result.completed_at = datetime.utcnow()
+        result.completed_at = datetime.now(tz=timezone.utc)
         result.execution_time = time.time() - start_time
 
     def _check_task_expired(self, task: Task) -> bool:
@@ -557,7 +557,7 @@ class TaskQueue:
 
         Issue #620.
         """
-        return task.expires_at is not None and datetime.utcnow() > task.expires_at
+        return task.expires_at is not None and datetime.now(tz=timezone.utc) > task.expires_at
 
     async def _execute_task_with_timeout(self, task: Task, result: TaskResult, start_time: float) -> None:
         """
@@ -609,7 +609,7 @@ class TaskQueue:
 
         self.logger.info("Worker %s processing task %s: %s", worker_name, task_id, task.function_name)
 
-        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow())
+        result = TaskResult(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.now(tz=timezone.utc))
 
         try:
             await self._execute_task_with_timeout(task, result, start_time)
@@ -654,7 +654,7 @@ class TaskQueue:
         result.status = TaskStatus.RETRY
 
         retry_delay = task.retry_delay * (2**result.retry_count)
-        retry_time = datetime.utcnow() + timedelta(seconds=retry_delay)
+        retry_time = datetime.now(tz=timezone.utc) + timedelta(seconds=retry_delay)
 
         if task.metadata:
             task.metadata["retry_count"] = result.retry_count
@@ -746,7 +746,7 @@ class TaskQueue:
             result = TaskResult(
                 task_id=task_id,
                 status=TaskStatus.CANCELLED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(tz=timezone.utc),
             )
 
             result_data = json.dumps(result.to_dict())
@@ -794,7 +794,7 @@ class TaskQueue:
         }
 
         if started_at:
-            uptime = datetime.utcnow() - started_at
+            uptime = datetime.now(tz=timezone.utc) - started_at
             stats["uptime_seconds"] = uptime.total_seconds()
 
         return stats
