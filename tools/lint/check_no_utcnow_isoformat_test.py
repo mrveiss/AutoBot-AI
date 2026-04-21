@@ -291,3 +291,100 @@ def test_non_python_argv_silently_skipped(tmp_path: Path) -> None:
     md = _write(tmp_path, "notes.md", "datetime.utcnow().isoformat() in markdown\n")
     rc = hook.main(["check_no_utcnow_isoformat", str(md)])
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# .worktrees exclusion (#5394) — full-repo scan must skip parallel worktrees
+# ---------------------------------------------------------------------------
+
+
+def test_worktrees_directory_excluded_from_full_scan(tmp_path: Path) -> None:
+    # Simulate the repo layout: .worktrees/issue-XXXX/ contains a violation
+    # that would fire if scanned. Full-scan mode (no argv) must skip it.
+    worktree_file = tmp_path / ".worktrees" / "issue-9999" / "leaked.py"
+    worktree_file.parent.mkdir(parents=True)
+    worktree_file.write_text(
+        "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",
+        encoding="utf-8",
+    )
+    files = list(hook._iter_target_files([], tmp_path))
+    assert worktree_file not in files, ".worktrees/ must be excluded from full scan"
+
+
+# ---------------------------------------------------------------------------
+# Path-aware suggestion (#5397) — message recommends inline form for
+# components that lack autobot_shared on path
+# ---------------------------------------------------------------------------
+
+
+def test_suggestion_uses_helper_for_default_path() -> None:
+    # autobot-backend/ files have autobot_shared on path → recommend helper
+    msg = hook._suggestion_for("autobot-backend/services/something.py")
+    assert "utc_timestamp()" in msg
+    assert "autobot_shared.time_utils" in msg
+
+
+def test_suggestion_uses_inline_for_slm_agent_standalone() -> None:
+    # Standalone agent runs on remote nodes possibly without autobot_shared
+    msg = hook._suggestion_for("autobot-slm-agent/agent.py")
+    assert "datetime.now(timezone.utc).isoformat()" in msg
+    assert "inline" in msg
+
+
+def test_suggestion_uses_inline_for_slm_backend_agent_subpackage() -> None:
+    # Same agent code lives under slm-backend/slm/agent/ — also remote-deployed
+    msg = hook._suggestion_for("autobot-slm-backend/slm/agent/health_collector.py")
+    assert "datetime.now(timezone.utc).isoformat()" in msg
+
+
+def test_suggestion_uses_inline_for_ansible_synced_copy() -> None:
+    # Ansible-synced mirror of the agent code — same constraints
+    msg = hook._suggestion_for(
+        "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py"
+    )
+    assert "datetime.now(timezone.utc).isoformat()" in msg
+
+
+def test_suggestion_uses_inline_for_infra_shared_scripts() -> None:
+    # Log forwarders run as standalone scripts on infra nodes
+    msg = hook._suggestion_for(
+        "autobot-infrastructure/shared/scripts/seq_log_forwarder.py"
+    )
+    assert "datetime.now(timezone.utc).isoformat()" in msg
+
+
+def test_scan_emits_path_aware_suggestion_in_message(tmp_path: Path) -> None:
+    # End-to-end: a violation in an inline-path file produces a message
+    # recommending the inline form, not utc_timestamp().
+    target = tmp_path / "autobot-slm-agent" / "agent.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",
+        encoding="utf-8",
+    )
+    hits = hook._scan(target, tmp_path)
+    assert len(hits) == 1
+    _, _, message = hits[0]
+    assert "datetime.now(timezone.utc).isoformat()" in message
+    assert "utc_timestamp()" not in message
+
+
+# ---------------------------------------------------------------------------
+# #5393 allowlist — knowledge_context_suggestions_test.py is exempt because
+# the test deliberately exercises naive-timestamp handling
+# ---------------------------------------------------------------------------
+
+
+def test_naive_timestamp_test_fixture_allowlisted(tmp_path: Path) -> None:
+    # The test at autobot-backend/knowledge/knowledge_context_suggestions_test.py
+    # has `naive = datetime.utcnow().isoformat()` by design. Allowlist exempts it.
+    target = tmp_path / "autobot-backend" / "knowledge" / "knowledge_context_suggestions_test.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "def test_naive_timestamp_handled(mixin):\n"
+        "    naive = datetime.utcnow().isoformat()\n"
+        "    assert mixin._compute_recency_score(naive) >= 0.0\n",
+        encoding="utf-8",
+    )
+    hits = hook._scan(target, tmp_path)
+    assert hits == [], "knowledge_context_suggestions_test.py must be allowlisted (#5393)"
