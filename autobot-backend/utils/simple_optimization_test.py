@@ -18,9 +18,9 @@ async def test_direct_optimization():
     print("=" * 50)  # noqa: print
 
     try:
-        from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+        from utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
 
-        chunker = get_gpu_semantic_chunker()
+        chunker = get_optimized_semantic_chunker()
         print(f"✅ Optimized chunker imported: {type(chunker).__name__}")  # noqa: print
         print(f"📍 Module: {chunker.__class__.__module__}")  # noqa: print
 
@@ -38,7 +38,7 @@ async def test_direct_optimization():
         print(f"Text length: {len(test_text)} characters")  # noqa: print
 
         start_time = time.time()
-        chunks = await chunker.chunk_text(test_text)
+        chunks = await chunker.chunk_text_optimized(test_text)
         processing_time = time.time() - start_time
 
         print("\n📊 Results:")  # noqa: print
@@ -74,9 +74,9 @@ async def test_performance_stats():
     print("\n📊 Testing Performance Statistics...")  # noqa: print
 
     try:
-        from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+        from utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
 
-        chunker = get_gpu_semantic_chunker()
+        chunker = get_optimized_semantic_chunker()
 
         # Check if performance stats are available
         if hasattr(chunker, "get_performance_stats"):
