@@ -102,10 +102,14 @@
     <!-- Delete confirmation dialog -->
     <div
       v-if="deleteTarget"
+      ref="deleteDialogRef"
       class="modal-overlay"
       role="dialog"
       aria-modal="true"
       :aria-label="`Confirm deletion of ${deleteTarget.title}`"
+      tabindex="-1"
+      @keydown="onDeleteDialogKeydown"
+      @keydown.escape="deleteTarget = null"
     >
       <div class="modal-card">
         <h3 class="modal-title">Delete document?</h3>
@@ -136,12 +140,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
 import { createLogger } from '@/utils/debugUtils'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 
 const logger = createLogger('DocumentsView')
 
@@ -151,6 +157,11 @@ const composable = useAIDocument()
 const selectedDocId = ref<string | null>(null)
 const currentOffset = ref(0)
 const deleteTarget = ref<{ id: string; title: string } | null>(null)
+
+const deleteDialogRef = ref<HTMLElement | null>(null)
+const isDeleteDialogOpen = computed(() => deleteTarget.value !== null)
+const { onKeydown: onDeleteDialogKeydown } = useFocusTrap(deleteDialogRef)
+useFocusRestore(isDeleteDialogOpen)
 const errorMessage = ref<string | null>(null)
 
 // ---------------------------------------------------------------------------

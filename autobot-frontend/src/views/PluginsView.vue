@@ -272,7 +272,16 @@
 
     <!-- Plugin Detail Modal -->
     <div v-if="selectedPlugin" class="modal-overlay" @click.self="closeDetail">
-      <div class="modal-panel" role="dialog" aria-modal="true" :aria-label="$t('views.plugins.pluginDetails')">
+      <div
+        ref="detailDialogRef"
+        class="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('views.plugins.pluginDetails')"
+        tabindex="-1"
+        @keydown="onDetailKeydown"
+        @keydown.escape="closeDetail"
+      >
         <div class="modal-header">
           <h2 class="modal-title">{{ selectedPlugin.display_name }}</h2>
           <button class="modal-close" @click="closeDetail" :aria-label="$t('views.plugins.close')">
@@ -348,6 +357,8 @@
 // Issue #1359: i18n string extraction
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 
 const { t } = useI18n()
@@ -373,6 +384,11 @@ const actionLoading = ref<Record<string, boolean>>({})
 
 // Modal state
 const selectedPlugin = ref<PluginInfo | null>(null)
+
+const detailDialogRef = ref<HTMLElement | null>(null)
+const isDetailOpen = computed(() => selectedPlugin.value !== null)
+const { onKeydown: onDetailKeydown } = useFocusTrap(detailDialogRef)
+useFocusRestore(isDetailOpen)
 const pluginConfig = ref<Record<string, unknown> | null>(null)
 const configLoading = ref(false)
 const editingConfig = ref(false)

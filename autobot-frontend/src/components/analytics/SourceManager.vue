@@ -1,7 +1,16 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="source-manager-overlay" @click.self="$emit('close')">
-      <div class="source-manager-panel" role="dialog" aria-modal="true" :aria-label="$t('analytics.sources.registry')">
+      <div
+        ref="dialogRef"
+        class="source-manager-panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('analytics.sources.registry')"
+        tabindex="-1"
+        @keydown="onFocusTrapKeydown"
+        @keydown.escape="$emit('close')"
+      >
         <!-- Panel Header -->
         <div class="panel-header">
           <div class="panel-title">
@@ -170,8 +179,10 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -205,6 +216,10 @@ const emit = defineEmits<{
   (e: 'share-source', source: CodeSource): void
   (e: 'close'): void
 }>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'visible'))
 
 // ---- State ----------------------------------------------------------------
 
