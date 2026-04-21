@@ -11,8 +11,10 @@
  * Fetches real users from the /user-management/users API endpoint.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
 import { useDebounce } from '@/composables/useDebounce'
@@ -36,6 +38,10 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   invited: [userId: string, username: string, role: string]
 }>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(toRef(props, 'modelValue'))
 
 // Types
 interface User {
@@ -228,10 +234,14 @@ const roleOptions = computed(() => [
       <Transition name="modal-content">
         <div
           v-if="props.modelValue"
+          ref="dialogRef"
           class="bg-autobot-bg-secondary rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
           role="dialog"
           aria-labelledby="invite-dialog-title"
           aria-modal="true"
+          tabindex="-1"
+          @keydown="onFocusTrapKeydown"
+          @keydown.escape="closeDialog"
         >
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
