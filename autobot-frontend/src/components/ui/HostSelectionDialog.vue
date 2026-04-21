@@ -191,6 +191,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { useFocusTrap } from '@/composables/useFocusTrap';
 import { useFocusRestore } from '@/composables/useFocusRestore';
 import { useInitialFocus } from '@/composables/useInitialFocus';
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -247,6 +248,7 @@ const hostListLabelId = `host-list-label-${_uid}`;
 const dialogRef = ref<HTMLElement | null>(null);
 const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef);
 useFocusRestore(toRef(props, 'show'));
+useBodyScrollLock(toRef(props, 'show'));
 const { focusFirst } = useInitialFocus(dialogRef);
 
 // State

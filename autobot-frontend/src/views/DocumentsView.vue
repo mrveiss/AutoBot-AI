@@ -149,6 +149,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
 const logger = createLogger('DocumentsView')
 
@@ -163,8 +164,9 @@ const deleteDialogRef = ref<HTMLElement | null>(null)
 const isDeleteDialogOpen = computed(() => deleteTarget.value !== null)
 const { onKeydown: onDeleteDialogKeydown } = useFocusTrap(deleteDialogRef)
 useFocusRestore(isDeleteDialogOpen)
+useBodyScrollLock(isDeleteDialogOpen)
 const { focusFirst: focusDeleteFirst } = useInitialFocus(deleteDialogRef)
-watch(isDeleteDialogOpen, (open) => { if (open) focusDeleteFirst() })
+watch(isDeleteDialogOpen, (open) => { if (open) focusDeleteFirst() }, { immediate: true })
 const errorMessage = ref<string | null>(null)
 
 // ---------------------------------------------------------------------------

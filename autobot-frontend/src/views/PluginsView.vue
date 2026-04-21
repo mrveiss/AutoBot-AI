@@ -360,6 +360,7 @@ import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
+import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 
 const { t } = useI18n()
@@ -390,8 +391,9 @@ const detailDialogRef = ref<HTMLElement | null>(null)
 const isDetailOpen = computed(() => selectedPlugin.value !== null)
 const { onKeydown: onDetailKeydown } = useFocusTrap(detailDialogRef)
 useFocusRestore(isDetailOpen)
+useBodyScrollLock(isDetailOpen)
 const { focusFirst: focusDetailFirst } = useInitialFocus(detailDialogRef)
-watch(isDetailOpen, (open) => { if (open) focusDetailFirst() })
+watch(isDetailOpen, (open) => { if (open) focusDetailFirst() }, { immediate: true })
 const pluginConfig = ref<Record<string, unknown> | null>(null)
 const configLoading = ref(false)
 const editingConfig = ref(false)
