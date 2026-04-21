@@ -37,7 +37,7 @@
  * ```
  */
 
-import { ref, onUnmounted, type Ref } from 'vue'
+import { ref, onScopeDispose, getCurrentScope, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for useTimeout
@@ -276,10 +276,12 @@ export function useDebounce<T extends (...args: any[]) => any>(
   debounced.cancel = cancel
   debounced.flush = flush
 
-  // Auto-cleanup on unmount
-  onUnmounted(() => {
-    cancel()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      cancel()
+    })
+  }
 
   return debounced
 }
@@ -395,10 +397,12 @@ export function useThrottle<T extends (...args: any[]) => any>(
 
   throttled.cancel = cancel
 
-  // Auto-cleanup on unmount
-  onUnmounted(() => {
-    cancel()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      cancel()
+    })
+  }
 
   return throttled
 }
@@ -489,10 +493,12 @@ export function useTimeout(
     start()
   }
 
-  // Auto-cleanup on unmount
-  onUnmounted(() => {
-    stop()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stop()
+    })
+  }
 
   return {
     start,
@@ -607,10 +613,12 @@ export function useInterval(
     start()
   }
 
-  // Auto-cleanup on unmount
-  onUnmounted(() => {
-    stop()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stop()
+    })
+  }
 
   return {
     start,
@@ -725,10 +733,12 @@ export function useCancelableSleep(ms: number): CancelableSleep {
     }
   }
 
-  // Auto-cleanup on unmount
-  onUnmounted(() => {
-    cancel()
-  })
+  // Cleanup when effect scope disposes (component unmount or scope.stop())
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      cancel()
+    })
+  }
 
   return {
     promise,

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { effectScope } from 'vue'
 import { useThumbnailWorker } from '../useThumbnailWorker'
 
 describe('useThumbnailWorker', () => {
@@ -171,5 +172,42 @@ describe('useThumbnailWorker', () => {
 
     clearCache()
     expect(getCacheStats().localStorageCacheSize).toBe(0)
+  })
+
+  // ========================================
+  // Scope-aware cleanup (#5347)
+  // ========================================
+
+  describe('scope-aware cleanup (#5347)', () => {
+    it('does not warn outside component setup when used in effectScope', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const scope = effectScope()
+      scope.run(() => {
+        useThumbnailWorker()
+      })
+      scope.stop()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('does not warn when called with no active scope at all', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { clearCache } = useThumbnailWorker()
+      clearCache()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('no active component')
+      )
+      warn.mockRestore()
+    })
+
+    it('scope.stop() disposes cleanup without errors', () => {
+      const scope = effectScope()
+      scope.run(() => {
+        useThumbnailWorker()
+      })
+      expect(() => scope.stop()).not.toThrow()
+    })
   })
 })
