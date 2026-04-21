@@ -33,6 +33,7 @@ from fastapi import HTTPException
 
 from autobot_shared.redis_management.cache_wrapper import RedisCache
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import parse_utc_iso
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ class BackgroundTaskManager:
             started = task.get("started_at")
             if started:
                 try:
-                    elapsed = (now - datetime.fromisoformat(started)).total_seconds()
+                    elapsed = (now - parse_utc_iso(started)).total_seconds()
                     if elapsed < self._timeout:
                         continue  # Still within timeout — may be running on another worker
                 except (ValueError, TypeError):
@@ -180,7 +181,7 @@ class BackgroundTaskManager:
             stuck = True
             if started:
                 try:
-                    elapsed = (now - datetime.fromisoformat(started)).total_seconds()
+                    elapsed = (now - parse_utc_iso(started)).total_seconds()
                     stuck = elapsed > self._timeout
                 except (ValueError, TypeError):
                     pass
@@ -323,7 +324,7 @@ class BackgroundTaskManager:
             started = redis_task.get("started_at")
             if started:
                 try:
-                    elapsed = (datetime.now(tz=timezone.utc) - datetime.fromisoformat(started)).total_seconds()
+                    elapsed = (datetime.now(tz=timezone.utc) - parse_utc_iso(started)).total_seconds()
                     if elapsed > self._timeout:
                         redis_task["status"] = "failed"
                         redis_task["error"] = "Task timed out (auto-recovered)"
