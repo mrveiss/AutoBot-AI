@@ -15,6 +15,7 @@ import sys
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 from tests.helpers.fake_kb import FactsFakeKB
+from knowledge.facts import FactsMixin
 
 import pytest
 

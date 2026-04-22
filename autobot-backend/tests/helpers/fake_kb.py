@@ -8,7 +8,7 @@ Extracted from scattered _FakeKB definitions per #5443/#5557.
 
 from unittest.mock import AsyncMock, MagicMock
 
-from knowledge.facts.mixin import FactsMixin
+from knowledge.facts import FactsMixin
 
 
 class MinimalFakeKB:
