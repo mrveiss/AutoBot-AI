@@ -1,5 +1,6 @@
 // ChatInterface TypeScript definitions and setup
 import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -396,7 +397,6 @@ export function useChatInterface() {
   })
 
   // Message polling for real-time updates
-  let messagePollingInterval: number | null = null
   let _lastMessageCount = 0  // Tracks count for future deduplication optimization
 
   const loadChatMessages = async (chatId: string, silent: boolean = false): Promise<void> => {
@@ -447,29 +447,18 @@ export function useChatInterface() {
     }
   }
 
-  const startMessagePolling = (chatId: string) => {
-    // Clear any existing polling
-    stopMessagePolling()
-
-    // Poll every 2 seconds for new messages
-    messagePollingInterval = window.setInterval(async () => {
+  const { start: _startMessagePolling, stop: stopMessagePolling } = usePollingJob(
+    async (chatId: string) => {
       if (currentChatId.value === chatId) {
         await loadChatMessages(chatId, true) // silent=true to avoid error spam
-      } else {
-        // Chat switched, stop polling
-        stopMessagePolling()
       }
-    }, 2000)
+    },
+    { intervalMs: 2000, maxAttempts: Number.MAX_SAFE_INTEGER }
+  )
 
+  const startMessagePolling = (chatId: string) => {
     logger.debug(`Started message polling for chat ${chatId}`)
-  }
-
-  const stopMessagePolling = () => {
-    if (messagePollingInterval) {
-      clearInterval(messagePollingInterval)
-      messagePollingInterval = null
-      logger.debug('Stopped message polling')
-    }
+    _startMessagePolling(chatId)
   }
 
   const loadChatContext = async (chatId: string): Promise<void> => {
