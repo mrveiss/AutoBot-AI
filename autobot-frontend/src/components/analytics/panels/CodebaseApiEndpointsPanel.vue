@@ -97,10 +97,10 @@
         <div v-if="analysis.orphaned?.length > 0" class="accordion-group">
           <div
             class="accordion-header warning"
-            @click="expanded.orphaned = !expanded.orphaned"
+            @click="toggle('orphaned')"
           >
             <div class="header-info">
-              <i :class="expanded.orphaned ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('orphaned') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.apiCoverage.orphanedEndpoints') }}
               </span>
@@ -113,7 +113,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.orphaned" class="accordion-items">
+            <div v-if="isExpanded('orphaned')" class="accordion-items">
               <div
                 v-for="(ep, index) in analysis.orphaned.slice(0, 30)"
                 :key="'orphan-' + index"
@@ -138,10 +138,10 @@
         <div v-if="analysis.missing?.length > 0" class="accordion-group">
           <div
             class="accordion-header critical"
-            @click="expanded.missing = !expanded.missing"
+            @click="toggle('missing')"
           >
             <div class="header-info">
-              <i :class="expanded.missing ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('missing') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.apiCoverage.missingEndpoints') }}
               </span>
@@ -154,7 +154,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.missing" class="accordion-items">
+            <div v-if="isExpanded('missing')" class="accordion-items">
               <div
                 v-for="(ep, index) in analysis.missing.slice(0, 30)"
                 :key="'missing-' + index"
@@ -180,10 +180,10 @@
         <div v-if="(analysis.used?.length ?? 0) > 0" class="accordion-group">
           <div
             class="accordion-header success"
-            @click="expanded.used = !expanded.used"
+            @click="toggle('used')"
           >
             <div class="header-info">
-              <i :class="expanded.used ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('used') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.apiCoverage.usedEndpointsHeader') }}
               </span>
@@ -196,7 +196,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.used" class="accordion-items">
+            <div v-if="isExpanded('used')" class="accordion-items">
               <div
                 v-for="(usage, index) in analysis.used?.slice(0, 30)"
                 :key="'used-' + index"
@@ -239,8 +239,8 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useExpansion } from '@/composables/useExpansion'
 
 interface ApiEndpointInfo {
   path: string
@@ -283,7 +283,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expanded = reactive({ orphaned: false, missing: false, used: false })
+type Section = 'orphaned' | 'missing' | 'used'
+const { isExpanded, toggle } = useExpansion<Section>()
 
 function getCoverageClass(percentage: number): string {
   if (!percentage || percentage < 50) return 'critical'
