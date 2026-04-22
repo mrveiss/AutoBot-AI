@@ -88,10 +88,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 const logger = createLogger('DesktopContextPanel')
@@ -123,25 +124,28 @@ interface DesktopContext {
 const context = ref<DesktopContext | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
-let refreshInterval: number | null = null
 
-async function fetchContext() {
-  loading.value = true
-  error.value = null
+const { start: startContextPolling } = usePollingJob<DesktopContext | null>(
+  async () => {
+    loading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.get<DesktopContext>('/vnc/desktop/context')
+      context.value = data
+      return data
+    } catch (err: unknown) {
+      logger.error('Failed to fetch desktop context:', err)
+      error.value = t('desktop.contextPanel.error')
+      return null
+    } finally {
+      loading.value = false
+    }
+  },
+  { intervalMs: 5000, maxAttempts: Infinity }
+)
 
-  try {
-    const data = await ApiClient.get<DesktopContext>('/vnc/desktop/context')
-    context.value = data
-  } catch (err: any) {
-    logger.error('Failed to fetch desktop context:', err)
-    error.value = t('desktop.contextPanel.error')
-  } finally {
-    loading.value = false
-  }
-}
-
-function refresh() {
-  fetchContext()
+function refresh(): void {
+  startContextPolling('')
 }
 
 function formatTime(timestamp: string): string {
@@ -154,15 +158,7 @@ function formatTime(timestamp: string): string {
 }
 
 onMounted(() => {
-  fetchContext()
-  // Auto-refresh every 5 seconds
-  refreshInterval = window.setInterval(fetchContext, 5000)
-})
-
-onUnmounted(() => {
-  if (refreshInterval !== null) {
-    clearInterval(refreshInterval)
-  }
+  startContextPolling('')  // fires immediately + every 5s; auto-cleans via onScopeDispose
 })
 </script>
 

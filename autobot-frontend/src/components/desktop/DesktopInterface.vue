@@ -178,6 +178,7 @@ import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useVncControls } from '@/composables/useVncControls'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -363,7 +364,10 @@ const handleDesktopTimeout = () => {
   error.value = t('desktop.interface.errorServiceTimeout')
 }
 
-let connectionCheckInterval
+const { start: startConnectionCheck } = usePollingJob(
+  async () => { await checkConnection() },
+  { intervalMs: 10000, maxAttempts: Infinity }
+)
 
 onMounted(async () => {
   // Load dynamic VNC URL first - wrapped in try-catch for safety
@@ -377,11 +381,8 @@ onMounted(async () => {
     error.value = t('desktop.interface.errorInitFailed')
   }
 
-  // Initial connection check
-  setTimeout(checkConnection, 2000)
-
-  // Check connection status periodically
-  connectionCheckInterval = setInterval(checkConnection, 10000)
+  // Initial connection check after 2s, then poll every 10s
+  setTimeout(() => startConnectionCheck(''), 2000)
 
   // Listen for fullscreen changes
   document.addEventListener('fullscreenchange', handleFullscreenChange)
@@ -449,10 +450,6 @@ function downloadScreenshot() {
 }
 
 onUnmounted(() => {
-  if (connectionCheckInterval) {
-    clearInterval(connectionCheckInterval)
-  }
-
   // Clean up event listener
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
