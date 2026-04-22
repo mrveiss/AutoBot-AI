@@ -10,6 +10,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -197,7 +198,7 @@ class SecretsService:
         """Check if a secret has expired"""
         if not expires_at:
             return False
-        return datetime.fromisoformat(expires_at) < datetime.now(timezone.utc)
+        return parse_utc_iso(expires_at) < datetime.now(timezone.utc)
 
     def _update_access_tracking(
         self, cursor: sqlite3.Cursor, secret_id: str, accessed_by: Optional[str]

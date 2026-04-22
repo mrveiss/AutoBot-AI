@@ -12,6 +12,8 @@ Each agent can have its own LLM model configuration and status monitoring.
 import logging
 import os
 from datetime import datetime, timezone
+
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -858,12 +860,7 @@ async def get_agents_usage(
     window_tasks = []
     for task in history:
         try:
-            started = datetime.fromisoformat(task["started_at"])
-            # Normalise naive timestamps that predate the UTC migration
-            if started.tzinfo is None:
-                from datetime import timezone as _tz
-
-                started = started.replace(tzinfo=_tz.utc)
+            started = parse_utc_iso(task["started_at"])
             if started >= cutoff:
                 window_tasks.append(task)
         except (KeyError, ValueError):

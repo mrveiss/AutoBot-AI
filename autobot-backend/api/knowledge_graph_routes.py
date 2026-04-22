@@ -175,8 +175,8 @@ async def search_events(
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        start = datetime.fromisoformat(start_date) if start_date else datetime.min
-        end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
+        start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
+        end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
         types_list = (
             [t.strip() for t in event_types.split(",")] if event_types else None
         )

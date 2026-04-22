@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List
 
 import psutil
@@ -249,7 +250,7 @@ class SystemResourceMonitor:
 
         for data in reversed(self.resource_history):
             try:
-                data_time = datetime.fromisoformat(data["timestamp"]).timestamp()
+                data_time = parse_utc_iso(data["timestamp"]).timestamp()
                 if data_time >= cutoff_time:
                     recent_data.append(data)
                 else:

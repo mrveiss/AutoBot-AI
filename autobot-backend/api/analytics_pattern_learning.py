@@ -23,6 +23,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -399,7 +400,7 @@ class PatternLearningEngine:
             irrelevant_count=stats_data.get("irrelevant_count", 0),
             raw_score=stats_data.get("raw_score", 0.5),
             confidence_score=stats_data.get("confidence_score", 0.5),
-            last_updated=datetime.fromisoformat(
+            last_updated=parse_utc_iso(
                 stats_data.get("last_updated", datetime.now(tz=timezone.utc).isoformat())
             ),
             version=stats_data.get("version", 1),

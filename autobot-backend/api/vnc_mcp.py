@@ -10,6 +10,7 @@ Integrates with backend VNC proxy for browser and desktop observation
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import List
 
 import aiohttp
@@ -331,7 +332,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
         obs
         for obs in recent_activity
         if obs.get("timestamp")
-        and datetime.fromisoformat(obs["timestamp"]) > cutoff_time
+        and parse_utc_iso(obs["timestamp"]) > cutoff_time
     ]
 
     return {
