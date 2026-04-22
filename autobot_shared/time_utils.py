@@ -31,12 +31,12 @@ Migration plan (#5169 part C)
 
 1. ✅ Selection rule documented (PR #5176)
 2. ✅ Audit + canonicalization decision (this PR)
-3. ⏳ Migrate 57 direct ``datetime.utcnow().isoformat()`` sites
+3. ✅ Migrated 57 direct ``datetime.utcnow().isoformat()`` sites
    to ``utc_timestamp()`` — tracked by #5178
 4. ⏳ Migrate ``workflow_versioning._utc_now`` → ``utc_timestamp``
    (after step 3, requires either tolerant readers or one-time
    data migration of stored Z records)
-5. ⏳ Delete ``utc_timestamp_z()`` (after step 4)
+5. ✅ Deleted ``utc_timestamp_z()`` (after step 4)
 6. ⏳ Python 3.11+ upgrade — drops the 9 ``.replace("Z", "+00:00")``
    workaround sites since 3.11 ``fromisoformat`` accepts ``Z`` natively
 """
@@ -106,23 +106,3 @@ def parse_utc_iso(value: str) -> datetime:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
 
-
-def utc_timestamp_z() -> str:
-    """Return current UTC time as ISO-8601 with ``Z`` suffix. **DEPRECATED.**
-
-    Format: ``YYYY-MM-DDTHH:MM:SSZ`` (exactly 20 chars, second precision,
-    no microseconds, no ``+00:00`` offset). Matches the on-disk format
-    used by ``services/workflow_versioning.py`` records.
-
-    .. deprecated::
-        Use :func:`utc_timestamp` for all new code. This helper is
-        retained only for the single legacy producer above; see module
-        docstring for the migration plan that will delete it (#5169).
-        Calling this from new code violates the canonicalization
-        decision and will be flagged in review.
-    """
-    t = time.gmtime()
-    return (
-        f"{t.tm_year:04d}-{t.tm_mon:02d}-{t.tm_mday:02d}T"
-        f"{t.tm_hour:02d}:{t.tm_min:02d}:{t.tm_sec:02d}Z"
-    )

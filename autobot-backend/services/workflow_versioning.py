@@ -42,7 +42,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.time_utils import utc_timestamp_z as _utc_now
+from autobot_shared.time_utils import utc_timestamp as _utc_now
 
 logger = logging.getLogger(__name__)
 
