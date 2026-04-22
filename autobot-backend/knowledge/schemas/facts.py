@@ -202,16 +202,19 @@ class ClearAllResponse(BaseModel):
 class QueryKnowledgeResponse(BaseModel):
     """Shape of legacy ``POST /api/knowledge_base/query``.
 
-    Proxies to :mod:`api.knowledge_search`. The exact payload mirrors
-    whatever ``search_knowledge`` returns — declared with ``extra="allow"``
-    so search-side additions flow through.
+    Proxies to :mod:`api.knowledge_search`. Fields mirror the shape returned
+    by ``_build_search_response`` in that module.
     """
 
     model_config = ConfigDict(extra="allow")
 
+    status: str = "success"
+    synthesized_response: str = ""
     results: List[Dict[str, Any]] = Field(default_factory=list)
     total_results: int = 0
-    query: Optional[str] = None
+    original_query: Optional[str] = None
+    reformulated_queries: List[str] = Field(default_factory=list)
+    rag_enhanced: bool = False
 
 
 class ManPageSearchResponse(BaseModel):
