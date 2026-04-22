@@ -27,6 +27,7 @@ from models.schemas import (
     TLSEndpointsResponse,
 )
 from services.auth import get_current_user
+from services.ansible_utils import _extract_failure_summary
 from services.database import get_db
 from services.tls_credentials import get_tls_credential_service
 
@@ -773,7 +774,9 @@ def _build_enable_tls_response(success: bool, returncode: int, services: List[st
     Returns:
         Response dict with success, message, services, and results.
     """
-    message = "TLS enabled successfully" if success else f"TLS enablement failed with code {returncode}"
+    _stdout = (results.get("enable_tls") or {}).get("stdout", "")
+    _summary = _extract_failure_summary(_stdout)
+    message = "TLS enabled successfully" if success else (_summary or f"TLS enablement failed with code {returncode}")
 
     logger.info(
         "TLS enablement for %s: %s (code %d)",
