@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ async def get_cost_summary(
     Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
-    end_date = datetime.utcnow()
+    end_date = now_utc()
     start_date = end_date - timedelta(days=days)
 
     summary = await tracker.get_cost_summary(start_date, end_date)
@@ -287,7 +287,7 @@ async def get_cost_forecast(
 
     # Simple linear forecast with growth rate
     forecasted_costs = {}
-    start_date = datetime.utcnow()
+    start_date = now_utc()
 
     for day in range(1, days_to_forecast + 1):
         future_date = start_date + timedelta(days=day)
@@ -605,7 +605,7 @@ async def get_budget_status(
     """
     tracker = get_cost_tracker()
     redis = await tracker.get_redis()
-    today = datetime.utcnow()
+    today = now_utc()
 
     # Get alerts and current costs (Issue #620: uses helper)
     alerts_data = await redis.hgetall(tracker.BUDGET_ALERTS_KEY)

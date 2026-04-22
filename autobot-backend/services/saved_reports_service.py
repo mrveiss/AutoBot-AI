@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ class SavedReportsService:
 async def _fetch_cost_section(service, days: int) -> Dict[str, Any]:
     """Fetch cost analytics for the given period."""
     try:
-        end = datetime.utcnow()
+        end = now_utc()
         start = end - timedelta(days=days)
         summary = await service.cost.get_cost_summary(start, end)
         return {"summary": summary}

@@ -13,6 +13,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -92,7 +93,7 @@ class WebCrawlerConnector(AbstractConnector):
                     path=url,
                     content_type="text/html",
                     size_bytes=0,
-                    last_modified=datetime.utcnow(),
+                    last_modified=now_utc(),
                     metadata={"url": url, "domain": domain},
                 )
             )
@@ -130,7 +131,7 @@ class WebCrawlerConnector(AbstractConnector):
                     ChangeInfo(
                         source_id=source_id,
                         change_type="added",
-                        timestamp=datetime.utcnow(),
+                        timestamp=now_utc(),
                         details={"url": url},
                     )
                 )
@@ -143,7 +144,7 @@ class WebCrawlerConnector(AbstractConnector):
                     ChangeInfo(
                         source_id=source_id,
                         change_type="modified",
-                        timestamp=datetime.utcnow(),
+                        timestamp=now_utc(),
                         details={"url": url},
                     )
                 )

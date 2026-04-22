@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import (
     BatchConfig,
     LLMDefaults,
@@ -394,11 +394,11 @@ Output ONLY valid JSON in this format:
         plan, step = await self._get_plan_and_step(plan_id, step_id)
 
         step.status = StepStatus.IN_PROGRESS
-        step.started_at = datetime.utcnow()
+        step.started_at = now_utc()
         plan.status = PlanStatus.IN_PROGRESS
 
         if not plan.started_at:
-            plan.started_at = datetime.utcnow()
+            plan.started_at = now_utc()
 
         plan.update_metrics()
         await self._store_plan(plan)
@@ -468,7 +468,7 @@ Output ONLY valid JSON in this format:
             tools_used: Optional list of tools used
         """
         step.status = StepStatus.COMPLETED
-        step.completed_at = datetime.utcnow()
+        step.completed_at = now_utc()
         step.reflection = reflection
 
         if tools_used:
@@ -490,7 +490,7 @@ Output ONLY valid JSON in this format:
 
         if plan.is_complete():
             plan.status = PlanStatus.COMPLETED
-            plan.completed_at = datetime.utcnow()
+            plan.completed_at = now_utc()
 
     async def fail_step(
         self,
@@ -546,7 +546,7 @@ Output ONLY valid JSON in this format:
             reflection: Optional reflection text
         """
         step.status = StepStatus.FAILED
-        step.completed_at = datetime.utcnow()
+        step.completed_at = now_utc()
         step.reflection = reflection or f"Failed: {error}"
 
         if step.started_at:
@@ -586,7 +586,7 @@ Output ONLY valid JSON in this format:
 
         step.status = StepStatus.SKIPPED
         step.reflection = f"Skipped: {reason}"
-        step.completed_at = datetime.utcnow()
+        step.completed_at = now_utc()
 
         plan.update_metrics()
         await self._store_plan(plan)
@@ -837,7 +837,7 @@ class InMemoryPlannerModule(PlannerModule):
             raise ValueError(f"Step not found: {step_id}")
 
         step.status = StepStatus.IN_PROGRESS
-        step.started_at = datetime.utcnow()
+        step.started_at = now_utc()
         plan.status = PlanStatus.IN_PROGRESS
         plan.update_metrics()
         return step
@@ -859,13 +859,13 @@ class InMemoryPlannerModule(PlannerModule):
             raise ValueError(f"Step not found: {step_id}")
 
         step.status = StepStatus.COMPLETED
-        step.completed_at = datetime.utcnow()
+        step.completed_at = now_utc()
         step.reflection = reflection
         plan.update_metrics()
 
         if plan.is_complete():
             plan.status = PlanStatus.COMPLETED
-            plan.completed_at = datetime.utcnow()
+            plan.completed_at = now_utc()
 
         return step
 

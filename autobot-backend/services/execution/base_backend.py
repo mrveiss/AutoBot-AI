@@ -14,6 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
@@ -113,7 +114,7 @@ class ExecutionBackend(ABC):
         """
         self.backend_type = backend_type
         self._health_status = True
-        self._last_health_check = datetime.utcnow()
+        self._last_health_check = now_utc()
 
     @abstractmethod
     async def execute(
@@ -156,7 +157,7 @@ class ExecutionBackend(ABC):
             True if backend is healthy
         """
         # Refresh health check every 30 seconds
-        now = datetime.utcnow()
+        now = now_utc()
         elapsed = (now - self._last_health_check).total_seconds()
         if elapsed > 30:
             self._health_status = await self.health_check()

@@ -13,6 +13,7 @@ import hmac
 import logging
 import time
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List
 from urllib.parse import quote
 
@@ -204,7 +205,7 @@ class AWSIntegration(BaseIntegration):
         service: str,
     ) -> Dict[str, str]:
         """Create AWS Signature Version 4 headers."""
-        now = datetime.utcnow()
+        now = now_utc()
         amz_date = now.strftime("%Y%m%dT%H%M%SZ")
         date_stamp = now.strftime("%Y%m%d")
 

@@ -11,6 +11,7 @@ Manages session isolation, context persistence, and lifecycle.
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from autobot_shared.time_utils import now_utc
 from typing import Dict, List, Optional
 
 from constants.threshold_constants import TimingConstants
@@ -220,7 +221,7 @@ class SessionManager:
     async def _cleanup_idle_sessions(self) -> None:
         """Clean up idle sessions that have exceeded timeout."""
         async with self._lock:
-            now = datetime.utcnow()
+            now = now_utc()
             timeout_delta = timedelta(seconds=self.config.session_timeout_seconds)
             sessions_to_close = []
 

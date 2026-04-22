@@ -29,7 +29,8 @@ import logging
 import os
 import re
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc
 from typing import List, Optional
 
 from knowledge.connectors.base import AbstractConnector
@@ -235,11 +236,11 @@ class AudioConnector(AbstractConnector):
                 stat = os.stat(src) if os.path.exists(src) else None
                 size = stat.st_size if stat else 0
                 mtime = (
-                    datetime.utcfromtimestamp(stat.st_mtime) if stat else datetime.utcnow()
+                    datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc) if stat else now_utc()
                 )
             else:
                 size = 0
-                mtime = datetime.utcnow()
+                mtime = now_utc()
 
             results.append(
                 SourceInfo(

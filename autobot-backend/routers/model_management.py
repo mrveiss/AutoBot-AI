@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -285,7 +286,7 @@ async def activate_model(version: str):
 
         # Activate this model
         model.is_active = True
-        model.deployed_at = datetime.utcnow()
+        model.deployed_at = now_utc()
         db.commit()
 
     # Load model into memory then atomically publish both globals (#2846).

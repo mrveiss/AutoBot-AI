@@ -9,6 +9,7 @@ Core user model with authentication, profile, and tenant association.
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
@@ -234,7 +235,7 @@ class User(Base):
 
     def soft_delete(self) -> None:
         """Soft delete the user."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = now_utc()
         self.is_active = False
 
     def get_preference(self, key: str, default=None):
@@ -267,9 +268,9 @@ class User(Base):
 
     def record_login(self) -> None:
         """Record a successful login."""
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = now_utc()
 
     def verify_email(self) -> None:
         """Mark email as verified."""
         self.is_verified = True
-        self.email_verified_at = datetime.utcnow()
+        self.email_verified_at = now_utc()

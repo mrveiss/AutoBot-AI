@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 try:
     import modal
@@ -77,7 +77,7 @@ class ModalBackend(ExecutionBackend):
         )
 
         try:
-            result.started_at = datetime.utcnow()
+            result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
             # For this implementation, we simulate Modal execution
@@ -113,7 +113,7 @@ class ModalBackend(ExecutionBackend):
                 logger.exception(f"Error executing task {task.task_id} on Modal: {e}")
 
         finally:
-            result.completed_at = datetime.utcnow()
+            result.completed_at = now_utc()
             if result.started_at:
                 result.execution_time_ms = (
                     result.completed_at - result.started_at

@@ -228,7 +228,7 @@ class AnalyticsService:
         Returns:
             Comprehensive dashboard data
         """
-        end_date = datetime.utcnow()
+        end_date = now_utc()
         start_date = end_date - timedelta(days=days)
 
         # Fetch all data concurrently
@@ -819,7 +819,7 @@ class AnalyticsService:
         Returns:
             Custom report data
         """
-        end_date = end_date or datetime.utcnow()
+        end_date = end_date or now_utc()
         start_date = start_date or (end_date - timedelta(days=30))
         days = (end_date - start_date).days
         report = {
