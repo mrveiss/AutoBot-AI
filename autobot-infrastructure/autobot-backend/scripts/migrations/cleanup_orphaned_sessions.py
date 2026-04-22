@@ -158,8 +158,8 @@ class OrphanedSessionCleaner:
                 return None
 
             # Parse ISO format timestamp
-            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-            age = datetime.utcnow() - timestamp.replace(tzinfo=None)
+            timestamp = parse_utc_iso(timestamp_str)
+            age = now_utc() - timestamp
             return age.days
         except Exception as e:
             logger.debug(f"Could not determine session age: {e}")
