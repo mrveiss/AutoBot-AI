@@ -481,8 +481,8 @@ class TestExecutionResult:
             stdout="output",
             stderr="",
             return_code=0,
-            started_at=datetime.datetime.utcnow(),
-            completed_at=datetime.datetime.utcnow(),
+            started_at=datetime.datetime.now(datetime.timezone.utc),
+            completed_at=datetime.datetime.now(datetime.timezone.utc),
         )
 
         data = result.to_dict()

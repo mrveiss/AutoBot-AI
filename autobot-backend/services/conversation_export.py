@@ -14,6 +14,7 @@ Provides export and import operations for chat conversations:
 import json
 import logging
 import time
+from autobot_shared.time_utils import utc_timestamp
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def _build_json_envelope(session_id: str, chat_data: Dict[str, Any]) -> Dict[str
     """Wrap raw session data in the versioned AutoBot JSON export envelope."""
     return {
         "format": AUTOBOT_EXPORT_FORMAT,
-        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "exported_at": utc_timestamp(),
         "session_id": session_id,
         "name": chat_data.get("name", ""),
         "created_time": chat_data.get("created_time", chat_data.get("createdTime", "")),
@@ -83,7 +84,7 @@ def _build_bulk_envelope(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Wrap multiple session envelopes in a bulk archive envelope."""
     return {
         "format": f"{AUTOBOT_EXPORT_FORMAT}-bulk",
-        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "exported_at": utc_timestamp(),
         "conversation_count": len(sessions),
         "conversations": sessions,
     }
