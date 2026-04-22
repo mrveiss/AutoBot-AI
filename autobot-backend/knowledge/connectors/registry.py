@@ -26,6 +26,7 @@ from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Type
 
 from knowledge.connectors.models import ConnectorConfig
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

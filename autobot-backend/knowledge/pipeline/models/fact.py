@@ -14,6 +14,7 @@ from typing import List, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from autobot_shared.time_utils import now_utc
 
 FactType = Literal[
     "statement",      # Simple declarative fact (e.g., "X is Y")

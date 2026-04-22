@@ -23,6 +23,7 @@ from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

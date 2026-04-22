@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics, REDIS_SKILL_METRICS_PREFIX
 

@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+from autobot_shared.time_utils import now_utc
 
 
 class TestIsTaskStale:

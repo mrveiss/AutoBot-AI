@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

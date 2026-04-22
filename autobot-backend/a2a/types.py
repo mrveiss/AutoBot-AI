@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from autobot_shared.time_utils import now_utc
 
 
 def _utcnow() -> str:

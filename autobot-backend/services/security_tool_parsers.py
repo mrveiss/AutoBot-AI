@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.models import Organization, Team, User
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
