@@ -112,6 +112,22 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoryEntry,
     KnowledgeStatsBasic,
 )
+from knowledge.schemas.vectorization import (
+    BackgroundVectorizationResponse,
+    ClearFailedJobsResponse,
+    DeleteJobResponse,
+    DocumentResult,
+    FailedJobsResponse,
+    ReindexWithContextStatusResponse,
+    RetryJobResponse,
+    VectorizationStatusPollResponse,
+    VectorizationStatusResponse,
+    VectorizationSummary,
+    VectorizeDocumentsResponse,
+    VectorizeFactJobResponse,
+    VectorizeFactsResponse,
+    VectorizeJobStatusResponse,
+)
 
 __all__ = [
     # maintenance.py
@@ -215,4 +231,19 @@ __all__ = [
     "ManPagesSummaryResponse",
     "OrgKnowledgeConfigResponse",
     "TestCategoriesResponse",
+    # vectorization.py
+    "BackgroundVectorizationResponse",
+    "ClearFailedJobsResponse",
+    "DeleteJobResponse",
+    "DocumentResult",
+    "FailedJobsResponse",
+    "ReindexWithContextStatusResponse",
+    "RetryJobResponse",
+    "VectorizationStatusPollResponse",
+    "VectorizationStatusResponse",
+    "VectorizationSummary",
+    "VectorizeDocumentsResponse",
+    "VectorizeFactJobResponse",
+    "VectorizeFactsResponse",
+    "VectorizeJobStatusResponse",
 ]
