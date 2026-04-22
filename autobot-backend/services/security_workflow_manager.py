@@ -209,7 +209,7 @@ class SecurityAssessment:
 
     def __post_init__(self) -> None:
         """Set timestamps if not provided."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         if not self.created_at:
             self.created_at = now
         if not self.updated_at:
@@ -368,7 +368,7 @@ class SecurityWorkflowManager:
             Created SecurityAssessment
         """
         assessment_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         effective_scope = scope or [target]
 
         assessment = SecurityAssessment(
@@ -403,7 +403,7 @@ class SecurityWorkflowManager:
             key = self._assessment_key(assessment.id)
 
             # Update timestamp
-            assessment.updated_at = datetime.now(timezone.utc).isoformat()
+            assessment.updated_at = now_utc().isoformat()
 
             # Save as JSON
             await redis.set(
@@ -523,7 +523,7 @@ class SecurityWorkflowManager:
 
         Issue #620: Extracted from advance_phase.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         transition = {
             "from_phase": current_phase,
             "to_phase": next_phase,
@@ -713,7 +713,7 @@ class SecurityWorkflowManager:
             "service": service,
             "version": version,
             "product": product,
-            "discovered_at": datetime.now(timezone.utc).isoformat(),
+            "discovered_at": now_utc().isoformat(),
         }
 
     def _add_service_if_identified(
@@ -886,7 +886,7 @@ class SecurityWorkflowManager:
             "affected_service": affected_service,
             "affected_port": affected_port,
             "references": references or [],
-            "discovered_at": datetime.now(timezone.utc).isoformat(),
+            "discovered_at": now_utc().isoformat(),
             "metadata": metadata or {},
         }
 
@@ -1045,7 +1045,7 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        finding["timestamp"] = datetime.now(timezone.utc).isoformat()
+        finding["timestamp"] = now_utc().isoformat()
         assessment.findings.append(finding)
 
         await self._save_assessment(assessment)
@@ -1086,7 +1086,7 @@ class SecurityWorkflowManager:
             "tool": tool,
             "command": command,
             "result": result,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
             "metadata": metadata or {},
         }
         assessment.actions_taken.append(action_record)
@@ -1119,7 +1119,7 @@ class SecurityWorkflowManager:
         assessment.phase = AssessmentPhase.ERROR
         assessment.error_message = error_message
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         assessment.phase_history.append(
             {
                 "from_phase": previous_phase,
@@ -1167,7 +1167,7 @@ class SecurityWorkflowManager:
         assessment.phase = AssessmentPhase(target_phase)
         assessment.error_message = None
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         assessment.phase_history.append(
             {
                 "from_phase": "ERROR",

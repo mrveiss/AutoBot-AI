@@ -56,7 +56,7 @@ class TestBranchMetrics:
     def test_with_timestamps(self):
         """Test metrics with activity timestamps."""
         div = BranchDivergence(branch="feature/test")
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         metrics = BranchMetrics(
             branch="feature/test",
             divergence=div,

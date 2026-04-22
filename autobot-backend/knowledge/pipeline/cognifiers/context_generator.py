@@ -77,7 +77,7 @@ class ContextGeneratorCognifier(BaseCognifier):
             {
                 "summary": summary,
                 "model": self.model,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": now_utc().isoformat(),
             }
         )
         await asyncio.to_thread(redis.setex, cache_key, self.ttl_seconds, payload)
@@ -103,7 +103,7 @@ class ContextGeneratorCognifier(BaseCognifier):
         chunk.metadata["original_chunk"] = original
         chunk.metadata["has_context"] = bool(ctx_text)
         chunk.metadata["context_model"] = self.model
-        chunk.metadata["context_generated_at"] = datetime.now(timezone.utc).isoformat()
+        chunk.metadata["context_generated_at"] = now_utc().isoformat()
 
     async def _generate_chunk_context(self, doc_summary: str, chunk_text: str) -> str:
         if not doc_summary:

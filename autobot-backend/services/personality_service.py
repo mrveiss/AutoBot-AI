@@ -121,7 +121,7 @@ class PersonalityProfile:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _load_json(path: Path) -> dict:

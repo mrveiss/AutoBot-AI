@@ -599,7 +599,7 @@ async def get_quick_llm_status(
                 "status": status,
                 "provider_type": provider_type,
                 "model": model,
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
@@ -616,7 +616,7 @@ async def get_quick_llm_status(
                 "provider_type": "unknown",
                 "model": "",
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
@@ -688,7 +688,7 @@ async def get_all_providers_health():
                 "total_providers": total_count,
                 "providers": providers_health,
                 "cache_stats": ProviderHealthManager.get_cache_stats(),
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
@@ -700,7 +700,7 @@ async def get_all_providers_health():
             content={
                 "overall_status": "error",
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
@@ -746,7 +746,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
                 "message": result.message,
                 "response_time_ms": round(result.response_time * 1000, 2),
                 "details": result.details or {},
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },
@@ -761,7 +761,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
                 "status": "error",
                 "available": False,
                 "error": "Internal server error",
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": now_utc()
                 .isoformat()
                 .replace("+00:00", "Z"),
             },

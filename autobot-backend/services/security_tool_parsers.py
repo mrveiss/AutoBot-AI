@@ -158,7 +158,7 @@ class BaseToolParser(ABC):
         return ParsedToolOutput(
             tool=self.TOOL_NAME,
             scan_type=scan_type,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=now_utc().isoformat(),
             command=command,
         )
 

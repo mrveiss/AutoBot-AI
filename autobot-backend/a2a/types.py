@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 def _utcnow() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return now_utc().isoformat()
 
 
 class TaskState(str, Enum):

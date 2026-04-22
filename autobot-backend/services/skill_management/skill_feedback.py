@@ -57,7 +57,7 @@ class SkillFeedbackAnalyzer:
             return
 
         try:
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             feedback_entry = {
                 "timestamp": now.isoformat(),
                 "skill_id": skill_id,
@@ -101,7 +101,7 @@ class SkillFeedbackAnalyzer:
             failure_patterns: List[str] = []
 
             # Collect feedback from past N days
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             for i in range(days):
                 date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 key = f"skill_feedback:{skill_id}:{date}"

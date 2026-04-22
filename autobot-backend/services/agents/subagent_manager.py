@@ -64,7 +64,7 @@ class SubagentManager:
         status_data = {
             "task_id": task_id,
             "status": status.value,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": now_utc().isoformat(),
         }
         if metadata:
             status_data["metadata"] = metadata

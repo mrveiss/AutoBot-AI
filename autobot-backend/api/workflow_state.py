@@ -67,10 +67,10 @@ class WorkflowState(BaseModel):
     done: bool = False
     errors: List[str] = Field(default_factory=list)
     created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
     updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
     metadata: Dict = Field(default_factory=dict)
 
@@ -171,7 +171,7 @@ class WorkflowStateMachine:
         state.steps_completed.append(state.current_step)
         state.current_step = new_step
         state.active_service = route_next(state)
-        state.updated_at = datetime.now(timezone.utc).isoformat()
+        state.updated_at = now_utc().isoformat()
 
         await self._persist(state)
 
@@ -193,7 +193,7 @@ class WorkflowStateMachine:
         state.done = True
         state.current_step = STEP_COMPLETE
         state.active_service = route_next(state)
-        state.updated_at = datetime.now(timezone.utc).isoformat()
+        state.updated_at = now_utc().isoformat()
 
         await redis.set(self._key(workflow_id), state.model_dump_json())
         await redis.srem(ACTIVE_SET, workflow_id)
@@ -212,7 +212,7 @@ class WorkflowStateMachine:
         state.done = True
         state.errors.append(error)
         state.active_service = route_next(state)
-        state.updated_at = datetime.now(timezone.utc).isoformat()
+        state.updated_at = now_utc().isoformat()
 
         await self._persist(state)
         redis = await self._redis()

@@ -50,7 +50,7 @@ _KEY_EVENTS = "a2a:events:{}"  # pub/sub channel for SSE streaming (#4554)
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return now_utc().isoformat()
 
 
 # ---------------------------------------------------------------------------

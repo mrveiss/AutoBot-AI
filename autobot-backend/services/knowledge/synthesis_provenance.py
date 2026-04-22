@@ -63,7 +63,7 @@ class SynthesisProvenanceLog:
             "synthesis_ids": json.dumps(synthesis_ids),
             "llm_model": llm_model,
             "prompt_template": prompt_template,
-            "ran_at": datetime.now(timezone.utc).isoformat(),
+            "ran_at": now_utc().isoformat(),
             "duration_ms": str(duration_ms),
             "parent_run_id": parent_run_id or "",
             "source_doc_ids": json.dumps(source_doc_ids or source_docs),

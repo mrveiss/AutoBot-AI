@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return datetime.now(timezone.utc)
+    return now_utc()
 
 
 class ProcessedChunk(BaseModel):

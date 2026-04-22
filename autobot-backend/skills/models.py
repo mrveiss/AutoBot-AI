@@ -58,7 +58,7 @@ class SkillPackage(SkillsBase):
     mcp_pid = Column(Integer, nullable=True)
     gap_reason = Column(Text, nullable=True)
     requested_by = Column(String, default="autobot-self")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: now_utc())
     promoted_at = Column(DateTime, nullable=True)
 
 
@@ -85,7 +85,7 @@ class SkillApproval(SkillsBase):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     skill_id = Column(String, nullable=False, index=True)
     requested_by = Column(String, nullable=False)
-    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    requested_at = Column(DateTime, default=lambda: now_utc())
     reason = Column(Text, nullable=False)
     status = Column(String, default="pending")
     reviewed_by = Column(String, nullable=True)
@@ -111,8 +111,8 @@ class GovernanceConfig(SkillsBase):
     self_generation_enabled = Column(Boolean, default=True)
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: now_utc(),
+        onupdate=lambda: now_utc(),
     )
     updated_by = Column(String, nullable=True)
 
