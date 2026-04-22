@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { OptimizationSession, PromptVariant } from '@/composables/useAutoResearch'
+import { useExpansion } from '@/composables/useExpansion'
 
 defineProps<{
   session: OptimizationSession | null
@@ -20,7 +21,7 @@ const agentName = ref('autoresearch_hypothesis')
 const maxRounds = ref(3)
 const reviewScore = ref(5)
 const reviewComment = ref('')
-const reviewingVariantId = ref<string | null>(null)
+const { isExpanded: isReviewing, expand: startReview, collapseAll: closeAllReviews } = useExpansion<string>()
 
 function handleStart() {
   emit('start', agentName.value, maxRounds.value)
@@ -28,7 +29,7 @@ function handleStart() {
 
 function submitScore(variantId: string) {
   emit('scoreVariant', variantId, reviewScore.value, reviewComment.value)
-  reviewingVariantId.value = null
+  closeAllReviews()
   reviewScore.value = 5
   reviewComment.value = ''
 }
@@ -102,7 +103,7 @@ function submitScore(variantId: string) {
         </p>
 
         <!-- Human review form -->
-        <div v-if="reviewingVariantId === variant.id" class="mt-2 flex items-end gap-2">
+        <div v-if="isReviewing(variant.id)" class="mt-2 flex items-end gap-2">
           <input
             v-model.number="reviewScore"
             type="number"
@@ -125,7 +126,7 @@ function submitScore(variantId: string) {
         <button
           v-else
           class="mt-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
-          @click="reviewingVariantId = variant.id"
+          @click="startReview(variant.id)"
         >
           Review
         </button>

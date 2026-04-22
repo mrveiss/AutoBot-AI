@@ -125,9 +125,9 @@
               <td class="mono">
                 {{ run.cost_usd != null ? '$' + run.cost_usd.toFixed(4) : '—' }}
               </td>
-              <td class="chevron">{{ expandedRunId === run.id ? '▲' : '▼' }}</td>
+              <td class="chevron">{{ isRunExpanded(run.id) ? '▲' : '▼' }}</td>
             </tr>
-            <tr v-if="expandedRunId && expandedRun" class="events-row">
+            <tr v-if="expandedRun" class="events-row">
               <td colspan="7">
                 <div class="events-container">
                   <div v-if="expandedRun.error_message" class="error-message">
@@ -155,6 +155,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useLiveEvents } from '@/composables/useLiveEvents'
+import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
 
 const logger = createLogger('HeartbeatPanel')
@@ -221,8 +222,8 @@ const pendingWakeups = ref<WakeupRequest[]>([])
 const editEnabled = ref(false)
 const editInterval = ref(300)
 const editMaxDuration = ref(600)
-const expandedRunId = ref<string | null>(null)
-const expandedRun = computed(() => runs.value.find((r) => r.id === expandedRunId.value) ?? null)
+const { isExpanded: isRunExpanded, expand: expandRun, collapseAll: collapseAllRuns } = useExpansion<string>()
+const expandedRun = computed(() => runs.value.find((r) => isRunExpanded(r.id)) ?? null)
 
 // ── Live event subscription ───────────────────────────────────────────────────
 
@@ -365,7 +366,9 @@ async function queueWakeup(): Promise<void> {
 }
 
 function toggleEvents(runId: string): void {
-  expandedRunId.value = expandedRunId.value === runId ? null : runId
+  const wasExpanded = isRunExpanded(runId)
+  collapseAllRuns()
+  if (!wasExpanded) expandRun(runId)
 }
 
 function formatTime(iso: string | null): string {

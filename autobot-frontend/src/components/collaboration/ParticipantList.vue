@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type UserPresence } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
 import { useVirtualList } from '@/composables/useVirtualList'
+import { useExpansion } from '@/composables/useExpansion'
 import { apiService, type ParticipantResponse } from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -40,7 +41,7 @@ const emit = defineEmits<{
 }>()
 
 // Local state
-const showRoleMenu = ref<string | null>(null)
+const { isExpanded: isRoleMenuOpen, expand: openRoleMenu, collapseAll: closeAllRoleMenus } = useExpansion<string>()
 const removingUserId = ref<string | null>(null)
 const isLoadingParticipants = ref(false)
 const participantRoles = ref<Map<string, ParticipantResponse>>(new Map())
@@ -140,13 +141,15 @@ const getInitials = (username: string): string => {
 // Toggle role menu
 const toggleRoleMenu = (userId: string) => {
   if (!props.allowManagement || !isOwner.value) return
-  showRoleMenu.value = showRoleMenu.value === userId ? null : userId
+  const wasOpen = isRoleMenuOpen(userId)
+  closeAllRoleMenus()
+  if (!wasOpen) openRoleMenu(userId)
 }
 
 // Change participant role
 const changeRole = (userId: string, newRole: 'owner' | 'collaborator' | 'viewer') => {
   emit('changeRole', userId, newRole)
-  showRoleMenu.value = null
+  closeAllRoleMenus()
 }
 
 // Remove participant
@@ -327,7 +330,7 @@ watch(
 
               <!-- Role menu dropdown -->
               <div
-                v-if="showRoleMenu === virtualItem.data.userId"
+                v-if="isRoleMenuOpen(virtualItem.data.userId)"
                 class="mt-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg shadow-lg overflow-hidden"
                 role="menu"
               >

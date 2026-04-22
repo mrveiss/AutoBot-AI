@@ -149,9 +149,9 @@
                   <span>{{ $t('analytics.llmPatterns.promptsAffected', { count: rec.affected_prompts }) }}</span>
                 </div>
                 <button class="expand-btn" @click="toggleSteps(rec.type)">
-                  {{ expandedRec === rec.type ? $t('analytics.llmPatterns.hideSteps') : $t('analytics.llmPatterns.showSteps') }}
+                  {{ isRecExpanded(rec.type) ? $t('analytics.llmPatterns.hideSteps') : $t('analytics.llmPatterns.showSteps') }}
                 </button>
-                <div v-if="expandedRec === rec.type" class="rec-steps">
+                <div v-if="isRecExpanded(rec.type)" class="rec-steps">
                   <ol>
                     <li v-for="(step, idx) in rec.implementation_steps" :key="idx">
                       {{ step }}
@@ -327,6 +327,7 @@ import { ref, computed, onMounted } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useExpansion } from '@/composables/useExpansion'
 
 const logger = createLogger('LLMPatternDashboard')
 
@@ -408,7 +409,7 @@ const cacheOpportunities = ref<CacheOpportunity[]>([])
 const analyzePrompt = ref('')
 const analyzeModel = ref('')
 const analysisResult = ref<AnalysisResult | null>(null)
-const expandedRec = ref<string | null>(null)
+const { isExpanded: isRecExpanded, expand: expandRec, collapseAll: collapseAllRecs } = useExpansion<string>()
 
 // Chart configuration
 const chartWidth = 800
@@ -480,7 +481,9 @@ const getModelBarWidth = (model: ModelData): number => {
 }
 
 const toggleSteps = (type: string) => {
-  expandedRec.value = expandedRec.value === type ? null : type
+  const wasExpanded = isRecExpanded(type)
+  collapseAllRecs()
+  if (!wasExpanded) expandRec(type)
 }
 
 // API Calls
