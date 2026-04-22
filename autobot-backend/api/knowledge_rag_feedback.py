@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from auth_middleware import get_current_user
+from knowledge.schemas.mcp import RagFeedbackResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
@@ -45,7 +46,7 @@ class RagFeedbackRequest(BaseModel):
     user_id: Optional[str] = None
 
 
-@router.post("/rag-feedback")
+@router.post("/rag-feedback", response_model=RagFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_rag_feedback",
@@ -54,7 +55,7 @@ class RagFeedbackRequest(BaseModel):
 async def record_rag_feedback(
     body: RagFeedbackRequest,
     current_user: dict = Depends(get_current_user),
-) -> dict:
+) -> RagFeedbackResponse:
     """Record a user's explicit accept/reject annotation for a retrieved source.
 
     Issue #3240: Writes to ``rag:feedback:{user_id}:{date}`` Redis stream so
