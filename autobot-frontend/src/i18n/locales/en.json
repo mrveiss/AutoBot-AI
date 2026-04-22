@@ -2193,6 +2193,10 @@
       "description": "Each category shows 0 facts because nothing has been indexed yet.",
       "hint": "Click 'Populate' on any category card to seed it, or upload documents under User Knowledge."
     },
+    "categoriesFetchError": {
+      "title": "Failed to load knowledge base",
+      "description": "The server returned an error. Check the backend service logs."
+    },
     "categoriesError": {
       "title": "Knowledge base is unreachable",
       "description": "Redis connection failed. Check that the backend has Redis running."
