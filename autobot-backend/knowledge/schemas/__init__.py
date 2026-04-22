@@ -102,6 +102,19 @@ from knowledge.schemas.rag import (
     RerankResultsResponse,
     UpdateRagConfigResponse,
 )
+from knowledge.schemas.mcp import (
+    McpAddDocumentResponse,
+    McpHealthResponse,
+    McpKnowledgeStatsResponse,
+    McpQaChainResponse,
+    McpRedisVectorOpsResponse,
+    McpSchemaResponse,
+    McpSearchResponse,
+    McpSummarizeTopicResponse,
+    McpToolsResponse,
+    McpVectorSimilarityResponse,
+    RagFeedbackResponse,
+)
 from knowledge.schemas.stats import (
     DetailedKnowledgeSizeMetrics,
     DetailedKnowledgeStats,
@@ -277,4 +290,16 @@ __all__ = [
     "ConnectorTypeEntry",
     "ConnectorTypesResponse",
     "ConnectorUpdateResponse",
+    # mcp.py
+    "McpAddDocumentResponse",
+    "McpHealthResponse",
+    "McpKnowledgeStatsResponse",
+    "McpQaChainResponse",
+    "McpRedisVectorOpsResponse",
+    "McpSchemaResponse",
+    "McpSearchResponse",
+    "McpSummarizeTopicResponse",
+    "McpToolsResponse",
+    "McpVectorSimilarityResponse",
+    "RagFeedbackResponse",
 ]

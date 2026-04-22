@@ -20,6 +20,18 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from knowledge.schemas.mcp import (
+    McpAddDocumentResponse,
+    McpHealthResponse,
+    McpKnowledgeStatsResponse,
+    McpQaChainResponse,
+    McpRedisVectorOpsResponse,
+    McpSchemaResponse,
+    McpSearchResponse,
+    McpSummarizeTopicResponse,
+    McpToolsResponse,
+    McpVectorSimilarityResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from constants.model_constants import ModelConstants
@@ -336,7 +348,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
     operation="get_mcp_tools",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=List[McpToolsResponse])
 async def get_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[MCPTool]:
@@ -356,7 +368,7 @@ async def get_mcp_tools(
     operation="mcp_search_knowledge_base",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/search_knowledge_base")
+@router.post("/mcp/search_knowledge_base", response_model=McpSearchResponse)
 async def mcp_search_knowledge_base(
     request: KnowledgeSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -402,7 +414,7 @@ async def mcp_search_knowledge_base(
     operation="mcp_add_to_knowledge_base",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/add_to_knowledge_base")
+@router.post("/mcp/add_to_knowledge_base", response_model=McpAddDocumentResponse)
 async def mcp_add_to_knowledge_base(
     request: DocumentAddRequest,
     current_user: dict = Depends(get_current_user),
@@ -437,7 +449,7 @@ async def mcp_add_to_knowledge_base(
     operation="mcp_get_knowledge_stats",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/get_knowledge_stats")
+@router.post("/mcp/get_knowledge_stats", response_model=McpKnowledgeStatsResponse)
 async def mcp_get_knowledge_stats(
     request: KnowledgeStatsRequest,
     current_user: dict = Depends(get_current_user),
@@ -480,7 +492,7 @@ async def mcp_get_knowledge_stats(
     operation="mcp_summarize_knowledge_topic",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/summarize_knowledge_topic")
+@router.post("/mcp/summarize_knowledge_topic", response_model=McpSummarizeTopicResponse)
 async def mcp_summarize_knowledge_topic(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -544,7 +556,7 @@ async def mcp_summarize_knowledge_topic(
     operation="mcp_vector_similarity_search",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/vector_similarity_search")
+@router.post("/mcp/vector_similarity_search", response_model=McpVectorSimilarityResponse)
 async def mcp_vector_similarity_search(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -593,7 +605,7 @@ async def mcp_vector_similarity_search(
     operation="mcp_langchain_qa_chain",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/langchain_qa_chain")
+@router.post("/mcp/langchain_qa_chain", response_model=McpQaChainResponse)
 async def mcp_langchain_qa_chain(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -719,7 +731,7 @@ _VECTOR_OPERATIONS = {
     operation="mcp_redis_vector_operations",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/redis_vector_operations")
+@router.post("/mcp/redis_vector_operations", response_model=McpRedisVectorOpsResponse)
 async def mcp_redis_vector_operations(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -752,7 +764,7 @@ async def mcp_redis_vector_operations(
     operation="get_mcp_schema",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/schema")
+@router.get("/mcp/schema", response_model=McpSchemaResponse)
 async def get_mcp_schema(
     current_user: dict = Depends(get_current_user),
 ):
@@ -781,7 +793,7 @@ async def get_mcp_schema(
     operation="mcp_health",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/health")
+@router.get("/mcp/health", response_model=McpHealthResponse)
 async def mcp_health():
     """Check if MCP bridge is healthy"""
     try:
