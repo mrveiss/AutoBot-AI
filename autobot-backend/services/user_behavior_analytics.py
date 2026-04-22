@@ -286,7 +286,7 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            end_date = datetime.utcnow()
+            end_date = now_utc()
             start_date = end_date - timedelta(days=days)
 
             daily_data = {}
@@ -393,7 +393,7 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            end_date = datetime.utcnow()
+            end_date = now_utc()
             start_date = end_date - timedelta(days=days)
 
             # Initialize heatmap structure

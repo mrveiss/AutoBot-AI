@@ -2,6 +2,7 @@
 import logging
 from typing import Callable, Dict, Optional
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class CronScheduler:
         self.tasks[task_id] = {
             "cron": cron_expr,
             "func": task_func,
-            "created_at": datetime.utcnow()
+            "created_at": now_utc()
         }
 
         logger.info(f"Scheduled task {task_id}: {cron_expr}")

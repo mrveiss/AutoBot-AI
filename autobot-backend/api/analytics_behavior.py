@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.user_behavior_analytics import UserEvent, get_behavior_analytics
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ async def track_user_event(
         feature=request.feature,
         user_id=request.user_id,
         session_id=request.session_id,
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
         duration_ms=request.duration_ms,
         metadata=request.metadata or {},
     )

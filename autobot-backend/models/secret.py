@@ -10,6 +10,7 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import Optional
 
@@ -181,7 +182,7 @@ class Secret(Base):
         """Check if secret has expired."""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return now_utc() > self.expires_at
 
     def is_accessible_by(
         self,

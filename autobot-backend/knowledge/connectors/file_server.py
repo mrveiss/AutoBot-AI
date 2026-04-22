@@ -14,7 +14,8 @@ import fnmatch
 import hashlib
 import logging
 import mimetypes
-from datetime import datetime
+from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import List, Optional
 
@@ -202,7 +203,7 @@ class FileServerConnector(AbstractConnector):
 
             content_type = mimetypes.guess_type(str(file_path))[0] or "text/plain"
             source_id = self._build_source_id(file_path)
-            last_modified = datetime.utcfromtimestamp(stat.st_mtime)
+            last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
             sources.append(
                 SourceInfo(

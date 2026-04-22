@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, Optional, Tuple
 
 try:
@@ -85,7 +86,7 @@ class DockerBackend(ExecutionBackend):
         container = None
 
         try:
-            result.started_at = datetime.utcnow()
+            result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
             # Prepare image and command
@@ -161,7 +162,7 @@ class DockerBackend(ExecutionBackend):
                         f"Error removing container {container.id}: {e}"
                     )
 
-            result.completed_at = datetime.utcnow()
+            result.completed_at = now_utc()
             if result.started_at:
                 result.execution_time_ms = (
                     result.completed_at - result.started_at

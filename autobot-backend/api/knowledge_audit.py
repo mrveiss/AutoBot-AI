@@ -9,6 +9,7 @@ Issue #679: Audit logging and compliance reporting for knowledge access and modi
 
 import logging
 from datetime import datetime, timedelta
+from autobot_shared.time_utils import now_utc
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -397,7 +398,7 @@ async def get_compliance_summary(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        end_date = datetime.utcnow()
+        end_date = now_utc()
         start_date = end_date - timedelta(days=days)
 
         audit_log = await _get_audit_log(kb)

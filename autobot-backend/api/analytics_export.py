@@ -26,7 +26,7 @@ from fastapi.responses import PlainTextResponse, Response
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
 
@@ -57,7 +57,7 @@ async def export_cost_csv(
     Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
-    end_date = datetime.utcnow()
+    end_date = now_utc()
     start_date = end_date - timedelta(days=days)
 
     summary = await tracker.get_cost_summary(start_date, end_date)
@@ -229,7 +229,7 @@ async def export_full_json(
     tracker = get_cost_tracker()
     analytics = get_agent_analytics()
 
-    end_date = datetime.utcnow()
+    end_date = now_utc()
     start_date = end_date - timedelta(days=days)
 
     # Issue #379: Concurrent data collection with asyncio.gather

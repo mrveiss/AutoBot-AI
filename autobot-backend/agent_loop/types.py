@@ -294,7 +294,7 @@ class TaskContext:
 
     def get_duration_ms(self) -> float:
         """Get task duration in milliseconds."""
-        return (datetime.utcnow() - self.started_at).total_seconds() * 1000
+        return (now_utc() - self.started_at).total_seconds() * 1000
 
     def to_dict(self) -> dict:
         """Convert to dictionary for events/logging."""

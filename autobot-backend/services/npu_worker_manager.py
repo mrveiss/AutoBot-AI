@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from models.npu_models import (
@@ -346,7 +346,7 @@ class NPUWorkerManager(AsyncInitializable):
             current_load=health_data.get("current_load", 0),
             total_tasks_completed=health_data.get("total_tasks", 0),
             uptime_seconds=health_data.get("uptime_seconds", 0.0),
-            last_heartbeat=datetime.utcnow(),
+            last_heartbeat=now_utc(),
             error_message=(health_data.get("error") if health_data.get("status") != "healthy" else None),
         )
 
@@ -535,7 +535,7 @@ class NPUWorkerManager(AsyncInitializable):
             total_tasks_completed=heartbeat.total_tasks_completed,
             total_tasks_failed=heartbeat.total_tasks_failed,
             uptime_seconds=heartbeat.uptime_seconds,
-            last_heartbeat=datetime.utcnow(),
+            last_heartbeat=now_utc(),
             error_message=None,
         )
 
@@ -591,7 +591,7 @@ class NPUWorkerManager(AsyncInitializable):
         client = NPUWorkerClient(worker_config.url)
 
         try:
-            start_time = datetime.utcnow()
+            start_time = now_utc()
 
             # Perform health check with timeout
             health_data = await asyncio.wait_for(
@@ -599,7 +599,7 @@ class NPUWorkerManager(AsyncInitializable):
                 timeout=self._load_balancing_config.timeout_seconds,
             )
 
-            end_time = datetime.utcnow()
+            end_time = now_utc()
             response_time_ms = (end_time - start_time).total_seconds() * 1000
 
             return WorkerTestResult(

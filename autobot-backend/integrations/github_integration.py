@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -82,7 +83,7 @@ class GitHubIntegration(BaseIntegration):
                 provider="github",
                 status=IntegrationStatus.ERROR,
                 message="Request timed out",
-                last_checked=datetime.utcnow(),
+                last_checked=now_utc(),
             )
 
         latency_ms = (time.monotonic() - start) * 1000
@@ -96,7 +97,7 @@ class GitHubIntegration(BaseIntegration):
                 status=IntegrationStatus.CONNECTED,
                 latency_ms=latency_ms,
                 message=f"Connected as {body.get('login')}",
-                last_checked=datetime.utcnow(),
+                last_checked=now_utc(),
                 details={
                     "login": body.get("login"),
                     "type": body.get("type"),
@@ -109,7 +110,7 @@ class GitHubIntegration(BaseIntegration):
                 status=IntegrationStatus.UNAUTHORIZED,
                 latency_ms=latency_ms,
                 message="Invalid or expired token",
-                last_checked=datetime.utcnow(),
+                last_checked=now_utc(),
             )
         self._status = IntegrationStatus.ERROR
         return IntegrationHealth(
@@ -117,7 +118,7 @@ class GitHubIntegration(BaseIntegration):
             status=IntegrationStatus.ERROR,
             latency_ms=latency_ms,
             message=f"HTTP {status_code}: {body.get('message', 'Unknown error')}",
-            last_checked=datetime.utcnow(),
+            last_checked=now_utc(),
         )
 
     def get_available_actions(self) -> List[IntegrationAction]:

@@ -116,7 +116,7 @@ class Team(Base, TenantMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the team."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = now_utc()
 
     @property
     def member_count(self) -> int:

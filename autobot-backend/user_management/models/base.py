@@ -12,6 +12,7 @@ Provides:
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
@@ -93,7 +94,7 @@ class SoftDeleteMixin:
     def soft_delete(self) -> None:
         """Mark the record as deleted."""
         self.is_deleted = True
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = now_utc()
 
     def restore(self) -> None:
         """Restore a soft-deleted record."""

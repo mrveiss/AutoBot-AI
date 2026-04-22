@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -240,7 +241,7 @@ class CompletionTrainer:
         Args:
             is_best: Whether this is the best model so far
         """
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = now_utc().strftime("%Y%m%d_%H%M%S")
         version = f"v{timestamp}"
 
         checkpoint = {
