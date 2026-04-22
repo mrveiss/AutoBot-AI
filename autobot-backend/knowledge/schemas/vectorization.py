@@ -5,7 +5,10 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_REINDEX_DEFAULT_BATCH_SIZE = 20
+_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
 
 
 class VectorizationSummary(BaseModel):
@@ -167,3 +170,46 @@ class ReindexWithContextStatusResponse(BaseModel):
     started_at: Optional[str]
     completed_at: Optional[str]
     error: Optional[str]
+
+
+class BatchVectorizeRequest(BaseModel):
+    """Request model for POST /vectorize_documents (#2077)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    document_ids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="List of document IDs to vectorize (max 100 per request)",
+    )
+
+    @field_validator("document_ids")
+    @classmethod
+    def validate_document_ids(cls, v: List[str]) -> List[str]:
+        """Deduplicate and validate individual document IDs."""
+        seen: dict[str, None] = {}
+        for item in v:
+            if not isinstance(item, str) or not item.strip() or len(item) > 255:
+                raise ValueError(f"Invalid document ID: {item!r}")
+            seen[item] = None
+        return list(seen)
+
+
+class ReindexWithContextRequest(BaseModel):
+    """Request model for POST /reindex_with_context (#1513)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    collection_name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        pattern=_REINDEX_COLLECTION_PATTERN,
+        description="ChromaDB collection (defaults to knowledge_vectors)",
+    )
+    batch_size: int = Field(
+        default=_REINDEX_DEFAULT_BATCH_SIZE,
+        ge=1,
+        le=500,
+        description="Chunks to process per batch",
+    )

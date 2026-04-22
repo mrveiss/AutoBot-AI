@@ -143,10 +143,12 @@ from knowledge.schemas.connectors import (
 )
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
+    BatchVectorizeRequest,
     ClearFailedJobsResponse,
     DeleteJobResponse,
     DocumentResult,
     FailedJobsResponse,
+    ReindexWithContextRequest,
     ReindexWithContextResponse,
     ReindexWithContextStatusResponse,
     RetryJobResponse,
@@ -263,10 +265,12 @@ __all__ = [
     "TestCategoriesResponse",
     # vectorization.py
     "BackgroundVectorizationResponse",
+    "BatchVectorizeRequest",
     "ClearFailedJobsResponse",
     "DeleteJobResponse",
     "DocumentResult",
     "FailedJobsResponse",
+    "ReindexWithContextRequest",
     "ReindexWithContextResponse",
     "ReindexWithContextStatusResponse",
     "RetryJobResponse",
