@@ -17,6 +17,8 @@ Covers:
 import asyncio
 import logging
 
+import pytest
+
 from .execution_modes import (
     DebugController,
     DryRunReport,
@@ -228,47 +230,39 @@ class TestDryRunReport:
 
 
 class TestDebugController:
-    def test_resume_signal(self) -> None:
-        async def _run() -> None:
-            ctrl = DebugController()
-            asyncio.get_running_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.resume())
-            )
-            signal = await ctrl.wait_for_resume("step_1")
-            assert signal == DebugController.Signal.RESUME
+    @pytest.mark.asyncio
+    async def test_resume_signal(self) -> None:
+        ctrl = DebugController()
+        asyncio.get_running_loop().call_soon(
+            lambda: asyncio.ensure_future(ctrl.resume())
+        )
+        signal = await ctrl.wait_for_resume("step_1")
+        assert signal == DebugController.Signal.RESUME
 
-        asyncio.run(_run())
+    @pytest.mark.asyncio
+    async def test_skip_signal(self) -> None:
+        ctrl = DebugController()
+        asyncio.get_running_loop().call_soon(
+            lambda: asyncio.ensure_future(ctrl.skip())
+        )
+        signal = await ctrl.wait_for_resume("step_1")
+        assert signal == DebugController.Signal.SKIP
 
-    def test_skip_signal(self) -> None:
-        async def _run() -> None:
-            ctrl = DebugController()
-            asyncio.get_running_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.skip())
-            )
-            signal = await ctrl.wait_for_resume("step_1")
-            assert signal == DebugController.Signal.SKIP
+    @pytest.mark.asyncio
+    async def test_retry_signal(self) -> None:
+        ctrl = DebugController()
+        asyncio.get_running_loop().call_soon(
+            lambda: asyncio.ensure_future(ctrl.retry())
+        )
+        signal = await ctrl.wait_for_resume("step_1")
+        assert signal == DebugController.Signal.RETRY
 
-        asyncio.run(_run())
-
-    def test_retry_signal(self) -> None:
-        async def _run() -> None:
-            ctrl = DebugController()
-            asyncio.get_running_loop().call_soon(
-                lambda: asyncio.ensure_future(ctrl.retry())
-            )
-            signal = await ctrl.wait_for_resume("step_1")
-            assert signal == DebugController.Signal.RETRY
-
-        asyncio.run(_run())
-
-    def test_stop_returns_resume_immediately(self) -> None:
-        async def _run() -> None:
-            ctrl = DebugController()
-            ctrl.stop()
-            signal = await ctrl.wait_for_resume("step_1")
-            assert signal == DebugController.Signal.RESUME
-
-        asyncio.run(_run())
+    @pytest.mark.asyncio
+    async def test_stop_returns_resume_immediately(self) -> None:
+        ctrl = DebugController()
+        ctrl.stop()
+        signal = await ctrl.wait_for_resume("step_1")
+        assert signal == DebugController.Signal.RESUME
 
     def test_is_active_starts_true(self) -> None:
         ctrl = DebugController()
@@ -286,17 +280,16 @@ class TestDebugController:
 
 
 class TestWorkflowExecutorDryRun:
-    def test_dry_run_returns_report_dict(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_report_dict(self) -> None:
         executor = _make_executor()
         steps = _make_steps(2)
 
-        result = asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_dr_1",
-                steps,
-                context={},
-                mode=ExecutionMode.DRY_RUN,
-            )
+        result = await executor.execute_coordinated_workflow(
+            "wf_dr_1",
+            steps,
+            context={},
+            mode=ExecutionMode.DRY_RUN,
         )
 
         assert result["mode"] == "dry_run"
@@ -306,7 +299,8 @@ class TestWorkflowExecutorDryRun:
         assert "issues" in result
         assert "warnings" in result
 
-    def test_dry_run_does_not_execute_steps(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dry_run_does_not_execute_steps(self) -> None:
         """Verify that DRY_RUN never calls _execute_coordinated_step."""
         executor = _make_executor()
         steps = _make_steps(3)
@@ -320,18 +314,17 @@ class TestWorkflowExecutorDryRun:
 
         executor._execute_coordinated_step = _spy  # type: ignore[method-assign]
 
-        asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_dr_spy",
-                steps,
-                context={},
-                mode=ExecutionMode.DRY_RUN,
-            )
+        await executor.execute_coordinated_workflow(
+            "wf_dr_spy",
+            steps,
+            context={},
+            mode=ExecutionMode.DRY_RUN,
         )
 
         assert executed == [], "DRY_RUN must not execute any step"
 
-    def test_dry_run_detects_broken_dependency(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dry_run_detects_broken_dependency(self) -> None:
         executor = _make_executor()
         steps = [
             {
@@ -343,13 +336,11 @@ class TestWorkflowExecutorDryRun:
             },
         ]
 
-        result = asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_dr_broken",
-                steps,
-                context={},
-                mode=ExecutionMode.DRY_RUN,
-            )
+        result = await executor.execute_coordinated_workflow(
+            "wf_dr_broken",
+            steps,
+            context={},
+            mode=ExecutionMode.DRY_RUN,
         )
 
         assert result["valid"] is False
@@ -362,35 +353,34 @@ class TestWorkflowExecutorDryRun:
 
 
 class TestWorkflowExecutorDebugMode:
-    def test_debug_mode_skip_marks_step_skipped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_debug_mode_skip_marks_step_skipped(self) -> None:
         """When the controller sends SKIP, the step dict should have status=skipped."""
         executor = _make_executor()
         steps = _make_steps(1)
         ctrl = DebugController()
 
         # Schedule an immediate skip signal so wait_for_resume unblocks right away.
-        async def _run():
-            task = asyncio.ensure_future(
-                executor.execute_coordinated_workflow(
-                    "wf_dbg_skip",
-                    steps,
-                    context={},
-                    mode=ExecutionMode.DEBUG,
-                    debug_controller=ctrl,
-                )
+        task = asyncio.ensure_future(
+            executor.execute_coordinated_workflow(
+                "wf_dbg_skip",
+                steps,
+                context={},
+                mode=ExecutionMode.DEBUG,
+                debug_controller=ctrl,
             )
-            # Let the executor reach wait_for_resume, then fire skip
-            await asyncio.sleep(0)
-            await ctrl.skip()
-            return await task
-
-        result = asyncio.run(_run())
+        )
+        # Let the executor reach wait_for_resume, then fire skip
+        await asyncio.sleep(0)
+        await ctrl.skip()
+        result = await task
 
         # Step was skipped, so it should appear in step_results
         step_id = steps[0]["id"]
         assert result["step_results"][step_id]["skipped"] is True
 
-    def test_debug_mode_without_controller_falls_back_to_normal(self, caplog) -> None:
+    @pytest.mark.asyncio
+    async def test_debug_mode_without_controller_falls_back_to_normal(self, caplog) -> None:
         """DEBUG without a controller logs a warning and falls back to NORMAL execution."""
         executor = _make_executor()
         steps = _make_steps(1)
@@ -398,30 +388,27 @@ class TestWorkflowExecutorDebugMode:
         with caplog.at_level(
             logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"
         ):
-            asyncio.run(
-                executor.execute_coordinated_workflow(
-                    "wf_dbg_no_ctrl",
-                    steps,
-                    context={},
-                    mode=ExecutionMode.DEBUG,
-                    debug_controller=None,
-                )
+            await executor.execute_coordinated_workflow(
+                "wf_dbg_no_ctrl",
+                steps,
+                context={},
+                mode=ExecutionMode.DEBUG,
+                debug_controller=None,
             )
 
         assert any("debug_controller" in r.message.lower() for r in caplog.records)
 
-    def test_normal_mode_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_normal_mode_unchanged(self) -> None:
         """NORMAL mode must still reach the step executor and produce an execution_context."""
         executor = _make_executor()
         steps = _make_steps(1)
 
-        result = asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_normal",
-                steps,
-                context={},
-                mode=ExecutionMode.NORMAL,
-            )
+        result = await executor.execute_coordinated_workflow(
+            "wf_normal",
+            steps,
+            context={},
+            mode=ExecutionMode.NORMAL,
         )
 
         # NORMAL mode should have the standard execution_context keys
@@ -429,7 +416,8 @@ class TestWorkflowExecutorDebugMode:
         assert "step_results" in result
         assert "status" in result
 
-    def test_notification_config_injected_into_execution_context(self) -> None:
+    @pytest.mark.asyncio
+    async def test_notification_config_injected_into_execution_context(self) -> None:
         """Issue #3172: notification_config passed to execute_coordinated_workflow
         must appear in the returned execution_context so _resolve_notification_config
         can locate it and fire notifications.
@@ -438,18 +426,17 @@ class TestWorkflowExecutorDebugMode:
         steps = _make_steps(1)
         cfg = {"workflow_id": "wf_nc", "channels": {}}
 
-        result = asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_nc",
-                steps,
-                context={},
-                notification_config=cfg,
-            )
+        result = await executor.execute_coordinated_workflow(
+            "wf_nc",
+            steps,
+            context={},
+            notification_config=cfg,
         )
 
         assert result.get("notification_config") is cfg
 
-    def test_notification_config_defaults_to_none(self) -> None:
+    @pytest.mark.asyncio
+    async def test_notification_config_defaults_to_none(self) -> None:
         """Issue #3172: when notification_config is not supplied the key is
         present in execution_context with value None so the resolver can safely
         call .get() without a KeyError.
@@ -457,18 +444,17 @@ class TestWorkflowExecutorDebugMode:
         executor = _make_executor()
         steps = _make_steps(1)
 
-        result = asyncio.run(
-            executor.execute_coordinated_workflow(
-                "wf_no_nc",
-                steps,
-                context={},
-            )
+        result = await executor.execute_coordinated_workflow(
+            "wf_no_nc",
+            steps,
+            context={},
         )
 
         assert "notification_config" in result
         assert result["notification_config"] is None
 
-    def test_dag_path_fires_send_workflow_notification(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dag_path_fires_send_workflow_notification(self) -> None:
         """Issue #3172: DAG execution path must call _send_workflow_notification.
 
         Before the fix, execute_coordinated_workflow returned early from
@@ -505,14 +491,12 @@ class TestWorkflowExecutorDebugMode:
         with unittest.mock.patch.object(
             executor, "_send_workflow_notification", mock_notify
         ):
-            asyncio.run(
-                executor.execute_coordinated_workflow(
-                    "wf_dag_notif",
-                    steps,
-                    context={},
-                    edges=edges,
-                    notification_config=cfg,
-                )
+            await executor.execute_coordinated_workflow(
+                "wf_dag_notif",
+                steps,
+                context={},
+                edges=edges,
+                notification_config=cfg,
             )
 
         mock_notify.assert_called_once()

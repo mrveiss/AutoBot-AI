@@ -142,12 +142,11 @@ class TestApiSerialization:
 class TestConnectorTypesEndpoint:
     """/knowledge_base/connector_types enumerates types with tier."""
 
-    def test_endpoint_returns_tier_per_type(self):
-        import asyncio
-
+    @pytest.mark.asyncio
+    async def test_endpoint_returns_tier_per_type(self):
         from api.knowledge_connectors import list_connector_types
 
-        response = asyncio.run(list_connector_types())
+        response = await list_connector_types()
         assert "connector_types" in response
         assert response["total"] == len(response["connector_types"])
 
@@ -161,12 +160,11 @@ class TestConnectorTypesEndpoint:
                 % (connector_type, expected, by_type.get(connector_type))
             )
 
-    def test_endpoint_sorted_by_tier_then_name(self):
-        import asyncio
-
+    @pytest.mark.asyncio
+    async def test_endpoint_sorted_by_tier_then_name(self):
         from api.knowledge_connectors import list_connector_types
 
-        response = asyncio.run(list_connector_types())
+        response = await list_connector_types()
         entries = response["connector_types"]
         keys = [(e["tier"], e["connector_type"]) for e in entries]
         assert keys == sorted(keys)

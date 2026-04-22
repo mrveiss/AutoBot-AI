@@ -8,7 +8,6 @@ Tests autonomous subagent spawning, parallel execution, failure isolation,
 conflict resolution, and constraint validation.
 """
 
-import asyncio
 import pytest
 from unittest.mock import AsyncMock
 
@@ -114,32 +113,26 @@ class TestSubagentSpawner:
         # Validate constraints at spawner level
         assert len(tasks) <= 5  # MAX_SUBAGENTS_PER_PARENT
 
-    def test_spawn_exceeds_max_subagents(self, spawner):
+    @pytest.mark.asyncio
+    async def test_spawn_exceeds_max_subagents(self, spawner):
         """Test spawning exceeds max subagents constraint."""
         tasks = [
             {"goal": f"Task {i}", "context": {"index": i}} for i in range(6)
         ]
         # This should raise ValueError in spawn_subagents
-        async def test():
-            with pytest.raises(ValueError, match="Cannot spawn 6 subagents"):
-                await spawner.spawn_subagents("parent-1", tasks)
+        with pytest.raises(ValueError, match="Cannot spawn 6 subagents"):
+            await spawner.spawn_subagents("parent-1", tasks)
 
-        asyncio.run(test())
-
-    def test_spawn_exceeds_max_depth(self, spawner):
-
-
+    @pytest.mark.asyncio
+    async def test_spawn_exceeds_max_depth(self, spawner):
         """Test spawning at max depth constraint."""
         tasks = [{"goal": "Task", "context": {}}]
 
-        async def test():
-            # At depth 2 (max), should raise ValueError
-            with pytest.raises(ValueError, match="Cannot spawn subagents at depth"):
-                await spawner.spawn_subagents(
-                    "parent-1", tasks, parent_depth=2
-                )
-
-        asyncio.run(test())
+        # At depth 2 (max), should raise ValueError
+        with pytest.raises(ValueError, match="Cannot spawn subagents at depth"):
+            await spawner.spawn_subagents(
+                "parent-1", tasks, parent_depth=2
+            )
 
     @pytest.mark.asyncio
     async def test_spawn_without_waiting(self):

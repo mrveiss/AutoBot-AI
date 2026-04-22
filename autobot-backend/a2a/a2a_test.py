@@ -9,6 +9,7 @@ Issue #4502: TaskManager tests now mock Redis instead of the in-process dict.
 Uses no network connections and no external dependencies.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from a2a.agent_card import build_agent_card
@@ -569,74 +570,63 @@ class TestSelfEvaluator:
     scoring logic and EvalResult dataclass directly.
     """
 
-    def _run(self, coro):
-        import asyncio
-
-        return asyncio.run(coro)
-
-    def test_high_confidence_response_passes(self):
+    @pytest.mark.asyncio
+    async def test_high_confidence_response_passes(self):
         from a2a.self_evaluator import evaluate_task_output
 
-        result = self._run(
-            evaluate_task_output(
-                input_text="What is 2 + 2?",
-                response_text="The answer is 4. Addition of 2 and 2 yields 4.",
-                metadata={},
-                threshold=0.6,
-            )
+        result = await evaluate_task_output(
+            input_text="What is 2 + 2?",
+            response_text="The answer is 4. Addition of 2 and 2 yields 4.",
+            metadata={},
+            threshold=0.6,
         )
         assert result.passed is True
         assert result.confidence >= 0.6
         assert result.eval_reason == ""
 
-    def test_uncertain_response_fails(self):
+    @pytest.mark.asyncio
+    async def test_uncertain_response_fails(self):
         from a2a.self_evaluator import evaluate_task_output
 
         # Response with 4+ uncertainty phrases drives confidence below 0.6
-        result = self._run(
-            evaluate_task_output(
-                input_text="What is the capital of France?",
-                response_text=(
-                    "I don't know. I am not sure. I cannot answer this. "
-                    "Unable to provide information here. I have no data on this."
-                ),
-                metadata={},
-                threshold=0.6,
-            )
+        result = await evaluate_task_output(
+            input_text="What is the capital of France?",
+            response_text=(
+                "I don't know. I am not sure. I cannot answer this. "
+                "Unable to provide information here. I have no data on this."
+            ),
+            metadata={},
+            threshold=0.6,
         )
         assert result.passed is False
         assert result.confidence < 0.6
         assert result.eval_reason != ""
 
-    def test_empty_response_fails(self):
+    @pytest.mark.asyncio
+    async def test_empty_response_fails(self):
         from a2a.self_evaluator import evaluate_task_output
 
-        result = self._run(
-            evaluate_task_output(
-                input_text="Summarise this document.",
-                response_text="   ",
-                metadata={},
-                threshold=0.6,
-            )
+        result = await evaluate_task_output(
+            input_text="Summarise this document.",
+            response_text="   ",
+            metadata={},
+            threshold=0.6,
         )
         assert result.passed is False
         assert result.confidence == 0.0
 
-    def test_custom_threshold_respected(self):
+    @pytest.mark.asyncio
+    async def test_custom_threshold_respected(self):
         """A response that passes default threshold can fail a stricter one."""
         from a2a.self_evaluator import evaluate_task_output
 
         good_response = "Python is a high-level programming language used widely."
         # Should pass at default 0.6
-        result_default = self._run(
-            evaluate_task_output("Describe Python", good_response, {}, threshold=0.6)
-        )
+        result_default = await evaluate_task_output("Describe Python", good_response, {}, threshold=0.6)
         assert result_default.passed is True
 
         # Force failure with threshold above 1.0 (impossible to pass)
-        result_strict = self._run(
-            evaluate_task_output("Describe Python", good_response, {}, threshold=1.1)
-        )
+        result_strict = await evaluate_task_output("Describe Python", good_response, {}, threshold=1.1)
         assert result_strict.passed is False
 
     def test_confidence_is_bounded(self):
@@ -666,12 +656,8 @@ class TestExecuteA2aTaskEvalGate:
             mgr = TaskManager()
         return mgr
 
-    def _run(self, coro):
-        import asyncio
-
-        return asyncio.run(coro)
-
-    def test_pass_threshold_transitions_to_completed(self):
+    @pytest.mark.asyncio
+    async def test_pass_threshold_transitions_to_completed(self):
         """When eval passes, task must reach COMPLETED."""
         import sys
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -701,12 +687,13 @@ class TestExecuteA2aTaskEvalGate:
             ),
             patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
         ):
-            self._run(execute_a2a_task(task.id, "Describe Python"))
+            await execute_a2a_task(task.id, "Describe Python")
 
         final = mgr.get_task(task.id)
         assert final.status.state == TaskState.COMPLETED
 
-    def test_fail_threshold_transitions_to_failed_with_eval_reason(self):
+    @pytest.mark.asyncio
+    async def test_fail_threshold_transitions_to_failed_with_eval_reason(self):
         """When eval fails, task must reach FAILED with eval_reason artifact."""
         import sys
         from unittest.mock import AsyncMock, MagicMock, patch
@@ -739,7 +726,7 @@ class TestExecuteA2aTaskEvalGate:
             ),
             patch.dict(sys.modules, {"agents.agent_orchestration": mock_ao_module}),
         ):
-            self._run(execute_a2a_task(task.id, "Explain quantum entanglement"))
+            await execute_a2a_task(task.id, "Explain quantum entanglement")
 
         final = mgr.get_task(task.id)
         assert final.status.state == TaskState.FAILED

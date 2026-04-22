@@ -13,7 +13,6 @@ optimizer. These tests verify that:
 - The default (no argument) still produces the legacy 0.8/0.2 blend.
 """
 
-import asyncio
 import math
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,7 +35,7 @@ def _make_search_result(hybrid_score: float = 0.5, content: str = "test content"
     )
 
 
-class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
+class TestAdvancedRAGOptimizerRerankWeights(unittest.IsolatedAsyncioTestCase):
     """AdvancedRAGOptimizer rerank weights handling. Issue #2034."""
 
     def test_default_weights_are_legacy_split(self):
@@ -55,7 +54,7 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         optimizer = AdvancedRAGOptimizer(rerank_weights=weights)
         self.assertIs(optimizer._rerank_weights, weights)
 
-    def test_apply_cross_encoder_scores_uses_stored_weights(self):
+    async def test_apply_cross_encoder_scores_uses_stored_weights(self):
         """_apply_cross_encoder_scores calls compute_blended_score with _rerank_weights."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
@@ -72,11 +71,11 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.run(optimizer._apply_cross_encoder_scores("query", [result]))
+        await optimizer._apply_cross_encoder_scores("query", [result])
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 
-    def test_default_weights_produce_legacy_blend(self):
+    async def test_default_weights_produce_legacy_blend(self):
         """Without a custom weights arg the legacy 0.8 CE + 0.2 vector blend is used."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
@@ -90,11 +89,11 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.run(optimizer._apply_cross_encoder_scores("query", [result]))
+        await optimizer._apply_cross_encoder_scores("query", [result])
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 
-    def test_edge_and_recency_weights_are_forwarded(self):
+    async def test_edge_and_recency_weights_are_forwarded(self):
         """Non-zero edge and recency weights are respected by compute_blended_score."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
@@ -110,15 +109,15 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.predict.return_value = [ce_score]
         optimizer._cross_encoder = mock_ce
-        asyncio.run(optimizer._apply_cross_encoder_scores("query", [result]))
+        await optimizer._apply_cross_encoder_scores("query", [result])
 
         self.assertAlmostEqual(result.rerank_score, expected, places=6)
 
 
-class TestRAGServiceForwardsWeights(unittest.TestCase):
+class TestRAGServiceForwardsWeights(unittest.IsolatedAsyncioTestCase):
     """RAGService.initialize() must pass rerank_weights to AdvancedRAGOptimizer."""
 
-    def test_initialize_passes_rerank_weights_to_optimizer(self):
+    async def test_initialize_passes_rerank_weights_to_optimizer(self):
         """RAGService creates AdvancedRAGOptimizer with config's rerank_weights."""
         from services.rag_config import RAGConfig
         from services.rag_service import RAGService
@@ -135,7 +134,7 @@ class TestRAGServiceForwardsWeights(unittest.TestCase):
             "services.rag_service.AdvancedRAGOptimizer",
             side_effect=lambda **kw: _capture_and_create(kw, captured_weights),
         ):
-            asyncio.run(service.initialize())
+            await service.initialize()
 
         if captured_weights:
             self.assertIs(captured_weights[0], custom_weights)

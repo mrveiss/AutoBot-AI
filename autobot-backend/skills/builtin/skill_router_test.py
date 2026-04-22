@@ -3,8 +3,9 @@
 # Author: mrveiss
 """Tests for SkillRouterSkill (skill-router meta-skill)."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from skills.base_skill import SkillManifest
 from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize
@@ -89,7 +90,8 @@ def test_score_skill_zero_for_no_match():
     assert score == 0.0
 
 
-def test_llm_rerank_parses_json_response():
+@pytest.mark.asyncio
+async def test_llm_rerank_parses_json_response():
     """_llm_rerank should parse skill name and reason from LLM JSON."""
     mock_response = MagicMock()
     mock_response.content = '{"skill": "document-analysis", "reason": "PDF task"}'
@@ -115,13 +117,14 @@ def test_llm_rerank_parses_json_response():
         instance.chat_completion = AsyncMock(return_value=mock_response)
 
         skill = SkillRouterSkill()
-        name, reason = asyncio.run(skill._llm_rerank("analyze this pdf", candidates))
+        name, reason = await skill._llm_rerank("analyze this pdf", candidates)
 
     assert name == "document-analysis"
     assert reason == "PDF task"
 
 
-def test_llm_rerank_handles_markdown_code_block():
+@pytest.mark.asyncio
+async def test_llm_rerank_handles_markdown_code_block():
     """_llm_rerank should extract JSON from ```json ... ``` blocks."""
     mock_response = MagicMock()
     mock_response.content = '```json\n{"skill": "code-review", "reason": "code task"}\n```'
@@ -136,13 +139,14 @@ def test_llm_rerank_handles_markdown_code_block():
         instance.chat_completion = AsyncMock(return_value=mock_response)
 
         skill = SkillRouterSkill()
-        name, reason = asyncio.run(skill._llm_rerank("review my code", candidates))
+        name, reason = await skill._llm_rerank("review my code", candidates)
 
     assert name == "code-review"
     assert reason == "code task"
 
 
-def test_find_skill_enables_best_match_via_llm():
+@pytest.mark.asyncio
+async def test_find_skill_enables_best_match_via_llm():
     """find_skill should enable the LLM-chosen winner and return it."""
     mock_llm_response = MagicMock()
     mock_llm_response.content = '{"skill": "document-analysis", "reason": "PDF task"}'
@@ -169,7 +173,7 @@ def test_find_skill_enables_best_match_via_llm():
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "analyze this pdf document"}))
+        result = await skill.execute("find_skill", {"task": "analyze this pdf document"})
 
     assert result["success"] is True
     assert result["enabled_skill"] == "document-analysis"
@@ -179,7 +183,8 @@ def test_find_skill_enables_best_match_via_llm():
     mock_registry.enable_skill.assert_called_once_with("document-analysis")
 
 
-def test_find_skill_falls_back_to_keyword_on_llm_error():
+@pytest.mark.asyncio
+async def test_find_skill_falls_back_to_keyword_on_llm_error():
     """If LLM fails, use the top keyword-scored skill."""
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = [
@@ -202,14 +207,15 @@ def test_find_skill_falls_back_to_keyword_on_llm_error():
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "analyze this pdf document"}))
+        result = await skill.execute("find_skill", {"task": "analyze this pdf document"})
 
     assert result["success"] is True
     assert result["enabled_skill"] == "document-analysis"
     assert result["method"] == "keyword_fallback"
 
 
-def test_find_skill_dry_run_does_not_enable():
+@pytest.mark.asyncio
+async def test_find_skill_dry_run_does_not_enable():
     """dry_run=True should return result without calling enable_skill."""
     mock_llm_response = MagicMock()
     mock_llm_response.content = '{"skill": "document-analysis", "reason": "test"}'
@@ -234,21 +240,23 @@ def test_find_skill_dry_run_does_not_enable():
 
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "analyze pdf", "dry_run": True}))
+        result = await skill.execute("find_skill", {"task": "analyze pdf", "dry_run": True})
 
     assert result["success"] is True
     mock_registry.enable_skill.assert_not_called()
 
 
-def test_find_skill_requires_task_param():
+@pytest.mark.asyncio
+async def test_find_skill_requires_task_param():
     """find_skill with no task returns error."""
     skill = SkillRouterSkill()
-    result = asyncio.run(skill.execute("find_skill", {}))
+    result = await skill.execute("find_skill", {})
     assert result["success"] is False
     assert "task" in result["error"].lower()
 
 
-def test_find_skill_no_skills_registered():
+@pytest.mark.asyncio
+async def test_find_skill_no_skills_registered():
     """find_skill returns error when registry is empty and no build-skill available."""
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
@@ -256,13 +264,14 @@ def test_find_skill_no_skills_registered():
 
     with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
-        result = asyncio.run(skill.execute("find_skill", {"task": "do something"}))
+        result = await skill.execute("find_skill", {"task": "do something"})
 
     assert result["success"] is False
     assert "no skills" in result["error"].lower()
 
 
-def test_find_skill_no_match_delegates_to_autonomous():
+@pytest.mark.asyncio
+async def test_find_skill_no_match_delegates_to_autonomous():
     """When no skill matches the task, delegate to autonomous-skill-development."""
     mock_build_skill = MagicMock()
     mock_build_skill.execute = AsyncMock(
@@ -288,7 +297,7 @@ def test_find_skill_no_match_delegates_to_autonomous():
     with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "transcribe this audio file"}))
+        result = await skill.execute("find_skill", {"task": "transcribe this audio file"})
 
     assert result["success"] is True
     assert result["build_triggered"] is True
@@ -302,7 +311,8 @@ def test_find_skill_no_match_delegates_to_autonomous():
     )
 
 
-def test_find_skill_no_match_uses_research_context():
+@pytest.mark.asyncio
+async def test_find_skill_no_match_uses_research_context():
     """Research findings should enrich the capability passed to autonomous-skill-development."""
     mock_researcher = MagicMock()
     mock_researcher.execute = AsyncMock(
@@ -326,7 +336,7 @@ def test_find_skill_no_match_uses_research_context():
     with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "voice transcription"}))
+        result = await skill.execute("find_skill", {"task": "voice transcription"})
 
     assert result["success"] is True
     assert result["research_performed"] is True
@@ -336,7 +346,8 @@ def test_find_skill_no_match_uses_research_context():
     assert call_args["context"].get("implementation_hints") == "Use faster-whisper for speed"
 
 
-def test_find_skill_no_match_dry_run_skips_build():
+@pytest.mark.asyncio
+async def test_find_skill_no_match_dry_run_skips_build():
     """dry_run=True with no matching skill returns info without triggering build."""
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
@@ -344,7 +355,7 @@ def test_find_skill_no_match_dry_run_skips_build():
     with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):
         skill = SkillRouterSkill()
         skill.apply_config({"top_k": 5, "auto_enable": True})
-        result = asyncio.run(skill.execute("find_skill", {"task": "transcribe audio", "dry_run": True}))
+        result = await skill.execute("find_skill", {"task": "transcribe audio", "dry_run": True})
 
     assert result["success"] is True
     assert result["dry_run"] is True

@@ -7,7 +7,6 @@ Unit tests for cognifier _parse_llm_response and conversion logic.
 Issue #1075: Test coverage for knowledge pipeline cognifiers.
 """
 
-import asyncio
 import json
 import sys
 from datetime import datetime
@@ -571,7 +570,8 @@ def _make_context(n_chunks=2, doc_id="doc-1"):
 class TestContextGeneratorDisabled:
     """ContextGeneratorCognifier is a no-op when CONTEXT_ENABLED=false."""
 
-    def test_returns_context_unchanged(self):
+    @pytest.mark.asyncio
+    async def test_returns_context_unchanged(self):
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
@@ -579,17 +579,18 @@ class TestContextGeneratorDisabled:
         cog = ContextGeneratorCognifier()
         ctx = _make_context()
         original_contents = [c.content for c in ctx.chunks]
-        result = asyncio.run(cog.process(ctx))
+        result = await cog.process(ctx)
         assert [c.content for c in result.chunks] == original_contents
 
-    def test_empty_chunks_returns_early(self):
+    @pytest.mark.asyncio
+    async def test_empty_chunks_returns_early(self):
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
 
         cog = ContextGeneratorCognifier()
         ctx = _make_context(n_chunks=0)
-        result = asyncio.run(cog.process(ctx))
+        result = await cog.process(ctx)
         assert result.chunks == []
 
 
@@ -608,8 +609,9 @@ class TestContextGeneratorEnabled:
         resp.content = text
         return resp
 
+    @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
-    def test_enriches_chunks(self, mock_get_redis):
+    async def test_enriches_chunks(self, mock_get_redis):
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
@@ -624,7 +626,7 @@ class TestContextGeneratorEnabled:
         )
 
         ctx = _make_context(n_chunks=2)
-        result = asyncio.run(cog.process(ctx))
+        result = await cog.process(ctx)
 
         for chunk in result.chunks:
             assert chunk.metadata["has_context"] is True
@@ -633,17 +635,16 @@ class TestContextGeneratorEnabled:
             assert "context_model" in chunk.metadata
             assert "context_generated_at" in chunk.metadata
 
+    @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
-    def test_cache_hit_skips_summary_llm_call(self, mock_get_redis):
-        import json
-
+    async def test_cache_hit_skips_summary_llm_call(self, mock_get_redis):
+        cached_payload = json.dumps(
+            {"summary": "cached summary", "model": "llama3.2:1b"}
+        )
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
 
-        cached_payload = json.dumps(
-            {"summary": "cached summary", "model": "llama3.2:1b"}
-        )
         mock_get_redis.return_value = self._mock_redis(cached=cached_payload)
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
@@ -651,12 +652,13 @@ class TestContextGeneratorEnabled:
         cog.llm.chat_completion = AsyncMock(return_value=chunk_resp)
 
         ctx = _make_context(n_chunks=2)
-        asyncio.run(cog.process(ctx))
+        await cog.process(ctx)
 
         assert cog.llm.chat_completion.call_count == 2
 
+    @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
-    def test_llm_failure_sets_has_context_false(self, mock_get_redis):
+    async def test_llm_failure_sets_has_context_false(self, mock_get_redis):
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
@@ -667,13 +669,14 @@ class TestContextGeneratorEnabled:
         cog.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM down"))
 
         ctx = _make_context(n_chunks=1)
-        result = asyncio.run(cog.process(ctx))
+        result = await cog.process(ctx)
 
         assert result.chunks[0].metadata["has_context"] is False
         assert result.chunks[0].metadata["contextual_text"] == ""
 
+    @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
-    def test_enriched_content_format(self, mock_get_redis):
+    async def test_enriched_content_format(self, mock_get_redis):
         from knowledge.pipeline.cognifiers.context_generator import (
             ContextGeneratorCognifier,
         )
@@ -690,6 +693,6 @@ class TestContextGeneratorEnabled:
 
         ctx = _make_context(n_chunks=1)
         original = ctx.chunks[0].content
-        result = asyncio.run(cog.process(ctx))
+        result = await cog.process(ctx)
 
         assert result.chunks[0].content == f"ctx sentence\n\n{original}"

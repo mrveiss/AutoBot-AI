@@ -4,7 +4,6 @@ Tests for Error Metrics Collection System
 Validates error metrics collection, aggregation, and reporting functionality
 """
 
-import asyncio
 import time
 
 import pytest
@@ -106,9 +105,10 @@ class TestErrorMetrics:
         success = await collector.mark_resolved("nonexistent_trace")
         assert success is False
 
-    def test_get_recent_errors(self, collector):
+    @pytest.mark.asyncio
+    async def test_get_recent_errors(self, collector):
         """Test retrieving recent errors"""
-        asyncio.run(self._populate_errors(collector, count=15))
+        await self._populate_errors(collector, count=15)
 
         recent = collector.get_recent_errors(limit=10)
         assert len(recent) == 10
@@ -117,9 +117,10 @@ class TestErrorMetrics:
         timestamps = [m.timestamp for m in recent]
         assert timestamps == sorted(timestamps, reverse=True)
 
-    def test_component_filtering(self, collector):
+    @pytest.mark.asyncio
+    async def test_component_filtering(self, collector):
         """Test filtering errors by component"""
-        asyncio.run(self._populate_errors_multi_component(collector, component1="comp_a", component2="comp_b"))
+        await self._populate_errors_multi_component(collector, component1="comp_a", component2="comp_b")
 
         comp_a_stats = collector.get_stats(component="comp_a")
         comp_b_stats = collector.get_stats(component="comp_b")
@@ -127,9 +128,10 @@ class TestErrorMetrics:
         assert all(s.component == "comp_a" for s in comp_a_stats)
         assert all(s.component == "comp_b" for s in comp_b_stats)
 
-    def test_error_timeline(self, collector):
+    @pytest.mark.asyncio
+    async def test_error_timeline(self, collector):
         """Test error timeline generation"""
-        asyncio.run(self._populate_errors(collector, count=10))
+        await self._populate_errors(collector, count=10)
 
         timeline = collector.get_error_timeline(hours=24)
         assert isinstance(timeline, dict)
@@ -140,9 +142,10 @@ class TestErrorMetrics:
             assert isinstance(hour_key, str)
             assert isinstance(errors, list)
 
-    def test_category_breakdown(self, collector):
+    @pytest.mark.asyncio
+    async def test_category_breakdown(self, collector):
         """Test error breakdown by category"""
-        asyncio.run(self._populate_errors_multi_category(collector))
+        await self._populate_errors_multi_category(collector)
 
         breakdown = collector.get_category_breakdown()
 
@@ -150,9 +153,10 @@ class TestErrorMetrics:
         assert "validation" in breakdown
         assert all(isinstance(count, int) for count in breakdown.values())
 
-    def test_component_breakdown(self, collector):
+    @pytest.mark.asyncio
+    async def test_component_breakdown(self, collector):
         """Test error breakdown by component"""
-        asyncio.run(self._populate_errors_multi_component(collector))
+        await self._populate_errors_multi_component(collector)
 
         breakdown = collector.get_component_breakdown()
 
@@ -160,9 +164,10 @@ class TestErrorMetrics:
         assert "comp_b" in breakdown
         assert all(isinstance(count, int) for count in breakdown.values())
 
-    def test_top_errors(self, collector):
+    @pytest.mark.asyncio
+    async def test_top_errors(self, collector):
         """Test getting top N errors"""
-        asyncio.run(self._populate_errors_with_varying_counts(collector))
+        await self._populate_errors_with_varying_counts(collector)
 
         top_errors = collector.get_top_errors(limit=3)
 
@@ -171,9 +176,10 @@ class TestErrorMetrics:
         counts = [s.total_count for s in top_errors]
         assert counts == sorted(counts, reverse=True)
 
-    def test_summary(self, collector):
+    @pytest.mark.asyncio
+    async def test_summary(self, collector):
         """Test getting overall summary"""
-        asyncio.run(self._populate_errors(collector, count=20))
+        await self._populate_errors(collector, count=20)
 
         summary = collector.get_summary()
 
@@ -185,22 +191,20 @@ class TestErrorMetrics:
 
         assert summary["total_errors"] >= 20
 
-    def test_alert_threshold(self, collector):
+    @pytest.mark.asyncio
+    async def test_alert_threshold(self, collector):
         """Test setting and checking alert thresholds"""
         collector.set_alert_threshold("test_component", "TEST_001", threshold=5)
 
         # Record errors up to threshold
-        async def record_errors():
-            for i in range(10):
-                await collector.record_error(
-                    error_code="TEST_001",
-                    category=ErrorCategory.SERVER_ERROR,
-                    component="test_component",
-                    function="test_func",
-                    message=f"Test error {i}",
-                )
-
-        asyncio.run(record_errors())
+        for i in range(10):
+            await collector.record_error(
+                error_code="TEST_001",
+                category=ErrorCategory.SERVER_ERROR,
+                component="test_component",
+                function="test_func",
+                message=f"Test error {i}",
+            )
 
         stats = collector.get_stats(component="test_component")
         assert stats[0].total_count == 10

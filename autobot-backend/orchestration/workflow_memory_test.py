@@ -327,7 +327,8 @@ class TestWorkflowMemoryLazyRedis:
 class TestWorkflowMemoryAutoInjection:
     """Verify that _execute_coordinated_step injects shared_memory findings."""
 
-    def test_prior_findings_injected_into_context(self):
+    @pytest.mark.asyncio
+    async def test_prior_findings_injected_into_context(self):
         """When shared_memory has data, it appears in context['prior_agent_findings']."""
         from unittest.mock import AsyncMock, MagicMock
 
@@ -354,16 +355,13 @@ class TestWorkflowMemoryAutoInjection:
         )
         executor._create_agent_interaction = MagicMock(return_value=None)
 
-        import asyncio
-
         with pytest.raises(NotImplementedError):
-            asyncio.run(
-                executor._execute_coordinated_step(step, execution_context, context)
-            )
+            await executor._execute_coordinated_step(step, execution_context, context)
 
         assert context["prior_agent_findings"] == {"step1": "found data"}
 
-    def test_empty_memory_not_injected(self):
+    @pytest.mark.asyncio
+    async def test_empty_memory_not_injected(self):
         """When shared_memory is empty, no prior_agent_findings key is added."""
         from unittest.mock import AsyncMock, MagicMock
 
@@ -388,11 +386,7 @@ class TestWorkflowMemoryAutoInjection:
         )
         executor._create_agent_interaction = MagicMock(return_value=None)
 
-        import asyncio
-
         with pytest.raises(NotImplementedError):
-            asyncio.run(
-                executor._execute_coordinated_step(step, execution_context, context)
-            )
+            await executor._execute_coordinated_step(step, execution_context, context)
 
         assert "prior_agent_findings" not in context

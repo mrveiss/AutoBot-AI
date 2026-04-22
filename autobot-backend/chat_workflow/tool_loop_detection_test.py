@@ -20,12 +20,13 @@ module level before graph.py is loaded.  The test therefore runs with only
 Python stdlib and pytest installed.
 """
 
-import asyncio
 import importlib.util
 import sys
 import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Stub all missing runtime packages so graph.py can be imported in isolation.
@@ -350,30 +351,34 @@ class TestPrepareLlmResetsLoopState:
         base.update(overrides)
         return base
 
-    def test_loop_count_reset_to_zero(self):
+    @pytest.mark.asyncio
+    async def test_loop_count_reset_to_zero(self):
         """prepare_llm must return tool_loop_count=0 regardless of prior state."""
         state = self._make_state()
         config = self._make_config()
-        result = asyncio.run(prepare_llm(state, config))
+        result = await prepare_llm(state, config)
         assert result.get("tool_loop_count") == 0
 
-    def test_fingerprints_reset_to_empty(self):
+    @pytest.mark.asyncio
+    async def test_fingerprints_reset_to_empty(self):
         """prepare_llm must return tool_call_fingerprints=[] regardless of prior state."""
         state = self._make_state()
         config = self._make_config()
-        result = asyncio.run(prepare_llm(state, config))
+        result = await prepare_llm(state, config)
         assert result.get("tool_call_fingerprints") == []
 
-    def test_loop_warning_reset_to_empty(self):
+    @pytest.mark.asyncio
+    async def test_loop_warning_reset_to_empty(self):
         """prepare_llm must return tool_loop_warning='' regardless of prior state."""
         state = self._make_state()
         config = self._make_config()
-        result = asyncio.run(prepare_llm(state, config))
+        result = await prepare_llm(state, config)
         assert result.get("tool_loop_warning") == ""
 
-    def test_error_state_skips_reset(self):
+    @pytest.mark.asyncio
+    async def test_error_state_skips_reset(self):
         """prepare_llm returns {} when error is set — no KeyError on reset fields."""
         state = self._make_state(error="something failed")
         config = self._make_config()
-        result = asyncio.run(prepare_llm(state, config))
+        result = await prepare_llm(state, config)
         assert result == {}

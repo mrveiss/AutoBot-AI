@@ -145,16 +145,14 @@ class TestTaskOutcomeJudge:
         # Should not raise
         await judge._persist_outcome("t", "g", "o", "s", result)
 
-    def test_prepare_judgment_prompt_contains_goal(self):
+    @pytest.mark.asyncio
+    async def test_prepare_judgment_prompt_contains_goal(self):
         judge = TaskOutcomeJudge()
-        import asyncio
 
-        prompt = asyncio.run(
-            judge._prepare_judgment_prompt(
-                subject={"goal": "my goal", "output": "my output"},
-                criteria=[],
-                context={"task_type": "test", "goal": "my goal", "strategy_used": "s"},
-            )
+        prompt = await judge._prepare_judgment_prompt(
+            subject={"goal": "my goal", "output": "my output"},
+            criteria=[],
+            context={"task_type": "test", "goal": "my goal", "strategy_used": "s"},
         )
         assert "my goal" in prompt
         assert "ACCURACY" in prompt
