@@ -134,7 +134,7 @@ class KnowledgeConsistencyVerifier:
         self.critical_errors = []
         self.warnings = []
 
-    def verify_embedding_model_consistency(self) -> bool:
+    def verify_embedding_model_consistency(self, deep: bool = False) -> bool:
         """CRITICAL: Ensure all components use identical embedding models"""
         logger.info("🔍 CRITICAL CHECK: Verifying embedding model consistency...")
 
@@ -182,6 +182,33 @@ class KnowledgeConsistencyVerifier:
                         "✅ Semantic chunker consistency: %s",
                         chunker_model or "no embedding_model_name attr",
                     )
+                    if deep and chunker_model and chunker_model == kb_embedding_model:
+                        # String compare passed; verify vector shape matches too.
+                        try:
+                            import asyncio
+
+                            test_text = "test chunker-kb model consistency"
+                            kb_obj = KnowledgeBase()
+                            kb_vec = kb_obj.embed_model.get_text_embedding(test_text)
+                            chunker_vecs = asyncio.run(chunker._compute_embeddings([test_text]))
+                            if chunker_vecs is None or len(chunker_vecs[0]) != len(kb_vec):
+                                chunker_dim = len(chunker_vecs[0]) if chunker_vecs else "None"
+                                self.critical_errors.append(
+                                    f"CRITICAL: Chunker embedding dimension ({chunker_dim}) "
+                                    f"!= KB embedding dimension ({len(kb_vec)})"
+                                )
+                                logger.error(
+                                    "❌ --deep: chunker dim %s != KB dim %s",
+                                    chunker_dim,
+                                    len(kb_vec),
+                                )
+                                return False
+                            logger.info(
+                                "✅ --deep: chunker vector shape verified (dim=%s)", len(kb_vec)
+                            )
+                        except Exception as exc:
+                            self.warnings.append(f"--deep chunker vector check failed: {exc}")
+                            logger.warning("--deep chunker vector check failed: %s", exc)
                 except (ImportError, AttributeError, RuntimeError, OSError) as e:
                     # SemanticChunker() can raise on missing config,
                     # failed model load, or Redis-init failure.
@@ -296,18 +323,20 @@ class KnowledgeConsistencyVerifier:
             ],
         }
 
-    def run_full_verification(self, enforce_locks: bool = False) -> bool:
+    def run_full_verification(self, enforce_locks: bool = False, deep: bool = False) -> bool:
         """Run complete knowledge consistency verification"""
         logger.info("🚨 CRITICAL SYSTEM CHECK: Knowledge Base Consistency Verification")
         logger.info("=" * 60)
 
         # Run all critical checks
         checks = [
-            ("Embedding Model Consistency", self.verify_embedding_model_consistency),
+            (
+                "Embedding Model Consistency",
+                lambda: self.verify_embedding_model_consistency(deep=deep),
+            ),
             ("Vector Dimension Consistency", self.verify_vector_dimensions),
             ("Retrieval Accuracy", self.verify_retrieval_accuracy),
         ]
-
         if enforce_locks:
             checks.append(("Configuration Locks", self.enforce_configuration_locks))
 
@@ -359,10 +388,15 @@ def main():
         action="store_true",
         help="Enforce configuration locks to prevent inconsistencies",
     )
+    parser.add_argument(
+        "--deep",
+        action="store_true",
+        help="Run vector-shape verification (loads chunker model; slow)",
+    )
     args = parser.parse_args()
 
     verifier = KnowledgeConsistencyVerifier()
-    success = verifier.run_full_verification(enforce_locks=args.enforce_locks)
+    success = verifier.run_full_verification(enforce_locks=args.enforce_locks, deep=args.deep)
 
     if not success:
         sys.exit(1)
