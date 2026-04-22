@@ -43,7 +43,7 @@
         v-for="agent in agents"
         :key="agent.id"
         class="agent-card"
-        :class="[agent.status, { expanded: expandedAgent === agent.id }]"
+        :class="[agent.status, { expanded: isAgentExpanded(agent.id) }]"
         @click="toggleExpand(agent.id)"
       >
         <!-- Agent Avatar -->
@@ -92,7 +92,7 @@
 
         <!-- Expanded Details -->
         <Transition name="expand">
-          <div v-if="expandedAgent === agent.id" class="expanded-details">
+          <div v-if="isAgentExpanded(agent.id)" class="expanded-details">
             <div class="detail-section">
               <h5>{{ t('visualizations.agentActivity.recentTasks') }}</h5>
               <ul class="task-list">
@@ -185,6 +185,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
+import { useExpansion } from '@/composables/useExpansion'
 
 const { t } = useI18n()
 const logger = createLogger('AgentActivityVisualization')
@@ -242,7 +243,7 @@ const emit = defineEmits<{
 
 // State
 const viewMode = ref<'grid' | 'timeline'>('grid')
-const expandedAgent = ref<string | null>(null)
+const { isExpanded: isAgentExpanded, expand: expandAgent, collapseAll: collapseAllAgents } = useExpansion<string>()
 const agents = ref<Agent[]>([])
 const recentEvents = ref<ActivityEvent[]>([])
 
@@ -313,7 +314,9 @@ function getEventIcon(type: string): string {
 }
 
 function toggleExpand(agentId: string) {
-  expandedAgent.value = expandedAgent.value === agentId ? null : agentId
+  const wasExpanded = isAgentExpanded(agentId)
+  collapseAllAgents()
+  if (!wasExpanded) expandAgent(agentId)
 }
 
 function viewDetails(agent: Agent) {

@@ -52,7 +52,7 @@
 
         <div
           class="timeline-card"
-          :class="{ expanded: expandedEvent === event.id }"
+          :class="{ expanded: isEventExpanded(event.id) }"
           @click="toggleExpand(event.id)"
         >
           <div class="card-header">
@@ -95,7 +95,7 @@
 
           <!-- Expanded Content -->
           <div
-            v-if="expandedEvent === event.id"
+            v-if="isEventExpanded(event.id)"
             class="expanded-content"
           >
             <div
@@ -128,6 +128,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
+import { useExpansion } from '@/composables/useExpansion'
 import {
   getEventTypeColor as getEventColor,
   getEventTypeIcon as getEventIcon,
@@ -140,7 +141,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const expandedEvent = ref<string | null>(null)
+const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseAllEvents } = useExpansion<string>()
 
 function formatTimestamp(event: TemporalEvent): string {
   if (event.timestamp) {
@@ -175,9 +176,9 @@ function shouldShowDateMarker(index: number): boolean {
 }
 
 function toggleExpand(eventId: string): void {
-  expandedEvent.value = expandedEvent.value === eventId
-    ? null
-    : eventId
+  const wasExpanded = isEventExpanded(eventId)
+  collapseAllEvents()
+  if (!wasExpanded) expandEvent(eventId)
 }
 </script>
 

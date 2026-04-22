@@ -54,11 +54,11 @@
           <template v-for="virtualItem in visibleItems" :key="virtualItem.index">
             <tr
               @click="toggleExpand(virtualItem.index)"
-              :class="{ expanded: expandedRow === virtualItem.index }"
+              :class="{ expanded: isRowExpanded(virtualItem.index) }"
               class="finding-row"
               role="button"
               tabindex="0"
-              :aria-expanded="expandedRow === virtualItem.index"
+              :aria-expanded="isRowExpanded(virtualItem.index)"
               :aria-label="`${virtualItem.data.severity} severity finding in ${virtualItem.data.file_path}, click to expand details`"
               @keydown.enter="toggleExpand(virtualItem.index)"
               @keydown.space.prevent="toggleExpand(virtualItem.index)"
@@ -76,7 +76,7 @@
               <td class="col-message">{{ truncateMessage(virtualItem.data.message) }}</td>
             </tr>
             <!-- Expanded detail card -->
-            <tr v-if="expandedRow === virtualItem.index" class="detail-row">
+            <tr v-if="isRowExpanded(virtualItem.index)" class="detail-row">
               <td colspan="4">
                 <div class="detail-card">
                   <div class="detail-section">
@@ -115,6 +115,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualList } from '@/composables/useVirtualList'
 import { useDebounce } from '@/composables/useDebounce'
+import { useExpansion } from '@/composables/useExpansion'
 import type { Severity } from '@/types/codeIntelligence'
 
 const { t } = useI18n()
@@ -142,7 +143,7 @@ const props = defineProps<{
 const severityLevels: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
 const selectedSeverities = ref<Severity[]>([...severityLevels])
 const searchQuery = ref('')
-const expandedRow = ref<number | null>(null)
+const { isExpanded: isRowExpanded, expand: expandRow, collapseAll: collapseAllRows } = useExpansion<number>()
 
 // Debounce search query for performance (Issue #4035)
 // Reduces unnecessary filtering operations during rapid typing
@@ -198,7 +199,9 @@ function getRemediation(finding: Finding): string {
 }
 
 function toggleExpand(index: number): void {
-  expandedRow.value = expandedRow.value === index ? null : index
+  const wasExpanded = isRowExpanded(index)
+  collapseAllRows()
+  if (!wasExpanded) expandRow(index)
 }
 
 function copyPath(finding: Finding): void {
