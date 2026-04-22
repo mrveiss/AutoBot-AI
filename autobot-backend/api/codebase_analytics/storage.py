@@ -11,7 +11,7 @@ import logging
 import re
 from pathlib import Path
 
-from utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
+from knowledge.backends import get_async_default_client, get_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def get_code_collection():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
 
         # Create persistent client with telemetry disabled using shared utility
-        chroma_client = get_chromadb_client(
+        chroma_client = get_default_client(
             db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )
 
@@ -91,7 +91,7 @@ async def get_code_collection_async():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
 
         # Get async ChromaDB client
-        async_client = await get_async_chromadb_client(
+        async_client = await get_async_default_client(
             db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )
 

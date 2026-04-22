@@ -176,7 +176,7 @@ class IndexMixin:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
+            from knowledge.backends import get_default_client as create_chromadb_client
 
             logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
             chroma_client = create_chromadb_client(
@@ -235,7 +235,7 @@ class IndexMixin:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
+            from knowledge.backends import get_default_client as create_chromadb_client
 
             chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(
@@ -247,8 +247,10 @@ class IndexMixin:
             )
             vector_count = await asyncio.to_thread(collection.count)
 
+            # ChromaDBCollection wraps the raw collection; access metadata via ._raw
+            raw_col = getattr(collection, "_raw", collection)
             return self._build_index_info_result(
-                chroma_path, vector_count, collection.metadata or {}
+                chroma_path, vector_count, getattr(raw_col, "metadata", None) or {}
             )
 
         except Exception as e:

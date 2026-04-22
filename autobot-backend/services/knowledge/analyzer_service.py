@@ -257,18 +257,18 @@ class AnalyzerService:
         target = name or self.COLLECTION_NAME
         if name is None:
             if self._collection is None:
-                from utils.chromadb_client import get_async_chromadb_client
+                from knowledge.backends import get_async_default_client
 
-                client = await get_async_chromadb_client()
+                client = await get_async_default_client()
                 self._collection = await client.get_or_create_collection(
                     name=target,
                     metadata={"description": "Analyzer-distilled lessons for context injection"},
                 )
             return self._collection
 
-        from utils.chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        client = await get_async_chromadb_client()
+        client = await get_async_default_client()
         return await client.get_or_create_collection(
             name=target,
             metadata={"description": "Analyzer-distilled lessons for context injection"},

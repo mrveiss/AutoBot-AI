@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
+from knowledge.backends import get_async_default_client, get_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def get_pattern_collection():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
         chroma_path.mkdir(parents=True, exist_ok=True)
 
-        chroma_client = get_chromadb_client(
+        chroma_client = get_default_client(
             db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )
 
@@ -77,7 +77,7 @@ async def get_pattern_collection_async():
         chroma_path = _PROJECT_ROOT / "data" / "chromadb"
         chroma_path.mkdir(parents=True, exist_ok=True)
 
-        async_client = await get_async_chromadb_client(
+        async_client = await get_async_default_client(
             db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )
 

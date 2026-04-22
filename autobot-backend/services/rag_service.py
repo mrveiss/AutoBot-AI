@@ -862,7 +862,7 @@ class RAGService:
         Results from all collections are merged.  Per-collection errors are
         logged and swallowed so the main context path is never interrupted.
         """
-        from utils.chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
         # Collect all synthesis collection names: default + schema-defined targets.
         collection_names: List[str] = ["kb_synthesis"]
@@ -877,7 +877,7 @@ class RAGService:
 
         all_docs: List[str] = []
         try:
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
         except Exception as exc:
             logger.debug("KB synthesis ChromaDB client unavailable (non-fatal): %s", exc)
             return ""
@@ -907,9 +907,9 @@ class RAGService:
         interrupted.
         """
         try:
-            from utils.chromadb_client import get_async_chromadb_client
+            from knowledge.backends import get_async_default_client
 
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
             collection = await client.get_or_create_collection(name="autobot_lessons")
             results = await collection.query(query_texts=[query], n_results=2)
             if not (results and results.get("ids") and results["ids"][0]):

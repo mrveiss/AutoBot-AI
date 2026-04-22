@@ -138,10 +138,10 @@ class CrossLanguagePatternDetector:
         """Get or create ChromaDB collection for patterns."""
         if self._chromadb_collection is None:
             try:
-                from utils.async_chromadb_client import get_async_chromadb_client
+                from knowledge.backends import get_async_default_client
 
                 chromadb_path = self.project_root / "data" / "chromadb"
-                self._chromadb_client = await get_async_chromadb_client(
+                self._chromadb_client = await get_async_default_client(
                     db_path=str(chromadb_path)
                 )
                 self._chromadb_collection = (

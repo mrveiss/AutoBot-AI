@@ -44,7 +44,7 @@ from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCogn
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
-from utils.async_chromadb_client import get_async_chromadb_client
+from knowledge.backends import get_async_default_client
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1686,7 +1686,7 @@ async def _reindex_with_context_task(
 async def _run_reindex(collection_name: str, batch_size: int) -> None:
     """Core reindex logic, separated for testability (#1513)."""
     cognifier = ContextGeneratorCognifier()
-    client = await get_async_chromadb_client()
+    client = await get_async_default_client()
 
     try:
         collection = await client.get_or_create_collection(name=collection_name)

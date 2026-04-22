@@ -597,10 +597,10 @@ async def get_entity_history(
     """
     from services.knowledge.lineage_service import LineageService
     from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
-    from utils.chromadb_client import get_async_chromadb_client
+    from knowledge.backends import get_async_default_client
 
     async def _collection_factory(name: str):
-        client = await get_async_chromadb_client()
+        client = await get_async_default_client()
         return await client.get_or_create_collection(name=name)
 
     svc = LineageService(

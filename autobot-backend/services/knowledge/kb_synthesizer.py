@@ -85,9 +85,9 @@ class KBSynthesizer:
         name = collection_name or self.COLLECTION_NAME
         if collection_name is None:
             if self._collection is None:
-                from utils.chromadb_client import get_async_chromadb_client
+                from knowledge.backends import get_async_default_client
 
-                client = await get_async_chromadb_client()
+                client = await get_async_default_client()
                 self._collection = await client.get_or_create_collection(
                     name=name,
                     metadata={"description": "LLM-synthesized KB topic summaries"},
@@ -95,9 +95,9 @@ class KBSynthesizer:
             return self._collection
 
         if name not in self._named_collections:
-            from utils.chromadb_client import get_async_chromadb_client
+            from knowledge.backends import get_async_default_client
 
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
             self._named_collections[name] = await client.get_or_create_collection(
                 name=name,
                 metadata={"description": "LLM-synthesized KB topic summaries"},
