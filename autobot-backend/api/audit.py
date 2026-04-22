@@ -18,6 +18,7 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -159,8 +160,8 @@ async def query_audit_logs(
     """
     try:
         audit_logger = await get_audit_logger()
-        start_dt = datetime.fromisoformat(start_time) if start_time else None
-        end_dt = datetime.fromisoformat(end_time) if end_time else None
+        start_dt = parse_utc_iso(start_time) if start_time else None
+        end_dt = parse_utc_iso(end_time) if end_time else None
 
         entries = await audit_logger.query(
             start_time=start_dt,

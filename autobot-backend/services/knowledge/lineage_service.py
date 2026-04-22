@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class SynthesisRun:
         """
         ran_at_raw = entry.get("ran_at", "")
         try:
-            ts = datetime.fromisoformat(ran_at_raw)
+            ts = parse_utc_iso(ran_at_raw)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):

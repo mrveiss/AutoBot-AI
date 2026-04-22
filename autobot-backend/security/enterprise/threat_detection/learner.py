@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ class ThreatDetectionLearner:
         last_seen_raw = data[2]
         if last_seen_raw:
             try:
-                last_seen = datetime.fromisoformat(
+                last_seen = parse_utc_iso(
                     last_seen_raw.decode()
                     if isinstance(last_seen_raw, bytes)
                     else last_seen_raw

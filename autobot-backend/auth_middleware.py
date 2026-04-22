@@ -7,6 +7,7 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
+from autobot_shared.time_utils import parse_utc_iso
 import json
 import logging
 import os
@@ -361,7 +362,7 @@ class AuthenticationMiddleware:
         # Check session timeout for in-memory sessions
         last_activity = session.get("last_activity")
         if isinstance(last_activity, str):
-            last_activity = datetime.datetime.fromisoformat(last_activity)
+            last_activity = parse_utc_iso(last_activity)
             if last_activity.tzinfo is None:
                 last_activity = last_activity.replace(tzinfo=datetime.timezone.utc)
 

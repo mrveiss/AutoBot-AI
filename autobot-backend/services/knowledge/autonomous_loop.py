@@ -35,6 +35,7 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Deque, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -317,7 +318,7 @@ class AutonomousLoopRunner:
                 data = json.loads(raw)
                 staged_at_str = data.pop("staged_at", None)
                 if staged_at_str:
-                    staged_at = datetime.fromisoformat(staged_at_str)
+                    staged_at = parse_utc_iso(staged_at_str)
                     if staged_at.tzinfo is None:
                         staged_at = staged_at.replace(tzinfo=timezone.utc)
                     if (datetime.now(timezone.utc) - staged_at).days > 7:

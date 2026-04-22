@@ -32,6 +32,7 @@ import subprocess  # nosec B404 - required for git operations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -850,7 +851,7 @@ class BugPredictor(_BaseClass):
         last_date = None
         if bugs:
             try:
-                last_date = datetime.fromisoformat(bugs[0].get("date", ""))
+                last_date = parse_utc_iso(bugs[0].get("date", ""))
             except Exception:
                 logger.debug("Suppressed exception in try block", exc_info=True)
 

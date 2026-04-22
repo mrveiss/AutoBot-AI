@@ -9,6 +9,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import logging
 from datetime import datetime
+from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional, Set
 from uuid import UUID
 
@@ -116,7 +117,7 @@ class TemporalSearchService:
                 if event and event.get("timestamp"):
                     events.append(event)
 
-            events.sort(key=lambda e: datetime.fromisoformat(e["timestamp"]))
+            events.sort(key=lambda e: parse_utc_iso(e["timestamp"]))
 
             logger.info(
                 "Retrieved %s events for %s",

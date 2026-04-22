@@ -24,6 +24,7 @@ import uuid
 from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from time import time
 from typing import Dict, List, Optional
@@ -857,7 +858,7 @@ async def get_secrets_stats(
 
             # Count expired secrets
             if secret_data.get("expires_at"):
-                expires_at = datetime.fromisoformat(secret_data["expires_at"])
+                expires_at = parse_utc_iso(secret_data["expires_at"])
                 if expires_at < now:
                     stats["expired_count"] += 1
 

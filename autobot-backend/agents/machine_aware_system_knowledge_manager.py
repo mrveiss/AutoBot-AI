@@ -14,6 +14,7 @@ import json
 import logging
 import shutil
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -77,7 +78,7 @@ class MachineProfile:
 
         last_updated_str = data.get("last_updated")
         if last_updated_str:
-            profile.last_updated = datetime.fromisoformat(last_updated_str)
+            profile.last_updated = parse_utc_iso(last_updated_str)
 
         return profile
 
@@ -739,7 +740,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         try:
             from datetime import datetime, timedelta, timezone
 
-            last_updated = datetime.fromisoformat(man_info.last_updated)
+            last_updated = parse_utc_iso(man_info.last_updated)
             if last_updated.tzinfo is None:
                 last_updated = last_updated.replace(tzinfo=timezone.utc)
             age_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=max_age_hours)

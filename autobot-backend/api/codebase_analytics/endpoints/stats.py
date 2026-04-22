@@ -109,11 +109,9 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
     try:
-        from datetime import datetime, timezone
+        from autobot_shared.time_utils import parse_utc_iso
 
-        start_time = datetime.fromisoformat(started_at)
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
+        start_time = parse_utc_iso(started_at)
         elapsed = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
         return elapsed > _STALE_TASK_TIMEOUT_SECONDS
     except (ValueError, TypeError):

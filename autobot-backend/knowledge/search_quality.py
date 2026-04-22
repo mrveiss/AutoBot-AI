@@ -19,6 +19,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -348,7 +349,7 @@ class RelevanceScorer:
         created_at = None
         if "created_at" in metadata:
             try:
-                created_at = datetime.fromisoformat(metadata["created_at"])
+                created_at = parse_utc_iso(metadata["created_at"])
             except (ValueError, TypeError):
                 pass
 
@@ -519,7 +520,7 @@ class AdvancedFilter:
             return True  # Allow if no date info
 
         try:
-            created_at = datetime.fromisoformat(created_at_str)
+            created_at = parse_utc_iso(created_at_str)
         except (ValueError, TypeError):
             return True
 
