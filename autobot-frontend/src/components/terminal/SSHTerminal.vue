@@ -275,7 +275,7 @@ watch(() => props.hostId, (newHostId, oldHostId) => {
 onMounted(() => {
   initTerminal()
   connect()
-  startHeartbeat()
+  startHeartbeat('')
   window.addEventListener('resize', handleResize)
 })
 
