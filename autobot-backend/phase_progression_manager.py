@@ -894,18 +894,11 @@ class PhaseProgressionManager:
 
 
 # Singleton instance for global access (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_progression_manager = None
-_progression_manager_lock = threading.Lock()
+_progression_manager = lazy_singleton(PhaseProgressionManager)
 
 
 def get_progression_manager() -> PhaseProgressionManager:
     """Get singleton instance of PhaseProgressionManager (thread-safe)."""
-    global _progression_manager
-    if _progression_manager is None:
-        with _progression_manager_lock:
-            # Double-check after acquiring lock
-            if _progression_manager is None:
-                _progression_manager = PhaseProgressionManager()
-    return _progression_manager
+    return _progression_manager()

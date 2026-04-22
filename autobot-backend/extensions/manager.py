@@ -9,11 +9,11 @@ hook invocations across all registered extensions.
 """
 
 import logging
-import threading
 from typing import Any, Dict, List, Optional, Type
 
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -374,7 +374,6 @@ class ExtensionManager:
 
 # Singleton instance for global access (Issue #662: thread-safe)
 _global_manager: Optional[ExtensionManager] = None
-_global_manager_lock = threading.Lock()
 
 
 def get_extension_manager() -> ExtensionManager:
@@ -384,7 +383,6 @@ def get_extension_manager() -> ExtensionManager:
     Returns:
         Global ExtensionManager singleton
     """
-    global _global_manager
     if _global_manager is None:
         with _global_manager_lock:
             # Double-check after acquiring lock
@@ -395,6 +393,5 @@ def get_extension_manager() -> ExtensionManager:
 
 def reset_extension_manager() -> None:
     """Reset the global extension manager (for testing)."""
-    global _global_manager
     with _global_manager_lock:
         _global_manager = None
