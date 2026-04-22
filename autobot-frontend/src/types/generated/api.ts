@@ -12,19 +12,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Root Health Check
-         * @description Health endpoint with per-service breakdown and capabilities (supports GET and HEAD).
+         * Root Health Check Get
+         * @description Health endpoint with per-service breakdown and capabilities.
          */
-        get: operations["root_health_check_api_health_head"];
+        get: operations["root_health_check_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        /**
-         * Root Health Check
-         * @description Health endpoint with per-service breakdown and capabilities (supports GET and HEAD).
-         */
-        head: operations["root_health_check_api_health_head"];
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -3302,6 +3298,7 @@ export interface paths {
          * @description Get basic knowledge base statistics for quick display
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
          */
         get: operations["get_knowledge_stats_basic_api_knowledge_base_stats_basic_get"];
         put?: never;
@@ -3325,6 +3322,7 @@ export interface paths {
          *
          *     Issue #910: Available to all authenticated users (not admin-only).
          *     The 3 top-level categories are non-sensitive public metadata.
+         *     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
          */
         get: operations["get_main_categories_api_knowledge_base_categories_main_get"];
         put?: never;
@@ -3347,6 +3345,7 @@ export interface paths {
          * @description Get all knowledge base categories with fact counts
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
          */
         get: operations["get_knowledge_categories_api_knowledge_base_categories_get"];
         put?: never;
@@ -3582,6 +3581,7 @@ export interface paths {
          * @description Get detailed knowledge base statistics with additional metrics.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
          */
         get: operations["get_detailed_stats_api_knowledge_base_detailed_stats_get"];
         put?: never;
@@ -17007,6 +17007,10 @@ export interface paths {
          *
          *     Issue #620: Refactored to use helper functions.
          *     Issue #1710: source_id scopes to per-project data.
+         *     Issue #5290: response boundary normalizes legacy records so the
+         *     frontend receives canonical ``file`` + ``severity`` keys regardless
+         *     of whether the data was scanned before or after producers were
+         *     updated.
          */
         get: operations["get_hardcoded_values_api_analytics_codebase_hardcodes_get"];
         put?: never;
@@ -43603,6 +43607,8 @@ export interface components {
              * @description List of activities to create
              */
             activities: components["schemas"]["ActivityCreate"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ActivityCreate
@@ -43646,6 +43652,8 @@ export interface components {
              * @description ISO format timestamp from frontend
              */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddCommentRequest
@@ -43656,6 +43664,42 @@ export interface components {
             body: string;
             /** @default human */
             author_type: components["schemas"]["AuthorTypeEnum"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AddFactResponse
+         * @description Shape of ``POST /api/knowledge_base/facts`` (frontend-compatible).
+         *
+         *     Returns a truncated content echo (first 100 chars) — callers that
+         *     need the full content should re-fetch via ``GET /fact/{key}``.
+         */
+        AddFactResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Content
+             * @description Truncated to first 100 chars + ellipsis
+             * @default
+             */
+            content: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddFactsRequest
@@ -43695,6 +43739,8 @@ export interface components {
              * @description Board ID to scope this fact. None means global board.
              */
             board_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddFindingRequest
@@ -43715,6 +43761,8 @@ export interface components {
             data?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddHostRequest
@@ -43738,6 +43786,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** AddKnowledgeRequest */
         AddKnowledgeRequest: {
@@ -43749,6 +43799,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddPortRequest
@@ -43778,6 +43830,8 @@ export interface components {
             service?: string | null;
             /** Version */
             version?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddRepoRequest
@@ -43806,6 +43860,8 @@ export interface components {
              * @default 60
              */
             sync_interval: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddRuleRequest
@@ -43834,6 +43890,8 @@ export interface components {
              * @default
              */
             description: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddTagsRequest
@@ -43845,6 +43903,51 @@ export interface components {
              * @description List of tags to add (max 20 per request)
              */
             tags: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AddTextResponse
+         * @description Shape of ``POST /api/knowledge_base/add_text``.
+         *
+         *     Legacy text-ingestion endpoint (newer frontend uses /facts — see
+         *     :class:`AddFactResponse`). Returns the fact_id plus ownership
+         *     metadata echo for audit visibility.
+         */
+        AddTextResponse: {
+            /**
+             * Status
+             * @description 'success' on insert
+             */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Fact Id */
+            fact_id?: string | null;
+            /**
+             * Text Length
+             * @default 0
+             */
+            text_length: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /** Access Level */
+            access_level?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddUrlRequest
@@ -43884,6 +43987,41 @@ export interface components {
              * @description Board ID to scope this URL content. None means global board.
              */
             board_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AddUrlResponse
+         * @description Shape of ``POST /api/knowledge_base/url``.
+         *
+         *     Same envelope as :class:`AddFactResponse`; the content field carries
+         *     the truncated fetched page text.
+         */
+        AddUrlResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddVulnerabilityRequest
@@ -43922,6 +44060,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AddWakeWordRequest
@@ -43930,6 +44070,8 @@ export interface components {
         AddWakeWordRequest: {
             /** Wake Word */
             wake_word: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AdminExecuteRequest
@@ -43943,6 +44085,8 @@ export interface components {
              * @default
              */
             host: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AdvancePhaseRequest
@@ -43960,10 +44104,12 @@ export interface components {
              * @description Specific phase to transition to
              */
             target_phase?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AdvancedSearchRequest
-         * @description Request model for advanced RAG search with reranking
+         * @description Request body for POST /rag/advanced_search.
          */
         AdvancedSearchRequest: {
             /**
@@ -43993,7 +44139,47 @@ export interface components {
              * Timeout
              * @description Optional timeout in seconds
              */
-            timeout?: number;
+            timeout?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdvancedSearchResponse
+         * @description Shape returned by POST /advanced_search.
+         *
+         *     Core keys: results, total_results, query, metrics, reranking_enabled.
+         *     Optional context/context_length when return_context=True.
+         */
+        AdvancedSearchResponse: {
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /** Metrics */
+            metrics?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Reranking Enabled
+             * @default true
+             */
+            reranking_enabled: boolean;
+            /** Context */
+            context?: string | null;
+            /** Context Length */
+            context_length?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentAnalysisRequest
@@ -44023,6 +44209,8 @@ export interface components {
              * @default true
              */
             include_optimization: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentBudgetRequest
@@ -44034,6 +44222,8 @@ export interface components {
              * @description Monthly budget in USD
              */
             budget_monthly_usd: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentGenerateFileRequest
@@ -44067,6 +44257,8 @@ export interface components {
             metadata?: {
                 [key: string]: string;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentMetricsResponse
@@ -44097,6 +44289,8 @@ export interface components {
             success_rate: number;
             /** Last Activity */
             last_activity: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentModelUpdate
@@ -44112,6 +44306,8 @@ export interface components {
              * @default ollama
              */
             provider: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AgentSummary
@@ -44126,6 +44322,8 @@ export interface components {
             org_role: string;
             /** Title */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AlertInstance
@@ -44150,6 +44348,8 @@ export interface components {
             generatorURL: string;
             /** Fingerprint */
             fingerprint: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AlertManagerWebhook
@@ -44185,6 +44385,8 @@ export interface components {
             externalURL: string;
             /** Alerts */
             alerts: components["schemas"]["AlertInstance"][];
+        } & {
+            [key: string]: unknown;
         };
         /** AlertThresholdRequest */
         AlertThresholdRequest: {
@@ -44194,6 +44396,8 @@ export interface components {
             error_code?: string | null;
             /** Threshold */
             threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalyticsOverview
@@ -44230,6 +44434,8 @@ export interface components {
             trends: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** AnalyticsRequest */
         AnalyticsRequest: {
@@ -44248,6 +44454,8 @@ export interface components {
             exclude_patterns: string[] | null;
             /** Languages */
             languages?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AntiPatternSummary
@@ -44265,6 +44473,8 @@ export interface components {
             };
             /** Analysis Time Seconds */
             analysis_time_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApiCallMetric
@@ -44291,6 +44501,8 @@ export interface components {
             is_timeout: boolean;
             /** Error Type */
             error_type?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApplyResolutionRequest
@@ -44313,6 +44525,8 @@ export interface components {
              * @default true
              */
             create_backup: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApprovalDecision
@@ -44328,11 +44542,15 @@ export interface components {
              * @default
              */
             notes: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ApprovalDecisionRequest */
         ApprovalDecisionRequest: {
             /** Decision */
             decision: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApprovalRecordResponse
@@ -44353,6 +44571,8 @@ export interface components {
             original_command: string;
             /** Comment */
             comment?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApprovalResponse
@@ -44391,6 +44611,8 @@ export interface components {
             comments?: components["schemas"]["CommentResponse"][];
             /** Task Links */
             task_links?: components["schemas"]["TaskApprovalLinkResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ApprovalStatus
@@ -44441,6 +44663,8 @@ export interface components {
              * @description Project path for approval memory
              */
             project_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ArchitectureLayer
@@ -44457,6 +44681,8 @@ export interface components {
             dependencies: string[];
             /** Patterns Used */
             patterns_used: components["schemas"]["PatternType"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ArchitectureReport
@@ -44484,6 +44710,8 @@ export interface components {
             recommendations: string[];
             /** Mermaid Diagram */
             mermaid_diagram: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AssignFactToCategoryRequest
@@ -44495,6 +44723,8 @@ export interface components {
              * @description Category ID to assign fact to
              */
             category_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /** AssociateFileRequest */
         AssociateFileRequest: {
@@ -44507,6 +44737,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AudioIngestRequest
@@ -44541,6 +44773,41 @@ export interface components {
              * @description ISO-639-1 language hint
              */
             language?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AudioIngestResponse
+         * @description Shape of ``POST /api/knowledge_base/audio`` and ``/audio/upload``.
+         *
+         *     Returned by the shared ``_ingest_audio_source`` helper after Whisper
+         *     transcription completes.
+         */
+        AudioIngestResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Word Count
+             * @default 0
+             */
+            word_count: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AuditLogEntry
@@ -44561,6 +44828,8 @@ export interface components {
             details: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AuditQueryResponse
@@ -44581,6 +44850,8 @@ export interface components {
             query: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AuditStatisticsResponse
@@ -44597,6 +44868,8 @@ export interface components {
             vm_info: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AuthorTypeEnum
@@ -44634,6 +44907,8 @@ export interface components {
              * @default 0.85
              */
             min_confidence: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AutomatedWorkflowRequest
@@ -44658,6 +44933,24 @@ export interface components {
              * @default 300
              */
             timeout_per_step: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BackgroundVectorizationResponse
+         * @description Response for POST /vectorize_facts/background.
+         */
+        BackgroundVectorizationResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Last Run */
+            last_run: string | null;
+            /** Is Running */
+            is_running: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BackupRequest
@@ -44688,6 +44981,8 @@ export interface components {
              * @default
              */
             description: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchExtractionRequest
@@ -44699,6 +44994,8 @@ export interface components {
              * @description Conversations to process (max 50)
              */
             conversations: components["schemas"]["EntityExtractionRequest"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchExtractionResponse
@@ -44740,6 +45037,8 @@ export interface components {
              * @description Unique request identifier
              */
             request_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchJob
@@ -44777,6 +45076,8 @@ export interface components {
             result?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchJobCreate
@@ -44806,6 +45107,8 @@ export interface components {
              * @description Optional template ID to use
              */
             template_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchJobList
@@ -44820,6 +45123,8 @@ export interface components {
             status_counts: {
                 [key: string]: number;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchJobStatus
@@ -44842,6 +45147,8 @@ export interface components {
             requests: {
                 [key: string]: unknown;
             }[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchSchedule
@@ -44861,6 +45168,8 @@ export interface components {
              * Format: date-time
              */
             next_run: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchTemplate
@@ -44881,10 +45190,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BatchVectorizeRequest
-         * @description Request model for batch document vectorization. Issue #2077.
+         * @description Request model for POST /vectorize_documents (#2077).
          */
         BatchVectorizeRequest: {
             /**
@@ -44892,6 +45203,8 @@ export interface components {
              * @description List of document IDs to vectorize (max 100 per request)
              */
             document_ids: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BenchmarkRequest
@@ -44909,6 +45222,44 @@ export interface components {
              * @default 3
              */
             iterations: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BenchmarkRunResponse
+         * @description Shape returned by POST /benchmark/run.
+         *
+         *     When Redis is unavailable, reason="redis_unavailable" and stream_key=None.
+         */
+        BenchmarkRunResponse: {
+            /**
+             * Published
+             * @default 0
+             */
+            published: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /** Stream Key */
+            stream_key?: string | null;
+            /** Split Used */
+            split_used?: string | null;
+            /** Dev Size */
+            dev_size?: number | null;
+            /** Test Size */
+            test_size?: number | null;
+            /** Tuned On Dev */
+            tuned_on_dev?: boolean | null;
+            /** Held Out Score */
+            held_out_score?: boolean | null;
+            /** Mean Precision At K */
+            mean_precision_at_k?: number | null;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_combine_multimodal_inputs_api_multimodal_fusion_combine_post */
         Body_combine_multimodal_inputs_api_multimodal_fusion_combine_post: {
@@ -44923,6 +45274,8 @@ export interface components {
              * @default decision_making
              */
             intent: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_create_directory_api_files_create_directory_post */
         Body_create_directory_api_files_create_directory_post: {
@@ -44930,16 +45283,22 @@ export interface components {
             path: string;
             /** Name */
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_dynamic_import_api_system_dynamic_import_post */
         Body_dynamic_import_api_system_dynamic_import_post: {
             /** Module Name */
             module_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_enhanced_chat_api_enhanced_post */
         Body_enhanced_chat_api_enhanced_post: {
             message?: components["schemas"]["EnhancedChatMessage"];
             preferences?: components["schemas"]["ChatPreferences"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_execute_command_api_agent_execute_command_post */
         Body_execute_command_api_agent_execute_command_post: {
@@ -44952,6 +45311,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_pause_agent_api_api_agent_pause_post */
         Body_pause_agent_api_api_agent_pause_post: {
@@ -44960,6 +45321,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_process_audio_api_multimodal_process_audio_post */
         Body_process_audio_api_multimodal_process_audio_post: {
@@ -44970,6 +45333,8 @@ export interface components {
              * @default voice_command
              */
             intent: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_process_image_api_multimodal_process_image_post */
         Body_process_image_api_multimodal_process_image_post: {
@@ -44982,6 +45347,8 @@ export interface components {
             intent: string;
             /** Question */
             question?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_rename_file_or_directory_api_files_rename_post */
         Body_rename_file_or_directory_api_files_rename_post: {
@@ -44989,6 +45356,8 @@ export interface components {
             path: string;
             /** New Name */
             new_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_resume_agent_api_api_agent_resume_post */
         Body_resume_agent_api_api_agent_resume_post: {
@@ -44997,6 +45366,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_send_direct_chat_response_api_chat_direct_post */
         Body_send_direct_chat_response_api_chat_direct_post: {
@@ -45009,11 +45380,15 @@ export interface components {
              * @default false
              */
             remember_choice: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_stream_enhanced_chat_api_stream_enhanced_post */
         Body_stream_enhanced_chat_api_stream_enhanced_post: {
             message?: components["schemas"]["EnhancedChatMessage"];
             preferences?: components["schemas"]["ChatPreferences"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_upload_conversation_file_api_conversation_files_conversation__session_id__upload_post */
         Body_upload_conversation_file_api_conversation_files_conversation__session_id__upload_post: {
@@ -45021,6 +45396,8 @@ export interface components {
             file: string;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_upload_file_api_files_upload_post */
         Body_upload_file_api_files_upload_post: {
@@ -45036,6 +45413,8 @@ export interface components {
              * @default false
              */
             overwrite: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_upload_file_to_chat_api_chat_knowledge_files_upload__chat_id__post */
         Body_upload_file_to_chat_api_chat_knowledge_files_upload__chat_id__post: {
@@ -45046,6 +45425,8 @@ export interface components {
              * @default upload
              */
             association_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_clone_api_api_voice_clone_voice_post */
         Body_voice_clone_api_api_voice_clone_voice_post: {
@@ -45058,6 +45439,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_create_api_api_voice_voices_create_post */
         Body_voice_create_api_api_voice_voices_create_post: {
@@ -45065,6 +45448,8 @@ export interface components {
             name: string;
             /** Audio */
             audio: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_listen_api_api_voice_listen_post */
         Body_voice_listen_api_api_voice_listen_post: {
@@ -45073,6 +45458,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_speak_api_api_voice_speak_post */
         Body_voice_speak_api_api_voice_speak_post: {
@@ -45083,6 +45470,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_synthesize_api_api_voice_synthesize_post */
         Body_voice_synthesize_api_api_voice_synthesize_post: {
@@ -45103,6 +45492,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_voice_transcribe_api_api_voice_transcribe_post */
         Body_voice_transcribe_api_api_voice_transcribe_post: {
@@ -45113,6 +45504,8 @@ export interface components {
              * @default
              */
             language: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BudgetAlertRequest
@@ -45151,6 +45544,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BulkCategoryUpdateRequest
@@ -45161,6 +45556,24 @@ export interface components {
             fact_ids: string[];
             /** New Category */
             new_category: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BulkCategoryUpdateResponse
+         * @description Shape of ``POST /bulk/category``.
+         */
+        BulkCategoryUpdateResponse: {
+            /** Status */
+            status?: string | null;
+            /** Updated */
+            updated?: number | null;
+            /** Not Found */
+            not_found?: number | null;
+            /** Errors */
+            errors?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BulkDeleteRequest
@@ -45178,6 +45591,24 @@ export interface components {
              * @default false
              */
             confirm: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BulkDeleteResponse
+         * @description Shape of ``DELETE /bulk``.
+         */
+        BulkDeleteResponse: {
+            /** Status */
+            status?: string | null;
+            /** Deleted */
+            deleted?: number | null;
+            /** Not Found */
+            not_found?: number | null;
+            /** Errors */
+            errors?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** BulkFeatureRequest */
         BulkFeatureRequest: {
@@ -45188,6 +45619,8 @@ export interface components {
              * @default true
              */
             enable_dependencies: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * BulkTagRequest
@@ -45210,6 +45643,8 @@ export interface components {
              * @default add
              */
             operation: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CacheStatsResponse */
         CacheStatsResponse: {
@@ -45233,6 +45668,8 @@ export interface components {
                     [key: string]: unknown;
                 };
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** CacheWarmingRequest */
         CacheWarmingRequest: {
@@ -45243,6 +45680,8 @@ export interface components {
              * @default false
              */
             force_refresh: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChainOfCommandResponse
@@ -45251,6 +45690,8 @@ export interface components {
         ChainOfCommandResponse: {
             /** Chain */
             chain: components["schemas"]["AgentSummary"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChangePasswordRequest
@@ -45261,6 +45702,8 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChangePasswordResponse
@@ -45271,6 +45714,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ChatCompletionRequest */
         ChatCompletionRequest: {
@@ -45318,6 +45763,8 @@ export interface components {
             n: number;
             /** User */
             user?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChatMessage
@@ -45358,6 +45805,8 @@ export interface components {
              * @description Preferred response language code (e.g. 'en', 'es', 'de'). Overrides personality language when set.
              */
             language?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChatPreferences
@@ -45388,6 +45837,8 @@ export interface components {
              * @default true
              */
             fact_checking: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ChatResetRequest
@@ -45411,6 +45862,8 @@ export interface components {
              * @default true
              */
             keep_system_prompt: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckCategory
@@ -45434,6 +45887,8 @@ export interface components {
              * @default Bash
              */
             tool: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckCommandResponse
@@ -45446,6 +45901,8 @@ export interface components {
             pattern?: string | null;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckDefinition
@@ -45471,6 +45928,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckResult
@@ -45495,6 +45954,8 @@ export interface components {
             snippet?: string | null;
             /** Suggestion */
             suggestion?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckSeverity
@@ -45502,6 +45963,56 @@ export interface components {
          * @enum {string}
          */
         CheckSeverity: "block" | "warn" | "info";
+        /**
+         * CleanupKnowledgeBaseResponse
+         * @description Shape of ``POST /cleanup``.
+         */
+        CleanupKnowledgeBaseResponse: {
+            /** Status */
+            status?: string | null;
+            /** Dry Run */
+            dry_run?: boolean | null;
+            /** Issues Found */
+            issues_found?: {
+                [key: string]: unknown;
+            } | null;
+            /** Issues Details */
+            issues_details?: {
+                [key: string]: unknown;
+            } | null;
+            /** Fixes Applied */
+            fixes_applied?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupOrphanedFactsResponse
+         * @description Shape of ``DELETE /orphans``.
+         */
+        CleanupOrphanedFactsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Dry Run */
+            dry_run?: boolean | null;
+            /** Message */
+            message?: string | null;
+            /** Orphaned Count */
+            orphaned_count?: number | null;
+            /**
+             * Deleted Count
+             * @default 0
+             */
+            deleted_count: number;
+            /** Orphaned Facts */
+            orphaned_facts?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * CleanupResult
          * @description Cleanup operation result.
@@ -45522,6 +46033,88 @@ export interface components {
              * @default []
              */
             errors: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupSessionOrphansResponse
+         * @description Shape of ``DELETE /session-orphans``.
+         */
+        CleanupSessionOrphansResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Dry Run */
+            dry_run?: boolean | null;
+            /** Message */
+            message?: string | null;
+            /** Orphaned Count */
+            orphaned_count?: number | null;
+            /**
+             * Deleted Count
+             * @default 0
+             */
+            deleted_count: number;
+            /**
+             * Preserved Count
+             * @default 0
+             */
+            preserved_count: number;
+            /** Preserved Facts */
+            preserved_facts?: unknown[] | null;
+            /** Session Breakdown */
+            session_breakdown?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ClearAllResponse
+         * @description Shape of ``POST /api/knowledge_base/clear_all``.
+         *
+         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
+         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
+         */
+        ClearAllResponse: {
+            /**
+             * Status
+             * @description 'success' | 'error'
+             */
+            status: string;
+            /**
+             * Items Removed
+             * @default 0
+             */
+            items_removed: number;
+            /**
+             * Items Before
+             * @default 0
+             */
+            items_before: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ClearFailedJobsResponse
+         * @description Response for DELETE /vectorize_jobs/failed/clear.
+         */
+        ClearFailedJobsResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Deleted Count */
+            deleted_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ClearHistoryRequest
@@ -45534,6 +46127,8 @@ export interface components {
              * @default default
              */
             session_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ClickRequest
@@ -45551,6 +46146,8 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ClipboardSyncRequest
@@ -45562,6 +46159,8 @@ export interface components {
              * @description Text content to copy to clipboard
              */
             content: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CloneWorkflowRequest
@@ -45573,6 +46172,8 @@ export interface components {
              * @description Session to associate with the cloned workflow.
              */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CloudProviderInfo
@@ -45587,6 +46188,8 @@ export interface components {
             description: string;
             /** Required Fields */
             required_fields: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeAction
@@ -45610,6 +46213,8 @@ export interface components {
             edit?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeActionKind
@@ -45635,6 +46240,8 @@ export interface components {
              * @default true
              */
             include_metrics: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeGenerationRequest
@@ -45666,6 +46273,8 @@ export interface components {
              * @description Existing code to integrate with
              */
             existing_code?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeGenerationResponse
@@ -45692,6 +46301,8 @@ export interface components {
             processing_time: number;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeLanguage
@@ -45721,6 +46332,8 @@ export interface components {
              * @default true
              */
             include_npu: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeSourceCreateRequest
@@ -45742,6 +46355,8 @@ export interface components {
             credential_id?: string | null;
             /** @default private */
             access: components["schemas"]["SourceAccess"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeSourceUpdateRequest
@@ -45755,6 +46370,8 @@ export interface components {
             /** Credential Id */
             credential_id?: string | null;
             access?: components["schemas"]["SourceAccess"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodebaseIndexingRequest
@@ -45804,6 +46421,8 @@ export interface components {
              * @default normal
              */
             priority: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CollectionFactsRequest
@@ -45815,6 +46434,8 @@ export interface components {
              * @description List of fact IDs to add/remove
              */
             fact_ids: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** CommandApprovalPayload */
         CommandApprovalPayload: {
@@ -45827,6 +46448,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CommandApprovalRequest */
         CommandApprovalRequest: {
@@ -45834,6 +46457,8 @@ export interface components {
             command_id: string;
             /** Approved */
             approved: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** CommandApprovalResponse */
         CommandApprovalResponse: {
@@ -45841,6 +46466,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CommandRequest */
         CommandRequest: {
@@ -45864,6 +46491,8 @@ export interface components {
             environment?: {
                 [key: string]: string;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CommentResponse
@@ -45882,6 +46511,8 @@ export interface components {
             body: string;
             /** Created At */
             created_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CommitCheckResult
@@ -45908,6 +46539,8 @@ export interface components {
             files_checked: string[];
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CompareRequest */
         CompareRequest: {
@@ -45920,6 +46553,8 @@ export interface components {
             models: string[];
             /** Context */
             context?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CompareVersionsRequest
@@ -45936,6 +46571,8 @@ export interface components {
              * @description Second version number
              */
             version_b: number;
+        } & {
+            [key: string]: unknown;
         };
         /** CompileChatRequest */
         CompileChatRequest: {
@@ -45948,6 +46585,8 @@ export interface components {
              * @default false
              */
             include_system_messages: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CompleteTaskRequest
@@ -45979,6 +46618,8 @@ export interface components {
              * @description Error message if failed
              */
             error_message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CompletionItem
@@ -46026,6 +46667,8 @@ export interface components {
              * @default 0
              */
             score: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CompletionItemKind
@@ -46070,6 +46713,8 @@ export interface components {
              * @default 20
              */
             max_completions: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CompletionResponse
@@ -46087,6 +46732,8 @@ export interface components {
              * @default false
              */
             cached: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ComplianceReportRequest
@@ -46110,6 +46757,8 @@ export interface components {
              * @description Organization ID (defaults to user's org)
              */
             organization_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConfigRevisionResponse
@@ -46140,6 +46789,8 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConfigSyncRequest
@@ -46153,6 +46804,8 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConfigSyncResponse
@@ -46167,6 +46820,8 @@ export interface components {
             };
             /** Unchanged Keys */
             unchanged_keys: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConfigurationUpdate
@@ -46183,6 +46838,8 @@ export interface components {
             } | null;
             /** Categories */
             categories?: components["schemas"]["api__ide_integration__PatternCategory"][] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConflictAnalysisRequest
@@ -46194,6 +46851,8 @@ export interface components {
              * @description Path to file with merge conflicts
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConflictResolutionRequest
@@ -46222,6 +46881,8 @@ export interface components {
              * @default true
              */
             validate: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionQualitySettings
@@ -46246,6 +46907,8 @@ export interface components {
              * @default tight
              */
             encoding: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionSettings
@@ -46271,6 +46934,226 @@ export interface components {
              */
             max_reconnect_attempts: number;
             quality?: components["schemas"]["ConnectionQualitySettings"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorConfigDict
+         * @description Config sub-object returned inside connector list / detail responses.
+         */
+        ConnectorConfigDict: {
+            /** Connector Id */
+            connector_id: string;
+            /** Connector Type */
+            connector_type: string;
+            /** Name */
+            name: string;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Enabled */
+            enabled: boolean;
+            /** Verification Mode */
+            verification_mode: string;
+            /** Schedule Cron */
+            schedule_cron?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Last Sync At */
+            last_sync_at?: string | null;
+            /** Include Patterns */
+            include_patterns: string[];
+            /** Exclude Patterns */
+            exclude_patterns: string[];
+            /** Tier */
+            tier: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCreateResponse
+         * @description POST /knowledge_base/connectors (201).
+         */
+        ConnectorCreateResponse: {
+            /** Connector Id */
+            connector_id: string;
+            config: components["schemas"]["ConnectorConfigDict"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorDetailResponse
+         * @description GET /knowledge_base/connectors/{connector_id}.
+         */
+        ConnectorDetailResponse: {
+            config: components["schemas"]["ConnectorConfigDict"];
+            status: components["schemas"]["ConnectorStatusDict"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorEntry
+         * @description One element of the connectors list.
+         */
+        ConnectorEntry: {
+            config: components["schemas"]["ConnectorConfigDict"];
+            status: components["schemas"]["ConnectorStatusDict"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorHistoryEntry
+         * @description Single history record stored per sync run.
+         */
+        ConnectorHistoryEntry: {
+            /** Connector Id */
+            connector_id: string;
+            /** Started At */
+            started_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Added */
+            added?: number | null;
+            /** Updated */
+            updated?: number | null;
+            /** Deleted */
+            deleted?: number | null;
+            /** Errors */
+            errors?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorHistoryResponse
+         * @description GET /knowledge_base/connectors/{connector_id}/history.
+         */
+        ConnectorHistoryResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** History */
+            history: components["schemas"]["ConnectorHistoryEntry"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorStatusDict
+         * @description Status sub-object returned inside connector list / detail responses.
+         */
+        ConnectorStatusDict: {
+            /** Connector Id */
+            connector_id: string;
+            /** Is Healthy */
+            is_healthy: boolean;
+            /** Last Sync At */
+            last_sync_at?: string | null;
+            /** Last Sync Status */
+            last_sync_status?: string | null;
+            /** Documents Indexed */
+            documents_indexed?: number | null;
+            /** Last Error */
+            last_error?: string | null;
+            /** Scheduled */
+            scheduled?: boolean | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorSyncResponse
+         * @description POST /knowledge_base/connectors/{connector_id}/sync.
+         */
+        ConnectorSyncResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** Status */
+            status: string;
+            /** Incremental */
+            incremental: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorTestResponse
+         * @description POST /knowledge_base/connectors/{connector_id}/test.
+         */
+        ConnectorTestResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** Healthy */
+            healthy: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorTypeEntry
+         * @description Single entry in the connector_types list.
+         */
+        ConnectorTypeEntry: {
+            /** Connector Type */
+            connector_type: string;
+            /** Tier */
+            tier: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorTypesResponse
+         * @description GET /knowledge_base/connector_types.
+         */
+        ConnectorTypesResponse: {
+            /** Connector Types */
+            connector_types: components["schemas"]["ConnectorTypeEntry"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorUpdateResponse
+         * @description PUT /knowledge_base/connectors/{connector_id}.
+         */
+        ConnectorUpdateResponse: {
+            /** Connector Id */
+            connector_id: string;
+            config: components["schemas"]["ConnectorConfigDict"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorsHealthResponse
+         * @description GET /knowledge_base/connectors/health.
+         */
+        ConnectorsHealthResponse: {
+            /** Healthy */
+            healthy: string[];
+            /** Unavailable */
+            unavailable: string[];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Checked At */
+            checked_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorsListResponse
+         * @description GET /knowledge_base/connectors.
+         */
+        ConnectorsListResponse: {
+            /** Connectors */
+            connectors: components["schemas"]["ConnectorEntry"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConsistencyLevel
@@ -46409,6 +47292,8 @@ export interface components {
              * @description Session ID for analytics correlation
              */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ContentClassificationRequest
@@ -46425,6 +47310,8 @@ export interface components {
              * @description Classification types
              */
             classification_types?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ContextAnalysisRequest
@@ -46451,6 +47338,8 @@ export interface components {
              * @description Optional file path
              */
             file_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ContextAnalysisResponse
@@ -46463,6 +47352,8 @@ export interface components {
             };
             /** Analysis Time Ms */
             analysis_time_ms: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ContextRequest
@@ -46492,6 +47383,8 @@ export interface components {
              * @default true
              */
             include_relations: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ContextSuggestionsRequest
@@ -46531,6 +47424,8 @@ export interface components {
              * @default 200
              */
             snippet_length: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationAnalysisResult
@@ -46552,6 +47447,8 @@ export interface components {
             analysis_period: string;
             /** Conversations Analyzed */
             conversations_analyzed: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationFileInfo
@@ -46581,6 +47478,8 @@ export interface components {
             file_path: string;
             /** Extension */
             extension?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationFileListResponse
@@ -46605,6 +47504,8 @@ export interface components {
              * @default 50
              */
             page_size: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationFlow
@@ -46623,6 +47524,8 @@ export interface components {
             completion_rate: number;
             /** Drop Off Point */
             drop_off_point?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationImportRequest
@@ -46642,6 +47545,8 @@ export interface components {
              * @default skip
              */
             on_conflict: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConversationMetrics
@@ -46662,6 +47567,8 @@ export interface components {
             resolution_rate: number;
             /** Escalation Rate */
             escalation_rate: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CopyFileRequest
@@ -46673,6 +47580,8 @@ export interface components {
              * @description Optional new name for the copy
              */
             new_filename?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CorrelationChainResponse
@@ -46687,6 +47596,8 @@ export interface components {
             count: number;
             /** Messages */
             messages: components["schemas"]["ServiceMessageResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CostSummaryResponse
@@ -46709,6 +47620,8 @@ export interface components {
             };
             /** Avg Daily Cost */
             avg_daily_cost: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CostTrendResponse
@@ -46729,6 +47642,8 @@ export interface components {
             growth_rate_percent: number;
             /** Avg Daily Cost */
             avg_daily_cost: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateApprovalRequest
@@ -46752,6 +47667,8 @@ export interface components {
             } | null;
             /** Task Ids */
             task_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateAssessmentRequest
@@ -46780,6 +47697,31 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CreateBackupResponse
+         * @description Shape of ``POST /backup``.
+         */
+        CreateBackupResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Backup File */
+            backup_file?: string | null;
+            /** Backup Name */
+            backup_name?: string | null;
+            /** Facts Count */
+            facts_count?: number | null;
+            /** File Size */
+            file_size?: number | null;
+            /** Created At */
+            created_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateBoardRequest
@@ -46802,6 +47744,8 @@ export interface components {
              * @default
              */
             description: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateCategoryRequest
@@ -46835,6 +47779,8 @@ export interface components {
              * @description Hex color code (e.g., '#3B82F6')
              */
             color?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateChatBrowserRequest
@@ -46850,6 +47796,8 @@ export interface components {
             headless: boolean;
             /** Initial Url */
             initial_url?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateCollectionRequest
@@ -46885,10 +47833,12 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateConnectorRequest
-         * @description Request body for POST /connectors.
+         * @description Request body for POST /knowledge_base/connectors.
          */
         CreateConnectorRequest: {
             /**
@@ -46918,6 +47868,8 @@ export interface components {
             include_patterns?: string[];
             /** Exclude Patterns */
             exclude_patterns?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateContextRequest
@@ -46932,6 +47884,8 @@ export interface components {
             keywords?: string[] | null;
             /** User Id */
             user_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateDirectoryRequest
@@ -46943,6 +47897,8 @@ export interface components {
              * @description Absolute path to directory
              */
             path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateDocumentRequest
@@ -46968,6 +47924,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** CreateExperimentRequest */
         CreateExperimentRequest: {
@@ -46992,6 +47950,8 @@ export interface components {
             hyperparams?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateFileRequest
@@ -47010,6 +47970,8 @@ export interface components {
              * @default text/plain
              */
             mime_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateMetadataTemplateRequest
@@ -47036,6 +47998,8 @@ export interface components {
              * @description Categories this template applies to
              */
             applicable_categories?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateRelationRequest
@@ -47064,6 +48028,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CreateSessionRequest
@@ -47098,6 +48064,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CriticalIssueMetric
@@ -47106,6 +48074,8 @@ export interface components {
         CriticalIssueMetric: {
             /** Issue Type */
             issue_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CrossModalSearchRequest */
         CrossModalSearchRequest: {
@@ -47129,6 +48099,8 @@ export interface components {
             limit: number;
             /** Similarity Threshold */
             similarity_threshold?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** CrossModalSearchResponse */
         CrossModalSearchResponse: {
@@ -47146,6 +48118,8 @@ export interface components {
             total_found: number;
             /** Processing Time */
             processing_time: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CustomReportRequest
@@ -47169,6 +48143,8 @@ export interface components {
              * @description Sections to include: cost, agents, behavior, maintenance, optimization
              */
             include_sections?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** DashboardGenerateRequest */
         DashboardGenerateRequest: {
@@ -47187,6 +48163,8 @@ export interface components {
              * @default 30
              */
             refresh_interval: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DataFlowResponse
@@ -47207,6 +48185,35 @@ export interface components {
             definitions: components["schemas"]["VariableDefResponse"][];
             /** Vulnerabilities */
             vulnerabilities: components["schemas"]["VulnerabilityResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DataQualityMetricsResponse
+         * @description Shape of ``GET /quality``.
+         */
+        DataQualityMetricsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Overall Score */
+            overall_score?: number | null;
+            /** Dimensions */
+            dimensions?: {
+                [key: string]: unknown;
+            } | null;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            } | null;
+            /** Issues */
+            issues?: unknown[] | null;
+            /** Recommendations */
+            recommendations?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DatabaseConnectionRequest
@@ -47245,6 +48252,8 @@ export interface components {
              * @default
              */
             database: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DatabaseListRequest
@@ -47277,6 +48286,8 @@ export interface components {
              * @description Database name (for table listing)
              */
             database?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DebtCalculationRequest
@@ -47301,6 +48312,56 @@ export interface components {
              * @default []
              */
             include_categories: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DeduplicateFactsResponse
+         * @description Shape of ``POST /deduplicate``.
+         */
+        DeduplicateFactsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /**
+             * Total Facts Scanned
+             * @default 0
+             */
+            total_facts_scanned: number;
+            /**
+             * Unique Combinations
+             * @default 0
+             */
+            unique_combinations: number;
+            /**
+             * Duplicate Groups Found
+             * @default 0
+             */
+            duplicate_groups_found: number;
+            /**
+             * Total Duplicates
+             * @default 0
+             */
+            total_duplicates: number;
+            /**
+             * Deleted Count
+             * @default 0
+             */
+            deleted_count: number;
+            /**
+             * Duplicates
+             * @default []
+             */
+            duplicates: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DeduplicationRequest
@@ -47348,6 +48409,8 @@ export interface components {
              * @default 10000
              */
             max_comparisons: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DelegateRequest
@@ -47371,6 +48434,8 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DelegationResponse
@@ -47391,6 +48456,8 @@ export interface components {
             escalated_to?: string | null;
             /** Created At */
             created_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DelegationStatusUpdate
@@ -47406,6 +48473,8 @@ export interface components {
             result?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DeleteBackupRequest
@@ -47417,6 +48486,65 @@ export interface components {
              * @description Path to backup file to delete
              */
             backup_file: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DeleteBackupResponse
+         * @description Shape of ``DELETE /backup``.
+         */
+        DeleteBackupResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Deleted File */
+            deleted_file?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DeleteFactResponse
+         * @description Shape of ``DELETE /fact/{fact_id}``.
+         */
+        DeleteFactResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Fact Id
+             * @default
+             */
+            fact_id: string;
+            /**
+             * Vector Deleted
+             * @default false
+             */
+            vector_deleted: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DeleteJobResponse
+         * @description Response for DELETE /vectorize_jobs/{job_id}.
+         */
+        DeleteJobResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Job Id */
+            job_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DeleteRelationRequest
@@ -47438,6 +48566,8 @@ export interface components {
              * @description Specific relation type to delete (None = all relations)
              */
             relation_type?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DeploymentCreateRequest
@@ -47452,6 +48582,8 @@ export interface components {
             strategy: components["schemas"]["DeploymentStrategy"];
             /** Playbook Path */
             playbook_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DeploymentStrategy
@@ -47466,6 +48598,8 @@ export interface components {
         DesktopKeyboardTypeRequest: {
             /** Text */
             text: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DesktopMouseClickRequest
@@ -47481,6 +48615,8 @@ export interface components {
              * @default left
              */
             button: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DesktopObserveStateRequest
@@ -47492,6 +48628,8 @@ export interface components {
              * @default true
              */
             include_screenshot: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DesktopSpecialKeyRequest
@@ -47500,6 +48638,75 @@ export interface components {
         DesktopSpecialKeyRequest: {
             /** Key */
             key: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DetailedKnowledgeSizeMetrics
+         * @description Size-breakdown block inside ``DetailedKnowledgeStats``.
+         */
+        DetailedKnowledgeSizeMetrics: {
+            /**
+             * Total Content Size
+             * @default 0
+             */
+            total_content_size: number;
+            /**
+             * Average Fact Size
+             * @default 0
+             */
+            average_fact_size: number;
+            /**
+             * Median Fact Size
+             * @default 0
+             */
+            median_fact_size: number;
+            /**
+             * Largest Fact Size
+             * @default 0
+             */
+            largest_fact_size: number;
+            /**
+             * Smallest Fact Size
+             * @default 0
+             */
+            smallest_fact_size: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DetailedKnowledgeStats
+         * @description Shape of ``GET /api/knowledge_base/detailed_stats``.
+         */
+        DetailedKnowledgeStats: {
+            /**
+             * Status
+             * @description 'online' | 'offline' | 'error' | 'unknown'
+             */
+            status: string;
+            basic_stats?: components["schemas"]["KnowledgeBasicStatsEnvelope"];
+            /** Category Breakdown */
+            category_breakdown?: {
+                [key: string]: number;
+            };
+            /** Source Breakdown */
+            source_breakdown?: {
+                [key: string]: number;
+            };
+            /** Type Breakdown */
+            type_breakdown?: {
+                [key: string]: number;
+            };
+            size_metrics?: components["schemas"]["DetailedKnowledgeSizeMetrics"];
+            /**
+             * Rag Available
+             * @default false
+             */
+            rag_available: boolean;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DetectLanguageRequest
@@ -47511,6 +48718,8 @@ export interface components {
              * @description Text to detect language of
              */
             text: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DevelopmentAnalysisRequest
@@ -47528,6 +48737,8 @@ export interface components {
              * @default comprehensive
              */
             analysis_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * Diagnostic
@@ -47550,6 +48761,8 @@ export interface components {
             data?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DiagnosticSeverity
@@ -47574,6 +48787,8 @@ export interface components {
             total_directories: number;
             /** Total Size */
             total_size: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DirectoryTreeRequest
@@ -47585,6 +48800,8 @@ export interface components {
              * @description Root directory path
              */
             path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DockerContainerSpec
@@ -47611,6 +48828,8 @@ export interface components {
              * @default unless-stopped
              */
             restart_policy: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DockerDeploymentRequest
@@ -47626,6 +48845,8 @@ export interface components {
              * @default deploy-hybrid-docker.yml
              */
             playbook: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DockerDeploymentStatus
@@ -47644,6 +48865,8 @@ export interface components {
             completed_at?: string | null;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DocsBrowseRequest
@@ -47694,10 +48917,217 @@ export interface components {
              * @default desc
              */
             sort_order: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsBrowseResponse
+         * @description Shape of ``POST /api/knowledge_base/docs/browse``.
+         *
+         *     ``documents`` is a list of doc-hash metadata entries; their schema is
+         *     freeform by design (indexer adds new fields over time), so we leave
+         *     it as ``List[Dict]`` rather than modelling each entry.
+         */
+        DocsBrowseResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Documents */
+            documents?: {
+                [key: string]: unknown;
+            }[];
+            pagination?: components["schemas"]["DocsPagination"];
+            filters_applied?: components["schemas"]["DocsFiltersApplied"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/docs/categories``.
+         *
+         *     Sorted descending by ``count``; metadata comes from
+         *     ``scripts.utilities.index_documentation.CATEGORY_TAXONOMY``.
+         */
+        DocsCategoriesResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Categories */
+            categories?: components["schemas"]["DocsCategoryEntry"][];
+            /**
+             * Total Documents
+             * @default 0
+             */
+            total_documents: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsCategoryEntry
+         * @description Single row in :class:`DocsCategoriesResponse.categories`.
+         */
+        DocsCategoryEntry: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsFiltersApplied
+         * @description Echoes the filter inputs back so the UI can render chips.
+         *
+         *     Every field is optional because the endpoint accepts any subset.
+         */
+        DocsFiltersApplied: {
+            /** Category */
+            category?: string | null;
+            /** Doc Type */
+            doc_type?: string | null;
+            /** File Path Pattern */
+            file_path_pattern?: string | null;
+            /** Search Query */
+            search_query?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsPagination
+         * @description Pagination envelope nested under :class:`DocsBrowseResponse`.
+         */
+        DocsPagination: {
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+            /**
+             * Total Documents
+             * @default 0
+             */
+            total_documents: number;
+            /**
+             * Total Pages
+             * @default 1
+             */
+            total_pages: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsStatsEnvelope
+         * @description Nested stats envelope under :class:`DocsStatsResponse.stats`.
+         */
+        DocsStatsEnvelope: {
+            /**
+             * Total Documents
+             * @default 0
+             */
+            total_documents: number;
+            /**
+             * Total Indexed Entries
+             * @default 0
+             */
+            total_indexed_entries: number;
+            /**
+             * Total Chunks
+             * @default 0
+             */
+            total_chunks: number;
+            /** Latest Indexed */
+            latest_indexed?: string | null;
+            /**
+             * Categories Count
+             * @default 0
+             */
+            categories_count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsStatsResponse
+         * @description Shape of ``GET /api/knowledge_base/docs/stats``.
+         */
+        DocsStatsResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            stats?: components["schemas"]["DocsStatsEnvelope"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsWatcherControlResponse
+         * @description Shape of ``POST /api/knowledge_base/docs/watcher/control``.
+         *
+         *     The control endpoint has three shapes depending on ``action``:
+         *     ``start``/``stop`` return ``{success, message}``; ``status`` returns
+         *     :class:`DocsWatcherStatusResponse` (``{success, watcher}``). Unknown
+         *     actions and ImportError both return ``{success, message}``. This
+         *     model unions all of them via optional fields.
+         */
+        DocsWatcherControlResponse: {
+            /**
+             * Success
+             * @default false
+             */
+            success: boolean;
+            /** Message */
+            message?: string | null;
+            /** Watcher */
+            watcher?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocsWatcherStatusResponse
+         * @description Shape of ``GET /api/knowledge_base/docs/watcher/status`` and the
+         *     status branch of ``POST /api/knowledge_base/docs/watcher/control``.
+         *
+         *     ``watcher`` carries the freeform stats dict returned by
+         *     ``DocumentationWatcher.get_stats()`` — schema evolves with the
+         *     watcher implementation.
+         */
+        DocsWatcherStatusResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Watcher */
+            watcher?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DocumentAddRequest
-         * @description Request model for adding documents
+         * @description Request body for POST /mcp/add_to_knowledge_base.
          */
         DocumentAddRequest: {
             /**
@@ -47717,6 +49147,8 @@ export interface components {
              * @description Document source
              */
             source?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DocumentAnalysisRequest
@@ -47748,6 +49180,20 @@ export interface components {
              * @default true
              */
             generate_summary: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DocumentResult
+         * @description Per-document result entry in batch vectorization.
+         */
+        DocumentResult: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DomainSecurityStatsResponse
@@ -47760,6 +49206,8 @@ export interface components {
             stats: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EditFileRequest
@@ -47784,6 +49232,8 @@ export interface components {
              * @default false
              */
             dry_run: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ElementDetectionRequest
@@ -47803,6 +49253,8 @@ export interface components {
             min_confidence: number;
             /** Session Id */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ElevationAuthorization */
         ElevationAuthorization: {
@@ -47815,6 +49267,8 @@ export interface components {
              * @default false
              */
             remember_session: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** ElevationRequest */
         ElevationRequest: {
@@ -47829,6 +49283,8 @@ export interface components {
              * @default MEDIUM
              */
             risk_level: string;
+        } & {
+            [key: string]: unknown;
         };
         /** EmbeddingRequest */
         EmbeddingRequest: {
@@ -47844,6 +49300,8 @@ export interface components {
              * @description Preferred processing device
              */
             preferred_device?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EmbeddingUpdate
@@ -47856,6 +49314,8 @@ export interface components {
             selected_model: string;
             /** Endpoint */
             endpoint?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EmbeddingUsageRequest
@@ -47919,6 +49379,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnforcementMode
@@ -47933,6 +49395,8 @@ export interface components {
         EnforcementModeUpdate: {
             /** @description New enforcement mode */
             mode: components["schemas"]["EnforcementMode"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnhancedChatMessage
@@ -47997,6 +49461,8 @@ export interface components {
              * @default true
              */
             include_sources: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnhancedChatRequest
@@ -48032,6 +49498,8 @@ export interface components {
              * @default conversational
              */
             response_style: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnhancedGoalPayload
@@ -48083,6 +49551,78 @@ export interface components {
              * @default 300
              */
             max_execution_time: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EnhancedSearchResponse
+         * @description Shape returned by deprecated POST /enhanced_search.
+         *
+         *     Mirrors the kb.enhanced_search() contract: success, results, total_count,
+         *     query_processed, mode, tags_applied, min_score_applied, reranking_applied.
+         *     extra="allow" handles KB-specific additions.
+         */
+        EnhancedSearchResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /** Query Processed */
+            query_processed?: string | null;
+            /** Mode */
+            mode?: string | null;
+            /** Tags Applied */
+            tags_applied?: string[] | null;
+            /**
+             * Min Score Applied
+             * @default 0
+             */
+            min_score_applied: number;
+            /**
+             * Reranking Applied
+             * @default false
+             */
+            reranking_applied: boolean;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EnhancedSearchV2Response
+         * @description Shape returned by deprecated POST /enhanced_search_v2.
+         *
+         *     Delegates to kb.enhanced_search_v2(); mirrors the enhanced_search shape.
+         */
+        EnhancedSearchV2Response: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EntityCreateRequest
@@ -48116,6 +49656,8 @@ export interface components {
              * @description Classification tags
              */
             tags?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EntityExtractionRequest
@@ -48139,6 +49681,8 @@ export interface components {
             session_metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EntityExtractionResponse
@@ -48185,6 +49729,30 @@ export interface components {
              * @description Unique request identifier
              */
             request_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EntityHistoryResponse
+         * @description Shape returned by GET /entity/{entity_id}/history.
+         */
+        EntityHistoryResponse: {
+            /**
+             * Entity Id
+             * @default
+             */
+            entity_id: string;
+            /** Versions */
+            versions?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EvaluateRequest
@@ -48196,6 +49764,8 @@ export interface components {
              * @description JavaScript code to execute
              */
             script: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EventsQueryRequest
@@ -48212,6 +49782,8 @@ export interface components {
              * @description End time (unix timestamp)
              */
             end?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EvolutionAnalysisRequest
@@ -48239,6 +49811,8 @@ export interface components {
              * @default 100
              */
             commit_limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EvolutionAnalysisResponse
@@ -48278,6 +49852,8 @@ export interface components {
              * @default 0
              */
             analysis_duration_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ExecuteCommandRequest
@@ -48300,6 +49876,35 @@ export interface components {
              * @default false
              */
             force_approval: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ExpandQueryResponse
+         * @description Shape returned by POST /expand_query.
+         */
+        ExpandQueryResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Original Query
+             * @default
+             */
+            original_query: string;
+            /** Expanded Queries */
+            expanded_queries?: string[];
+            /**
+             * Expansion Count
+             * @default 0
+             */
+            expansion_count: number;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ExportFilters
@@ -48322,6 +49927,8 @@ export interface components {
             date_to?: string | null;
             /** Fact Ids */
             fact_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ExportFormat
@@ -48329,6 +49936,24 @@ export interface components {
          * @enum {string}
          */
         ExportFormat: "json" | "csv" | "markdown";
+        /**
+         * ExportKnowledgeResponse
+         * @description Shape of ``POST /export``.
+         */
+        ExportKnowledgeResponse: {
+            /** Status */
+            status?: string | null;
+            /** Format */
+            format?: string | null;
+            /** Total Facts */
+            total_facts?: number | null;
+            /** Data */
+            data?: string | null;
+            /** Exported At */
+            exported_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ExportRequest
          * @description Request model for knowledge base export
@@ -48353,6 +49978,8 @@ export interface components {
              * @default false
              */
             include_embeddings: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ExtractionRequest
@@ -48375,6 +50002,8 @@ export interface components {
              * @default true
              */
             cache_hot_patterns: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ExtractionResponse
@@ -48391,6 +50020,112 @@ export interface components {
             };
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FactByCategoryEntry
+         * @description Single fact row nested under ``FactsByCategoryResponse.categories[cat]``.
+         */
+        FactByCategoryEntry: {
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @default Untitled
+             */
+            title: string;
+            /**
+             * Content
+             * @description Truncated to 500 chars + ellipsis
+             * @default
+             */
+            content: string;
+            /**
+             * Full Content
+             * @default
+             */
+            full_content: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Type
+             * @default unknown
+             */
+            type: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FactByKeyResponse
+         * @description Shape of ``GET /api/knowledge_base/fact/{fact_key}``.
+         */
+        FactByKeyResponse: {
+            /** Key */
+            key: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * @default
+             */
+            created_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FactsByCategoryResponse
+         * @description Shape of ``GET /api/knowledge_base/facts/by_category``.
+         *
+         *     Grouped facts keyed by category name. ``category_filter`` echoes the
+         *     optional ``?category=`` query param for client-side confirmation.
+         */
+        FactsByCategoryResponse: {
+            /** Categories */
+            categories?: {
+                [key: string]: components["schemas"]["FactByCategoryEntry"][];
+            };
+            /**
+             * Total Facts
+             * @default 0
+             */
+            total_facts: number;
+            /** Category Filter */
+            category_filter?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FailedJobsResponse
+         * @description Response for GET /vectorize_jobs/failed.
+         */
+        FailedJobsResponse: {
+            /** Status */
+            status: string;
+            /** Failed Jobs */
+            failed_jobs: {
+                [key: string]: unknown;
+            }[];
+            /** Total Failed */
+            total_failed: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FailureAnalysisRequest
@@ -48401,6 +50136,8 @@ export interface components {
             task_id: string;
             /** Error Description */
             error_description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FailureAnalysisResponse
@@ -48411,6 +50148,8 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FeatureCategory
@@ -48427,6 +50166,8 @@ export interface components {
              * @default false
              */
             force: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FeatureStatus
@@ -48484,6 +50225,8 @@ export interface components {
              * @description Position in top-k suggestions
              */
             completion_rank?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FeedbackResponse
@@ -48496,6 +50239,8 @@ export interface components {
             feedback_id: number;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FeedbackType
@@ -48539,6 +50284,8 @@ export interface components {
             permissions: string;
             /** Extension */
             extension?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FilePreviewResponse
@@ -48552,6 +50299,8 @@ export interface components {
             preview_content?: string | null;
             /** Preview Type */
             preview_type?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FileTransferRequest
@@ -48581,6 +50330,8 @@ export interface components {
              * @description Tags for KB indexing
              */
             tags?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FileTransferResponse
@@ -48603,6 +50354,8 @@ export interface components {
             total_transferred: number;
             /** Total Failed */
             total_failed: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FillRequest
@@ -48625,6 +50378,28 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FindDuplicatesResponse
+         * @description Shape of ``POST /deduplicate/advanced``.
+         */
+        FindDuplicatesResponse: {
+            /** Status */
+            status?: string | null;
+            /** Total Facts Scanned */
+            total_facts_scanned?: number | null;
+            /** Exact Duplicates */
+            exact_duplicates?: number | null;
+            /** Near Duplicates */
+            near_duplicates?: number | null;
+            /** Total Duplicates */
+            total_duplicates?: number | null;
+            /** Duplicates */
+            duplicates?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FindImageRequest
@@ -48642,6 +50417,78 @@ export interface components {
              * @default 0.8
              */
             threshold: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FindOrphanedFactsResponse
+         * @description Shape of ``GET /orphans``.
+         */
+        FindOrphanedFactsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Total Facts Checked
+             * @default 0
+             */
+            total_facts_checked: number;
+            /**
+             * Orphaned Count
+             * @default 0
+             */
+            orphaned_count: number;
+            /**
+             * Orphaned Facts
+             * @default []
+             */
+            orphaned_facts: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FindSessionOrphansResponse
+         * @description Shape of ``GET /session-orphans``.
+         */
+        FindSessionOrphansResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Total Facts Checked
+             * @default 0
+             */
+            total_facts_checked: number;
+            /**
+             * Facts With Session Tracking
+             * @default 0
+             */
+            facts_with_session_tracking: number;
+            /**
+             * Orphaned Count
+             * @default 0
+             */
+            orphaned_count: number;
+            /**
+             * Orphaned Sessions
+             * @default 0
+             */
+            orphaned_sessions: number;
+            /** Session Breakdown */
+            session_breakdown?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Orphaned Facts
+             * @default []
+             */
+            orphaned_facts: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FlowBottleneck
@@ -48660,6 +50507,8 @@ export interface components {
             affected_conversations: number;
             /** Suggested Improvements */
             suggested_improvements: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** FrontendTestRequest */
         FrontendTestRequest: {
@@ -48668,6 +50517,8 @@ export interface components {
              * @default http://127.0.0.1:5173
              */
             frontend_url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GPUConfigUpdateRequest
@@ -48678,6 +50529,8 @@ export interface components {
             updates: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GapRequest
@@ -48691,6 +50544,8 @@ export interface components {
              * @default
              */
             agent_output: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GenerateSummaryRequest
@@ -48703,6 +50558,8 @@ export interface components {
              * @default default
              */
             session_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GetAttributeRequest
@@ -48719,6 +50576,8 @@ export interface components {
              * @description Attribute name to retrieve
              */
             attribute: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GetFileInfoRequest
@@ -48730,6 +50589,24 @@ export interface components {
              * @description File or directory path
              */
             path: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GetLintReportResponse
+         * @description Shape of ``GET /lint/report`` — mirrors ContradictionReport fields.
+         */
+        GetLintReportResponse: {
+            /** Job Id */
+            job_id?: string | null;
+            /** Contradictions */
+            contradictions?: unknown[] | null;
+            /** Gaps */
+            gaps?: unknown[] | null;
+            /** Scanned At */
+            scanned_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GetTextRequest
@@ -48741,6 +50618,8 @@ export interface components {
              * @description CSS selector for element
              */
             selector: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitBlameRequest
@@ -48768,6 +50647,8 @@ export interface components {
              * @description Ending line number
              */
             line_end?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitBranchRequest
@@ -48786,6 +50667,8 @@ export interface components {
              * @default false
              */
             all_branches: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitDiffRequest
@@ -48814,6 +50697,8 @@ export interface components {
              * @description Compare with specific commit
              */
             commit?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitHubCommentRequest
@@ -48845,6 +50730,8 @@ export interface components {
              * @description Comment body text
              */
             body: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitHubConnectionTestRequest
@@ -48861,6 +50748,8 @@ export interface components {
              * @description Custom GitHub API base URL (e.g. GitHub Enterprise)
              */
             base_url?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitHubReviewRequest
@@ -48898,6 +50787,8 @@ export interface components {
              * @default COMMENT
              */
             event: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitLogRequest
@@ -48927,6 +50818,8 @@ export interface components {
              * @description Filter log to specific file
              */
             file_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitShowRequest
@@ -48945,6 +50838,8 @@ export interface components {
              * @default HEAD
              */
             ref: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GitStatusRequest
@@ -48963,6 +50858,8 @@ export interface components {
              * @default false
              */
             short: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /** GoalPayload */
         GoalPayload: {
@@ -48978,6 +50875,8 @@ export interface components {
              * @default user
              */
             user_role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GoalRequest
@@ -48993,6 +50892,8 @@ export interface components {
             context: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GoalResponse
@@ -49012,6 +50913,8 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GovernanceMode
@@ -49024,6 +50927,8 @@ export interface components {
          */
         GovernanceModeUpdate: {
             mode: components["schemas"]["GovernanceMode"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GrantPermissionRequest
@@ -49040,6 +50945,8 @@ export interface components {
              * @description owner | editor | runner | viewer
              */
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GraphRAGHealthResponse
@@ -49063,6 +50970,8 @@ export interface components {
              * @description Timestamp of health check
              */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GraphRAGSearchRequest
@@ -49102,6 +51011,8 @@ export interface components {
              * @description Optional timeout in seconds (1-30s)
              */
             timeout?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GraphRAGSearchResponse
@@ -49132,6 +51043,8 @@ export interface components {
              * @description Unique request identifier
              */
             request_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GraphRequest
@@ -49167,6 +51080,8 @@ export interface components {
              * @description Filter by category path
              */
             category_filter?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * GroundResponseRequest
@@ -49190,6 +51105,8 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPDeleteRequest
@@ -49214,6 +51131,8 @@ export interface components {
              * @default 30
              */
             timeout: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPGetRequest
@@ -49245,6 +51164,8 @@ export interface components {
             params?: {
                 [key: string]: string;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPHeadRequest
@@ -49269,6 +51190,8 @@ export interface components {
              * @default 30
              */
             timeout: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPPatchRequest
@@ -49300,6 +51223,8 @@ export interface components {
             json_body?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPPostRequest
@@ -49338,6 +51263,8 @@ export interface components {
             form_data?: {
                 [key: string]: string;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HTTPPutRequest
@@ -49369,11 +51296,15 @@ export interface components {
             json_body?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HardwarePriorityRequest
@@ -49385,6 +51316,8 @@ export interface components {
         HardwarePriorityRequest: {
             /** Priority Order */
             priority_order: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HardwarePriorityResponse
@@ -49399,6 +51332,8 @@ export interface components {
             changed: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HealthCheckResponse
@@ -49409,6 +51344,36 @@ export interface components {
             status: string;
             /** Engine Ready */
             engine_ready: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * HealthDashboardResponse
+         * @description Shape of ``GET /health/dashboard``.
+         */
+        HealthDashboardResponse: {
+            /**
+             * Status
+             * @default healthy
+             */
+            status: string;
+            /**
+             * Last Updated
+             * @default
+             */
+            last_updated: string;
+            /** Stats */
+            stats?: {
+                [key: string]: unknown;
+            } | null;
+            /** Quality */
+            quality?: {
+                [key: string]: unknown;
+            } | null;
+            /** Top Recommendations */
+            top_recommendations?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HealthStatusResponse
@@ -49435,6 +51400,8 @@ export interface components {
             error_count_last_hour: number;
             /** Recommendations */
             recommendations?: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HeartbeatConfigRequest
@@ -49456,6 +51423,8 @@ export interface components {
              * @default 600
              */
             max_run_duration_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HeartbeatConfigResponse
@@ -49486,6 +51455,8 @@ export interface components {
             created_at: string | null;
             /** Updated At */
             updated_at: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HeartbeatRunResponse
@@ -49525,6 +51496,8 @@ export interface components {
              * @default []
              */
             events: components["schemas"]["RunEventResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HookConfig
@@ -49555,6 +51528,8 @@ export interface components {
             enabled_checks?: string[];
             /** Disabled Checks */
             disabled_checks?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HookStatus
@@ -49570,6 +51545,8 @@ export interface components {
             /** Last Run */
             last_run?: string | null;
             config: components["schemas"]["HookConfig"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HostSelectionRequest
@@ -49602,6 +51579,8 @@ export interface components {
              * @default true
              */
             allow_auto_select: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HoverResponse
@@ -49611,6 +51590,8 @@ export interface components {
             /** Contents */
             contents: string;
             range?: components["schemas"]["Range"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HybridSearchRequest
@@ -49645,6 +51626,8 @@ export interface components {
              * @description Filter by relation types
              */
             relation_types?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ImpactLevel
@@ -49652,6 +51635,28 @@ export interface components {
          * @enum {string}
          */
         ImpactLevel: "critical" | "high" | "medium" | "low";
+        /**
+         * ImportKnowledgeResponse
+         * @description Shape of ``POST /import``.
+         */
+        ImportKnowledgeResponse: {
+            /** Status */
+            status?: string | null;
+            /** Total Facts */
+            total_facts?: number | null;
+            /** Imported */
+            imported?: number | null;
+            /** Skipped */
+            skipped?: number | null;
+            /** Overwritten */
+            overwritten?: number | null;
+            /** Errors */
+            errors?: unknown[] | null;
+            /** Validation Errors */
+            validation_errors?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ImportRequest
          * @description Request model for knowledge base import
@@ -49682,6 +51687,50 @@ export interface components {
              * @default imported
              */
             default_category: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ImportStatisticsResponse
+         * @description Shape of ``GET /api/knowledge_base/import/statistics``.
+         */
+        ImportStatisticsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Statistics */
+            statistics?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ImportStatusResponse
+         * @description Shape of ``GET /api/knowledge_base/import/status``.
+         *
+         *     ``imports`` is a freeform list of per-import tracker rows — schema
+         *     owned by :mod:`models.knowledge_import_tracking`.
+         */
+        ImportStatusResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Imports */
+            imports?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ImportWorkflowRequest
@@ -49700,6 +51749,8 @@ export interface components {
              * @description Session to associate with the imported workflow.
              */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IndexCodebaseRequest
@@ -49716,6 +51767,8 @@ export interface components {
              * @description Code source registry ID (#1133). Resolves to the source's clone_path.
              */
             source_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** IndexRequest */
         IndexRequest: {
@@ -49726,6 +51779,8 @@ export interface components {
              * @default false
              */
             force_reindex: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InferenceOptimizationSettings
@@ -49842,6 +51897,8 @@ export interface components {
              * @default true
              */
             local_vllm_async_output: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InstallRequest
@@ -49853,6 +51910,8 @@ export interface components {
              * @description Name of the plugin to install from catalog
              */
             plugin_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IntegrationHealth
@@ -49875,6 +51934,8 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IntegrationStatus
@@ -49901,6 +51962,8 @@ export interface components {
             avg_turns_to_resolve: number;
             /** Sample Queries */
             sample_queries?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** InteractRequest */
         InteractRequest: {
@@ -49922,6 +51985,8 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InterruptRequest
@@ -49933,6 +51998,8 @@ export interface components {
              * @description User requesting control
              */
             user_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InvalidateEntityRequest
@@ -49944,6 +52011,8 @@ export interface components {
              * @description ISO-8601 timestamp for valid_to. Defaults to now.
              */
             ended_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InvalidateRelationRequest
@@ -49970,6 +52039,8 @@ export interface components {
              * @description ISO-8601 timestamp for valid_to. Defaults to now.
              */
             ended_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InviteRequest
@@ -49983,6 +52054,8 @@ export interface components {
             user_id: string;
             /** @description Permission level (owner/editor/viewer) */
             permission: components["schemas"]["PermissionLevel"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * InviteResponse
@@ -49997,6 +52070,8 @@ export interface components {
             invited_user_id: string;
             /** Permission */
             permission: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IssueCreateRequest
@@ -50034,6 +52109,8 @@ export interface components {
              * @description Workspace GID (Asana)
              */
             workspace_gid?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IssueUpdateRequest
@@ -50070,6 +52147,30 @@ export interface components {
              * @description Completion status (Asana)
              */
             completed?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * JobStatusResponse
+         * @description Response for GET /job_status/{task_id}.
+         */
+        JobStatusResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Status */
+            status: string;
+            /** Message */
+            message?: string | null;
+            /** Result */
+            result?: unknown | null;
+            /** Error */
+            error?: string | null;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * JsErrorMetric
@@ -50087,6 +52188,8 @@ export interface components {
             is_rejection: boolean;
             /** Component */
             component?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KBQuery
@@ -50101,6 +52204,8 @@ export interface components {
             similarity_threshold?: number | null;
             /** Auto Summarize */
             auto_summarize?: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KBQueryResponse
@@ -50121,6 +52226,8 @@ export interface components {
             }[];
             /** Summary */
             summary?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KeyboardTypeRequest
@@ -50132,6 +52239,8 @@ export interface components {
              * @description Text to type
              */
             text: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeBaseRequest
@@ -50180,6 +52289,111 @@ export interface components {
              * @default normal
              */
             priority: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeBasicStatsEnvelope
+         * @description Full ``kb.get_stats()`` envelope nested under ``DetailedKnowledgeStats.basic_stats``.
+         *
+         *     Unlike ``KnowledgeStatsBasic`` (the /stats/basic projection), this
+         *     carries the complete set of diagnostic fields returned by
+         *     ``KnowledgeBase.get_stats()`` — used only inside the /detailed_stats
+         *     response, never as a standalone endpoint.
+         */
+        KnowledgeBasicStatsEnvelope: {
+            /**
+             * Total Documents
+             * @default 0
+             */
+            total_documents: number;
+            /**
+             * Total Chunks
+             * @default 0
+             */
+            total_chunks: number;
+            /**
+             * Total Facts
+             * @default 0
+             */
+            total_facts: number;
+            /**
+             * Total Vectors
+             * @default 0
+             */
+            total_vectors: number;
+            /** Categories */
+            categories?: string[];
+            /**
+             * Db Size
+             * @default 0
+             */
+            db_size: number;
+            /**
+             * Status
+             * @default unknown
+             */
+            status: string;
+            /** Last Updated */
+            last_updated?: string | null;
+            /** Redis Db */
+            redis_db?: unknown | null;
+            /** Vector Store */
+            vector_store?: string | null;
+            /** Chromadb Collection */
+            chromadb_collection?: string | null;
+            /** Initialized */
+            initialized?: boolean | null;
+            /** Llama Index Configured */
+            llama_index_configured?: boolean | null;
+            /** Embedding Model */
+            embedding_model?: string | null;
+            /** Embedding Dimensions */
+            embedding_dimensions?: number | null;
+            /** Index Available */
+            index_available?: boolean | null;
+            /** Indexed Documents */
+            indexed_documents?: number | null;
+            /** Chromadb Path */
+            chromadb_path?: string | null;
+            /** Embedding Cache */
+            embedding_cache?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/categories``.
+         */
+        KnowledgeCategoriesResponse: {
+            /** Categories */
+            categories?: components["schemas"]["KnowledgeCategoryEntry"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeCategoryEntry
+         * @description Single row returned by ``GET /api/knowledge_base/categories``.
+         */
+        KnowledgeCategoryEntry: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeDecision
@@ -50194,10 +52408,200 @@ export interface components {
             /** Knowledge Id */
             knowledge_id: string;
             decision: components["schemas"]["KnowledgeDecision"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeEntriesResponse
+         * @description Shape of ``GET /api/knowledge_base/entries``.
+         *
+         *     Cursor-paginated list. ``next_cursor`` is a stringified integer;
+         *     ``has_more`` flips to False when the SCAN cursor wraps to 0.
+         *     Error branches populate ``error`` instead of raising.
+         */
+        KnowledgeEntriesResponse: {
+            /** Entries */
+            entries?: components["schemas"]["KnowledgeEntry"][];
+            /**
+             * Next Cursor
+             * @default 0
+             */
+            next_cursor: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
+            /** Message */
+            message?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeEntry
+         * @description Single row inside ``KnowledgeEntriesResponse.entries``.
+         */
+        KnowledgeEntry: {
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @default Untitled
+             */
+            title: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Type
+             * @default unknown
+             */
+            type: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeHealthResponse
+         * @description Shape of ``GET /api/knowledge_base/health``.
+         *
+         *     Two branches: (a) KB uninitialized — ``status="unhealthy"``, all
+         *     booleans False; (b) KB initialized — fills in per-implementation
+         *     details plus RAG agent status.
+         */
+        KnowledgeHealthResponse: {
+            /**
+             * Status
+             * @description 'healthy' | 'unhealthy'
+             */
+            status: string;
+            /**
+             * Initialized
+             * @default false
+             */
+            initialized: boolean;
+            /**
+             * Redis Connected
+             * @default false
+             */
+            redis_connected: boolean;
+            /**
+             * Vector Store Available
+             * @default false
+             */
+            vector_store_available: boolean;
+            /**
+             * Rag Available
+             * @default false
+             */
+            rag_available: boolean;
+            /**
+             * Rag Status
+             * @default unknown
+             */
+            rag_status: string;
+            /**
+             * Total Facts
+             * @default 0
+             */
+            total_facts: number;
+            /**
+             * Db Size
+             * @default 0
+             */
+            db_size: number;
+            /** Kb Implementation */
+            kb_implementation?: string | null;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMainCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/categories/main``.
+         *
+         *     ``kb_connected`` (issue #5201) lets the UI distinguish an empty knowledge
+         *     base (counts == 0 because nothing has been indexed yet) from an
+         *     unreachable knowledge base (Redis unavailable) — both otherwise return
+         *     all-zero counts.
+         */
+        KnowledgeMainCategoriesResponse: {
+            /** Categories */
+            categories?: components["schemas"]["KnowledgeMainCategoryEntry"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Kb Connected
+             * @default true
+             */
+            kb_connected: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMainCategoryEntry
+         * @description Row returned by ``GET /api/knowledge_base/categories/main``.
+         *
+         *     Differs from :class:`KnowledgeCategoryEntry` by carrying UI-display
+         *     metadata (icon, color, description, examples) sourced from
+         *     ``knowledge_categories.CATEGORY_METADATA``.
+         */
+        KnowledgeMainCategoryEntry: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Icon
+             * @default
+             */
+            icon: string;
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+            /** Examples */
+            examples?: string[];
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeSearchRequest
-         * @description Request model for knowledge base search
+         * @description Request body for POST /mcp/search_knowledge_base.
          */
         KnowledgeSearchRequest: {
             /**
@@ -50218,10 +52622,95 @@ export interface components {
             filters?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeSearchResponse
+         * @description Shape returned by POST /search (all three code paths).
+         *
+         *     The basic and enhanced paths use _build_search_response (keys: results,
+         *     total_results, query, mode, kb_implementation, rag_enhanced, reranking_applied).
+         *     The RAG path additionally includes status, synthesized_response, original_query,
+         *     reformulated_queries, confidence_score, etc.  extra="allow" admits all extra
+         *     fields so both code paths validate without wrapping returns.
+         */
+        KnowledgeSearchResponse: {
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /** Query */
+            query?: string | null;
+            /** Mode */
+            mode?: string | null;
+            /** Kb Implementation */
+            kb_implementation?: string | null;
+            /**
+             * Rag Enhanced
+             * @default false
+             */
+            rag_enhanced: boolean;
+            /**
+             * Reranking Applied
+             * @default false
+             */
+            reranking_applied: boolean;
+            /** Status */
+            status?: string | null;
+            /** Synthesized Response */
+            synthesized_response?: string | null;
+            /** Original Query */
+            original_query?: string | null;
+            /** Reformulated Queries */
+            reformulated_queries?: string[];
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeStatsBasic
+         * @description Shape of ``GET /api/knowledge_base/stats/basic``.
+         *
+         *     The backend trims ``kb.get_stats()`` down to these four lightweight
+         *     fields; additional fields are accepted via ``extra="allow"`` for
+         *     forward-compat but aren't part of the declared contract.
+         */
+        KnowledgeStatsBasic: {
+            /**
+             * Status
+             * @description 'online' | 'offline' | 'error' | 'unknown'
+             */
+            status: string;
+            /**
+             * Total Facts
+             * @description Total facts in the knowledge base
+             * @default 0
+             */
+            total_facts: number;
+            /**
+             * Total Vectors
+             * @description Total vectors in the index
+             * @default 0
+             */
+            total_vectors: number;
+            /**
+             * Categories
+             * @description Bare list of category names (not counts — see /categories)
+             */
+            categories?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeStatsRequest
-         * @description Request model for knowledge base statistics
+         * @description Request body for POST /mcp/get_knowledge_stats.
          */
         KnowledgeStatsRequest: {
             /**
@@ -50230,6 +52719,72 @@ export interface components {
              * @default false
              */
             include_details: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeStatsResponse
+         * @description Shape of ``GET /api/knowledge_base/stats``.
+         *
+         *     Two branches: (a) KB uninitialized — emits zero counts + status
+         *     ``"offline"`` + a ``rag_available`` flag; (b) KB initialized — echoes
+         *     ``kb.get_stats()`` output (freeform per-implementation diagnostics)
+         *     plus ``rag_available``. Modelled with ``extra="allow"`` so neither
+         *     branch's fields get stripped.
+         */
+        KnowledgeStatsResponse: {
+            /**
+             * Status
+             * @description 'online' | 'offline' | 'error' | 'unknown'
+             * @default unknown
+             */
+            status: string;
+            /**
+             * Total Documents
+             * @default 0
+             */
+            total_documents: number;
+            /**
+             * Total Chunks
+             * @default 0
+             */
+            total_chunks: number;
+            /**
+             * Total Facts
+             * @default 0
+             */
+            total_facts: number;
+            /**
+             * Total Vectors
+             * @default 0
+             */
+            total_vectors: number;
+            /** Categories */
+            categories?: string[];
+            /**
+             * Db Size
+             * @default 0
+             */
+            db_size: number;
+            /** Last Updated */
+            last_updated?: string | null;
+            /** Redis Db */
+            redis_db?: unknown | null;
+            /** Index Name */
+            index_name?: string | null;
+            /** Initialized */
+            initialized?: boolean | null;
+            /**
+             * Rag Available
+             * @default false
+             */
+            rag_available: boolean;
+            /** Vectorization Stats */
+            vectorization_stats?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LatestMessagesResponse
@@ -50242,6 +52797,8 @@ export interface components {
             count: number;
             /** Messages */
             messages: components["schemas"]["ServiceMessageResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LearnedStrategyResponse
@@ -50264,6 +52821,8 @@ export interface components {
             failure_patterns: string[];
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LearningConfig
@@ -50307,6 +52866,8 @@ export interface components {
              * @default 0.7
              */
             accuracy_threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LinkTaskRequest
@@ -50320,6 +52881,33 @@ export interface components {
              * @default github_issue
              */
             task_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ListBackupsResponse
+         * @description Shape of ``GET /backups``.
+         */
+        ListBackupsResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Backup Dir */
+            backup_dir?: string | null;
+            /**
+             * Backups
+             * @default []
+             */
+            backups: unknown[];
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ListDirectoryRequest
@@ -50331,6 +52919,8 @@ export interface components {
              * @description Absolute path to directory
              */
             path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ListDirectoryWithSizesRequest
@@ -50348,6 +52938,8 @@ export interface components {
              * @default name
              */
             sort_by: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LoadBalancingConfig
@@ -50390,6 +52982,8 @@ export interface components {
              * @default 60
              */
             retry_cooldown_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LoadBalancingStrategy
@@ -50420,6 +53014,8 @@ export interface components {
             metric_after: number;
             /** Confidence */
             confidence: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LogEntry
@@ -50435,6 +53031,8 @@ export interface components {
             level: string;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LogPattern
@@ -50472,6 +53070,8 @@ export interface components {
              * @default false
              */
             is_anomaly: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LogTrend
@@ -50492,6 +53092,8 @@ export interface components {
             data_points: {
                 [key: string]: unknown;
             }[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LoginRequest
@@ -50502,6 +53104,8 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LoginResponse
@@ -50520,6 +53124,8 @@ export interface components {
             token?: string | null;
             /** Session Id */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LogoutRequest
@@ -50528,6 +53134,54 @@ export interface components {
         LogoutRequest: {
             /** Session Id */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LoopApproveResponse
+         * @description Shape returned by POST /loop/approve.
+         */
+        LoopApproveResponse: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LoopRejectResponse
+         * @description Shape returned by POST /loop/reject.
+         */
+        LoopRejectResponse: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LoopStatusResponse
+         * @description Shape returned by GET /loop/status.
+         */
+        LoopStatusResponse: {
+            /** Loop Status */
+            loop_status?: {
+                [key: string]: unknown;
+            };
+            /** Current Config */
+            current_config?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MCPTool
@@ -50542,6 +53196,8 @@ export interface components {
             input_schema: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MCPToolCallRequest
@@ -50560,6 +53216,101 @@ export interface components {
             arguments?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MachineKnowledgeInitComponents
+         * @description Per-component counts nested under :class:`MachineKnowledgeInitResponse`.
+         */
+        MachineKnowledgeInitComponents: {
+            /**
+             * System Commands
+             * @default 0
+             */
+            system_commands: number;
+            /** Man Pages */
+            man_pages?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MachineKnowledgeInitResponse
+         * @description Shape of ``POST /api/knowledge_base/machine_knowledge/initialize``.
+         */
+        MachineKnowledgeInitResponse: {
+            /**
+             * Status
+             * @description 'success' | 'error'
+             */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Items Added
+             * @default 0
+             */
+            items_added: number;
+            components?: components["schemas"]["MachineKnowledgeInitComponents"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MachineProfileCapabilities
+         * @description Capability flags nested under :class:`MachineProfileResponse`.
+         */
+        MachineProfileCapabilities: {
+            /**
+             * Rag Available
+             * @default false
+             */
+            rag_available: boolean;
+            /**
+             * Vector Search
+             * @default false
+             */
+            vector_search: boolean;
+            /**
+             * Man Pages Available
+             * @default true
+             */
+            man_pages_available: boolean;
+            /**
+             * System Knowledge
+             * @default true
+             */
+            system_knowledge: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MachineProfileResponse
+         * @description Shape of ``GET /api/knowledge_base/machine_profile``.
+         *
+         *     ``machine_profile`` and ``knowledge_base_stats`` are freeform —
+         *     they echo ``platform`` + ``psutil`` output and ``kb.get_stats()``
+         *     respectively.
+         */
+        MachineProfileResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Machine Profile */
+            machine_profile?: {
+                [key: string]: unknown;
+            };
+            /** Knowledge Base Stats */
+            knowledge_base_stats?: {
+                [key: string]: unknown;
+            };
+            capabilities?: components["schemas"]["MachineProfileCapabilities"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ManPageRequest
@@ -50576,6 +53327,8 @@ export interface components {
              * @description Manual section (1-8). Defaults to section 1.
              */
             section?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ManPageSearchRequest
@@ -50593,6 +53346,103 @@ export interface components {
              * @default 10
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ManPageSearchResponse
+         * @description Shape of ``GET /api/knowledge_base/man_pages/search``.
+         */
+        ManPageSearchResponse: {
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /** Query */
+            query?: string | null;
+            /** Limit */
+            limit?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ManPagesIntegrateResponse
+         * @description Shape of ``POST /api/knowledge_base/man_pages/integrate``.
+         *
+         *     ``integration_started`` is False on the KB-uninit branch, True when
+         *     a background task has been enqueued.
+         */
+        ManPagesIntegrateResponse: {
+            /**
+             * Status
+             * @description 'success' | 'error'
+             */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Integration Started
+             * @default false
+             */
+            integration_started: boolean;
+            /** Background */
+            background?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ManPagesSummaryEnvelope
+         * @description Nested summary under :class:`ManPagesSummaryResponse`.
+         */
+        ManPagesSummaryEnvelope: {
+            /**
+             * Total Man Pages
+             * @default 0
+             */
+            total_man_pages: number;
+            /**
+             * System Commands
+             * @default 0
+             */
+            system_commands: number;
+            /**
+             * Indexed Count
+             * @default 0
+             */
+            indexed_count: number;
+            /** Last Indexed */
+            last_indexed?: string | null;
+            /**
+             * Integration Active
+             * @default false
+             */
+            integration_active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ManPagesSummaryResponse
+         * @description Shape of ``GET /api/knowledge_base/man_pages/summary``.
+         */
+        ManPagesSummaryResponse: {
+            /**
+             * Status
+             * @description 'success' | 'error'
+             */
+            status: string;
+            /** Message */
+            message?: string | null;
+            man_pages_summary?: components["schemas"]["ManPagesSummaryEnvelope"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MarkFactsPreservedRequest
@@ -50606,6 +53456,8 @@ export interface components {
              * @default true
              */
             preserve: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** MarkdownReferenceRequest */
         MarkdownReferenceRequest: {
@@ -50618,6 +53470,8 @@ export interface components {
              * @default documentation
              */
             reference_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MarketplaceCatalogResponse
@@ -50632,6 +53486,8 @@ export interface components {
             category: string;
             /** Sort By */
             sort_by: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MarketplaceEntry
@@ -50673,6 +53529,220 @@ export interface components {
              * @default
              */
             source_url: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpAddDocumentResponse
+         * @description Shape returned by POST /mcp/add_to_knowledge_base.
+         */
+        McpAddDocumentResponse: {
+            /** Success */
+            success: boolean;
+            /** Document Id */
+            document_id?: string | null;
+            /** Message */
+            message?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpHealthResponse
+         * @description Shape returned by GET /mcp/health.
+         */
+        McpHealthResponse: {
+            /** Status */
+            status: string;
+            /**
+             * Knowledge Base Initialized
+             * @default false
+             */
+            knowledge_base_initialized: boolean;
+            /**
+             * Vector Store Connected
+             * @default false
+             */
+            vector_store_connected: boolean;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpKnowledgeStatsResponse
+         * @description Shape returned by POST /mcp/get_knowledge_stats.
+         */
+        McpKnowledgeStatsResponse: {
+            /** Success */
+            success: boolean;
+            /** Stats */
+            stats?: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpQaChainResponse
+         * @description Shape returned by POST /mcp/langchain_qa_chain.
+         */
+        McpQaChainResponse: {
+            /** Success */
+            success: boolean;
+            /**
+             * Answer
+             * @default
+             */
+            answer: string;
+            /** Question */
+            question?: string | null;
+            /** Sources */
+            sources?: string[];
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpRedisVectorOpsResponse
+         * @description Shape returned by POST /mcp/redis_vector_operations.
+         */
+        McpRedisVectorOpsResponse: {
+            /** Success */
+            success: boolean;
+            /** Operation */
+            operation?: string | null;
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Message */
+            message?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpSchemaResponse
+         * @description Shape returned by GET /mcp/schema.
+         */
+        McpSchemaResponse: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Tools */
+            tools?: {
+                [key: string]: unknown;
+            }[];
+            /** Backends */
+            backends?: {
+                [key: string]: string;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpSearchResponse
+         * @description Shape returned by POST /mcp/search_knowledge_base.
+         */
+        McpSearchResponse: {
+            /** Success */
+            success: boolean;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpSummarizeTopicResponse
+         * @description Shape returned by POST /mcp/summarize_knowledge_topic.
+         */
+        McpSummarizeTopicResponse: {
+            /** Success */
+            success: boolean;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Topic */
+            topic?: string | null;
+            /**
+             * Source Count
+             * @default 0
+             */
+            source_count: number;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpToolsResponse
+         * @description Shape returned by GET /mcp/tools — list of MCPTool definitions.
+         */
+        McpToolsResponse: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * McpVectorSimilarityResponse
+         * @description Shape returned by POST /mcp/vector_similarity_search.
+         */
+        McpVectorSimilarityResponse: {
+            /** Success */
+            success: boolean;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /** Query */
+            query?: string | null;
+            /** Threshold */
+            threshold?: number | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MemberAddedResponse
@@ -50687,6 +53757,8 @@ export interface components {
             /** Message */
             message: string;
             member: components["schemas"]["MemberResponse"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MemberRemovedResponse
@@ -50700,6 +53772,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MemberResponse
@@ -50721,6 +53795,8 @@ export interface components {
             role: string;
             /** Joined At */
             joined_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MembershipUpdate
@@ -50732,6 +53808,8 @@ export interface components {
              * @description New role (owner, admin, member)
              */
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MergeTagsRequest
@@ -50748,6 +53826,8 @@ export interface components {
              * @description Target tag to merge into
              */
             target_tag: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * Message
@@ -50764,6 +53844,8 @@ export interface components {
              * @description Message content
              */
             content: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MetadataFieldDefinition
@@ -50804,6 +53886,8 @@ export interface components {
              * @description Field description for UI
              */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MetricCategory
@@ -50839,6 +53923,8 @@ export interface components {
              * @default true
              */
             include_alerts: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MetricsQueryRequest
@@ -50865,6 +53951,8 @@ export interface components {
              * @description Relative time (e.g., '1 hour ago')
              */
             since?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MetricsResponse
@@ -50889,6 +53977,8 @@ export interface components {
             top_patterns: {
                 [key: string]: unknown;
             }[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ModelPerformanceData
@@ -50905,6 +53995,8 @@ export interface components {
             success: boolean;
             /** User Rating */
             user_rating?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ModelResponse
@@ -50929,6 +54021,8 @@ export interface components {
             is_active: boolean;
             /** Created At */
             created_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MongoQueryRequest
@@ -50980,6 +54074,8 @@ export interface components {
              * @description MongoDB password
              */
             password?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MonitoringState
@@ -51008,6 +54104,8 @@ export interface components {
              * @default left
              */
             button: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MouseDragRequest
@@ -51034,6 +54132,8 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MouseScrollRequest
@@ -51051,6 +54151,8 @@ export interface components {
              * @default 3
              */
             amount: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MoveFileRequest
@@ -51067,6 +54169,8 @@ export interface components {
              * @description Destination path
              */
             destination: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MultiAgentTaskPayload
@@ -51103,6 +54207,8 @@ export interface components {
             dependencies?: {
                 [key: string]: string;
             }[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** MultiModalResponse */
         MultiModalResponse: {
@@ -51124,6 +54230,8 @@ export interface components {
             device_used?: string | null;
             /** Error Message */
             error_message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NLQueryRequest
@@ -51146,6 +54254,8 @@ export interface components {
              * @description Secret ID (from secrets manager) containing the database_url
              */
             db_secret_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NLQueryResponse
@@ -51170,6 +54280,8 @@ export interface components {
             elapsed_ms: number;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NLSearchRequest
@@ -51198,6 +54310,8 @@ export interface components {
              * @description Filter by programming language
              */
             language_filter?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NLSearchResponse
@@ -51215,6 +54329,8 @@ export interface components {
             total_results: number;
             /** Search Time Ms */
             search_time_ms: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NPUWorkerConfig
@@ -51276,6 +54392,8 @@ export interface components {
              * @default 4
              */
             max_concurrent_tasks: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NPUWorkerDetails
@@ -51317,6 +54435,8 @@ export interface components {
             status: components["schemas"]["NPUWorkerStatus"];
             /** @description Worker performance metrics */
             metrics?: components["schemas"]["NPUWorkerMetrics"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NPUWorkerMetrics
@@ -51372,6 +54492,8 @@ export interface components {
              * @description Metrics collection timestamp
              */
             metrics_timestamp?: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NPUWorkerStatus
@@ -51431,11 +54553,15 @@ export interface components {
              * @description Latest error message if status is ERROR
              */
             error_message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** NavigationRequest */
         NavigationRequest: {
             /** Url */
             url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NotificationConfigRequest
@@ -51463,6 +54589,8 @@ export interface components {
             templates?: {
                 [key: string]: string;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** OAIMessage */
         OAIMessage: {
@@ -51472,6 +54600,8 @@ export interface components {
             content: string;
             /** Name */
             name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** OAIModelCard */
         OAIModelCard: {
@@ -51492,6 +54622,8 @@ export interface components {
              * @default autobot
              */
             owned_by: string;
+        } & {
+            [key: string]: unknown;
         };
         /** OAIStreamOptions */
         OAIStreamOptions: {
@@ -51500,6 +54632,8 @@ export interface components {
              * @default false
              */
             include_usage: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ObservationAddRequest
@@ -51511,6 +54645,8 @@ export interface components {
              * @description New observations to add
              */
             observations: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OptimizationRecommendation
@@ -51527,6 +54663,8 @@ export interface components {
             action: string;
             /** Expected Improvement */
             expected_improvement: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrgKnowledgeConfigPayload
@@ -51541,6 +54679,32 @@ export interface components {
             embedding_model?: string | null;
             /** Embedding Dimension */
             embedding_dimension?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrgKnowledgeConfigResponse
+         * @description Shape of ``GET`` and ``PUT`` ``/api/knowledge_base/org-config`` (#4451).
+         *
+         *     ``stored`` may be ``None`` on GET when the org has never set a
+         *     preference; ``effective`` is always populated (SSOT fallback).
+         */
+        OrgKnowledgeConfigResponse: {
+            /**
+             * Org Id
+             * @default __default__
+             */
+            org_id: string;
+            /** Stored */
+            stored?: {
+                [key: string]: unknown;
+            } | null;
+            /** Effective */
+            effective?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrgNodeResponse
@@ -51564,6 +54728,8 @@ export interface components {
             direct_reports_count: number;
             /** Children */
             children?: components["schemas"]["OrgNodeResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationCreate
@@ -51604,6 +54770,8 @@ export interface components {
              * @default -1
              */
             max_users: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationCreatedResponse
@@ -51618,6 +54786,8 @@ export interface components {
             /** Message */
             message: string;
             organization: components["schemas"]["OrganizationResponse"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationDeletedResponse
@@ -51631,6 +54801,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationKnowledgePolicy
@@ -51671,6 +54843,8 @@ export interface components {
              * @description Knowledge retention period (None = indefinite)
              */
             retention_days?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationListResponse
@@ -51685,6 +54859,8 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationResponse
@@ -51716,6 +54892,8 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationStatsResponse
@@ -51742,6 +54920,8 @@ export interface components {
             is_active: boolean;
             /** Created At */
             created_at: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OrganizationUpdate
@@ -51775,6 +54955,8 @@ export interface components {
              * @description Maximum users
              */
             max_users?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PageMetrics
@@ -51793,6 +54975,8 @@ export interface components {
             tti_seconds?: number | null;
             /** Dom Loaded Seconds */
             dom_loaded_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ParseToolOutputRequest
@@ -51809,6 +54993,8 @@ export interface components {
              * @description Tool name (auto-detect if not provided)
              */
             tool?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ParsedQueryResponse
@@ -51833,6 +55019,8 @@ export interface components {
             confidence: number;
             /** Question Type */
             question_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ParticipantResponse
@@ -51850,6 +55038,8 @@ export interface components {
              * @default false
              */
             online: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PasswordChange
@@ -51866,6 +55056,8 @@ export interface components {
              * @description New password
              */
             new_password: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PasswordChangedResponse
@@ -51879,6 +55071,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternAnalysisRequest
@@ -51926,6 +55120,8 @@ export interface components {
              * @default 0.8
              */
             similarity_threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternAnalysisStatus
@@ -51959,6 +55155,8 @@ export interface components {
             partial_results?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternConsistency
@@ -51977,6 +55175,8 @@ export interface components {
             }[];
             /** Recommendations */
             recommendations: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternDefinition
@@ -52032,6 +55232,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternDefinition
@@ -52060,6 +55262,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternFeedback
@@ -52103,6 +55307,8 @@ export interface components {
              * @description Feedback timestamp
              */
             timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternListResponse
@@ -52117,6 +55323,8 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternMatch
@@ -52138,6 +55346,8 @@ export interface components {
             indicators_found: string[];
             /** Code Snippet */
             code_snippet?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternMiningResult
@@ -52158,6 +55368,8 @@ export interface components {
             analysis_time_ms: number;
             /** Logs Analyzed */
             logs_analyzed: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternResponse
@@ -52184,6 +55396,8 @@ export interface components {
             file_path: string | null;
             /** Line Number */
             line_number: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternSearchRequest
@@ -52210,6 +55424,8 @@ export interface components {
              * @default 20
              */
             limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternSnapshot
@@ -52234,6 +55450,8 @@ export interface components {
              * @default []
              */
             top_files: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternSummary
@@ -52254,6 +55472,8 @@ export interface components {
             potential_loc_reduction: number;
             /** Complexity Score */
             complexity_score: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternToggleRequest
@@ -52264,6 +55484,8 @@ export interface components {
             pattern_id: string;
             /** Enabled */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternType
@@ -52286,6 +55508,8 @@ export interface components {
             recommendation: string;
             /** Timestamp */
             timestamp: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PerformanceAnalysisRequest
@@ -52307,6 +55531,8 @@ export interface components {
              * @description Minimum severity level to include
              */
             min_severity?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PerformanceAnalysisResult
@@ -52338,6 +55564,8 @@ export interface components {
             timestamp: string;
             /** Score */
             score: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PerformanceFileScanRequest
@@ -52349,6 +55577,8 @@ export interface components {
              * @description Path to Python file to analyze
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PerformanceIssue
@@ -52380,6 +55610,8 @@ export interface components {
             code_snippet?: string | null;
             /** Estimated Impact */
             estimated_impact?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** PerformanceOptimizationRequest */
         PerformanceOptimizationRequest: {
@@ -52392,6 +55624,8 @@ export interface components {
              * @default balanced
              */
             optimization_level: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionLevel
@@ -52409,6 +55643,8 @@ export interface components {
              * @description Permission mode to set
              */
             mode: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionModeResponse
@@ -52423,6 +55659,8 @@ export interface components {
             is_admin_only: boolean;
             /** Allowed Modes */
             allowed_modes: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionResponse
@@ -52441,6 +55679,8 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionRuleResponse
@@ -52455,6 +55695,8 @@ export interface components {
             action: string;
             /** Description */
             description: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionRulesResponse
@@ -52467,6 +55709,8 @@ export interface components {
             ask: components["schemas"]["PermissionRuleResponse"][];
             /** Deny */
             deny: components["schemas"]["PermissionRuleResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PermissionStatusResponse
@@ -52487,6 +55731,8 @@ export interface components {
             rules_count: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** PhaseEntry */
         PhaseEntry: {
@@ -52500,6 +55746,8 @@ export interface components {
             is_active: boolean;
             /** Is Completed */
             is_completed: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** PhaseStatus */
         PhaseStatus: {
@@ -52515,6 +55763,8 @@ export interface components {
             capabilities: number;
             /** Implemented Capabilities */
             implemented_capabilities: number;
+        } & {
+            [key: string]: unknown;
         };
         /** PhaseStatusItem */
         PhaseStatusItem: {
@@ -52530,6 +55780,8 @@ export interface components {
             capabilities: number;
             /** Implemented Capabilities */
             implemented_capabilities: number;
+        } & {
+            [key: string]: unknown;
         };
         /** PhasesStatusResponse */
         PhasesStatusResponse: {
@@ -52541,6 +55793,8 @@ export interface components {
             phases: components["schemas"]["PhaseEntry"][];
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PipelineRunRequest
@@ -52559,6 +55813,8 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PipelineRunResponse
@@ -52602,6 +55858,8 @@ export interface components {
              * @default []
              */
             errors: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PipelineTriggerRequest
@@ -52621,6 +55879,8 @@ export interface components {
             parameters?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PlanApprovalResponse
@@ -52642,6 +55902,8 @@ export interface components {
             modifications?: string[] | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PlanPresentationRequest
@@ -52667,6 +55929,8 @@ export interface components {
              * @default 300
              */
             timeout_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PluginConfigUpdate
@@ -52680,6 +55944,8 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PluginListResponse
@@ -52698,6 +55964,46 @@ export interface components {
              * @description Total plugin count
              */
             total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PopulateManPagesResponse
+         * @description Response for POST /populate_man_pages.
+         */
+        PopulateManPagesResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /**
+             * Items Added
+             * @default 0
+             */
+            items_added: number;
+            /** Background */
+            background?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PopulateSystemCommandsResponse
+         * @description Response for POST /populate_system_commands.
+         */
+        PopulateSystemCommandsResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /**
+             * Items Added
+             * @default 0
+             */
+            items_added: number;
+            /** Total Commands */
+            total_commands?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PortMapping
@@ -52713,6 +56019,8 @@ export interface components {
              * @default tcp
              */
             protocol: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * Position
@@ -52723,6 +56031,8 @@ export interface components {
             line: number;
             /** Character */
             character: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PredictRequest
@@ -52746,6 +56056,8 @@ export interface components {
              * @default 5
              */
             top_k: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PredictResponse
@@ -52758,6 +56070,8 @@ export interface components {
             confidence: number;
             /** Model Version */
             model_version: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProcessThoughtRequest
@@ -52807,6 +56121,8 @@ export interface components {
              * @default default
              */
             session_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ProfileCreate */
         ProfileCreate: {
@@ -52859,6 +56175,8 @@ export interface components {
              * @default en
              */
             language_code: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ProfileDetail */
         ProfileDetail: {
@@ -52903,6 +56221,8 @@ export interface components {
              * @default en
              */
             language_code: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ProfileSummary */
         ProfileSummary: {
@@ -52914,6 +56234,8 @@ export interface components {
             is_system: boolean;
             /** Active */
             active: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** ProfileUpdate */
         ProfileUpdate: {
@@ -52939,6 +56261,8 @@ export interface components {
             } | null;
             /** Language Code */
             language_code?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProjectApprovalsResponse
@@ -52949,6 +56273,8 @@ export interface components {
             project_path: string;
             /** Approvals */
             approvals: components["schemas"]["ApprovalRecordResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /** ProjectReportResponse */
         ProjectReportResponse: {
@@ -52964,6 +56290,8 @@ export interface components {
             completed_phases: number;
             /** Generated At */
             generated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ProjectStatus */
         ProjectStatus: {
@@ -52983,6 +56311,8 @@ export interface components {
             phases: {
                 [key: string]: components["schemas"]["PhaseStatus"];
             };
+        } & {
+            [key: string]: unknown;
         };
         /** ProjectStatusResponse */
         ProjectStatusResponse: {
@@ -53002,6 +56332,8 @@ export interface components {
             phases: {
                 [key: string]: components["schemas"]["PhaseStatusItem"];
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PromptAnalysisRequest
@@ -53018,6 +56350,8 @@ export interface components {
              * @description Model used or planned
              */
             model?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QualitySnapshot
@@ -53070,6 +56404,47 @@ export interface components {
              * @default 0
              */
             problems_count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * QueryKnowledgeResponse
+         * @description Shape of legacy ``POST /api/knowledge_base/query``.
+         *
+         *     Proxies to :mod:`api.knowledge_search`. Fields mirror the shape returned
+         *     by ``_build_search_response`` in that module.
+         */
+        QueryKnowledgeResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Synthesized Response
+             * @default
+             */
+            synthesized_response: string;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /** Original Query */
+            original_query?: string | null;
+            /** Reformulated Queries */
+            reformulated_queries?: string[];
+            /**
+             * Rag Enhanced
+             * @default false
+             */
+            rag_enhanced: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueryRequest
@@ -53108,6 +56483,8 @@ export interface components {
              * @description Database password
              */
             password?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** QueueControlRequest */
         QueueControlRequest: {
@@ -53115,6 +56492,8 @@ export interface components {
             action: string;
             /** Value */
             value?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QuickFixRequest
@@ -53128,6 +56507,8 @@ export interface components {
             /** Diagnostic Code */
             diagnostic_code: string;
             range: components["schemas"]["Range"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QuickFixResponse
@@ -53138,6 +56519,8 @@ export interface components {
             actions: components["schemas"]["CodeAction"][];
             /** Diagnostic Code */
             diagnostic_code: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QuickScanRequest
@@ -53149,22 +56532,26 @@ export interface components {
              * @description Path to Python file to analyze
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RAGConfigUpdate
-         * @description Request model for updating RAG configuration
+         * @description Request body for PUT /rag/config.
          */
         RAGConfigUpdate: {
             /** Hybrid Weight Semantic */
-            hybrid_weight_semantic?: number;
+            hybrid_weight_semantic?: number | null;
             /** Hybrid Weight Keyword */
-            hybrid_weight_keyword?: number;
+            hybrid_weight_keyword?: number | null;
             /** Enable Reranking */
-            enable_reranking?: boolean;
+            enable_reranking?: boolean | null;
             /** Diversity Threshold */
-            diversity_threshold?: number;
+            diversity_threshold?: number | null;
             /** Max Results Per Stage */
-            max_results_per_stage?: number;
+            max_results_per_stage?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RBACInitRequest
@@ -53181,6 +56568,22 @@ export interface components {
              * @default admin
              */
             admin_username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RagConfigResponse
+         * @description Shape returned by GET /config/rag and as the config sub-object in PUT responses.
+         */
+        RagConfigResponse: {
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RagFeedbackRequest
@@ -53203,6 +56606,81 @@ export interface components {
             decision: "accepted" | "rejected";
             /** User Id */
             user_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RagFeedbackResponse
+         * @description Shape returned by POST /rag-feedback.
+         */
+        RagFeedbackResponse: {
+            /** Status */
+            status: string;
+            /** Stream Key */
+            stream_key?: string | null;
+            /** Decision */
+            decision?: string | null;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RagSearchResponse
+         * @description Shape returned by deprecated POST /rag_search.
+         *
+         *     Shares the same RAG synthesis shape as the /search RAG path.
+         */
+        RagSearchResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Synthesized Response
+             * @default
+             */
+            synthesized_response: string;
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /** Original Query */
+            original_query?: string | null;
+            /** Reformulated Queries */
+            reformulated_queries?: string[];
+            /**
+             * Rag Enhanced
+             * @default true
+             */
+            rag_enhanced: boolean;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RagStatsResponse
+         * @description Shape returned by GET /stats/rag.
+         */
+        RagStatsResponse: {
+            /** Stats */
+            stats?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Service Available
+             * @default true
+             */
+            service_available: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * Range
@@ -53211,6 +56689,8 @@ export interface components {
         Range: {
             start: components["schemas"]["Position"];
             end: components["schemas"]["Position"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadMediaFileRequest
@@ -53222,6 +56702,8 @@ export interface components {
              * @description Absolute path to media file
              */
             path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadMultipleFilesRequest
@@ -53233,6 +56715,8 @@ export interface components {
              * @description List of absolute file paths
              */
             paths: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadTextFileRequest
@@ -53254,6 +56738,8 @@ export interface components {
              * @description Read only last N lines
              */
             tail?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RealTimeEvent
@@ -53273,6 +56759,26 @@ export interface components {
              * @default info
              */
             severity: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RecordClickResponse
+         * @description Shape returned by POST /record_click.
+         */
+        RecordClickResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RecoverErrorRequest
@@ -53290,6 +56796,8 @@ export interface components {
              * @default Manual recovery
              */
             reason: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RedisAnalysisRequest
@@ -53311,6 +56819,8 @@ export interface components {
              * @description Minimum severity level to include (info, low, medium, high, critical)
              */
             min_severity?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RedisFileScanRequest
@@ -53322,6 +56832,8 @@ export interface components {
              * @description Path to Python file to analyze
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RedisToolCallRequest
@@ -53337,6 +56849,8 @@ export interface components {
             arguments?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RefactoringRequest
@@ -53367,6 +56881,8 @@ export interface components {
              * @default false
              */
             preserve_formatting: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RefactoringResponse
@@ -53402,6 +56918,8 @@ export interface components {
             processing_time: number;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RefactoringType
@@ -53424,6 +56942,24 @@ export interface components {
              * @description Optional section heading to scope the refinement
              */
             section?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RefreshSystemKnowledgeResponse
+         * @description Response for POST /refresh_system_knowledge.
+         */
+        RefreshSystemKnowledgeResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Poll Url */
+            poll_url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RegisterTargetRequest
@@ -53452,10 +56988,12 @@ export interface components {
              * @default 2
              */
             top_k: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReindexWithContextRequest
-         * @description Request model for retroactive context enrichment (#1513).
+         * @description Request model for POST /reindex_with_context (#1513).
          */
         ReindexWithContextRequest: {
             /**
@@ -53469,16 +57007,40 @@ export interface components {
              * @default 20
              */
             batch_size: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReindexWithContextResponse
-         * @description Response model for reindex_with_context (#1513).
+         * @description Response for POST /reindex_with_context (#1513).
          */
         ReindexWithContextResponse: {
             /** Status */
             status: string;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ReindexWithContextStatusResponse
+         * @description Response for GET /reindex_with_context/status (#1761).
+         */
+        ReindexWithContextStatusResponse: {
+            /** Is Running */
+            is_running: boolean;
+            /** Enriched Count */
+            enriched_count: number;
+            /** Total Count */
+            total_count: number;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** Error */
+            error: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RelationCreateRequest
@@ -53519,6 +57081,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReloadResponse
@@ -53546,6 +57110,8 @@ export interface components {
              * @default []
              */
             errors: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RemoteVerifyRequest
@@ -53557,6 +57123,8 @@ export interface components {
              * @description Base URL of the remote agent to verify
              */
             url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RemoveRequest
@@ -53568,6 +57136,8 @@ export interface components {
              * @description User ID to remove
              */
             user_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RemoveResponse
@@ -53580,6 +57150,8 @@ export interface components {
             session_id: string;
             /** Removed User Id */
             removed_user_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RemoveRuleRequest
@@ -53597,6 +57169,8 @@ export interface components {
              * @description Pattern to remove
              */
             pattern: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RemoveTagsRequest
@@ -53608,6 +57182,8 @@ export interface components {
              * @description List of tags to remove
              */
             tags: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RenameFileRequest
@@ -53616,6 +57192,8 @@ export interface components {
         RenameFileRequest: {
             /** New Filename */
             new_filename: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RenameTagRequest
@@ -53627,6 +57205,8 @@ export interface components {
              * @description New name for the tag
              */
             new_tag: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RepoType
@@ -53643,6 +57223,8 @@ export interface components {
              * @description True if detection was correct, False if false positive
              */
             is_correct: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RepositoryAnalysisRequest
@@ -53654,10 +57236,12 @@ export interface components {
              * @description Path to git repository
              */
             repo_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RerankRequest
-         * @description Request model for reranking existing search results
+         * @description Request body for POST /rag/rerank.
          */
         RerankRequest: {
             /**
@@ -53672,6 +57256,33 @@ export interface components {
             results: {
                 [key: string]: unknown;
             }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RerankResultsResponse
+         * @description Shape returned by POST /rerank_results.
+         */
+        RerankResultsResponse: {
+            /** Reranked Results */
+            reranked_results?: unknown[];
+            /**
+             * Original Count
+             * @default 0
+             */
+            original_count: number;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Reranking Applied
+             * @default true
+             */
+            reranking_applied: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** RescheduleRequest */
         RescheduleRequest: {
@@ -53679,6 +57290,8 @@ export interface components {
             new_scheduled_time: string;
             /** New Priority */
             new_priority?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResearchTaskRequest
@@ -53713,6 +57326,8 @@ export interface components {
              * @description Specific sources
              */
             sources?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResetLearningResponse
@@ -53723,6 +57338,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResolveConflictRequest
@@ -53736,6 +57353,8 @@ export interface components {
             chosen_fact: string;
             /** Reasoning */
             reasoning: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResourceMetric
@@ -53751,6 +57370,37 @@ export interface components {
              * @default false
              */
             is_slow: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RestoreBackupResponse
+         * @description Shape of ``POST /restore``.
+         */
+        RestoreBackupResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /** Mode */
+            mode?: string | null;
+            /** Backup Version */
+            backup_version?: string | null;
+            /** Backup Created At */
+            backup_created_at?: string | null;
+            /** Total Facts In Backup */
+            total_facts_in_backup?: number | null;
+            /** Restored */
+            restored?: number | null;
+            /** Skipped */
+            skipped?: number | null;
+            /** Updated */
+            updated?: number | null;
+            /** Errors */
+            errors?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RestoreRequest
@@ -53786,6 +57436,8 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResubmitRequest
@@ -53798,6 +57450,8 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RetrainRequest
@@ -53821,6 +57475,8 @@ export interface components {
              * @default 5
              */
             num_epochs: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RetrainResponse
@@ -53833,6 +57489,8 @@ export interface components {
             message: string;
             /** Training Started */
             training_started: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RetrainingReason
@@ -53854,6 +57512,26 @@ export interface components {
             force: boolean;
             /** Patterns To Focus */
             patterns_to_focus?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RetryJobResponse
+         * @description Response for POST /vectorize_jobs/{job_id}/retry.
+         */
+        RetryJobResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** New Job Id */
+            new_job_id: string;
+            /** Fact Id */
+            fact_id: string;
+            /** Original Job Id */
+            original_job_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RevertToVersionRequest
@@ -53870,6 +57548,8 @@ export interface components {
              * @description User/agent performing the revert
              */
             created_by?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RoleAssignmentResponse
@@ -53888,6 +57568,8 @@ export interface components {
              * Format: uuid
              */
             role_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RoleResponse
@@ -53908,6 +57590,8 @@ export interface components {
              * @default false
              */
             is_system: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RoleUpdateRequest
@@ -53919,6 +57603,8 @@ export interface components {
              * @description Role name: admin, user, or readonly
              */
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RoleUpdateResponse
@@ -53936,6 +57622,8 @@ export interface components {
             username: string;
             /** Role */
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RollbackRequest
@@ -53952,6 +57640,8 @@ export interface components {
              * @description Specific version to rollback to
              */
             version_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** RumConfig */
         RumConfig: {
@@ -54005,6 +57695,8 @@ export interface components {
              * @default info
              */
             log_level: string;
+        } & {
+            [key: string]: unknown;
         };
         /** RumEvent */
         RumEvent: {
@@ -54025,6 +57717,8 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RumMetrics
@@ -54050,18 +57744,17 @@ export interface components {
             resources?: components["schemas"]["ResourceMetric"][] | null;
             /** Critical Issues */
             critical_issues?: components["schemas"]["CriticalIssueMetric"][] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RunBenchmarkRequest
-         * @description Request body for POST /rag/benchmark/run.
-         *
-         *     Issue #5074: callers must declare which split they are benchmarking
-         *     against so held-out scores are auditable.
+         * @description Request body for POST /rag/benchmark/run (#5074).
          */
         RunBenchmarkRequest: {
             /**
              * Split
-             * @description Which portion of the dataset to run: 'dev' (tuning), 'test' (held-out final score), or 'all' (combined — not a held-out score).
+             * @description Which portion to benchmark: 'dev', 'test', or 'all'.
              */
             split: string;
             /**
@@ -54070,6 +57763,8 @@ export interface components {
              * @default 5
              */
             k: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RunEventResponse
@@ -54088,6 +57783,8 @@ export interface components {
             } | null;
             /** Occurred At */
             occurred_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SQLExecuteRequest
@@ -54109,6 +57806,8 @@ export interface components {
              * @description Statement parameters for ? placeholders
              */
             params?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SQLQueryRequest
@@ -54133,6 +57832,8 @@ export interface components {
              * @default 100
              */
             limit: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SSHKeyAgentRequest
@@ -54143,6 +57844,8 @@ export interface components {
             key_name: string;
             /** Passphrase */
             passphrase?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SSHKeySetupRequest
@@ -54158,6 +57861,8 @@ export interface components {
             include_general: boolean | null;
             /** Key Names */
             key_names?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** SavedReportRequest */
         SavedReportRequest: {
@@ -54176,6 +57881,8 @@ export interface components {
              *     ]
              */
             sections: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ScanHostChangesRequest
@@ -54200,6 +57907,124 @@ export interface components {
              * @default false
              */
             auto_vectorize: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ScanHostChangesResponse
+         * @description Shape of ``POST /scan_host_changes``.
+         */
+        ScanHostChangesResponse: {
+            /** Status */
+            status?: string | null;
+            /** Changes */
+            changes?: {
+                [key: string]: unknown;
+            } | null;
+            /** Vectorization */
+            vectorization?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ScanManPagesChangesResponse
+         * @description Response for POST /scan_man_pages_changes.
+         */
+        ScanManPagesChangesResponse: {
+            /** Status */
+            status: string;
+            /** Machine Id */
+            machine_id: string;
+            /**
+             * Scan Duration Seconds
+             * @default 0
+             */
+            scan_duration_seconds: number;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Items Stored
+             * @default 0
+             */
+            items_stored: number;
+            /**
+             * Parsed Count
+             * @default 0
+             */
+            parsed_count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ScanManPagesResponse
+         * @description Response for POST /scan_man_pages.
+         *
+         *     When run_background=True the body is a lightweight acknowledgement;
+         *     when run synchronously it carries full counts.
+         */
+        ScanManPagesResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Background */
+            background?: boolean | null;
+            /** Machine Id */
+            machine_id?: string | null;
+            /** Limit */
+            limit?: number | null;
+            /** Sections */
+            sections?: unknown | null;
+            /** Items Added */
+            items_added?: number | null;
+            /** Items Failed */
+            items_failed?: number | null;
+            /** Total Scanned */
+            total_scanned?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ScanUnimportedFilesResponse
+         * @description Shape of ``POST /import/scan``.
+         */
+        ScanUnimportedFilesResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Directory
+             * @default
+             */
+            directory: string;
+            /**
+             * Unimported Files
+             * @default []
+             */
+            unimported_files: string[];
+            /**
+             * Needs Reimport
+             * @default []
+             */
+            needs_reimport: string[];
+            /**
+             * Total Unimported
+             * @default 0
+             */
+            total_unimported: number;
+            /**
+             * Total Needs Reimport
+             * @default 0
+             */
+            total_needs_reimport: number;
+        } & {
+            [key: string]: unknown;
         };
         /** ScheduleWorkflowRequest */
         ScheduleWorkflowRequest: {
@@ -54249,6 +58074,8 @@ export interface components {
              * @default 3
              */
             max_retries: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SchemaRequest
@@ -54265,6 +58092,8 @@ export interface components {
              * @description Specific table to describe (optional)
              */
             table?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ScopedSearchRequest
@@ -54316,6 +58145,8 @@ export interface components {
              * @default false
              */
             enable_reranking: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ScreenAnalysisRequest
@@ -54333,6 +58164,8 @@ export interface components {
              * @default true
              */
             include_multimodal: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ScreenAnalysisResponse
@@ -54369,6 +58202,27 @@ export interface components {
             multimodal_analysis?: {
                 [key: string]: unknown;
             }[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SearchAnalyticsResponse
+         * @description Shape returned by GET /search_analytics.
+         */
+        SearchAnalyticsResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Analytics */
+            analytics?: {
+                [key: string]: unknown;
+            };
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchByMetadataRequest
@@ -54397,6 +58251,8 @@ export interface components {
              * @default 50
              */
             limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchByTagsRequest
@@ -54426,6 +58282,8 @@ export interface components {
             offset: number;
             /** Category */
             category?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchCategoriesByPathRequest
@@ -54445,6 +58303,8 @@ export interface components {
              * @default 50
              */
             limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchFilesRequest
@@ -54466,6 +58326,8 @@ export interface components {
              * @description Patterns to exclude
              */
             exclude_patterns?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchResponse
@@ -54493,6 +58355,8 @@ export interface components {
              * @default false
              */
             cache_hit: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchResultWithExplanation
@@ -54513,6 +58377,8 @@ export interface components {
             explanation?: string | null;
             /** Key Concepts */
             key_concepts?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecretCreateRequest
@@ -54560,6 +58426,8 @@ export interface components {
              * @description User IDs to share with
              */
             shared_with?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecretScope
@@ -54577,6 +58445,8 @@ export interface components {
             target_scope: components["schemas"]["SecretScope"];
             /** Target Chat Id */
             target_chat_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecretType
@@ -54601,6 +58471,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecurityAnalysisRequest
@@ -54622,6 +58494,8 @@ export interface components {
              * @description Minimum severity level to include (info, low, medium, high, critical)
              */
             min_severity?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecurityFileScanRequest
@@ -54633,6 +58507,8 @@ export interface components {
              * @description Path to Python file to analyze
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SecurityLevel
@@ -54681,6 +58557,8 @@ export interface components {
              * @default high
              */
             priority: string;
+        } & {
+            [key: string]: unknown;
         };
         /** SecurityStatusResponse */
         SecurityStatusResponse: {
@@ -54694,6 +58572,8 @@ export interface components {
             pending_approvals: {
                 [key: string]: unknown;
             }[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeedRequest
@@ -54705,6 +58585,8 @@ export interface components {
              * @default cognition_seed.yaml
              */
             manifest_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SelectRequest
@@ -54721,6 +58603,8 @@ export interface components {
              * @description Value to select
              */
             value: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SemanticCacheConfigUpdate
@@ -54735,6 +58619,8 @@ export interface components {
             response_ttl?: number | null;
             /** Enabled */
             enabled?: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SendMessageRequest
@@ -54766,6 +58652,8 @@ export interface components {
              * @description Message title (Teams)
              */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SequentialThinkingRequest
@@ -54825,6 +58713,8 @@ export interface components {
              * @default default
              */
             session_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ServiceMessageResponse
@@ -54849,6 +58739,8 @@ export interface components {
             meta?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ServiceOperationResponse
@@ -54878,6 +58770,8 @@ export interface components {
             new_status: string;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ServiceStatus
@@ -54900,6 +58794,8 @@ export interface components {
             last_check?: string | null;
             /** Response Time Ms */
             response_time_ms?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ServiceStatusResponse
@@ -54922,6 +58818,8 @@ export interface components {
              * Format: date-time
              */
             last_check: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ServicesResponse
@@ -54943,6 +58841,8 @@ export interface components {
              * Format: date-time
              */
             last_updated: string;
+        } & {
+            [key: string]: unknown;
         };
         /** SessionAction */
         SessionAction: {
@@ -54955,6 +58855,8 @@ export interface components {
              * @default 300
              */
             timeout_seconds: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionActionLog
@@ -54978,6 +58880,8 @@ export interface components {
              * @default success
              */
             result: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionCostResponse
@@ -54996,6 +58900,8 @@ export interface components {
             output_tokens?: number | null;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionCreate
@@ -55019,6 +58925,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionMetric
@@ -55029,6 +58937,8 @@ export interface components {
             event: string;
             /** Duration Seconds */
             duration_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionParticipantsResponse
@@ -55043,6 +58953,8 @@ export interface components {
             participants: components["schemas"]["ParticipantResponse"][];
             /** Total Count */
             total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionShareRequest
@@ -55065,6 +58977,8 @@ export interface components {
              * @description Specific fact IDs to share (all if omitted)
              */
             knowledge_facts?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SessionUpdate
@@ -55083,11 +58997,15 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** SetBaselineRequest */
         SetBaselineRequest: {
             /** Val Bpb */
             val_bpb: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeveritySummary
@@ -55114,6 +59032,8 @@ export interface components {
              * @default 0
              */
             low: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ShareFactRequest
@@ -55125,6 +59045,8 @@ export interface components {
              * @description List of user IDs to share with
              */
             user_ids: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ShareKnowledgeRequest
@@ -55141,6 +59063,8 @@ export interface components {
              * @description Group IDs to share with
              */
             group_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ShareSecretRequest
@@ -55157,6 +59081,8 @@ export interface components {
              * @description Specific participants (None = all with editor+)
              */
             participant_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ShareWorkflowRequest
@@ -55179,6 +59105,8 @@ export interface components {
              * @default false
              */
             public: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SignalRequest
@@ -55190,6 +59118,8 @@ export interface components {
              * @description Signal name: SIGTERM or SIGKILL
              */
             signal: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SignupRequest
@@ -55204,6 +59134,8 @@ export interface components {
             password: string;
             /** Display Name */
             display_name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SignupResponse
@@ -55216,6 +59148,49 @@ export interface components {
             message: string;
             /** Username */
             username?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SimilaritySearchResponse
+         * @description Shape returned by deprecated POST /similarity_search.
+         */
+        SimilaritySearchResponse: {
+            /** Results */
+            results?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Total Results
+             * @default 0
+             */
+            total_results: number;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Threshold
+             * @default 0.7
+             */
+            threshold: number;
+            /**
+             * Kb Implementation
+             * @default
+             */
+            kb_implementation: string;
+            /**
+             * Rag Enhanced
+             * @default false
+             */
+            rag_enhanced: boolean;
+            /** Rag Analysis */
+            rag_analysis?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SingleMessageResponse
@@ -55225,6 +59200,8 @@ export interface components {
             /** Success */
             success: boolean;
             message?: components["schemas"]["ServiceMessageResponse"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SkillActionRequest
@@ -55243,6 +59220,8 @@ export interface components {
             params?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SkillConfigUpdate
@@ -55256,6 +59235,8 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SkillFeedbackRequest
@@ -55272,6 +59253,8 @@ export interface components {
              * @description Feedback text
              */
             feedback?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SourceAccess
@@ -55287,6 +59270,8 @@ export interface components {
             /** User Ids */
             user_ids: string[];
             access: components["schemas"]["SourceAccess"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SourceType
@@ -55324,6 +59309,8 @@ export interface components {
              * @description Optional parent task ID
              */
             task_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SpawnResponse
@@ -55336,6 +59323,8 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SpecialKeyRequest
@@ -55347,6 +59336,26 @@ export interface components {
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StartLintResponse
+         * @description Shape of ``POST /lint``.
+         */
+        StartLintResponse: {
+            /**
+             * Status
+             * @default started
+             */
+            status: string;
+            /**
+             * Job Id
+             * @default
+             */
+            job_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /** StartOptimizationRequest */
         StartOptimizationRequest: {
@@ -55357,6 +59366,8 @@ export interface components {
              * @default 3
              */
             max_rounds: number;
+        } & {
+            [key: string]: unknown;
         };
         /** StatusResponse */
         StatusResponse: {
@@ -55364,6 +59375,8 @@ export interface components {
             enabled: boolean;
             /** Active Id */
             active_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * StorageCategory
@@ -55392,6 +59405,8 @@ export interface components {
              * @default manual
              */
             cleanup_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * StorageStats
@@ -55410,6 +59425,8 @@ export interface components {
             categories: components["schemas"]["StorageCategory"][];
             /** Last Cleanup */
             last_cleanup?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** StreamingSessionRequest */
         StreamingSessionRequest: {
@@ -55425,6 +59442,8 @@ export interface components {
              * @default 24
              */
             depth: number;
+        } & {
+            [key: string]: unknown;
         };
         /** StreamingSessionResponse */
         StreamingSessionResponse: {
@@ -55442,6 +59461,8 @@ export interface components {
             web_url: string | null;
             /** Websocket Endpoint */
             websocket_endpoint: string;
+        } & {
+            [key: string]: unknown;
         };
         /** SubmitScoreRequest */
         SubmitScoreRequest: {
@@ -55452,6 +59473,8 @@ export interface components {
              * @default
              */
             comment: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SufficiencyConfigUpdate
@@ -55466,6 +59489,8 @@ export interface components {
             enable_llm_pass?: boolean | null;
             /** Llm Timeout */
             llm_timeout?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SuggestAllRequest
@@ -55503,6 +59528,8 @@ export interface components {
              * @default 20
              */
             similarity_limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SuggestCategoriesRequest
@@ -55535,6 +59562,8 @@ export interface components {
              * @default 20
              */
             similarity_limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SuggestTagsRequest
@@ -55567,6 +59596,8 @@ export interface components {
              * @default 20
              */
             similarity_limit: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SuggestionsRequest
@@ -55584,11 +59615,33 @@ export interface components {
              * @default python
              */
             language: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SynthesisLogResponse
+         * @description Shape of ``GET /synthesis/log``.
+         */
+        SynthesisLogResponse: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: unknown[];
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+        } & {
+            [key: string]: unknown;
         };
         /** SynthesizeRequest */
         SynthesizeRequest: {
             /** Session Id */
             session_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SystemInfo
@@ -55605,6 +59658,8 @@ export interface components {
             uptime: number;
             /** Services Count */
             services_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SystemInfoResponse
@@ -55624,6 +59679,8 @@ export interface components {
             capabilities: string[];
             /** Available Tools */
             available_tools: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** SystemMonitoringResponse */
         SystemMonitoringResponse: {
@@ -55647,6 +59704,8 @@ export interface components {
             resource_usage: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SystemUpdateRequest
@@ -55670,6 +59729,8 @@ export interface components {
              * @default false
              */
             force_update: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TableListRequest
@@ -55681,6 +59742,8 @@ export interface components {
              * @description Database name from whitelist
              */
             database: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TaintSummary
@@ -55701,6 +59764,8 @@ export interface components {
             };
             /** Tainted Variables */
             tainted_variables: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** TakeoverActionRequest */
         TakeoverActionRequest: {
@@ -55710,6 +59775,8 @@ export interface components {
             action_data: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** TakeoverApprovalRequest */
         TakeoverApprovalRequest: {
@@ -55719,6 +59786,8 @@ export interface components {
             takeover_scope?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TakeoverRequest */
         TakeoverRequest: {
@@ -55742,6 +59811,8 @@ export interface components {
              * @default false
              */
             auto_approve: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TaskApprovalLinkResponse
@@ -55756,6 +59827,8 @@ export interface components {
             task_id: string;
             /** Task Type */
             task_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** TaskCreateRequest */
         TaskCreateRequest: {
@@ -55780,6 +59853,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TaskOutcomeResponse
@@ -55800,6 +59875,26 @@ export interface components {
             rationale: string;
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TaskQueuedResponse
+         * @description Response for endpoints that queue a background task and return immediately.
+         *
+         *     Used by POST /populate_autobot_docs and POST /index/code.
+         */
+        TaskQueuedResponse: {
+            /** Status */
+            status: string;
+            /** Task Id */
+            task_id: string;
+            /** Message */
+            message: string;
+            /** Status Url */
+            status_url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TaskSendRequest
@@ -55818,6 +59913,39 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TaskStatusResponse
+         * @description Response for task status poll endpoints.
+         *
+         *     Used by GET /populate_autobot_docs/status/{task_id} and
+         *     GET /index/code/status/{task_id}.
+         */
+        TaskStatusResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Status */
+            status: string;
+            /** Message */
+            message?: string | null;
+            /** Progress Percent */
+            progress_percent?: number | null;
+            /** Items Processed */
+            items_processed?: number | null;
+            /** Items Total */
+            items_total?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TaskUpdateRequest */
         TaskUpdateRequest: {
@@ -55829,6 +59957,8 @@ export interface components {
             } | null;
             /** Error Message */
             error_message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamCreate
@@ -55858,6 +59988,8 @@ export interface components {
              * @default false
              */
             is_default: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamCreatedResponse
@@ -55872,6 +60004,8 @@ export interface components {
             /** Message */
             message: string;
             team: components["schemas"]["TeamResponse"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamDeletedResponse
@@ -55885,6 +60019,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamListResponse
@@ -55899,6 +60035,8 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamResponse
@@ -55934,6 +60072,8 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TeamUpdate
@@ -55957,6 +60097,8 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TemplateExecutionRequest */
         TemplateExecutionRequest: {
@@ -55971,6 +60113,8 @@ export interface components {
              * @default false
              */
             auto_approve: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** TemplateValidationRequest */
         TemplateValidationRequest: {
@@ -55980,6 +60124,8 @@ export interface components {
             variables: {
                 [key: string]: string;
             };
+        } & {
+            [key: string]: unknown;
         };
         /** TerminalInputRequest */
         TerminalInputRequest: {
@@ -55990,6 +60136,8 @@ export interface components {
              * @default false
              */
             is_password: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TerminalSessionRequest */
         TerminalSessionRequest: {
@@ -56023,6 +60171,26 @@ export interface components {
             setup_ssh_keys: boolean | null;
             /** Ssh Key Names */
             ssh_key_names?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TestCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/test_categories_main``.
+         *
+         *     Debug probe: confirms the module is loaded and reports the built-in
+         *     category taxonomy keys.
+         */
+        TestCategoriesResponse: {
+            /**
+             * Status
+             * @default working
+             */
+            status: string;
+            /** Categories */
+            categories?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TestConnectionRequest
@@ -56049,6 +60217,8 @@ export interface components {
              * @description Custom base URL (optional)
              */
             base_url?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** TestErrorRequest */
         TestErrorRequest: {
@@ -56062,6 +60232,8 @@ export interface components {
              * @default Test error for error boundary system
              */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /** TestMessageRequest */
         TestMessageRequest: {
@@ -56075,6 +60247,8 @@ export interface components {
              * @default http://127.0.0.1:5173
              */
             frontend_url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TestSuiteRequest
@@ -56124,6 +60298,8 @@ export interface components {
              * @default high
              */
             priority: string;
+        } & {
+            [key: string]: unknown;
         };
         /** TextProcessingRequest */
         TextProcessingRequest: {
@@ -56142,6 +60318,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThinkingStage
@@ -56168,6 +60346,8 @@ export interface components {
             cache_stats: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThresholdUpdate
@@ -56182,11 +60362,15 @@ export interface components {
             threshold: number;
             /** Comparison */
             comparison: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ToggleRequest */
         ToggleRequest: {
             /** Enabled */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ToolApprovalRequest
@@ -56208,6 +60392,8 @@ export interface components {
              * @description Task ID from the APPROVAL_REQUIRED event
              */
             task_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ToolInstallRequest */
         ToolInstallRequest: {
@@ -56227,6 +60413,8 @@ export interface components {
              * @default true
              */
             update_first: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TopicCacheConfigUpdate
@@ -56241,6 +60429,8 @@ export interface components {
             ttl?: number | null;
             /** Enabled */
             enabled?: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrackEventRequest
@@ -56279,6 +60469,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrackTaskRequest
@@ -56317,6 +60509,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TransitionRequest
@@ -56325,6 +60519,8 @@ export interface components {
         TransitionRequest: {
             /** Comment */
             comment?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TranslateRequest
@@ -56346,6 +60542,8 @@ export interface components {
              * @description Source language (auto-detect if omitted)
              */
             source_language?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TraverseRequest
@@ -56374,6 +60572,8 @@ export interface components {
              * @default false
              */
             include_fact_details: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TriggerCreateRequest
@@ -56396,6 +60596,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TriggerCreateResponse
@@ -56406,6 +60608,8 @@ export interface components {
             trigger_id: string;
             /** Webhook Url */
             webhook_url?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TriggerListResponse
@@ -56418,6 +60622,8 @@ export interface components {
             }[];
             /** Total */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TriggerType
@@ -56455,6 +60661,8 @@ export interface components {
             };
             /** Possible Interactions */
             possible_interactions: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * URLCheckRequest
@@ -56466,6 +60674,8 @@ export interface components {
              * @description URL to check for threats
              */
             url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * URLCheckResponse
@@ -56490,6 +60700,8 @@ export interface components {
             cached: boolean;
             /** Message */
             message?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UnifiedSearchRequest
@@ -56535,6 +60747,8 @@ export interface components {
              *     ]
              */
             include_sources: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateCategoryRequest
@@ -56564,6 +60778,8 @@ export interface components {
              * @description New hex color code
              */
             color?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateCollectionRequest
@@ -56599,10 +60815,12 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateConnectorRequest
-         * @description Request body for PUT /connectors/{id}.
+         * @description Request body for PUT /knowledge_base/connectors/{id}.
          */
         UpdateConnectorRequest: {
             /** Name */
@@ -56621,6 +60839,8 @@ export interface components {
             include_patterns?: string[] | null;
             /** Exclude Patterns */
             exclude_patterns?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateDocumentRequest
@@ -56637,6 +60857,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateFactRequest
@@ -56660,6 +60882,41 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UpdateFactResponse
+         * @description Shape of ``PUT /fact/{fact_id}``.
+         */
+        UpdateFactResponse: {
+            /**
+             * Status
+             * @default success
+             */
+            status: string;
+            /**
+             * Fact Id
+             * @default
+             */
+            fact_id: string;
+            /**
+             * Updated Fields
+             * @default []
+             */
+            updated_fields: string[];
+            /**
+             * Vector Updated
+             * @default false
+             */
+            vector_updated: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateFileContentRequest
@@ -56668,6 +60925,8 @@ export interface components {
         UpdateFileContentRequest: {
             /** Content */
             content: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateMetadataTemplateRequest
@@ -56694,6 +60953,8 @@ export interface components {
              * @description New applicable categories
              */
             applicable_categories?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateOrgRequest
@@ -56720,6 +60981,8 @@ export interface components {
              * @description Free-text capability description
              */
             capabilities?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateOrganizationPolicyRequest
@@ -56727,6 +60990,8 @@ export interface components {
          */
         UpdateOrganizationPolicyRequest: {
             policy: components["schemas"]["OrganizationKnowledgePolicy"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdatePermissionsRequest
@@ -56745,6 +61010,27 @@ export interface components {
              * @description Group IDs for group-level knowledge
              */
             group_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UpdateRagConfigResponse
+         * @description Shape returned by PUT /config/rag.
+         */
+        UpdateRagConfigResponse: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Updated Fields */
+            updated_fields?: string[] | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateTagStyleRequest
@@ -56768,6 +61054,8 @@ export interface components {
              * @description Optional tag description
              */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpdateVisibilityRequest
@@ -56779,6 +61067,45 @@ export interface components {
              * @description Visibility level: private, shared, public
              */
             visibility: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UploadFileResponse
+         * @description Shape of ``POST /api/knowledge_base/upload``.
+         *
+         *     Adds ``word_count`` over the base upload envelope.
+         */
+        UploadFileResponse: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Word Count
+             * @default 0
+             */
+            word_count: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UpsertOrgRequest
@@ -56798,6 +61125,8 @@ export interface components {
             title?: string | null;
             /** Capabilities */
             capabilities?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserActionMetric
@@ -56812,6 +61141,8 @@ export interface components {
             form_name?: string | null;
             /** Form Status */
             form_status?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserCreate
@@ -56849,6 +61180,8 @@ export interface components {
              * @description List of role IDs to assign
              */
             role_ids?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserCreatedResponse
@@ -56863,6 +61196,8 @@ export interface components {
             /** Message */
             message: string;
             user: components["schemas"]["UserResponse"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserDeletedResponse
@@ -56876,6 +61211,8 @@ export interface components {
             success: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserJourneyResponse
@@ -56890,6 +61227,8 @@ export interface components {
             total_steps: number;
             /** Features Visited */
             features_visited: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserListResponse
@@ -56904,6 +61243,8 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserResponse
@@ -56965,6 +61306,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserSearchResponse
@@ -56981,6 +61324,8 @@ export interface components {
             available: boolean;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserSearchResult
@@ -56996,6 +61341,8 @@ export interface components {
              * @default user
              */
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UserUpdate
@@ -57034,6 +61381,8 @@ export interface components {
             preferences?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VNCObservationRequest
@@ -57052,6 +61401,8 @@ export interface components {
              * @default 5
              */
             duration_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VNCStatusRequest
@@ -57064,6 +61415,8 @@ export interface components {
              * @default browser
              */
             vnc_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ValidateMetadataRequest
@@ -57082,6 +61435,8 @@ export interface components {
              * @description Category to determine applicable templates
              */
             category?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ValidationError */
         ValidationError: {
@@ -57095,6 +61450,8 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ValidationResult
@@ -57121,6 +61478,8 @@ export interface components {
             execution_time: number;
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ValidationRunResponse */
         ValidationRunResponse: {
@@ -57130,6 +61489,8 @@ export interface components {
             message: string;
             /** Timestamp */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VariableDefResponse
@@ -57148,6 +61509,123 @@ export interface components {
             taint_level: string;
             /** Source Type */
             source_type: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizationStatusPollResponse
+         * @description Response for GET /vectorize_facts/status.
+         */
+        VectorizationStatusPollResponse: {
+            /** Is Running */
+            is_running: boolean;
+            /** Last Run */
+            last_run: string | null;
+            /** Check Interval */
+            check_interval: number;
+            /** Batch Size */
+            batch_size: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizationStatusResponse
+         * @description Response for POST /vectorization_status.
+         */
+        VectorizationStatusResponse: {
+            /** Statuses */
+            statuses: {
+                [key: string]: unknown;
+            };
+            summary: components["schemas"]["VectorizationSummary"];
+            /** Cached */
+            cached: boolean;
+            /** Check Time Ms */
+            check_time_ms: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizationSummary
+         * @description Summary statistics returned inside vectorization-status responses.
+         */
+        VectorizationSummary: {
+            /** Total Checked */
+            total_checked: number;
+            /** Vectorized */
+            vectorized: number;
+            /** Not Vectorized */
+            not_vectorized: number;
+            /** Vectorization Percentage */
+            vectorization_percentage: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizeDocumentsResponse
+         * @description Response for POST /vectorize_documents.
+         */
+        VectorizeDocumentsResponse: {
+            /** Results */
+            results: components["schemas"]["DocumentResult"][];
+            /** Total */
+            total: number;
+            /** Succeeded */
+            succeeded: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizeFactJobResponse
+         * @description Response for POST /vectorize_fact/{fact_id}.
+         */
+        VectorizeFactJobResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Job Id */
+            job_id: string;
+            /** Fact Id */
+            fact_id: string;
+            /** Force */
+            force: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizeFactsResponse
+         * @description Response for POST /vectorize_facts.
+         */
+        VectorizeFactsResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Processed */
+            processed: number;
+            /** Success */
+            success: number;
+            /** Failed */
+            failed: number;
+            /** Skipped */
+            skipped: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VectorizeJobStatusResponse
+         * @description Response for GET /vectorize_job/{job_id}.
+         */
+        VectorizeJobStatusResponse: {
+            /** Status */
+            status: string;
+            /** Job */
+            job: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VerificationConfig
@@ -57166,6 +61644,8 @@ export interface components {
              * @default 0.7
              */
             quality_threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VerificationRequest
@@ -57184,6 +61664,8 @@ export interface components {
              * @default false
              */
             delete_on_reject: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VerifyClaimRequest
@@ -57198,6 +61680,8 @@ export interface components {
             predicate?: string | null;
             /** Object */
             object?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VisibilityLevel
@@ -57222,6 +61706,8 @@ export interface components {
             element_types_supported: string[];
             /** Interaction Types Supported */
             interaction_types_supported: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * VulnerabilityResponse
@@ -57244,6 +61730,8 @@ export interface components {
             sink_function: string;
             /** Recommendation */
             recommendation: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WaitForImageRequest
@@ -57265,6 +61753,8 @@ export interface components {
              * @default 0.8
              */
             threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WaitForSelectorRequest
@@ -57288,6 +61778,8 @@ export interface components {
              * @default visible
              */
             state: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WaitForTextRequest
@@ -57312,6 +61804,8 @@ export interface components {
             region?: {
                 [key: string]: number;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WakeWordCheckRequest
@@ -57329,6 +61823,8 @@ export interface components {
              * @default 1
              */
             confidence: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WakeWordCheckResponse
@@ -57359,6 +61855,8 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WakeWordConfigRequest
@@ -57379,6 +61877,8 @@ export interface components {
             max_false_positive_rate?: number;
             /** Max Cpu Percent */
             max_cpu_percent?: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WakeupRequestCreate
@@ -57396,6 +61896,8 @@ export interface components {
             } | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WakeupRequestResponse
@@ -57420,6 +61922,8 @@ export interface components {
             consumed_at: string | null;
             /** Created At */
             created_at: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WebResearchSettings
@@ -57463,6 +61967,8 @@ export interface components {
              * @default 60
              */
             rate_limit_window: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WebSocketMetric
@@ -57475,6 +61981,8 @@ export interface components {
             direction?: string | null;
             /** Event Type */
             event_type?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WebhookMessageRequest
@@ -57496,6 +62004,8 @@ export interface components {
              * @description Message title
              */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkerHeartbeat
@@ -57584,6 +62094,8 @@ export interface components {
             metrics?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkerStatus
@@ -57639,6 +62151,8 @@ export interface components {
             health_data?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
         };
         /** WorkflowApprovalResponse */
         WorkflowApprovalResponse: {
@@ -57654,6 +62168,8 @@ export interface components {
             } | null;
             /** Timestamp */
             timestamp: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkflowControlRequest
@@ -57668,6 +62184,8 @@ export interface components {
             step_id?: string | null;
             /** User Input */
             user_input?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** WorkflowExecutionRequest */
         WorkflowExecutionRequest: {
@@ -57680,6 +62198,8 @@ export interface components {
              * @default false
              */
             auto_approve: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkflowSecretCreateRequest
@@ -57699,6 +62219,8 @@ export interface components {
             workflow_id?: string | null;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkflowSecretMetadata
@@ -57719,6 +62241,8 @@ export interface components {
             updated_at?: string | null;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkflowSecretUpdateRequest
@@ -57727,6 +62251,8 @@ export interface components {
         WorkflowSecretUpdateRequest: {
             /** Value */
             value: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WorkflowStepRequest
@@ -57756,6 +62282,8 @@ export interface components {
             dependencies: string[];
             /** Timeout Seconds */
             timeout_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * WriteFileRequest
@@ -57772,6 +62300,8 @@ export interface components {
              * @description File content to write
              */
             content: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeExtractionRequest
@@ -57795,6 +62325,8 @@ export interface components {
              * @default comprehensive
              */
             extraction_mode: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RAGQueryRequest
@@ -57824,6 +62356,8 @@ export interface components {
              * @default 10
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ResearchRequest
@@ -57852,6 +62386,8 @@ export interface components {
              * @default true
              */
             include_web: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisRequest
@@ -57880,6 +62416,8 @@ export interface components {
              * @default true
              */
             generate_diagram: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalyzeFileRequest
@@ -57891,6 +62429,8 @@ export interface components {
              * @description Path to Python file
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalyzeRequest
@@ -57908,6 +62448,8 @@ export interface components {
              * @default
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ValidationRequest
@@ -57921,6 +62463,8 @@ export interface components {
             code: string;
             /** @default python */
             language: components["schemas"]["CodeLanguage"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LearningMetrics
@@ -57949,6 +62493,8 @@ export interface components {
             insights_generated: number;
             /** Active Insights */
             active_insights: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MonitoringStatus
@@ -57968,6 +62514,8 @@ export interface components {
             events_queue_size: number;
             /** Last Event Time */
             last_event_time: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisResponse
@@ -57988,6 +62536,8 @@ export interface components {
             total_vulnerabilities: number;
             /** Tainted Variables */
             tainted_variables: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalyzeFileRequest
@@ -57999,6 +62549,8 @@ export interface components {
              * @description Path to Python file to analyze
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalyzeRequest
@@ -58016,6 +62568,8 @@ export interface components {
              * @default <unknown>
              */
             file_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UsageRecordRequest
@@ -58054,6 +62608,8 @@ export interface components {
             success: boolean;
             /** Session Id */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * LearningMetrics
@@ -58086,6 +62642,8 @@ export interface components {
             learning_rate: number;
             /** Last Training Run */
             last_training_run: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternCategory
@@ -58132,6 +62690,8 @@ export interface components {
              *     ]
              */
             exclude_patterns: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisResponse
@@ -58147,6 +62707,8 @@ export interface components {
             }[];
             /** Recommendations */
             recommendations: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CleanupRequest
@@ -58165,6 +62727,8 @@ export interface components {
              * @default false
              */
             confirm: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HoverRequest
@@ -58176,6 +62740,8 @@ export interface components {
              * @description CSS selector for element to hover
              */
             selector: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NavigateRequest
@@ -58199,6 +62765,8 @@ export interface components {
              * @default 30000
              */
             timeout: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ScreenshotRequest
@@ -58216,6 +62784,8 @@ export interface components {
              * @default false
              */
             full_page: boolean | null;
+        } & {
+            [key: string]: unknown;
         };
         /** SearchRequest */
         api__chat_knowledge__SearchRequest: {
@@ -58228,6 +62798,8 @@ export interface components {
              * @default true
              */
             include_temporary: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisRequest
@@ -58269,6 +62841,8 @@ export interface components {
              * @description Minimum severity level to include
              */
             min_severity?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** SearchRequest */
         api__code_search__SearchRequest: {
@@ -58286,6 +62860,8 @@ export interface components {
              * @default 20
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FileUploadResponse
@@ -58299,6 +62875,8 @@ export interface components {
             file_info?: components["schemas"]["ConversationFileInfo"] | null;
             /** Upload Id */
             upload_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CleanupRequest
@@ -58317,6 +62895,8 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisRequest
@@ -58330,6 +62910,8 @@ export interface components {
              * @default comprehensive
              */
             analysis_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OptimizationRequest
@@ -58342,6 +62924,8 @@ export interface components {
              * @default balanced
              */
             workload_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SearchRequest
@@ -58377,6 +62961,8 @@ export interface components {
              * @description Force specific device (npu/gpu/cpu)
              */
             force_device?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HealthResponse
@@ -58400,6 +62986,8 @@ export interface components {
              * @description Timestamp of health check
              */
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * FileUploadResponse
@@ -58413,6 +63001,8 @@ export interface components {
             file_info?: components["schemas"]["FileInfo"] | null;
             /** Upload Id */
             upload_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReloadRequest
@@ -58426,6 +63016,8 @@ export interface components {
              * @default false
              */
             force: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisRequest
@@ -58459,6 +63051,8 @@ export interface components {
              * @description Filter by categories
              */
             categories?: components["schemas"]["api__ide_integration__PatternCategory"][] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * AnalysisResponse
@@ -58475,6 +63069,8 @@ export interface components {
             patterns_checked: number;
             /** Issues Found */
             issues_found: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HoverRequest
@@ -58486,6 +63082,8 @@ export interface components {
             /** Content */
             content: string;
             position: components["schemas"]["Position"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PatternCategory
@@ -58516,6 +63114,8 @@ export interface components {
             credentials: {
                 [key: string]: string;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProviderInfo
@@ -58542,6 +63142,8 @@ export interface components {
              * @description Authentication type
              */
             auth_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionTestRequest
@@ -58575,6 +63177,8 @@ export interface components {
             extra?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProviderInfo
@@ -58589,6 +63193,8 @@ export interface components {
             auth_type: string;
             /** Required Fields */
             required_fields: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionTestRequest
@@ -58615,6 +63221,8 @@ export interface components {
              * @description Account ID (New Relic only)
              */
             account_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionTestRequest
@@ -58656,6 +63264,8 @@ export interface components {
              * @description Password
              */
             password?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProviderInfo
@@ -58674,6 +63284,8 @@ export interface components {
             base_url_required: boolean;
             /** Documentation Url */
             documentation_url: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ConnectionTestRequest
@@ -58697,6 +63309,8 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ProviderInfo
@@ -58728,6 +63342,8 @@ export interface components {
              * @description Optional configuration settings
              */
             optional_settings?: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * HealthResponse
@@ -58742,6 +63358,8 @@ export interface components {
             };
             /** Uptime */
             uptime: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnhancedSearchRequest
@@ -58783,6 +63401,8 @@ export interface components {
              * @default 0.3
              */
             confidence_threshold: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeExtractionRequest
@@ -58829,6 +63449,8 @@ export interface components {
              * @default true
              */
             auto_store: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RAGQueryRequest
@@ -58864,6 +63486,8 @@ export interface components {
              * @default false
              */
             include_reasoning: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CleanupRequest
@@ -58894,6 +63518,8 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * EnhancedSearchRequest
@@ -58959,6 +63585,8 @@ export interface components {
              * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
              */
             board_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OptimizationRequest
@@ -58983,6 +63611,8 @@ export interface components {
             context_length: number;
             /** User Preference */
             user_preference?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MonitoringStatus
@@ -59003,6 +63633,8 @@ export interface components {
             metrics_collected: number;
             /** Alerts Count */
             alerts_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrainRequest
@@ -59025,6 +63657,8 @@ export interface components {
              * @default postgresql
              */
             db_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrainResponse
@@ -59041,6 +63675,8 @@ export interface components {
             table_count?: number | null;
             /** Error */
             error?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ModelListResponse */
         api__openai_compat__ModelListResponse: {
@@ -59051,6 +63687,8 @@ export interface components {
             object: string;
             /** Data */
             data: components["schemas"]["OAIModelCard"][];
+        } & {
+            [key: string]: unknown;
         };
         /** NavigateRequest */
         api__playwright__NavigateRequest: {
@@ -59066,6 +63704,8 @@ export interface components {
              * @default 30000
              */
             timeout: number;
+        } & {
+            [key: string]: unknown;
         };
         /** ReloadRequest */
         api__playwright__ReloadRequest: {
@@ -59074,6 +63714,8 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ScreenshotRequest */
         api__playwright__ScreenshotRequest: {
@@ -59089,6 +63731,8 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
+        } & {
+            [key: string]: unknown;
         };
         /** SearchRequest */
         api__playwright__SearchRequest: {
@@ -59104,6 +63748,8 @@ export interface components {
              * @default 5
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
         };
         /** ResearchRequest */
         api__research_browser__ResearchRequest: {
@@ -59116,6 +63762,8 @@ export interface components {
              * @default true
              */
             extract_content: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ValidationRequest
@@ -59142,6 +63790,8 @@ export interface components {
              * @default 300
              */
             timeout_seconds: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * UsageRecordRequest
@@ -59169,6 +63819,8 @@ export interface components {
              * @default true
              */
             success: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OCRRequest
@@ -59184,6 +63836,8 @@ export interface components {
             } | null;
             /** Session Id */
             session_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * OCRRequest
@@ -59197,6 +63851,8 @@ export interface components {
             region?: {
                 [key: string]: number;
             };
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ModelListResponse
@@ -59207,6 +63863,8 @@ export interface components {
             models: components["schemas"]["ModelResponse"][];
             /** Total */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrainRequest
@@ -59238,6 +63896,8 @@ export interface components {
              * @description Training notes
              */
             notes?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TrainResponse
@@ -59250,6 +63910,8 @@ export interface components {
             message: string;
             /** Training Started */
             training_started: boolean;
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
@@ -59260,27 +63922,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    root_health_check_api_health_head: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    root_health_check_api_health_head: {
+    root_health_check_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -63488,7 +68130,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizationStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63521,7 +68163,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63554,7 +68196,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeFactJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63587,7 +68229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeDocumentsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63618,7 +68260,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeJobStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63647,7 +68289,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FailedJobsResponse"];
                 };
             };
         };
@@ -63671,7 +68313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RetryJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63702,7 +68344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -63731,7 +68373,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClearFailedJobsResponse"];
                 };
             };
         };
@@ -63751,7 +68393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BackgroundVectorizationResponse"];
                 };
             };
         };
@@ -63771,7 +68413,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizationStatusPollResponse"];
                 };
             };
         };
@@ -63824,9 +68466,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ReindexWithContextStatusResponse"];
                 };
             };
         };
@@ -63930,7 +68570,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeStatsResponse"];
                 };
             };
         };
@@ -63950,7 +68590,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TestCategoriesResponse"];
                 };
             };
         };
@@ -63970,7 +68610,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeStatsBasic"];
                 };
             };
         };
@@ -63990,7 +68630,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeMainCategoriesResponse"];
                 };
             };
         };
@@ -64010,7 +68650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeCategoriesResponse"];
                 };
             };
         };
@@ -64069,7 +68709,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AddTextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64102,7 +68742,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AddFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64135,7 +68775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AddUrlResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64164,7 +68804,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UploadFileResponse"];
                 };
             };
         };
@@ -64188,7 +68828,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AudioIngestResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64217,7 +68857,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AudioIngestResponse"];
                 };
             };
         };
@@ -64237,7 +68877,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeHealthResponse"];
                 };
             };
         };
@@ -64261,7 +68901,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeEntriesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64290,7 +68930,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DetailedKnowledgeStats"];
                 };
             };
         };
@@ -64310,7 +68950,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MachineProfileResponse"];
                 };
             };
         };
@@ -64330,7 +68970,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ManPagesSummaryResponse"];
                 };
             };
         };
@@ -64356,7 +68996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MachineKnowledgeInitResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64385,7 +69025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ManPagesIntegrateResponse"];
                 };
             };
         };
@@ -64408,7 +69048,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ManPageSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64443,7 +69083,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClearAllResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64478,7 +69118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AddTextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64513,7 +69153,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueryKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64545,7 +69185,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FactsByCategoryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64576,7 +69216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FactByKeyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64608,7 +69248,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64637,7 +69277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportStatisticsResponse"];
                 };
             };
         };
@@ -64661,7 +69301,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocsBrowseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64690,7 +69330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocsCategoriesResponse"];
                 };
             };
         };
@@ -64710,7 +69350,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocsStatsResponse"];
                 };
             };
         };
@@ -64730,7 +69370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocsWatcherStatusResponse"];
                 };
             };
         };
@@ -64756,7 +69396,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocsWatcherControlResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64787,7 +69427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OrgKnowledgeConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64822,7 +69462,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OrgKnowledgeConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64853,7 +69493,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeduplicateFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64886,7 +69526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindDuplicatesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64915,7 +69555,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DataQualityMetricsResponse"];
                 };
             };
         };
@@ -64935,7 +69575,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthDashboardResponse"];
                 };
             };
         };
@@ -64959,7 +69599,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanHostChangesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -64988,7 +69628,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindOrphanedFactsResponse"];
                 };
             };
         };
@@ -65010,7 +69650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupOrphanedFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65039,7 +69679,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindSessionOrphansResponse"];
                 };
             };
         };
@@ -65064,7 +69704,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupSessionOrphansResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65095,7 +69735,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanUnimportedFilesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65128,7 +69768,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExportKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65164,7 +69804,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65200,7 +69840,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UpdateFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65232,7 +69872,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65265,7 +69905,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65298,7 +69938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BulkCategoryUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65331,7 +69971,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupKnowledgeBaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65364,7 +70004,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CreateBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65397,7 +70037,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65430,7 +70070,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RestoreBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65462,7 +70102,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ListBackupsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -65491,7 +70131,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StartLintResponse"];
                 };
             };
         };
@@ -65511,7 +70151,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GetLintReportResponse"];
                 };
             };
         };
@@ -65534,7 +70174,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SynthesisLogResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66265,7 +70905,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KnowledgeSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66298,7 +70938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnhancedSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66333,7 +70973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RagSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66368,7 +71008,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SimilaritySearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66403,7 +71043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EnhancedSearchV2Response"];
                 };
             };
             /** @description Validation Error */
@@ -66432,7 +71072,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SearchAnalyticsResponse"];
                 };
             };
         };
@@ -66458,7 +71098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecordClickResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66493,7 +71133,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExpandQueryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -66771,9 +71411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RagFeedbackResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68619,7 +73257,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorTypesResponse"];
                 };
             };
         };
@@ -68639,7 +73277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorsListResponse"];
                 };
             };
         };
@@ -68663,7 +73301,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorCreateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68692,7 +73330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorsHealthResponse"];
                 };
             };
         };
@@ -68714,7 +73352,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorDetailResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68749,7 +73387,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68809,7 +73447,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorTestResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68842,7 +73480,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorSyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68875,7 +73513,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConnectorHistoryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68910,7 +73548,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PopulateSystemCommandsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68945,7 +73583,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PopulateManPagesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -68980,7 +73618,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RefreshSystemKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69011,7 +73649,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JobStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69046,7 +73684,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TaskQueuedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69077,7 +73715,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TaskStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69112,7 +73750,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TaskQueuedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69143,7 +73781,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TaskStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69178,7 +73816,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanManPagesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -69213,7 +73851,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanManPagesChangesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -72941,7 +77579,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MCPTool"][];
+                    "application/json": components["schemas"]["McpToolsResponse"][];
                 };
             };
         };
@@ -72965,7 +77603,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -72998,7 +77636,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpAddDocumentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73031,7 +77669,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpKnowledgeStatsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73066,7 +77704,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpSummarizeTopicResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73101,7 +77739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpVectorSimilarityResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73136,7 +77774,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpQaChainResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73171,7 +77809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpRedisVectorOpsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -73200,7 +77838,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpSchemaResponse"];
                 };
             };
         };
@@ -73220,7 +77858,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["McpHealthResponse"];
                 };
             };
         };
@@ -107079,7 +111717,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeduplicateFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107112,7 +111750,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindDuplicatesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107141,7 +111779,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DataQualityMetricsResponse"];
                 };
             };
         };
@@ -107161,7 +111799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthDashboardResponse"];
                 };
             };
         };
@@ -107185,7 +111823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanHostChangesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107214,7 +111852,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindOrphanedFactsResponse"];
                 };
             };
         };
@@ -107236,7 +111874,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupOrphanedFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107265,7 +111903,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FindSessionOrphansResponse"];
                 };
             };
         };
@@ -107290,7 +111928,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupSessionOrphansResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107321,7 +111959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanUnimportedFilesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107354,7 +111992,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExportKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107390,7 +112028,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ImportKnowledgeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107426,7 +112064,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UpdateFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107458,7 +112096,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteFactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107491,7 +112129,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107524,7 +112162,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BulkCategoryUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107557,7 +112195,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupKnowledgeBaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107590,7 +112228,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CreateBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107623,7 +112261,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107656,7 +112294,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RestoreBackupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107688,7 +112326,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ListBackupsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -107717,7 +112355,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StartLintResponse"];
                 };
             };
         };
@@ -107737,7 +112375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GetLintReportResponse"];
                 };
             };
         };
@@ -107760,7 +112398,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SynthesisLogResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108590,7 +113228,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizationStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108623,7 +113261,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeFactsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108656,7 +113294,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeFactJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108689,7 +113327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeDocumentsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108720,7 +113358,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizeJobStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108749,7 +113387,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FailedJobsResponse"];
                 };
             };
         };
@@ -108773,7 +113411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RetryJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108804,7 +113442,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteJobResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108833,7 +113471,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClearFailedJobsResponse"];
                 };
             };
         };
@@ -108853,7 +113491,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BackgroundVectorizationResponse"];
                 };
             };
         };
@@ -108873,7 +113511,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VectorizationStatusPollResponse"];
                 };
             };
         };
@@ -108926,9 +113564,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ReindexWithContextStatusResponse"];
                 };
             };
         };
@@ -111357,7 +115993,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdvancedSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -111390,7 +116026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RerankResultsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -111419,7 +116055,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RagConfigResponse"];
                 };
             };
         };
@@ -111443,7 +116079,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UpdateRagConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -111472,7 +116108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LoopStatusResponse"];
                 };
             };
         };
@@ -111492,7 +116128,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LoopApproveResponse"];
                 };
             };
         };
@@ -111512,7 +116148,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LoopRejectResponse"];
                 };
             };
         };
@@ -111532,7 +116168,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RagStatsResponse"];
                 };
             };
         };
@@ -111556,7 +116192,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BenchmarkRunResponse"];
                 };
             };
             /** @description Validation Error */
@@ -111587,7 +116223,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EntityHistoryResponse"];
                 };
             };
             /** @description Validation Error */
