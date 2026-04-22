@@ -19,7 +19,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
