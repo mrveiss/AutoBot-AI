@@ -14,6 +14,8 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
+
 if TYPE_CHECKING:
     import aioredis
     import redis
@@ -789,14 +791,10 @@ class StatsMixin:
             return None
         try:
             if "T" in timestamp_str:
-                dt = datetime.fromisoformat(
-                    timestamp_str.replace("Z", "+00:00").split("+")[0]
-                )
-            else:
-                dt = datetime.strptime(timestamp_str, "%Y-%m-%d")
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
+                return parse_utc_iso(timestamp_str)
+            return datetime.strptime(timestamp_str, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
         except (ValueError, TypeError):
             return None
 
