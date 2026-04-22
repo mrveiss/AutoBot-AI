@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from live_event_manager import publish_live_event
 from autobot_shared.time_utils import now_utc
 from models.heartbeat import (
+from events.event_types import HEARTBEAT_RUN_STARTED, HEARTBEAT_RUN_COMPLETED
     AgentRuntimeState,
     AgentWakeupRequest,
     HeartbeatRun,
@@ -194,7 +195,7 @@ class HeartbeatScheduler:
         logger.info("Heartbeat run %s started for agent %s", run_id, agent_id)
         await publish_live_event(
             f"agent:{agent_id}",
-            "heartbeat_run_started",
+            HEARTBEAT_RUN_STARTED,
             {"run_id": str(run_id), "agent_id": agent_id, "trigger": trigger.value},
         )
         return run_id, state_id, timeout
@@ -259,7 +260,7 @@ class HeartbeatScheduler:
             await session.commit()
         await publish_live_event(
             f"agent:{agent_id}",
-            "heartbeat_run_completed",
+            HEARTBEAT_RUN_COMPLETED,
             {
                 "run_id": str(run_id),
                 "agent_id": agent_id,
