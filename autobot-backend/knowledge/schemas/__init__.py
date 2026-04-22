@@ -112,6 +112,22 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoryEntry,
     KnowledgeStatsBasic,
 )
+from knowledge.schemas.connectors import (
+    ConnectorConfigDict,
+    ConnectorCreateResponse,
+    ConnectorDetailResponse,
+    ConnectorEntry,
+    ConnectorHistoryEntry,
+    ConnectorHistoryResponse,
+    ConnectorsHealthResponse,
+    ConnectorsListResponse,
+    ConnectorStatusDict,
+    ConnectorSyncResponse,
+    ConnectorTestResponse,
+    ConnectorTypeEntry,
+    ConnectorTypesResponse,
+    ConnectorUpdateResponse,
+)
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
     ClearFailedJobsResponse,
@@ -246,4 +262,19 @@ __all__ = [
     "VectorizeFactJobResponse",
     "VectorizeFactsResponse",
     "VectorizeJobStatusResponse",
+    # connectors.py
+    "ConnectorConfigDict",
+    "ConnectorCreateResponse",
+    "ConnectorDetailResponse",
+    "ConnectorEntry",
+    "ConnectorHistoryEntry",
+    "ConnectorHistoryResponse",
+    "ConnectorsHealthResponse",
+    "ConnectorsListResponse",
+    "ConnectorStatusDict",
+    "ConnectorSyncResponse",
+    "ConnectorTestResponse",
+    "ConnectorTypeEntry",
+    "ConnectorTypesResponse",
+    "ConnectorUpdateResponse",
 ]
