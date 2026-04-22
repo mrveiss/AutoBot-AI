@@ -38,6 +38,17 @@ from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
+from knowledge.schemas.connectors import (
+    ConnectorCreateResponse,
+    ConnectorDetailResponse,
+    ConnectorHistoryResponse,
+    ConnectorsHealthResponse,
+    ConnectorsListResponse,
+    ConnectorSyncResponse,
+    ConnectorTestResponse,
+    ConnectorTypesResponse,
+    ConnectorUpdateResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +271,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/knowledge_base/connector_types")
+@router.get("/knowledge_base/connector_types", response_model=ConnectorTypesResponse)
 async def list_connector_types():
     """Return all registered connector types with readiness tier (Issue #4421).
 
@@ -280,7 +291,7 @@ async def list_connector_types():
     return {"connector_types": types, "total": len(types)}
 
 
-@router.get("/knowledge_base/connectors")
+@router.get("/knowledge_base/connectors", response_model=ConnectorsListResponse)
 async def list_connectors():
     """Return all connectors with their current status."""
     try:
@@ -298,7 +309,7 @@ async def list_connectors():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge_base/connectors", status_code=201)
+@router.post("/knowledge_base/connectors", status_code=201, response_model=ConnectorCreateResponse)
 async def create_connector(request: CreateConnectorRequest):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
@@ -339,7 +350,7 @@ async def create_connector(request: CreateConnectorRequest):
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
 
 
-@router.get("/knowledge_base/connectors/health")
+@router.get("/knowledge_base/connectors/health", response_model=ConnectorsHealthResponse)
 async def connectors_health():
     """Aggregate test_connection() across all live connectors (Issue #4420).
 
@@ -387,7 +398,7 @@ async def _hydrate_all_instances() -> None:
             logger.warning("Skipping corrupted connector %s: %s", cid, exc)
 
 
-@router.get("/knowledge_base/connectors/{connector_id}")
+@router.get("/knowledge_base/connectors/{connector_id}", response_model=ConnectorDetailResponse)
 async def get_connector(connector_id: str):
     """Return config and status for a single connector."""
     cfg = await _load_connector(connector_id)
@@ -397,7 +408,7 @@ async def get_connector(connector_id: str):
     return {"config": _cfg_to_dict(cfg), "status": status}
 
 
-@router.put("/knowledge_base/connectors/{connector_id}")
+@router.put("/knowledge_base/connectors/{connector_id}", response_model=ConnectorUpdateResponse)
 async def update_connector(connector_id: str, request: UpdateConnectorRequest):
     """Update mutable fields of an existing connector."""
     cfg = await _load_connector(connector_id)
@@ -430,7 +441,7 @@ async def delete_connector(connector_id: str):
     logger.info("Deleted connector %s", connector_id)
 
 
-@router.post("/knowledge_base/connectors/{connector_id}/test")
+@router.post("/knowledge_base/connectors/{connector_id}/test", response_model=ConnectorTestResponse)
 async def test_connector_connection(connector_id: str):
     """Run a connection test against the connector's target."""
     cfg = await _load_connector(connector_id)
@@ -445,7 +456,7 @@ async def test_connector_connection(connector_id: str):
     return {"connector_id": connector_id, "healthy": healthy}
 
 
-@router.post("/knowledge_base/connectors/{connector_id}/sync")
+@router.post("/knowledge_base/connectors/{connector_id}/sync", response_model=ConnectorSyncResponse)
 async def trigger_sync(
     connector_id: str,
     background_tasks: BackgroundTasks,
@@ -466,7 +477,7 @@ async def trigger_sync(
     }
 
 
-@router.get("/knowledge_base/connectors/{connector_id}/history")
+@router.get("/knowledge_base/connectors/{connector_id}/history", response_model=ConnectorHistoryResponse)
 async def get_sync_history(connector_id: str, limit: int = 20):
     """Return recent sync results for a connector."""
     cfg = await _load_connector(connector_id)
