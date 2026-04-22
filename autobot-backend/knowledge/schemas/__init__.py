@@ -54,6 +54,16 @@ from knowledge.schemas.search import (
     SearchAnalyticsResponse,
     SimilaritySearchResponse,
 )
+from knowledge.schemas.population import (
+    JobStatusResponse,
+    PopulateManPagesResponse,
+    PopulateSystemCommandsResponse,
+    RefreshSystemKnowledgeResponse,
+    ScanManPagesChangesResponse,
+    ScanManPagesResponse,
+    TaskQueuedResponse,
+    TaskStatusResponse,
+)
 from knowledge.schemas.rag import (
     AdvancedSearchResponse,
     BenchmarkRunResponse,
@@ -131,6 +141,15 @@ __all__ = [
     "RecordClickResponse",
     "SearchAnalyticsResponse",
     "SimilaritySearchResponse",
+    # population.py
+    "JobStatusResponse",
+    "PopulateManPagesResponse",
+    "PopulateSystemCommandsResponse",
+    "RefreshSystemKnowledgeResponse",
+    "ScanManPagesChangesResponse",
+    "ScanManPagesResponse",
+    "TaskQueuedResponse",
+    "TaskStatusResponse",
     # operations.py
     "ImportStatisticsResponse",
     "ImportStatusResponse",

@@ -28,6 +28,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import TimingConstants
+from knowledge.schemas.population import (
+    JobStatusResponse,
+    PopulateManPagesResponse,
+    PopulateSystemCommandsResponse,
+    RefreshSystemKnowledgeResponse,
+    ScanManPagesChangesResponse,
+    ScanManPagesResponse,
+    TaskQueuedResponse,
+    TaskStatusResponse,
+)
 from knowledge_factory import get_or_create_knowledge_base
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
@@ -409,7 +419,7 @@ async def _store_autobot_config_info(kb_to_use) -> bool:
     operation="populate_system_commands",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/populate_system_commands")
+@router.post("/populate_system_commands", response_model=PopulateSystemCommandsResponse)
 async def populate_system_commands(request: dict, req: Request):
     """
     Populate knowledge base with common system commands and usage examples.
@@ -621,7 +631,7 @@ async def _populate_man_pages_background(kb_to_use):
     operation="populate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/populate_man_pages")
+@router.post("/populate_man_pages", response_model=PopulateManPagesResponse)
 async def populate_man_pages(
     request: dict, req: Request, background_tasks: BackgroundTasks
 ):
@@ -652,7 +662,7 @@ async def populate_man_pages(
     operation="refresh_system_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/refresh_system_knowledge")
+@router.post("/refresh_system_knowledge", response_model=RefreshSystemKnowledgeResponse)
 async def refresh_system_knowledge(request: dict, req: Request):
     """
     Refresh ALL system knowledge (man pages + AutoBot docs) - BACKGROUND JOB
@@ -693,7 +703,7 @@ async def refresh_system_knowledge(request: dict, req: Request):
     operation="get_job_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/job_status/{task_id}")
+@router.get("/job_status/{task_id}", response_model=JobStatusResponse)
 async def get_job_status(task_id: str, req: Request):
     """
     Get status of a background knowledge base job.
@@ -1005,7 +1015,7 @@ async def _process_all_doc_files(
     operation="populate_autobot_docs",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/populate_autobot_docs")
+@router.post("/populate_autobot_docs", response_model=TaskQueuedResponse)
 async def populate_autobot_docs(background_tasks: BackgroundTasks, request: dict, req: Request):
     """
     Queue documentation indexing as background task (#4103).
@@ -1110,7 +1120,7 @@ async def _index_autobot_docs_background(task_id: str, force_reindex: bool):
         )
 
 
-@router.get("/populate_autobot_docs/status/{task_id}")
+@router.get("/populate_autobot_docs/status/{task_id}", response_model=TaskStatusResponse)
 async def get_populate_status(task_id: str):
     """
     Poll the status of a background documentation indexing task.
@@ -1219,7 +1229,7 @@ async def _index_code_background(task_id: str, root_dir: str, force: bool) -> No
     operation="index_code",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/index/code")
+@router.post("/index/code", response_model=TaskQueuedResponse)
 async def index_code(request: dict = None):
     """Index source files in *root_dir* via AST-based CodeIndexer (#4835).
 
@@ -1264,7 +1274,7 @@ async def index_code(request: dict = None):
     }
 
 
-@router.get("/index/code/status/{task_id}")
+@router.get("/index/code/status/{task_id}", response_model=TaskStatusResponse)
 async def get_index_code_status(task_id: str):
     """Poll the status of a background code indexing task (#4912).
 
@@ -1496,7 +1506,7 @@ def _parse_scan_request(request: dict | None) -> tuple[int | None, list | None, 
     operation="scan_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/scan_man_pages")
+@router.post("/scan_man_pages", response_model=ScanManPagesResponse)
 async def scan_man_pages(
     request: dict,
     req: Request,
@@ -1563,7 +1573,7 @@ async def _store_parsed_man_pages(kb_to_use, parsed_content: list) -> int:
     operation="scan_man_pages_changes",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/scan_man_pages_changes")
+@router.post("/scan_man_pages_changes", response_model=ScanManPagesChangesResponse)
 async def scan_man_pages_changes(
     request: dict,
     req: Request,
