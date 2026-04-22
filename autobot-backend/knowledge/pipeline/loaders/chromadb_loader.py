@@ -14,7 +14,7 @@ from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.summary import Summary
 from knowledge.pipeline.registry import TaskRegistry
-from utils.async_chromadb_client import get_async_chromadb_client
+from knowledge.backends import get_async_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ChromaDBLoader(BaseLoader):
         Args:
             context: Pipeline context with processed data
         """
-        self.client = await get_async_chromadb_client()
+        self.client = await get_async_default_client()
 
         chunks: List[ProcessedChunk] = context.chunks
         if chunks:

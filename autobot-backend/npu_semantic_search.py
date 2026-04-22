@@ -32,7 +32,7 @@ from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.embedding_cache import get_embedding_cache
 from knowledge_base import KnowledgeBase
-from utils.chromadb_client import get_chromadb_client
+from knowledge.backends import get_default_client
 
 # Issue #387: GPU-accelerated vector search
 from utils.gpu_vector_search import (
@@ -945,7 +945,7 @@ class NPUSemanticSearch:
 
         try:
             # Initialize ChromaDB client using shared utility function
-            self.chroma_client = get_chromadb_client(
+            self.chroma_client = get_default_client(
                 db_path=str(self.chroma_db_path),
                 allow_reset=True,
                 anonymized_telemetry=False,

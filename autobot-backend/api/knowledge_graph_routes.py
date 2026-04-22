@@ -240,9 +240,9 @@ async def search_summaries(
     """Vector search on summary embeddings."""
     try:
         from knowledge.summary_search import SummarySearchService
-        from utils.async_chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        chromadb_client = await get_async_chromadb_client()
+        chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
 
         summaries = await summary_svc.search_summaries(
@@ -263,9 +263,9 @@ async def get_document_overview(
     """Get document overview with hierarchical summaries."""
     try:
         from knowledge.summary_search import SummarySearchService
-        from utils.async_chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        chromadb_client = await get_async_chromadb_client()
+        chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
 
         overview = await summary_svc.get_document_overview(UUID(document_id))
@@ -284,9 +284,9 @@ async def drill_down_summary(
     """Navigate from summary to children or source chunks."""
     try:
         from knowledge.summary_search import SummarySearchService
-        from utils.async_chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        chromadb_client = await get_async_chromadb_client()
+        chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
 
         result = await summary_svc.drill_down(UUID(summary_id))
