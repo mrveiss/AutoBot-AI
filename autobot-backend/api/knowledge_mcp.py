@@ -17,10 +17,11 @@ import threading
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-
 from auth_middleware import get_current_user
 from knowledge.schemas.mcp import (
+    DocumentAddRequest,
+    KnowledgeSearchRequest,
+    KnowledgeStatsRequest,
     McpAddDocumentResponse,
     McpHealthResponse,
     McpKnowledgeStatsResponse,
@@ -96,46 +97,16 @@ def _get_chat_ollama():
         return None
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class KnowledgeSearchRequest(BaseModel):
-    """Request model for knowledge base search"""
-
-    query: str = Field(..., description="Search query")
-    top_k: int = Field(5, description="Number of results to return")
-    filters: Optional[Metadata] = Field(None, description="Optional filters")
-
-
-class DocumentAddRequest(BaseModel):
-    """Request model for adding documents"""
-
-    content: str = Field(..., description="Document content")
-    metadata: Optional[Metadata] = Field(None, description="Document metadata")
-    source: Optional[str] = Field(None, description="Document source")
-
-
-class KnowledgeStatsRequest(BaseModel):
-    """Request model for knowledge base statistics"""
-
-    include_details: bool = Field(False, description="Include detailed statistics")
-
-
-def _create_search_tool() -> MCPTool:
+def _create_search_tool() -> McpToolsResponse:
     """
     Create MCP tool for knowledge base search.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for search_knowledge_base operation
+        McpToolsResponse definition for search_knowledge_base operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="search_knowledge_base",
         description="Search the AutoBot knowledge base using LlamaIndex and Redis vector store",
         input_schema={
@@ -158,16 +129,16 @@ def _create_search_tool() -> MCPTool:
     )
 
 
-def _create_add_document_tool() -> MCPTool:
+def _create_add_document_tool() -> McpToolsResponse:
     """
     Create MCP tool for adding documents to knowledge base.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for add_to_knowledge_base operation
+        McpToolsResponse definition for add_to_knowledge_base operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="add_to_knowledge_base",
         description=(
             "Add new information to the AutoBot knowledge base (stored in Redis"
@@ -195,16 +166,16 @@ def _create_add_document_tool() -> MCPTool:
     )
 
 
-def _create_vector_search_tool() -> MCPTool:
+def _create_vector_search_tool() -> McpToolsResponse:
     """
     Create MCP tool for vector similarity search.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for vector_similarity_search operation
+        McpToolsResponse definition for vector_similarity_search operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="vector_similarity_search",
         description="Perform vector similarity search in Redis using embeddings",
         input_schema={
@@ -230,16 +201,16 @@ def _create_vector_search_tool() -> MCPTool:
     )
 
 
-def _create_qa_chain_tool() -> MCPTool:
+def _create_qa_chain_tool() -> McpToolsResponse:
     """
     Create MCP tool for LangChain QA chain.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for langchain_qa_chain operation
+        McpToolsResponse definition for langchain_qa_chain operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="langchain_qa_chain",
         description="Use LangChain QA chain for comprehensive answers from knowledge base",
         input_schema={
@@ -260,7 +231,7 @@ def _create_qa_chain_tool() -> MCPTool:
     )
 
 
-def _get_knowledge_search_tools() -> List[MCPTool]:
+def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
 
@@ -269,7 +240,7 @@ def _get_knowledge_search_tools() -> List[MCPTool]:
     Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
 
     Returns:
-        List of MCPTool definitions for search/retrieval operations
+        List of McpToolsResponse definitions for search/retrieval operations
     """
     return [
         _create_search_tool(),
@@ -279,7 +250,7 @@ def _get_knowledge_search_tools() -> List[MCPTool]:
     ]
 
 
-def _get_knowledge_management_tools() -> List[MCPTool]:
+def _get_knowledge_management_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base management and admin operations.
 
@@ -287,10 +258,10 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
     and improve maintainability of tool definitions by category.
 
     Returns:
-        List of MCPTool definitions for management/admin operations
+        List of McpToolsResponse definitions for management/admin operations
     """
     return [
-        MCPTool(
+        McpToolsResponse(
             name="get_knowledge_stats",
             description="Get statistics about the AutoBot knowledge base and Redis vector store",
             input_schema={
@@ -304,7 +275,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
                 },
             },
         ),
-        MCPTool(
+        McpToolsResponse(
             name="summarize_knowledge_topic",
             description="Get a summary of knowledge on a specific topic using LangChain",
             input_schema={
@@ -320,7 +291,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
                 "required": ["topic"],
             },
         ),
-        MCPTool(
+        McpToolsResponse(
             name="redis_vector_operations",
             description="Direct Redis vector store operations (advanced)",
             input_schema={
@@ -351,7 +322,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
 @router.get("/mcp/tools", response_model=List[McpToolsResponse])
 async def get_mcp_tools(
     current_user: dict = Depends(get_current_user),
-) -> List[MCPTool]:
+) -> List[McpToolsResponse]:
     """Get available MCP tools for knowledge base operations.
 
     Issue #744: Requires authenticated user.

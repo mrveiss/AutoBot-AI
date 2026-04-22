@@ -29,7 +29,6 @@ from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission
@@ -48,6 +47,8 @@ from knowledge.schemas.connectors import (
     ConnectorTestResponse,
     ConnectorTypesResponse,
     ConnectorUpdateResponse,
+    CreateConnectorRequest,
+    UpdateConnectorRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,38 +58,7 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-# ---------------------------------------------------------------------------
-# Pydantic request / response models
-# ---------------------------------------------------------------------------
-
 _SUPPORTED_TYPES = ["file_server", "web_crawler", "database"]
-
-
-class CreateConnectorRequest(BaseModel):
-    """Request body for POST /connectors."""
-
-    connector_type: str = Field(
-        ..., description="One of: file_server, web_crawler, database"
-    )
-    name: str = Field(..., min_length=1, max_length=128)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    enabled: bool = True
-    verification_mode: str = "collaborative"
-    schedule_cron: Optional[str] = None
-    include_patterns: List[str] = Field(default_factory=list)
-    exclude_patterns: List[str] = Field(default_factory=list)
-
-
-class UpdateConnectorRequest(BaseModel):
-    """Request body for PUT /connectors/{id}."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=128)
-    config: Optional[Dict[str, Any]] = None
-    enabled: Optional[bool] = None
-    verification_mode: Optional[str] = None
-    schedule_cron: Optional[str] = None
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: Optional[List[str]] = None
 
 
 # ---------------------------------------------------------------------------

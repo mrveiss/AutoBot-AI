@@ -5,7 +5,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConnectorTypeEntry(BaseModel):
@@ -158,3 +158,28 @@ class ConnectorHistoryResponse(BaseModel):
     connector_id: str
     history: List[ConnectorHistoryEntry]
     total: int
+
+
+class CreateConnectorRequest(BaseModel):
+    """Request body for POST /knowledge_base/connectors."""
+
+    connector_type: str = Field(..., description="One of: file_server, web_crawler, database")
+    name: str = Field(..., min_length=1, max_length=128)
+    config: Dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+    verification_mode: str = "collaborative"
+    schedule_cron: Optional[str] = None
+    include_patterns: List[str] = Field(default_factory=list)
+    exclude_patterns: List[str] = Field(default_factory=list)
+
+
+class UpdateConnectorRequest(BaseModel):
+    """Request body for PUT /knowledge_base/connectors/{id}."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=128)
+    config: Optional[Dict[str, Any]] = None
+    enabled: Optional[bool] = None
+    verification_mode: Optional[str] = None
+    schedule_cron: Optional[str] = None
+    include_patterns: Optional[List[str]] = None
+    exclude_patterns: Optional[List[str]] = None
