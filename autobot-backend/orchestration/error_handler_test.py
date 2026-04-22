@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from constants.status_enums import TaskStatus
+from tests.helpers.fake_redis import SyncHashFakeRedis
 
 from .error_handler import (
     CHECKPOINT_TTL,
@@ -94,32 +95,10 @@ class TestStepCheckpoint:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRedis:
-    """In-memory Redis substitute for checkpoint tests."""
-
-    def __init__(self) -> None:
-        self._hashes: Dict[str, Dict[str, str]] = {}
-        # Record (key, ttl) pairs for every expire() call so tests can assert
-        # that the correct TTL was applied (#3231).
-        self.expire_calls: list = []
-
-    def hset(self, key: str, field: str, value: str) -> None:
-        self._hashes.setdefault(key, {})[field] = value
-
-    def expire(self, key: str, ttl: int) -> None:
-        self.expire_calls.append((key, ttl))
-
-    def hgetall(self, key: str) -> Dict[str, str]:
-        return dict(self._hashes.get(key, {}))
-
-    def delete(self, key: str) -> None:
-        self._hashes.pop(key, None)
-
-
 class TestWorkflowCheckpointManager:
     def _manager_with_fake_redis(self) -> WorkflowCheckpointManager:
         mgr = WorkflowCheckpointManager()
-        mgr._redis = _FakeRedis()
+        mgr._redis = SyncHashFakeRedis()
         return mgr
 
     def test_save_and_load(self) -> None:

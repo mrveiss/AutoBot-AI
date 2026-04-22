@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import patch
 
 import pytest
@@ -25,138 +24,16 @@ from services.knowledge.sync_queue import (
     SyncReason,
     SyncStatus,
 )
-
-
-# ---------------------------------------------------------------------------
-# Minimal in-memory async Redis stub
-# ---------------------------------------------------------------------------
-
-
-class _Pipeline:
-    """Accumulates Redis commands and replays them on ``execute()``."""
-
-    def __init__(self, redis: "_FakeAsyncRedis") -> None:
-        self._redis = redis
-        self._ops: List[Tuple[str, tuple, dict]] = []
-
-    def __getattr__(self, name: str):
-        def _op(*args, **kwargs):
-            self._ops.append((name, args, kwargs))
-            return self
-
-        return _op
-
-    async def execute(self) -> List[Any]:
-        out: List[Any] = []
-        for name, args, kwargs in self._ops:
-            method = getattr(self._redis, name)
-            result = method(*args, **kwargs)
-            if asyncio.iscoroutine(result):
-                result = await result
-            out.append(result)
-        return out
-
-
-class _FakeAsyncRedis:
-    """Just enough async Redis surface for :class:`DocumentSyncQueue`."""
-
-    def __init__(self) -> None:
-        self.hashes: Dict[str, Dict[str, str]] = {}
-        self.zsets: Dict[str, Dict[str, float]] = {}
-        self.strings: Dict[str, str] = {}
-
-    def pipeline(self) -> _Pipeline:
-        return _Pipeline(self)
-
-    async def hset(self, key: str, mapping: Optional[dict] = None, **kwargs) -> int:
-        payload = mapping or kwargs
-        bucket = self.hashes.setdefault(key, {})
-        added = 0
-        for k, v in payload.items():
-            if k not in bucket:
-                added += 1
-            bucket[k] = str(v)
-        return added
-
-    async def hgetall(self, key: str) -> Dict[str, str]:
-        return dict(self.hashes.get(key, {}))
-
-    async def get(self, key: str) -> Optional[str]:
-        return self.strings.get(key)
-
-    async def set(self, key: str, value: str) -> bool:
-        self.strings[key] = str(value)
-        return True
-
-    async def delete(self, *keys: str) -> int:
-        removed = 0
-        for k in keys:
-            if k in self.hashes:
-                del self.hashes[k]
-                removed += 1
-            if k in self.zsets:
-                del self.zsets[k]
-                removed += 1
-            if k in self.strings:
-                del self.strings[k]
-                removed += 1
-        return removed
-
-    async def zadd(self, key: str, mapping: Dict[str, float]) -> int:
-        bucket = self.zsets.setdefault(key, {})
-        added = 0
-        for m, score in mapping.items():
-            if m not in bucket:
-                added += 1
-            bucket[m] = float(score)
-        return added
-
-    async def zrem(self, key: str, *members: str) -> int:
-        bucket = self.zsets.get(key, {})
-        removed = 0
-        for m in members:
-            if m in bucket:
-                del bucket[m]
-                removed += 1
-        return removed
-
-    async def zrange(self, key: str, start: int, stop: int) -> List[str]:
-        bucket = self.zsets.get(key, {})
-        ordered = sorted(bucket.items(), key=lambda kv: kv[1])
-        # Redis ZRANGE stop is inclusive; -1 means last element.
-        if stop == -1:
-            stop = len(ordered) - 1
-        return [k for k, _ in ordered[start : stop + 1]]
-
-    async def zrevrange(self, key: str, start: int, stop: int) -> List[str]:
-        bucket = self.zsets.get(key, {})
-        ordered = sorted(bucket.items(), key=lambda kv: kv[1], reverse=True)
-        if stop == -1:
-            stop = len(ordered) - 1
-        return [k for k, _ in ordered[start : stop + 1]]
-
-    async def zrangebyscore(
-        self, key: str, min: float, max: float, **kwargs
-    ) -> List[str]:
-        bucket = self.zsets.get(key, {})
-        lo = float("-inf") if min == "-inf" else float(min)
-        hi = float("inf") if max == "+inf" else float(max)
-        return sorted(
-            (m for m, s in bucket.items() if lo <= s <= hi),
-            key=lambda m: bucket[m],
-        )
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
+from tests.helpers.fake_redis import AsyncFullFakeRedis
 
 
 @pytest.fixture
-def fake_redis() -> _FakeAsyncRedis:
-    return _FakeAsyncRedis()
+def fake_redis() -> AsyncFullFakeRedis:
+    return AsyncFullFakeRedis()
 
 
 @pytest.fixture
-def queue(fake_redis: _FakeAsyncRedis) -> DocumentSyncQueue:
+def queue(fake_redis: AsyncFullFakeRedis) -> DocumentSyncQueue:
     """A :class:`DocumentSyncQueue` patched to return the in-memory fake."""
 
     async def _return_redis(database: str = "main"):
@@ -227,7 +104,7 @@ class TestPriorityOrdering:
 
     @pytest.mark.asyncio
     async def test_priority_beats_fifo_across_one_second_gap(
-        self, queue: DocumentSyncQueue, fake_redis: _FakeAsyncRedis
+        self, queue: DocumentSyncQueue, fake_redis: AsyncFullFakeRedis
     ) -> None:
         """Regression for #5078: FIFO component must not overflow priority bucket.
 
@@ -548,7 +425,7 @@ class TestWorkerLoop:
 class TestPrune:
     @pytest.mark.asyncio
     async def test_prune_done_removes_expired_entries(
-        self, queue: DocumentSyncQueue, fake_redis: _FakeAsyncRedis
+        self, queue: DocumentSyncQueue, fake_redis: AsyncFullFakeRedis
     ) -> None:
         entry = await queue.enqueue_sync("a.md", SyncReason.MANUAL)
         await queue.mark_processing(entry.id)
