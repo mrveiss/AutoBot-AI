@@ -21,6 +21,7 @@ import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import { useUserStore } from '@/stores/useUserStore'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('KnowledgeResearchPanel')
 const userStore = useUserStore()
@@ -48,7 +49,6 @@ const screenshotLoading = ref(false)
 const viewportWidth = ref(1280)
 const viewportHeight = ref(720)
 
-let screenshotInterval: ReturnType<typeof setInterval> | null = null
 
 // Research WebSocket URL — set dynamically when research starts
 const researchWsUrl = ref('')
@@ -116,6 +116,27 @@ async function checkBrowserStatus(): Promise<void> {
   }
 }
 
+const { start: _startScreenshotPolling, stop: stopScreenshotPolling } = usePollingJob<void>(
+  async () => {
+    if (screenshotLoading.value) return
+    screenshotLoading.value = true
+    try {
+      const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
+      if (data.screenshot) {
+        screenshot.value = data.screenshot as string
+        browserConnected.value = true
+        if (data.viewportWidth) viewportWidth.value = data.viewportWidth as number
+        if (data.viewportHeight) viewportHeight.value = data.viewportHeight as number
+      }
+    } catch (e) {
+      logger.warn('Screenshot fetch failed:', e)
+    } finally {
+      screenshotLoading.value = false
+    }
+  },
+  { intervalMs: 3000, maxAttempts: Infinity }
+)
+
 async function fetchScreenshot(): Promise<void> {
   if (screenshotLoading.value) return
   screenshotLoading.value = true
@@ -135,16 +156,7 @@ async function fetchScreenshot(): Promise<void> {
 }
 
 function startScreenshotPolling(): void {
-  if (screenshotInterval) return
-  fetchScreenshot()
-  screenshotInterval = setInterval(fetchScreenshot, 3000)
-}
-
-function stopScreenshotPolling(): void {
-  if (screenshotInterval) {
-    clearInterval(screenshotInterval)
-    screenshotInterval = null
-  }
+  _startScreenshotPolling('')
 }
 
 // ── Source card helpers ────────────────────────────────────────────────────
@@ -341,7 +353,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   closeWs()
-  stopScreenshotPolling()
 })
 </script>
 
