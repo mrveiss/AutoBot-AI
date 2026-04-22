@@ -8,7 +8,8 @@
  * Author: mrveiss
  */
 
-import { ref, reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
+import { useExpansion } from '@/composables/useExpansion'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig, getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -176,12 +177,8 @@ export function usePatternAnalysis() {
   const storageStats = ref<PatternStorageStats | null>(null)
 
   // UI state
-  const expandedSections = reactive({
-    duplicates: false,
-    regex: false,
-    complexity: false,
-    refactoring: false
-  })
+  type Section = 'duplicates' | 'regex' | 'complexity' | 'refactoring'
+  const { isExpanded: isSectionExpanded, toggle: toggleSection } = useExpansion<Section>()
 
   // Computed properties
   const totalPatterns = computed(() => {
@@ -922,7 +919,8 @@ export function usePatternAnalysis() {
     complexityHotspots,
     refactoringSuggestions,
     storageStats,
-    expandedSections,
+    isSectionExpanded,
+    toggleSection,
 
     // Computed
     totalPatterns,
