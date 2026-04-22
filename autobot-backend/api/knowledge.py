@@ -51,6 +51,38 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from knowledge.schemas.documents import (
+    DocsBrowseResponse,
+    DocsCategoriesResponse,
+    DocsStatsResponse,
+    DocsWatcherControlResponse,
+    DocsWatcherStatusResponse,
+)
+from knowledge.schemas.facts import (
+    AddFactResponse,
+    AddTextResponse,
+    AddUrlResponse,
+    AudioIngestResponse,
+    ClearAllResponse,
+    FactByKeyResponse,
+    FactsByCategoryResponse,
+    KnowledgeEntriesResponse,
+    ManPageSearchResponse,
+    QueryKnowledgeResponse,
+    UploadFileResponse,
+)
+from knowledge.schemas.operations import (
+    ImportStatisticsResponse,
+    ImportStatusResponse,
+    KnowledgeHealthResponse,
+    KnowledgeStatsResponse,
+    MachineKnowledgeInitResponse,
+    MachineProfileResponse,
+    ManPagesIntegrateResponse,
+    ManPagesSummaryResponse,
+    OrgKnowledgeConfigResponse,
+    TestCategoriesResponse,
+)
 from knowledge.schemas.stats import (
     DetailedKnowledgeStats,
     KnowledgeCategoriesResponse,
@@ -262,11 +294,11 @@ from api.knowledge_population import (
     operation="get_knowledge_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=KnowledgeStatsResponse)
 async def get_knowledge_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeStatsResponse:
     """Get knowledge base statistics - FIXED to use proper instance
 
     Issue #744: Requires admin authentication.
@@ -282,26 +314,26 @@ async def get_knowledge_stats(
         autobot_kb_degradation_total.labels(
             endpoint="stats", reason="kb_uninit"
         ).inc()
-        return {
-            "total_documents": 0,
-            "total_chunks": 0,
-            "total_facts": 0,
-            "total_vectors": 0,
-            "categories": [],
-            "db_size": 0,
-            "status": "offline",
-            "last_updated": None,
-            "redis_db": None,
-            "index_name": None,
-            "initialized": False,
-            "rag_available": RAG_AVAILABLE,
-            "vectorization_stats": {
+        return KnowledgeStatsResponse(
+            total_documents=0,
+            total_chunks=0,
+            total_facts=0,
+            total_vectors=0,
+            categories=[],
+            db_size=0,
+            status="offline",
+            last_updated=None,
+            redis_db=None,
+            index_name=None,
+            initialized=False,
+            rag_available=RAG_AVAILABLE,
+            vectorization_stats={
                 "total_facts": 0,
                 "vectorized_count": 0,
                 "not_vectorized_count": 0,
                 "vectorization_percentage": 0.0,
             },
-        }
+        )
 
     stats = await kb_to_use.get_stats()
     stats["rag_available"] = RAG_AVAILABLE
@@ -310,7 +342,7 @@ async def get_knowledge_stats(
     # The previous implementation used synchronous redis_client.hgetall() which blocked the event
     # loop
 
-    return stats
+    return KnowledgeStatsResponse(**stats)
 
 
 @with_error_handling(
@@ -318,17 +350,19 @@ async def get_knowledge_stats(
     operation="test_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/test_categories_main")
+@router.get("/test_categories_main", response_model=TestCategoriesResponse)
 async def test_main_categories(
     admin_check: bool = Depends(check_admin_permission),
-):
+) -> TestCategoriesResponse:
     """Test endpoint to verify file is loaded
 
     Issue #744: Requires admin authentication.
     """
     from knowledge_categories import CATEGORY_METADATA
 
-    return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
+    return TestCategoriesResponse(
+        status="working", categories=list(CATEGORY_METADATA.keys())
+    )
 
 
 @with_error_handling(
@@ -679,12 +713,12 @@ def _build_ownership_metadata(
     operation="add_text_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/add_text")
+@router.post("/add_text", response_model=AddTextResponse)
 async def add_text_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
     req: Request = None,
-):
+) -> AddTextResponse:
     """Add text to knowledge base - FIXED to use proper instance
 
     Issue #744: Requires admin authentication.
@@ -732,16 +766,16 @@ async def add_text_to_knowledge(
 
     fact_id = await _store_fact_in_kb(kb_to_use, text, metadata)
 
-    return {
-        "status": "success",
-        "message": "Fact stored successfully",
-        "fact_id": fact_id,
-        "text_length": len(text),
-        "title": title,
-        "source": source,
-        "access_level": access_level,
-        "visibility": visibility,
-    }
+    return AddTextResponse(
+        status="success",
+        message="Fact stored successfully",
+        fact_id=fact_id,
+        text_length=len(text),
+        title=title,
+        source=source,
+        access_level=access_level,
+        visibility=visibility,
+    )
 
 
 # =============================================================================
@@ -936,12 +970,12 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     operation="add_facts_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/facts")
+@router.post("/facts", response_model=AddFactResponse)
 async def add_facts_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: AddFactsRequest = None,
     req: Request = None,
-):
+) -> AddFactResponse:
     """
     Add text content to knowledge base (frontend-compatible endpoint).
 
@@ -978,17 +1012,17 @@ async def add_facts_to_knowledge(
 
     fact_id = await _store_fact_in_kb(kb_to_use, request.content, metadata)
 
-    return {
-        "success": True,
-        "document_id": fact_id,
-        "title": request.title,
-        "content": (
+    return AddFactResponse(
+        success=True,
+        document_id=fact_id,
+        title=request.title,
+        content=(
             request.content[:100] + "..."
             if len(request.content) > 100
             else request.content
         ),
-        "message": "Document added successfully",
-    }
+        message="Document added successfully",
+    )
 
 
 async def _fetch_and_extract_url(
@@ -1026,12 +1060,12 @@ async def _fetch_and_extract_url(
     operation="add_url_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/url")
+@router.post("/url", response_model=AddUrlResponse)
 async def add_url_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: AddUrlRequest = None,
     req: Request = None,
-):
+) -> AddUrlResponse:
     """
     Add content from URL to knowledge base.
 
@@ -1081,13 +1115,13 @@ async def add_url_to_knowledge(
 
     fact_id = await _store_fact_in_kb(kb_to_use, content, url_metadata)
 
-    return {
-        "success": True,
-        "document_id": fact_id,
-        "title": title,
-        "content": content[:100] + "..." if len(content) > 100 else content,
-        "message": f"URL content added ({len(content)} chars)",
-    }
+    return AddUrlResponse(
+        success=True,
+        document_id=fact_id,
+        title=title,
+        content=content[:100] + "..." if len(content) > 100 else content,
+        message=f"URL content added ({len(content)} chars)",
+    )
 
 
 def _extract_pdf_content(filename: str, file_content: bytes) -> str:
@@ -1213,11 +1247,11 @@ def _parse_upload_tags(tags_str) -> list:
     operation="upload_file_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/upload")
+@router.post("/upload", response_model=UploadFileResponse)
 async def upload_file_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> UploadFileResponse:
     """
     Upload file to knowledge base.
 
@@ -1280,14 +1314,14 @@ async def upload_file_to_knowledge(
     )
 
     word_count = len(content.split())
-    return {
-        "success": True,
-        "document_id": fact_id,
-        "title": title,
-        "content": content[:100] + "..." if len(content) > 100 else content,
-        "word_count": word_count,
-        "message": f"File uploaded ({word_count} words)",
-    }
+    return UploadFileResponse(
+        success=True,
+        document_id=fact_id,
+        title=title,
+        content=content[:100] + "..." if len(content) > 100 else content,
+        word_count=word_count,
+        message=f"File uploaded ({word_count} words)",
+    )
 
 
 # =============================================================================
@@ -1344,11 +1378,12 @@ async def _ingest_audio_source(
     tags: list,
     whisper_model: str,
     language: Optional[str],
-) -> dict:
+) -> AudioIngestResponse:
     """Run transcription and store result in KB. Helper for audio endpoints.
 
     Issue #3243: shared by both the URL and file-upload audio routes.
-    Returns a dict with success, document_id, word_count, and message.
+    Returns an :class:`AudioIngestResponse` with success, document_id,
+    word_count, and message (Issue #5317).
     """
     import uuid as _uuid
 
@@ -1396,13 +1431,13 @@ async def _ingest_audio_source(
 
     fact_id = await _store_fact_in_kb(kb_to_use, transcript, metadata)
     word_count = len(transcript.split())
-    return {
-        "success": True,
-        "document_id": fact_id,
-        "title": effective_title,
-        "word_count": word_count,
-        "message": f"Audio transcribed and indexed ({word_count} words)",
-    }
+    return AudioIngestResponse(
+        success=True,
+        document_id=fact_id,
+        title=effective_title,
+        word_count=word_count,
+        message=f"Audio transcribed and indexed ({word_count} words)",
+    )
 
 
 @with_error_handling(
@@ -1410,12 +1445,12 @@ async def _ingest_audio_source(
     operation="ingest_audio_url",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/audio")
+@router.post("/audio", response_model=AudioIngestResponse)
 async def ingest_audio_url(
     request: AudioIngestRequest,
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> AudioIngestResponse:
     """Transcribe a YouTube URL or direct audio/video URL and index it.
 
     Issue #3243: Accepts a YouTube or remote audio URL, downloads the audio
@@ -1457,11 +1492,11 @@ async def ingest_audio_url(
     operation="upload_audio_file",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/audio/upload")
+@router.post("/audio/upload", response_model=AudioIngestResponse)
 async def upload_audio_file(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> AudioIngestResponse:
     """Upload a local audio/video file (mp3, wav, m4a, ogg, flac, mp4, mkv, webm).
 
     Issue #3243: Saves the uploaded file to a temp path, runs Whisper transcription
@@ -1557,11 +1592,11 @@ async def upload_audio_file(
     operation="get_knowledge_health",
     error_code_prefix="KB",
 )
-@router.get("/health")
+@router.get("/health", response_model=KnowledgeHealthResponse)
 async def get_knowledge_health(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-):
+) -> KnowledgeHealthResponse:
     """Get knowledge base health status with RAG capability status - FIXED to use proper instance
 
     Issue #744: Requires admin authentication.
@@ -1578,15 +1613,15 @@ async def get_knowledge_health(
         autobot_kb_degradation_total.labels(
             endpoint="health", reason="kb_uninit"
         ).inc()
-        return {
-            "status": "unhealthy",
-            "initialized": False,
-            "redis_connected": False,
-            "vector_store_available": False,
-            "rag_available": RAG_AVAILABLE,
-            "rag_status": "disabled" if not RAG_AVAILABLE else "unknown",
-            "message": "Knowledge base not initialized",
-        }
+        return KnowledgeHealthResponse(
+            status="unhealthy",
+            initialized=False,
+            redis_connected=False,
+            vector_store_available=False,
+            rag_available=RAG_AVAILABLE,
+            rag_status="disabled" if not RAG_AVAILABLE else "unknown",
+            message="Knowledge base not initialized",
+        )
 
     # Try to get stats to verify health
     stats = await kb_to_use.get_stats()

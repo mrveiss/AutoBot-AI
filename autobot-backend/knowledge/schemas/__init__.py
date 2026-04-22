@@ -3,6 +3,47 @@
 # Author: mrveiss
 """Knowledge base API response schemas."""
 
+from knowledge.schemas.documents import (
+    DocsBrowseResponse,
+    DocsCategoriesResponse,
+    DocsCategoryEntry,
+    DocsFiltersApplied,
+    DocsPagination,
+    DocsStatsEnvelope,
+    DocsStatsResponse,
+    DocsWatcherControlResponse,
+    DocsWatcherStatusResponse,
+)
+from knowledge.schemas.facts import (
+    AddFactResponse,
+    AddTextResponse,
+    AddUrlResponse,
+    AudioIngestResponse,
+    ClearAllResponse,
+    FactByCategoryEntry,
+    FactByKeyResponse,
+    FactsByCategoryResponse,
+    KnowledgeEntriesResponse,
+    KnowledgeEntry,
+    ManPageSearchResponse,
+    QueryKnowledgeResponse,
+    UploadFileResponse,
+)
+from knowledge.schemas.operations import (
+    ImportStatisticsResponse,
+    ImportStatusResponse,
+    KnowledgeHealthResponse,
+    KnowledgeStatsResponse,
+    MachineKnowledgeInitComponents,
+    MachineKnowledgeInitResponse,
+    MachineProfileCapabilities,
+    MachineProfileResponse,
+    ManPagesIntegrateResponse,
+    ManPagesSummaryEnvelope,
+    ManPagesSummaryResponse,
+    OrgKnowledgeConfigResponse,
+    TestCategoriesResponse,
+)
 from knowledge.schemas.stats import (
     DetailedKnowledgeSizeMetrics,
     DetailedKnowledgeStats,
@@ -15,6 +56,7 @@ from knowledge.schemas.stats import (
 )
 
 __all__ = [
+    # stats.py (pre-existing)
     "DetailedKnowledgeSizeMetrics",
     "DetailedKnowledgeStats",
     "KnowledgeBasicStatsEnvelope",
@@ -23,4 +65,42 @@ __all__ = [
     "KnowledgeMainCategoriesResponse",
     "KnowledgeMainCategoryEntry",
     "KnowledgeStatsBasic",
+    # facts.py
+    "AddFactResponse",
+    "AddTextResponse",
+    "AddUrlResponse",
+    "AudioIngestResponse",
+    "ClearAllResponse",
+    "FactByCategoryEntry",
+    "FactByKeyResponse",
+    "FactsByCategoryResponse",
+    "KnowledgeEntriesResponse",
+    "KnowledgeEntry",
+    "ManPageSearchResponse",
+    "QueryKnowledgeResponse",
+    "UploadFileResponse",
+    # documents.py
+    "DocsBrowseResponse",
+    "DocsCategoriesResponse",
+    "DocsCategoryEntry",
+    "DocsFiltersApplied",
+    "DocsPagination",
+    "DocsStatsEnvelope",
+    "DocsStatsResponse",
+    "DocsWatcherControlResponse",
+    "DocsWatcherStatusResponse",
+    # operations.py
+    "ImportStatisticsResponse",
+    "ImportStatusResponse",
+    "KnowledgeHealthResponse",
+    "KnowledgeStatsResponse",
+    "MachineKnowledgeInitComponents",
+    "MachineKnowledgeInitResponse",
+    "MachineProfileCapabilities",
+    "MachineProfileResponse",
+    "ManPagesIntegrateResponse",
+    "ManPagesSummaryEnvelope",
+    "ManPagesSummaryResponse",
+    "OrgKnowledgeConfigResponse",
+    "TestCategoriesResponse",
 ]
