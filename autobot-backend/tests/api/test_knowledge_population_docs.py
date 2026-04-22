@@ -8,7 +8,7 @@ Tests for GitHub issue #4103: Background task for documentation indexing.
 Ensures populate_autobot_docs returns immediately with task_id.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
