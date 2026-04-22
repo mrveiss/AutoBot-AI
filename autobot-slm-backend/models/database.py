@@ -8,7 +8,7 @@ SQLAlchemy models for SLM state persistence.
 """
 
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -110,7 +110,7 @@ class Node(Base):
     cpu_percent = Column(Float, default=0.0)
     memory_percent = Column(Float, default=0.0)
     disk_percent = Column(Float, default=0.0)
-    last_heartbeat = Column(DateTime, nullable=True)
+    last_heartbeat = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     agent_version = Column(String(20), nullable=True)
@@ -127,8 +127,8 @@ class Node(Base):
     role_versions = Column(JSON, default=dict)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     @property
     def ansible_target(self) -> str:
@@ -148,8 +148,8 @@ class Deployment(Base):
     status = Column(String(20), default=DeploymentStatus.PENDING.value)
 
     # Execution details
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     error = Column(Text, nullable=True)
     playbook_output = Column(Text, nullable=True)
 
@@ -158,8 +158,8 @@ class Deployment(Base):
     extra_data = Column(JSON, default=dict)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class Backup(Base):
@@ -180,9 +180,9 @@ class Backup(Base):
     error = Column(Text, nullable=True)
 
     # Timestamps
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Setting(Base):
@@ -195,7 +195,7 @@ class Setting(Base):
     value = Column(Text, nullable=True)
     value_type = Column(String(20), default="string")  # string, int, bool, json
     description = Column(String(255), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class EventType(str, enum.Enum):
@@ -264,11 +264,11 @@ class NodeEvent(Base):
     severity = Column(String(16), default=EventSeverity.INFO.value)
     message = Column(Text, nullable=False)
     details = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Error resolution tracking (Issue #563)
     resolved = Column(Boolean, default=False)
-    resolved_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolved_by = Column(String(255), nullable=True)
 
 
@@ -283,12 +283,12 @@ class Certificate(Base):
     serial_number = Column(String(64), nullable=True)
     subject = Column(String(255), nullable=True)
     issuer = Column(String(255), nullable=True)
-    not_before = Column(DateTime, nullable=True)
-    not_after = Column(DateTime, nullable=True)
+    not_before = Column(DateTime(timezone=True), nullable=True)
+    not_after = Column(DateTime(timezone=True), nullable=True)
     fingerprint = Column(String(64), nullable=True)
     status = Column(String(20), default="pending")  # pending, active, expired, revoked
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class Replication(Base):
@@ -305,10 +305,10 @@ class Replication(Base):
     sync_position = Column(String(128), nullable=True)
     lag_bytes = Column(Integer, default=0)
     error = Column(Text, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class UpdateInfo(Base):
@@ -325,8 +325,8 @@ class UpdateInfo(Base):
     severity = Column(String(16), default="low")  # low, medium, high, critical
     description = Column(Text, nullable=True)
     is_applied = Column(Boolean, default=False)
-    applied_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class UpdateJobStatus(str, enum.Enum):
@@ -355,10 +355,10 @@ class UpdateJob(Base):
     completed_steps = Column(Integer, default=0)
     error = Column(Text, nullable=True)
     output = Column(Text, nullable=True)  # Command output/logs
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class FleetSyncJob(Base):
@@ -376,8 +376,8 @@ class FleetSyncJob(Base):
     completed_nodes = Column(Integer, default=0)
     failed_nodes = Column(Integer, default=0)
     failure_reason = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class FleetSyncNodeState(Base):
@@ -392,8 +392,8 @@ class FleetSyncNodeState(Base):
     ip_address = Column(String(45), nullable=True)
     status = Column(String(20), default="pending")
     message = Column(Text, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Service(Base):
@@ -412,7 +412,7 @@ class Service(Base):
     sub_state = Column(String(32), nullable=True)  # running, dead, exited
     main_pid = Column(Integer, nullable=True)
     memory_bytes = Column(BigInteger, nullable=True)
-    last_checked = Column(DateTime, nullable=True)
+    last_checked = Column(DateTime(timezone=True), nullable=True)
     extra_data = Column(JSON, default=dict)
 
     # Service Discovery Fields (Issue #760)
@@ -421,8 +421,8 @@ class Service(Base):
     endpoint_path = Column(String(256), nullable=True)  # e.g., "/api/health"
     is_discoverable = Column(Boolean, default=True)  # Include in discovery responses
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Composite unique constraint - one service record per node
     __table_args__ = (UniqueConstraint("node_id", "service_name", name="uq_node_service"),)
@@ -443,8 +443,8 @@ class NodeConfig(Base):
     config_value = Column(Text, nullable=True)
     value_type = Column(String(20), default="string")  # string, int, bool, json
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (UniqueConstraint("node_id", "config_key", name="uq_node_config"),)
 
@@ -464,7 +464,7 @@ class ServiceConflict(Base):
     reason = Column(Text, nullable=True)  # e.g., "Both bind to port 6379"
     conflict_type = Column(String(32), default="port")  # port, dependency, resource
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (UniqueConstraint("service_name_a", "service_name_b", name="uq_service_conflict"),)
 
@@ -496,8 +496,8 @@ class Agent(Base):
     is_default = Column(Boolean, default=False, index=True)
     is_active = Column(Boolean, default=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class MaintenanceWindow(Base):
@@ -508,16 +508,16 @@ class MaintenanceWindow(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     window_id = Column(String(64), unique=True, nullable=False, index=True)
     node_id = Column(String(64), nullable=True, index=True)  # null = all nodes
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
     reason = Column(String(512), nullable=True)
     auto_drain = Column(Boolean, default=False)  # drain services before maintenance
     suppress_alerts = Column(Boolean, default=True)  # suppress alerts during window
     suppress_remediation = Column(Boolean, default=True)  # suppress auto-remediation
     status = Column(String(20), default="scheduled")  # scheduled, active, completed, cancelled
     created_by = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class BlueGreenStatus(str, enum.Enum):
@@ -574,7 +574,7 @@ class BlueGreenDeployment(Base):
     post_deploy_monitor_duration = Column(Integer, default=1800)  # 30 min monitoring after switch
     health_failure_threshold = Column(Integer, default=3)  # Consecutive failures before rollback
     health_failures = Column(Integer, default=0)  # Current consecutive failure count
-    monitoring_started_at = Column(DateTime, nullable=True)  # When monitoring started
+    monitoring_started_at = Column(DateTime(timezone=True), nullable=True)  # When monitoring started
 
     # Status tracking
     status = Column(String(32), default=BlueGreenStatus.PENDING.value)
@@ -583,16 +583,16 @@ class BlueGreenDeployment(Base):
     error = Column(Text, nullable=True)
 
     # Timestamps
-    started_at = Column(DateTime, nullable=True)
-    switched_at = Column(DateTime, nullable=True)  # When traffic switched to green
-    completed_at = Column(DateTime, nullable=True)
-    rollback_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    switched_at = Column(DateTime(timezone=True), nullable=True)  # When traffic switched to green
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    rollback_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     triggered_by = Column(String(64), nullable=True)
     extra_data = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class SecretCategory(str, enum.Enum):
@@ -617,8 +617,8 @@ class SystemSecret(Base):
     encrypted_value = Column(Text, nullable=False)
     category = Column(String(32), default=SecretCategory.SYSTEM.value)
     description = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class CredentialType(str, enum.Enum):
@@ -660,16 +660,16 @@ class NodeCredential(Base):
     # TLS-specific fields (Issue #725: mTLS certificate storage)
     # Certs stored in encrypted_data as JSON: {"ca_cert", "server_cert", "server_key"}
     tls_common_name = Column(String(255), nullable=True)  # CN from certificate
-    tls_expires_at = Column(DateTime, nullable=True)  # Certificate expiration
+    tls_expires_at = Column(DateTime(timezone=True), nullable=True)  # Certificate expiration
     tls_fingerprint = Column(String(64), nullable=True)  # SHA256 fingerprint
 
     # State
     is_active = Column(Boolean, default=True)
-    last_used = Column(DateTime, nullable=True)
+    last_used = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Composite unique constraint - one credential per node/type/name combo
     __table_args__ = (UniqueConstraint("node_id", "credential_type", "name", name="uq_node_cred_type_name"),)
@@ -737,7 +737,7 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     log_id = Column(String(64), unique=True, nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
     # Actor information
     user_id = Column(String(64), nullable=True, index=True)
@@ -765,7 +765,7 @@ class AuditLog(Base):
 
     # Metadata
     extra_data = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class SecurityEvent(Base):
@@ -775,7 +775,7 @@ class SecurityEvent(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     event_id = Column(String(64), unique=True, nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
     # Event classification
     event_type = Column(String(64), nullable=False, index=True)
@@ -804,15 +804,15 @@ class SecurityEvent(Base):
     # Status
     is_acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(String(64), nullable=True)
-    acknowledged_at = Column(DateTime, nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     is_resolved = Column(Boolean, default=False)
     resolved_by = Column(String(64), nullable=True)
-    resolved_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolution_notes = Column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class SecurityPolicy(Base):
@@ -842,7 +842,7 @@ class SecurityPolicy(Base):
     is_enforced = Column(Boolean, default=False)
 
     # Compliance tracking
-    last_evaluated = Column(DateTime, nullable=True)
+    last_evaluated = Column(DateTime(timezone=True), nullable=True)
     compliance_score = Column(Float, nullable=True)  # 0.0 - 100.0
     violations_count = Column(Integer, default=0)
 
@@ -853,8 +853,8 @@ class SecurityPolicy(Base):
     # Metadata
     created_by = Column(String(64), nullable=True)
     updated_by = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================
@@ -893,15 +893,15 @@ class UpdateSchedule(Base):
     restart_after_sync = Column(Boolean, default=True)
 
     # Execution tracking
-    last_run = Column(DateTime, nullable=True)
-    next_run = Column(DateTime, nullable=True)
+    last_run = Column(DateTime(timezone=True), nullable=True)
+    next_run = Column(DateTime(timezone=True), nullable=True)
     last_run_status = Column(String(20), nullable=True)  # success, failed, partial
     last_run_message = Column(Text, nullable=True)
 
     # Metadata
     created_by = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================
@@ -930,8 +930,8 @@ class Role(Base):
     required = Column(Boolean, default=False, nullable=False)
     degraded_without = Column(JSON, default=list)
     ansible_playbook = Column(String(200), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class NodeRole(Base):
@@ -945,10 +945,10 @@ class NodeRole(Base):
     assignment_type = Column(String(20), default="auto")  # auto | manual
     status = Column(String(20), default=RoleStatus.NOT_INSTALLED.value)
     current_version = Column(String(64), nullable=True)
-    last_synced_at = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_role"),)
 
@@ -967,9 +967,9 @@ class NodeCodeVersion(Base):
     role_name = Column(String(64), nullable=False, index=True)
     commit_hash = Column(String(64), nullable=True)
     status = Column(String(20), default=CodeStatus.UNKNOWN.value)
-    deployed_at = Column(DateTime, nullable=True)
+    deployed_at = Column(DateTime(timezone=True), nullable=True)
     cache_path = Column(String(512), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_code_version"),)
 
@@ -985,9 +985,9 @@ class CodeSource(Base):
     repo_path = Column(String(255), nullable=False)
     branch = Column(String(100), default="main")
     last_known_commit = Column(String(64), nullable=True)
-    last_notified_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_notified_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================
@@ -1009,7 +1009,7 @@ class PerformanceTrace(Base):
     span_count = Column(Integer, default=1)
     error_message = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
 
 class TraceSpan(Base):
@@ -1031,8 +1031,8 @@ class TraceSpan(Base):
     node_id = Column(String(100), nullable=True)
     status = Column(String(20), default="ok")
     duration_ms = Column(Float, nullable=False)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
     attributes_json = Column(Text, nullable=True)
 
 
@@ -1052,8 +1052,8 @@ class SLODefinition(Base):
     window_days = Column(Integer, default=30)
     node_id = Column(String(100), nullable=True)
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 
 class AlertRule(Base):
@@ -1073,9 +1073,9 @@ class AlertRule(Base):
     node_id = Column(String(100), nullable=True)
     notification_channels = Column(Text, nullable=True)
     enabled = Column(Boolean, default=True)
-    last_triggered = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    last_triggered = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 
 class ExternalAgent(Base):
@@ -1092,7 +1092,7 @@ class ExternalAgent(Base):
 
     # A2A Agent Card cache
     card_data = Column(JSON, nullable=True)
-    card_fetched_at = Column(DateTime, nullable=True)
+    card_fetched_at = Column(DateTime(timezone=True), nullable=True)
     card_error = Column(Text, nullable=True)
 
     # Trust and connectivity
@@ -1101,5 +1101,5 @@ class ExternalAgent(Base):
     api_key = Column(Text, nullable=True)  # AES-GCM encrypted at rest
 
     created_by = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

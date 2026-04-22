@@ -161,7 +161,7 @@ async def set_global_default(
     if config:
         config.config_value = request.value
         config.value_type = request.value_type
-        config.updated_at = datetime.utcnow()
+        config.updated_at = datetime.now(timezone.utc)
     else:
         config = NodeConfig(
             node_id=None,
@@ -324,7 +324,7 @@ async def set_node_config_key(
     if config:
         config.config_value = request.value
         config.value_type = request.value_type
-        config.updated_at = datetime.utcnow()
+        config.updated_at = datetime.now(timezone.utc)
     else:
         config = NodeConfig(
             node_id=node_id,

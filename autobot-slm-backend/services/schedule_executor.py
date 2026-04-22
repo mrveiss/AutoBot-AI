@@ -58,7 +58,7 @@ def calculate_next_run(expression: str, base: datetime = None) -> datetime:
     Returns:
         Next scheduled datetime
     """
-    base = base or datetime.utcnow()
+    base = base or datetime.now(timezone.utc)
     cron = croniter(expression, base)
     return cron.get_next(datetime)
 
@@ -281,7 +281,7 @@ async def check_and_execute_schedules() -> int:
     Returns:
         Number of schedules executed
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     executed_count = 0
 
     try:

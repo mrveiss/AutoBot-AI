@@ -20,7 +20,7 @@ Usage:
 import importlib
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple
 
 import psycopg2
@@ -60,6 +60,8 @@ MIGRATIONS = [
     "add_ansible_name_unique_constraint",
     # Issue #1980: add failure_reason column to fleet_sync_jobs
     "add_failure_reason_to_fleet_sync_jobs",
+    # Issue #5385: convert all TIMESTAMP columns to TIMESTAMPTZ (UTC-aware)
+    "migrate_timestamps_to_timestamptz",
 ]
 
 
@@ -142,7 +144,7 @@ def mark_migration_applied(conn: psycopg2.extensions.connection, name: str) -> N
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO migrations_applied (name, applied_at) VALUES (%s, %s)",
-            (name, datetime.utcnow()),
+            (name, datetime.now(timezone.utc)),
         )
     conn.commit()
 

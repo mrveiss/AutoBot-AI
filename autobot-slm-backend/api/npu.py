@@ -438,7 +438,7 @@ async def _build_node_metrics(node: Node, ip_address: str, port: int) -> NPUWork
                     memory_total_gb=caps.get("memory_gb", 0.0),
                     uptime_seconds=data.get("uptimeSeconds", 0),
                     error_count=data.get("errorCount", 0),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                 )
     except Exception:
         logger.debug("Live metrics unavailable for %s, using stored data", node.node_id)
@@ -449,7 +449,7 @@ async def _build_node_metrics(node: Node, ip_address: str, port: int) -> NPUWork
         utilization=caps.get("utilization", 0.0),
         queue_depth=npu_data.get("queue_depth", 0),
         memory_total_gb=caps.get("memory_gb", 0.0),
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 

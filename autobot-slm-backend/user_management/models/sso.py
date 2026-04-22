@@ -235,4 +235,4 @@ class UserSSOLink(Base, TimestampMixin):
 
     def record_login(self) -> None:
         """Record a login via this SSO link."""
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = datetime.now(timezone.utc)

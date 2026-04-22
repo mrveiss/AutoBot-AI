@@ -227,7 +227,7 @@ class TLSCredentialService:
             return None
 
         # Update last used timestamp
-        credential.last_used = datetime.utcnow()
+        credential.last_used = datetime.now(timezone.utc)
         await db.commit()
 
         # Decrypt and return
@@ -248,7 +248,7 @@ class TLSCredentialService:
         result = await db.execute(query)
         endpoints = []
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for cred, node in result.all():
             days_until_expiry = None
             if cred.tls_expires_at:
@@ -273,7 +273,7 @@ class TLSCredentialService:
 
     async def get_expiring_certificates(self, db: AsyncSession, days: int = 30) -> List[NodeCredential]:
         """Get certificates expiring within the specified days."""
-        threshold = datetime.utcnow() + timedelta(days=days)
+        threshold = datetime.now(timezone.utc) + timedelta(days=days)
         result = await db.execute(
             select(NodeCredential).where(
                 NodeCredential.credential_type == CredentialType.TLS.value,
@@ -305,7 +305,7 @@ class TLSCredentialService:
         )
 
         # Build certificate with 1 year validity
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cert_builder = x509.CertificateBuilder()
         cert_builder = cert_builder.subject_name(
             x509.Name(

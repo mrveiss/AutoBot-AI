@@ -404,7 +404,7 @@ class DeploymentService:
             del self._running_deployments[deployment_id]
 
         deployment.status = DeploymentStatus.CANCELLED.value
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(deployment)
 
@@ -435,7 +435,7 @@ class DeploymentService:
 
         # Mark deployment as rolled back
         deployment.status = DeploymentStatus.ROLLED_BACK.value
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(deployment)
@@ -546,12 +546,12 @@ class DeploymentService:
             if not node:
                 deployment.status = DeploymentStatus.FAILED.value
                 deployment.error = "Node not found"
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 return
 
             deployment.status = DeploymentStatus.IN_PROGRESS.value
-            deployment.started_at = datetime.utcnow()
+            deployment.started_at = datetime.now(timezone.utc)
             await db.commit()
 
             try:
@@ -569,7 +569,7 @@ class DeploymentService:
 
                 deployment.status = DeploymentStatus.COMPLETED.value
                 deployment.playbook_output = output
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
 
                 node.roles = list(set(node.roles or []) | set(deployment.roles))
                 await db.commit()
@@ -578,14 +578,14 @@ class DeploymentService:
 
             except asyncio.CancelledError:
                 deployment.status = DeploymentStatus.CANCELLED.value
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 logger.info("Deployment cancelled: %s", deployment_id)
 
             except Exception as e:
                 deployment.status = DeploymentStatus.FAILED.value
                 deployment.error = str(e)
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 logger.error("Deployment failed: %s - %s", deployment_id, e)
 

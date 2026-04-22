@@ -161,7 +161,7 @@ class APIKeyService(BaseService):
         """Calculate expiration datetime."""
         if expires_days is None:
             return None
-        return datetime.utcnow() + timedelta(days=expires_days)
+        return datetime.now(timezone.utc) + timedelta(days=expires_days)
 
     @staticmethod
     def _build_api_key(

@@ -73,7 +73,7 @@ class FleetMetricsResponse(BaseModel):
     running_services: int
     failed_services: int
     nodes: List[NodeMetrics]
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AlertItem(BaseModel):
@@ -106,7 +106,7 @@ class SystemHealthResponse(BaseModel):
     health_score: float  # 0-100
     components: Dict[str, str]  # component -> status
     issues: List[str]
-    last_check: datetime = Field(default_factory=datetime.utcnow)
+    last_check: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DashboardOverview(BaseModel):
@@ -460,7 +460,7 @@ async def get_alerts(
     hours: int = Query(24, ge=1, le=168),
 ) -> AlertsResponse:
     """Get alerts from node events within the specified time window."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     query = select(NodeEvent).where(
         NodeEvent.created_at >= cutoff,
@@ -501,7 +501,7 @@ async def clear_alerts(
     hours: int = Query(24, ge=1, le=168),
 ) -> dict:
     """Delete all warning/error node events within the time window."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     result = await db.execute(
         delete(NodeEvent).where(
             NodeEvent.created_at >= cutoff,
@@ -589,7 +589,7 @@ async def _check_deployment_health(
 
     Queries recent failed deployments and updates components/issues in place.
     """
-    recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
     deploy_result = await db.execute(
         select(Deployment).where(
             Deployment.created_at >= recent_cutoff,
@@ -611,7 +611,7 @@ async def _check_maintenance_health(
 
     Queries active maintenance windows and updates components/issues in place.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     maint_result = await db.execute(
         select(MaintenanceWindow).where(
             MaintenanceWindow.start_time <= now,
@@ -691,12 +691,12 @@ async def get_dashboard_overview(
     health_summary = await get_system_health(db, _)
 
     # Count recent deployments (last 24 hours)
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     deploy_result = await db.execute(select(func.count(Deployment.id)).where(Deployment.created_at >= cutoff))
     recent_deployments = deploy_result.scalar() or 0
 
     # Count active maintenance
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     maint_result = await db.execute(
         select(func.count(MaintenanceWindow.id)).where(
             MaintenanceWindow.start_time <= now,
@@ -754,7 +754,7 @@ async def get_logs(
     per_page: int = Query(50, ge=1, le=200),
 ) -> LogsResponse:
     """Query logs/events across the fleet."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     # Build and apply filters to both queries
     base_query = select(NodeEvent).where(NodeEvent.created_at >= cutoff)
@@ -824,7 +824,7 @@ async def get_errors(
     - GET /api/errors/components - Errors by node
     - POST /api/errors/metrics/resolve/{event_id} - Mark errors resolved
     """
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     result = await db.execute(
         select(NodeEvent)
