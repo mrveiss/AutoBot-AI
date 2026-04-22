@@ -11,7 +11,7 @@ Defines the 3 main categories for AutoBot's knowledge base:
 """
 
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Dict, List, TypedDict
 
 # Issue #380: Module-level tuples for source category detection
 _AUTOBOT_DOC_KEYWORDS = ("autobot", "docs/", "documentation")
@@ -33,8 +33,16 @@ class KnowledgeCategory(str, Enum):
     USER_KNOWLEDGE = "user-knowledge"
 
 
+class CategoryMeta(TypedDict):
+    name: str
+    description: str
+    icon: str
+    color: str
+    examples: List[str]
+
+
 # Category metadata for display and organization
-CATEGORY_METADATA: Dict[str, Dict[str, Any]] = {
+CATEGORY_METADATA: Dict[str, CategoryMeta] = {
     KnowledgeCategory.AUTOBOT_DOCUMENTATION: {
         "name": "AutoBot Documentation",
         "description": "AutoBot's initial knowledge - documentation and guides",
