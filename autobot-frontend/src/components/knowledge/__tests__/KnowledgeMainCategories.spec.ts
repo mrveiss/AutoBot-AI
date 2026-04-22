@@ -10,6 +10,11 @@
  *  - kb_connected == false → broken-KB error panel visible (takes precedence)
  *  - Any count > 0 → neither banner visible
  *  - Empty categories array (still loading) → no banner (prevents flash)
+ *
+ * Covers issue #5590:
+ *  - kbFetchError == true → fetch-error panel visible (top priority)
+ *  - kbFetchError overrides both !kbConnected and empty-state
+ *  - kbFetchError defaults to false when prop omitted
  */
 
 import { describe, it, expect } from 'vitest'
@@ -48,12 +53,14 @@ const SYSTEM_CATEGORIES = [
 function mountComponent(props: {
   categories?: typeof SYSTEM_CATEGORIES
   kbConnected?: boolean
+  kbFetchError?: boolean
 }) {
   return mount(KnowledgeMainCategories, {
     props: {
       categories: props.categories ?? SYSTEM_CATEGORIES,
       populationStates: {},
       kbConnected: props.kbConnected,
+      kbFetchError: props.kbFetchError,
     },
     global: {
       mocks: { $t: stubT },
@@ -125,5 +132,34 @@ describe('KnowledgeMainCategories — empty-KB vs broken-KB panels (#5201)', () 
     // No kbConnected prop → default true → empty-state shown (counts are 0)
     expect(wrapper.find('.kb-status-panel--info').exists()).toBe(true)
     expect(wrapper.find('.kb-status-panel--error').exists()).toBe(false)
+  })
+})
+
+describe('KnowledgeMainCategories — fetch-layer error panel (#5590)', () => {
+  it('shows fetch-error panel when kbFetchError is true', () => {
+    const wrapper = mountComponent({ kbFetchError: true, kbConnected: true })
+    expect(wrapper.find('.kb-status-panel--error').exists()).toBe(true)
+    expect(wrapper.text()).toContain('knowledge.categoriesFetchError.title')
+    expect(wrapper.text()).toContain('knowledge.categoriesFetchError.description')
+    expect(wrapper.find('.kb-status-panel--info').exists()).toBe(false)
+  })
+
+  it('fetch-error panel takes precedence over Redis-down panel', () => {
+    const wrapper = mountComponent({ kbFetchError: true, kbConnected: false })
+    // Both would show error, but fetch-error is first in v-if chain
+    expect(wrapper.text()).toContain('knowledge.categoriesFetchError.title')
+    expect(wrapper.text()).not.toContain('knowledge.categoriesError.title')
+  })
+
+  it('does not show fetch-error panel when kbFetchError is false', () => {
+    const wrapper = mountComponent({ kbFetchError: false, kbConnected: true })
+    expect(wrapper.text()).not.toContain('knowledge.categoriesFetchError.title')
+  })
+
+  it('defaults kbFetchError to false when prop omitted', () => {
+    const wrapper = mountComponent({ kbConnected: false })
+    // No kbFetchError prop → default false → Redis-down panel shown, not fetch-error
+    expect(wrapper.text()).toContain('knowledge.categoriesError.title')
+    expect(wrapper.text()).not.toContain('knowledge.categoriesFetchError.title')
   })
 })

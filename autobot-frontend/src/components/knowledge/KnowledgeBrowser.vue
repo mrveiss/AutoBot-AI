@@ -5,6 +5,7 @@
       :categories="mainCategories"
       :population-states="populationStates"
       :kb-connected="kbConnected"
+      :kb-fetch-error="kbFetchError"
       @select="selectMainCategory"
       @populate="handlePopulate"
       @import="() => router.push('/knowledge/upload')"
@@ -275,6 +276,10 @@ const mainCategories = ref<any[]>([])
 // (kb_connected=false). Defaults to true so we don't flash the error
 // banner before the first fetch completes.
 const kbConnected = ref<boolean>(true)
+// Issue #5590: track fetch-layer errors (5xx, network) separately from
+// Redis-down (kb_connected=false). Prevents blaming Redis when the real
+// cause is an unrelated backend error.
+const kbFetchError = ref<boolean>(false)
 const categoryCounts = ref<Record<string, number>>({})
 const isVectorizing = ref(false)
 const showProgressModal = ref(false)
@@ -571,6 +576,7 @@ const selectMainCategory = (mainCatId: string) => {
 }
 
 const loadMainCategories = async () => {
+  kbFetchError.value = false
   try {
     const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
 
@@ -583,9 +589,10 @@ const loadMainCategories = async () => {
     }
   } catch (err) {
     logger.error('Failed to load main categories:', err)
-    // Fetch itself failed — treat as broken KB so the UI shows the
-    // distinct error panel (#5201).
-    kbConnected.value = false
+    // Issue #5590: fetch failed (5xx, network error) — flag separately
+    // from kb_connected=false so the UI shows a generic message rather
+    // than blaming Redis for an unrelated backend error.
+    kbFetchError.value = true
     // Set default categories if API fails
     mainCategories.value = [
       {
