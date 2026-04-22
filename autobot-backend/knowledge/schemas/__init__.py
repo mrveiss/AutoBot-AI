@@ -54,6 +54,18 @@ from knowledge.schemas.search import (
     SearchAnalyticsResponse,
     SimilaritySearchResponse,
 )
+from knowledge.schemas.rag import (
+    AdvancedSearchResponse,
+    BenchmarkRunResponse,
+    EntityHistoryResponse,
+    LoopApproveResponse,
+    LoopRejectResponse,
+    LoopStatusResponse,
+    RagConfigResponse,
+    RagStatsResponse,
+    RerankResultsResponse,
+    UpdateRagConfigResponse,
+)
 from knowledge.schemas.stats import (
     DetailedKnowledgeSizeMetrics,
     DetailedKnowledgeStats,
@@ -99,6 +111,17 @@ __all__ = [
     "DocsStatsResponse",
     "DocsWatcherControlResponse",
     "DocsWatcherStatusResponse",
+    # rag.py
+    "AdvancedSearchResponse",
+    "BenchmarkRunResponse",
+    "EntityHistoryResponse",
+    "LoopApproveResponse",
+    "LoopRejectResponse",
+    "LoopStatusResponse",
+    "RagConfigResponse",
+    "RagStatsResponse",
+    "RerankResultsResponse",
+    "UpdateRagConfigResponse",
     # search.py
     "EnhancedSearchResponse",
     "EnhancedSearchV2Response",

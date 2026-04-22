@@ -20,6 +20,18 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
+from knowledge.schemas.rag import (
+    AdvancedSearchResponse,
+    BenchmarkRunResponse,
+    EntityHistoryResponse,
+    LoopApproveResponse,
+    LoopRejectResponse,
+    LoopStatusResponse,
+    RagConfigResponse,
+    RagStatsResponse,
+    RerankResultsResponse,
+    UpdateRagConfigResponse,
+)
 from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
 from services.rag_service import RAGService
@@ -154,7 +166,7 @@ def _build_search_metrics(metrics) -> dict:
     operation="advanced_rag_search",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/advanced_search")
+@router.post("/advanced_search", response_model=AdvancedSearchResponse)
 async def advanced_search(
     request: AdvancedSearchRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -217,7 +229,7 @@ async def advanced_search(
     operation="rerank_results",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/rerank_results")
+@router.post("/rerank_results", response_model=RerankResultsResponse)
 async def rerank_results(
     request: RerankRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -262,7 +274,7 @@ async def rerank_results(
     operation="get_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/config/rag")
+@router.get("/config/rag", response_model=RagConfigResponse)
 async def get_rag_configuration(
     current_user: dict = Depends(get_current_user),
 ):
@@ -289,7 +301,7 @@ async def get_rag_configuration(
     operation="update_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
-@router.put("/config/rag")
+@router.put("/config/rag", response_model=UpdateRagConfigResponse)
 async def update_rag_configuration(
     request: RAGConfigUpdate,
     current_user: dict = Depends(get_current_user),
@@ -335,7 +347,7 @@ async def update_rag_configuration(
     operation="get_loop_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/loop/status")
+@router.get("/loop/status", response_model=LoopStatusResponse)
 async def get_loop_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -377,7 +389,7 @@ async def get_loop_status(
     operation="approve_loop_variant",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/loop/approve")
+@router.post("/loop/approve", response_model=LoopApproveResponse)
 async def approve_loop_variant(
     current_user: dict = Depends(get_current_user),
 ):
@@ -411,7 +423,7 @@ async def approve_loop_variant(
     operation="reject_loop_variant",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/loop/reject")
+@router.post("/loop/reject", response_model=LoopRejectResponse)
 async def reject_loop_variant(
     current_user: dict = Depends(get_current_user),
 ):
@@ -442,7 +454,7 @@ async def reject_loop_variant(
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats/rag")
+@router.get("/stats/rag", response_model=RagStatsResponse)
 async def get_rag_stats(
     rag_service: RAGService = Depends(get_rag_service_dependency),
     current_user: dict = Depends(get_current_user),
@@ -489,7 +501,7 @@ class RunBenchmarkRequest(BaseModel):
     operation="run_rag_benchmark",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/benchmark/run")
+@router.post("/benchmark/run", response_model=BenchmarkRunResponse)
 async def run_rag_benchmark(
     request: RunBenchmarkRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -622,7 +634,7 @@ async def run_rag_benchmark(
     operation="get_entity_history",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/entity/{entity_id}/history")
+@router.get("/entity/{entity_id}/history", response_model=EntityHistoryResponse)
 async def get_entity_history(
     entity_id: str,
     current_user: dict = Depends(get_current_user),
