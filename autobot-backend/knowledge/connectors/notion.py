@@ -18,6 +18,7 @@ Config keys (under ``ConnectorConfig.config``):
 import hashlib
 import logging
 from datetime import datetime
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -188,7 +189,7 @@ class NotionConnector(AbstractConnector):
             return ChangeInfo(
                 source_id=page_id,
                 change_type="added",
-                timestamp=datetime.utcnow(),
+                timestamp=now_utc(),
                 details={"last_edited_time": last_edited},
             )
 
@@ -199,7 +200,7 @@ class NotionConnector(AbstractConnector):
             return ChangeInfo(
                 source_id=page_id,
                 change_type=change_type,
-                timestamp=datetime.utcnow(),
+                timestamp=now_utc(),
                 details={"last_edited_time": last_edited},
             )
         return None
@@ -285,9 +286,9 @@ def _page_to_source_info(page: Dict[str, Any], database_id: str) -> SourceInfo:
     page_id = page.get("id", "")
     last_edited = page.get("last_edited_time", "")
     try:
-        last_modified = datetime.fromisoformat(last_edited.rstrip("Z"))
+        last_modified = parse_utc_iso(last_edited)
     except (ValueError, AttributeError):
-        last_modified = datetime.utcnow()
+        last_modified = now_utc()
 
     return SourceInfo(
         source_id=page_id,

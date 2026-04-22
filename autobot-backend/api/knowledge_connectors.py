@@ -25,6 +25,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -155,7 +156,7 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        return parse_utc_iso(value)
     except (ValueError, TypeError):
         return None
 
@@ -234,7 +235,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         sync_result = None
 
     if sync_result is not None:
-        cfg.last_sync_at = sync_result.completed_at or datetime.utcnow()
+        cfg.last_sync_at = sync_result.completed_at or now_utc()
         await _save_connector(cfg)
 
         history_entry = {

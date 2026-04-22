@@ -23,7 +23,7 @@ import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -545,7 +545,7 @@ class ComplianceManager:
         pii_log_path = (
             self.audit_base_path
             / "pii_access"
-            / f"{datetime.utcnow().strftime('%Y-%m-%d')}.json"
+            / f"{now_utc().strftime('%Y-%m-%d')}.json"
         )
         # Issue #358 - avoid blocking
         await asyncio.to_thread(pii_log_path.parent.mkdir, exist_ok=True)
@@ -563,7 +563,7 @@ class ComplianceManager:
         """Store audit event with appropriate security measures"""
 
         # Determine storage path based on event type and date
-        date_str = datetime.fromisoformat(audit_event["timestamp"]).strftime("%Y-%m-%d")
+        date_str = parse_utc_iso(audit_event["timestamp"]).strftime("%Y-%m-%d")
         event_type = audit_event["event_type"]
 
         storage_path = self.audit_base_path / event_type / f"{date_str}.jsonl"
@@ -738,7 +738,7 @@ class ComplianceManager:
         violations_path = (
             self.audit_base_path
             / "violations"
-            / f"{datetime.utcnow().strftime('%Y-%m-%d')}.jsonl"
+            / f"{now_utc().strftime('%Y-%m-%d')}.jsonl"
         )
         # Issue #358 - avoid blocking
         await asyncio.to_thread(violations_path.parent.mkdir, exist_ok=True)
