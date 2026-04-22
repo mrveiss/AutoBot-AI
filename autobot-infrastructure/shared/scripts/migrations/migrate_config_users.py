@@ -31,7 +31,11 @@ from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
 sys.path.insert(0, str(project_root))
+
+from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 
 from config import ConfigManager
 from user_management.config import DeploymentMode, get_deployment_config
@@ -263,7 +267,7 @@ class ConfigUserMigrator:
         created_at = datetime.now(timezone.utc)
         if created_at_str:
             try:
-                created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                created_at = parse_utc_iso(created_at_str)
             except ValueError:
                 pass
 
