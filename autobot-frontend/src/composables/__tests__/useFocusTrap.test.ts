@@ -190,4 +190,70 @@ describe('useFocusTrap', () => {
       expect(document.activeElement).toBe(a)
     })
   })
+
+  describe('isTabbable filter (#5373)', () => {
+    it('skips buttons inside aria-hidden subtrees', () => {
+      const container = document.createElement('div')
+      const a = document.createElement('button')
+      const hiddenWrap = document.createElement('div')
+      hiddenWrap.setAttribute('aria-hidden', 'true')
+      const insideHidden = document.createElement('button')
+      hiddenWrap.appendChild(insideHidden)
+      const c = document.createElement('button')
+      container.append(a, hiddenWrap, c)
+      document.body.appendChild(container)
+
+      const ref_ = ref<HTMLElement | null>(container)
+      const { onKeydown } = useFocusTrap(ref_)
+
+      // Focus c (the visible last). Tab should wrap to a (visible first),
+      // skipping insideHidden which is in an aria-hidden subtree.
+      c.focus()
+      const ev = tabEvent(false)
+      onKeydown(ev)
+      expect(document.activeElement).toBe(a)
+    })
+
+    it('skips buttons inside [inert] containers', () => {
+      const container = document.createElement('div')
+      const a = document.createElement('button')
+      const inertWrap = document.createElement('div')
+      inertWrap.setAttribute('inert', '')
+      const insideInert = document.createElement('button')
+      inertWrap.appendChild(insideInert)
+      const c = document.createElement('button')
+      container.append(a, inertWrap, c)
+      document.body.appendChild(container)
+
+      const ref_ = ref<HTMLElement | null>(container)
+      const { onKeydown } = useFocusTrap(ref_)
+
+      c.focus()
+      const ev = tabEvent(false)
+      onKeydown(ev)
+      // insideInert filtered out → wrap from c to a.
+      expect(document.activeElement).toBe(a)
+    })
+
+    it('skips buttons whose ancestor has display:none (offsetParent === null)', () => {
+      const container = document.createElement('div')
+      const a = document.createElement('button')
+      const hiddenWrap = document.createElement('div')
+      hiddenWrap.style.display = 'none'
+      const insideHidden = document.createElement('button')
+      hiddenWrap.appendChild(insideHidden)
+      const c = document.createElement('button')
+      container.append(a, hiddenWrap, c)
+      document.body.appendChild(container)
+
+      const ref_ = ref<HTMLElement | null>(container)
+      const { onKeydown } = useFocusTrap(ref_)
+
+      c.focus()
+      const ev = tabEvent(false)
+      onKeydown(ev)
+      // insideHidden's offsetParent is null → filtered out → wrap c → a.
+      expect(document.activeElement).toBe(a)
+    })
+  })
 })
