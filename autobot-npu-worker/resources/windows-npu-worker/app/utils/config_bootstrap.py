@@ -15,7 +15,7 @@ import logging
 import socket
 from typing import Any, Dict, Optional
 
-import aiohttp
+from utils.http_retry import aiohttp_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -128,59 +128,31 @@ async def fetch_bootstrap_config(
 
         backend_url = f"http://{backend_host}:{backend_port}/api/npu/workers/bootstrap"
 
-        # Reuse single session for all retries (efficiency improvement)
-        session_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession(timeout=session_timeout) as session:
-            for attempt in range(retries):
-                try:
-                    async with session.post(
-                        backend_url, json=bootstrap_request
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            if data.get("success"):
-                                _bootstrap_config = data.get("config", {})
-                                _worker_id = data.get("worker_id")
-                                logger.info(
-                                    "Bootstrap config received from %s - worker_id: %s",
-                                    backend_url,
-                                    _worker_id,
-                                )
-                                return _bootstrap_config
-                            else:
-                                logger.warning(
-                                    "Bootstrap failed: %s", data.get("message")
-                                )
-                        else:
-                            text = await response.text()
-                            logger.warning(
-                                "Bootstrap request failed: status=%d, response=%s",
-                                response.status,
-                                text[:200],
-                            )
+        data = await aiohttp_with_backoff(
+            backend_url,
+            method="POST",
+            json_body=bootstrap_request,
+            max_attempts=retries,
+            initial_delay=1.0,
+            timeout_s=float(timeout),
+            logger=logger,
+        )
 
-                except aiohttp.ClientConnectorError:
-                    logger.warning(
-                        "Cannot connect to backend at %s (attempt %d/%d)",
-                        backend_url,
-                        attempt + 1,
-                        retries,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "Bootstrap request timeout to %s (attempt %d/%d)",
-                        backend_url,
-                        attempt + 1,
-                        retries,
-                    )
-                except Exception as e:
-                    logger.error("Bootstrap error: %s", e)
+        if data is None:
+            logger.error("Failed to fetch bootstrap config after %d attempts", retries)
+            return None
 
-                # Wait before retry (exponential backoff)
-                if attempt < retries - 1:
-                    await asyncio.sleep(2**attempt)
+        if data.get("success"):
+            _bootstrap_config = data.get("config", {})
+            _worker_id = data.get("worker_id")
+            logger.info(
+                "Bootstrap config received from %s - worker_id: %s",
+                backend_url,
+                _worker_id,
+            )
+            return _bootstrap_config
 
-        logger.error("Failed to fetch bootstrap config after %d attempts", retries)
+        logger.warning("Bootstrap failed: %s", data.get("message"))
         return None
 
 
