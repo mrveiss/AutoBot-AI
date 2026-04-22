@@ -1,12 +1,12 @@
 <template>
   <div v-if="showDialog" class="command-overlay">
-    <div class="command-dialog">
+    <div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="cmd-permission-title">
       <div class="command-header">
-        <div class="command-icon">
+        <div class="command-icon" aria-hidden="true">
           <Icon name="terminal" size="md" />
         </div>
         <div class="command-title">
-          <h3>{{ t('ui.commandPermission.title') }}</h3>
+          <h3 id="cmd-permission-title">{{ t('ui.commandPermission.title') }}</h3>
           <p class="command-subtitle">{{ purpose || t('ui.commandPermission.defaultPurpose') }}</p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 <template>
   <div class="unified-loading-view" :data-loading-key="loadingKey">
     <!-- Error State -->
-    <div v-if="error && !isLoading" class="error-container">
+    <div v-if="error && !isLoading" class="error-container" role="alert">
       <div class="error-content">
         <div class="error-icon">
           <Icon name="exclamation-triangle" size="xl" class="text-4xl" style="color: var(--color-error)" />
@@ -21,7 +21,7 @@
     </div>
 
     <!-- Loading State -->
-    <div v-else-if="isLoading && !hasContent" class="loading-container">
+    <div v-else-if="isLoading && !hasContent" class="loading-container" role="status" aria-live="polite" aria-atomic="true">
       <div class="loading-content">
         <div class="loading-spinner">
           <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600"></div>
@@ -41,7 +41,7 @@
       <slot />
 
       <!-- Subtle loading indicator when content exists -->
-      <div v-if="isLoading && hasContent" class="updating-indicator">
+      <div v-if="isLoading && hasContent" class="updating-indicator" role="status" aria-live="polite" aria-atomic="true">
         <div class="updating-pulse"></div>
         <span class="updating-text">{{ t('ui.unifiedLoading.updating') }}</span>
       </div>

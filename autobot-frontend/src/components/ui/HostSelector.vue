@@ -4,7 +4,12 @@
     <div
       v-if="!expanded"
       class="host-selector-collapsed"
+      role="button"
+      tabindex="0"
+      :aria-expanded="expanded"
       @click="toggleExpanded"
+      @keydown.enter="toggleExpanded"
+      @keydown.space.prevent="toggleExpanded"
     >
       <div class="selected-host" v-if="selectedHost">
         <Icon :name="getHostIcon(selectedHost)" size="sm" />
@@ -25,7 +30,7 @@
     <div v-else class="host-selector-expanded">
       <div class="selector-header">
         <h4>{{ t('ui.hostSelector.infrastructureHosts') }}</h4>
-        <button class="btn-close" @click="toggleExpanded">
+        <button class="btn-close" @click="toggleExpanded" :aria-label="t('ui.modal.closeDialog')">
           <Icon name="times" size="sm" />
         </button>
       </div>
@@ -99,7 +104,7 @@
       </div>
 
       <!-- Loading state -->
-      <div v-else class="loading-state">
+      <div v-else class="loading-state" role="status" aria-live="polite">
         <LoadingSpinner size="md" />
         <span>{{ t('ui.hostSelector.loadingHosts') }}</span>
       </div>
@@ -428,6 +433,11 @@ defineExpose({
   padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-close:hover {

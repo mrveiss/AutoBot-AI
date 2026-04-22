@@ -752,8 +752,8 @@ onUnmounted(() => {
   background: transparent;
   border: 1px solid var(--border-secondary);
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;

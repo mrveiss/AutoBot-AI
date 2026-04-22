@@ -388,6 +388,7 @@ const formatCell = (value: any, column: Column) => {
 /* Issue #901: Technical Precision pagination buttons */
 .pagination-btn {
   padding: var(--spacing-2) var(--spacing-3);
+  min-height: 44px;
   border: 1px solid var(--border-default);
   background: var(--bg-card);
   border-radius: var(--radius-xs);
