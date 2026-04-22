@@ -15,15 +15,16 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
 from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
+    BatchVectorizeRequest,
     ClearFailedJobsResponse,
     DeleteJobResponse,
     FailedJobsResponse,
+    ReindexWithContextRequest,
     ReindexWithContextResponse,
     ReindexWithContextStatusResponse,
     RetryJobResponse,
@@ -1121,28 +1122,6 @@ async def vectorize_individual_fact(
 # ===== BATCH DOCUMENT VECTORIZATION (Issue #2077) =====
 
 
-class BatchVectorizeRequest(BaseModel):
-    """Request model for batch document vectorization. Issue #2077."""
-
-    document_ids: List[str] = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="List of document IDs to vectorize (max 100 per request)",
-    )
-
-    @field_validator("document_ids")
-    @classmethod
-    def validate_document_ids(cls, v: List[str]) -> List[str]:
-        """Deduplicate and validate individual document IDs."""
-        seen: dict[str, None] = {}
-        for item in v:
-            if not isinstance(item, str) or not item.strip() or len(item) > 255:
-                raise ValueError(f"Invalid document ID: {item!r}")
-            seen[item] = None
-        return list(seen)
-
-
 async def _vectorize_single_document(kb, document_id: str) -> dict:
     """
     Vectorize a single document by ID, returning a per-document result dict.
@@ -1552,8 +1531,6 @@ async def get_vectorization_status(
 # ===== CONTEXTUAL RETRIEVAL REINDEX (Issue #1513) =====
 
 _REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
-_REINDEX_DEFAULT_BATCH_SIZE = 20
-_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
 
 # Reindex task state (#1513, #1761)
 _reindex_state: dict = {
@@ -1564,23 +1541,6 @@ _reindex_state: dict = {
     "completed_at": None,
     "error": None,
 }
-
-
-class ReindexWithContextRequest(BaseModel):
-    """Request model for retroactive context enrichment (#1513)."""
-
-    collection_name: Optional[str] = Field(
-        default=None,
-        max_length=200,
-        pattern=_REINDEX_COLLECTION_PATTERN,
-        description="ChromaDB collection (defaults to knowledge_vectors)",
-    )
-    batch_size: int = Field(
-        default=_REINDEX_DEFAULT_BATCH_SIZE,
-        ge=1,
-        le=500,
-        description="Chunks to process per batch",
-    )
 
 
 async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
