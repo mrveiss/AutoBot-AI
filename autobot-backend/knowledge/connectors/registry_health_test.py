@@ -33,12 +33,11 @@ if _BACKEND_DIR not in sys.path:
 
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
-
+from tests.helpers.fake_connector import FakeConnector
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def _make_config(connector_id: str, connector_type: str, name: str) -> ConnectorConfig:
     return ConnectorConfig(
@@ -48,23 +47,6 @@ def _make_config(connector_id: str, connector_type: str, name: str) -> Connector
         config={},
     )
 
-
-class _FakeConnector:
-    """Minimal stand-in for an AbstractConnector instance (Issue #4420)."""
-
-    def __init__(self, config: ConnectorConfig, result=True, delay: float = 0.0):
-        self.config = config
-        self._result = result
-        self._delay = delay
-
-    async def test_connection(self):
-        if self._delay:
-            await asyncio.sleep(self._delay)
-        if isinstance(self._result, Exception):
-            raise self._result
-        return self._result
-
-
 @pytest.fixture(autouse=True)
 def _clear_registry():
     """Guarantee clean registry state between tests (Issue #4420)."""
@@ -72,11 +54,9 @@ def _clear_registry():
     yield
     ConnectorRegistry._instances.clear()
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.asyncio
 async def test_empty_registry_returns_empty_structure():
@@ -89,12 +69,11 @@ async def test_empty_registry_returns_empty_structure():
     parsed = datetime.fromisoformat(result["checked_at"])
     assert parsed.tzinfo is not None
 
-
 @pytest.mark.asyncio
 async def test_all_connectors_healthy():
     for i in range(3):
         cfg = _make_config(f"id-{i}", "file_server", f"src-{i}")
-        ConnectorRegistry.add_instance(_FakeConnector(cfg, result=True))
+        ConnectorRegistry.add_instance(FakeConnector(cfg, result=True))
 
     result = await ConnectorRegistry.health_check_all()
     assert sorted(result["healthy"]) == [
@@ -105,17 +84,16 @@ async def test_all_connectors_healthy():
     assert result["unavailable"] == []
     assert result["errors"] == {}
 
-
 @pytest.mark.asyncio
 async def test_mixed_healthy_and_unhealthy():
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("a", "file_server", "docs-nfs"), result=True)
+        FakeConnector(_make_config("a", "file_server", "docs-nfs"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("b", "web_crawler", "internal-wiki"), result=True)
+        FakeConnector(_make_config("b", "web_crawler", "internal-wiki"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("c", "notion", "workspace-1"), result=False)
+        FakeConnector(_make_config("c", "notion", "workspace-1"), result=False)
     )
 
     result = await ConnectorRegistry.health_check_all()
@@ -124,14 +102,13 @@ async def test_mixed_healthy_and_unhealthy():
     # False (not exception) → no error string
     assert result["errors"] == {}
 
-
 @pytest.mark.asyncio
 async def test_connector_exception_captured_in_errors():
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("a", "file_server", "good"), result=True)
+        FakeConnector(_make_config("a", "file_server", "good"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(
+        FakeConnector(
             _make_config("b", "notion", "workspace-1"),
             result=RuntimeError("401 Unauthorized"),
         )
@@ -143,25 +120,23 @@ async def test_connector_exception_captured_in_errors():
     assert "notion:workspace-1" in result["errors"]
     assert "401 Unauthorized" in result["errors"]["notion:workspace-1"]
 
-
 @pytest.mark.asyncio
 async def test_one_failure_does_not_block_others():
     """Verify asyncio.gather(return_exceptions=False) path: _check_one never raises."""
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("a", "t", "one"), result=ValueError("boom"))
+        FakeConnector(_make_config("a", "t", "one"), result=ValueError("boom"))
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("b", "t", "two"), result=True)
+        FakeConnector(_make_config("b", "t", "two"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_config("c", "t", "three"), result=True)
+        FakeConnector(_make_config("c", "t", "three"), result=True)
     )
 
     result = await ConnectorRegistry.health_check_all()
     assert sorted(result["healthy"]) == ["t:three", "t:two"]
     assert result["unavailable"] == ["t:one"]
     assert "boom" in result["errors"]["t:one"]
-
 
 @pytest.mark.asyncio
 async def test_checks_run_concurrently():
@@ -170,7 +145,7 @@ async def test_checks_run_concurrently():
     for i in range(5):
         cfg = _make_config(f"id-{i}", "slow", f"n-{i}")
         ConnectorRegistry.add_instance(
-            _FakeConnector(cfg, result=True, delay=delay)
+            FakeConnector(cfg, result=True, delay=delay)
         )
 
     start = time.monotonic()
@@ -182,21 +157,19 @@ async def test_checks_run_concurrently():
     # Allow generous overhead but still catch sequential execution.
     assert elapsed < 0.5, f"health_check_all took {elapsed:.3f}s — not concurrent"
 
-
 @pytest.mark.asyncio
 async def test_label_falls_back_to_connector_id_when_name_missing():
     cfg = _make_config("only-id", "file_server", "")
-    ConnectorRegistry.add_instance(_FakeConnector(cfg, result=True))
+    ConnectorRegistry.add_instance(FakeConnector(cfg, result=True))
 
     result = await ConnectorRegistry.health_check_all()
     assert result["healthy"] == ["file_server:only-id"]
-
 
 @pytest.mark.asyncio
 async def test_async_mock_connector():
     """Verify health check works against AsyncMock-style connectors too."""
     cfg = _make_config("am", "file_server", "mock")
-    instance = _FakeConnector(cfg, result=True)
+    instance = FakeConnector(cfg, result=True)
     instance.test_connection = AsyncMock(return_value=True)
     ConnectorRegistry.add_instance(instance)
 
