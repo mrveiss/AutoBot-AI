@@ -24,7 +24,7 @@
     <div v-else-if="isLoading && !hasContent" class="loading-container" role="status" aria-live="polite" aria-atomic="true">
       <div class="loading-content">
         <div class="loading-spinner">
-          <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600"></div>
+          <LoadingSpinner size="xl" />
         </div>
         <p class="loading-message">{{ message || t('ui.unifiedLoading.loading') }}</p>
         <div v-if="hasTimedOut" class="timeout-warning">
@@ -55,6 +55,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 import Icon from './Icon.vue'
+import LoadingSpinner from './LoadingSpinner.vue'
 
 const logger = createLogger('UnifiedLoadingView')
 const { t } = useI18n()

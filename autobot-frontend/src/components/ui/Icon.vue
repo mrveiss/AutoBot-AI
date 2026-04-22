@@ -29,6 +29,7 @@ import { computed } from 'vue'
 const ICONS = {
   // Navigation
   'chevron-down': 'M19 9l-7 7-7-7',
+  sort: 'M8 9l4-4 4 4m-8 6l4 4 4-4',
   'chevron-up': 'M5 15l7-7 7 7',
   'chevron-left': 'M15 19l-7-7 7-7',
   'chevron-right': 'M9 5l7 7-7 7',

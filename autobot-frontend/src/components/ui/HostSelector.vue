@@ -1,15 +1,12 @@
 <template>
   <div class="host-selector">
     <!-- Collapsed state - shows current selection -->
-    <div
+    <button
       v-if="!expanded"
+      type="button"
       class="host-selector-collapsed"
-      role="button"
-      tabindex="0"
       :aria-expanded="expanded"
       @click="toggleExpanded"
-      @keydown.enter="toggleExpanded"
-      @keydown.space.prevent="toggleExpanded"
     >
       <div class="selected-host" v-if="selectedHost">
         <Icon :name="getHostIcon(selectedHost)" size="sm" />
@@ -24,7 +21,7 @@
         <span>{{ t('ui.hostSelector.selectHost') }}</span>
       </div>
       <Icon name="chevron-down" size="sm" class="expand-icon" />
-    </div>
+    </button>
 
     <!-- Expanded state - shows host list -->
     <div v-else class="host-selector-expanded">
@@ -337,6 +334,11 @@ defineExpose({
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all var(--duration-150);
+  appearance: none;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  width: 100%;
 }
 
 .host-selector-collapsed:hover {
