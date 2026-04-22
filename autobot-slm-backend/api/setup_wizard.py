@@ -11,6 +11,7 @@ node addition, enrollment, role assignment, and fleet provisioning.
 
 import asyncio
 import logging
+import re
 import tempfile
 import time
 import uuid
@@ -650,8 +651,6 @@ def _extract_failure_summary(output: str) -> str:
     users see e.g. '172.16.168.26 failed at "Common | Update apt cache":
     Failed to update apt cache: unknown reason' instead of 'exit code 2'.
     """
-    import re
-
     lines = output.splitlines()
     failures: list[str] = []
     current_task = ""
