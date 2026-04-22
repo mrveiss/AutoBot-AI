@@ -91,18 +91,25 @@ from knowledge.schemas.population import (
     TaskStatusResponse,
 )
 from knowledge.schemas.rag import (
+    AdvancedSearchRequest,
     AdvancedSearchResponse,
     BenchmarkRunResponse,
     EntityHistoryResponse,
     LoopApproveResponse,
     LoopRejectResponse,
     LoopStatusResponse,
+    RAGConfigUpdate,
     RagConfigResponse,
     RagStatsResponse,
+    RerankRequest,
     RerankResultsResponse,
+    RunBenchmarkRequest,
     UpdateRagConfigResponse,
 )
 from knowledge.schemas.mcp import (
+    DocumentAddRequest,
+    KnowledgeSearchRequest,
+    KnowledgeStatsRequest,
     McpAddDocumentResponse,
     McpHealthResponse,
     McpKnowledgeStatsResponse,
@@ -140,6 +147,8 @@ from knowledge.schemas.connectors import (
     ConnectorTypeEntry,
     ConnectorTypesResponse,
     ConnectorUpdateResponse,
+    CreateConnectorRequest,
+    UpdateConnectorRequest,
 )
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
@@ -221,15 +230,19 @@ __all__ = [
     "DocsWatcherControlResponse",
     "DocsWatcherStatusResponse",
     # rag.py
+    "AdvancedSearchRequest",
     "AdvancedSearchResponse",
     "BenchmarkRunResponse",
     "EntityHistoryResponse",
     "LoopApproveResponse",
     "LoopRejectResponse",
     "LoopStatusResponse",
+    "RAGConfigUpdate",
     "RagConfigResponse",
     "RagStatsResponse",
+    "RerankRequest",
     "RerankResultsResponse",
+    "RunBenchmarkRequest",
     "UpdateRagConfigResponse",
     # search.py
     "EnhancedSearchResponse",
@@ -296,7 +309,12 @@ __all__ = [
     "ConnectorTypeEntry",
     "ConnectorTypesResponse",
     "ConnectorUpdateResponse",
+    "CreateConnectorRequest",
+    "UpdateConnectorRequest",
     # mcp.py
+    "DocumentAddRequest",
+    "KnowledgeSearchRequest",
+    "KnowledgeStatsRequest",
     "McpAddDocumentResponse",
     "McpHealthResponse",
     "McpKnowledgeStatsResponse",

@@ -154,3 +154,25 @@ class RagFeedbackResponse(BaseModel):
     stream_key: Optional[str] = None
     decision: Optional[str] = None
     reason: Optional[str] = None
+
+
+class KnowledgeSearchRequest(BaseModel):
+    """Request body for POST /mcp/search_knowledge_base."""
+
+    query: str = Field(..., description="Search query")
+    top_k: int = Field(5, description="Number of results to return")
+    filters: Optional[Dict[str, Any]] = Field(None, description="Optional filters")
+
+
+class DocumentAddRequest(BaseModel):
+    """Request body for POST /mcp/add_to_knowledge_base."""
+
+    content: str = Field(..., description="Document content")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
+    source: Optional[str] = Field(None, description="Document source")
+
+
+class KnowledgeStatsRequest(BaseModel):
+    """Request body for POST /mcp/get_knowledge_stats."""
+
+    include_details: bool = Field(False, description="Include detailed statistics")

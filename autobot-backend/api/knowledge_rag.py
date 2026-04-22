@@ -15,72 +15,31 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import QueryDefaults
 from knowledge.schemas.rag import (
+    AdvancedSearchRequest,
     AdvancedSearchResponse,
     BenchmarkRunResponse,
     EntityHistoryResponse,
     LoopApproveResponse,
     LoopRejectResponse,
     LoopStatusResponse,
+    RAGConfigUpdate,
     RagConfigResponse,
     RagStatsResponse,
+    RerankRequest,
     RerankResultsResponse,
+    RunBenchmarkRequest,
     UpdateRagConfigResponse,
 )
 from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
 from services.rag_service import RAGService
-from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-# ===== PYDANTIC MODELS =====
-
-
-class AdvancedSearchRequest(BaseModel):
-    """Request model for advanced RAG search with reranking"""
-
-    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(
-        default=QueryDefaults.RAG_DEFAULT_RESULTS,
-        ge=1,
-        le=50,
-        description="Maximum results",
-    )
-    enable_reranking: bool = Field(
-        default=True, description="Enable cross-encoder reranking"
-    )
-    return_context: bool = Field(
-        default=False, description="Return optimized context for RAG"
-    )
-    timeout: float = Field(default=None, description="Optional timeout in seconds")
-
-
-class RerankRequest(BaseModel):
-    """Request model for reranking existing search results"""
-
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Original search query"
-    )
-    results: List[Metadata] = Field(..., description="Search results to rerank")
-
-
-class RAGConfigUpdate(BaseModel):
-    """Request model for updating RAG configuration"""
-
-    hybrid_weight_semantic: float = Field(default=None, ge=0.0, le=1.0)
-    hybrid_weight_keyword: float = Field(default=None, ge=0.0, le=1.0)
-    enable_reranking: bool = Field(default=None)
-    diversity_threshold: float = Field(default=None, ge=0.0, le=1.0)
-    max_results_per_stage: int = Field(default=None, ge=1, le=100)
 
 
 # ===== DEPENDENCY INJECTION =====
@@ -476,24 +435,6 @@ async def get_rag_stats(
         "stats": stats,
         "service_available": True,
     }
-
-
-class RunBenchmarkRequest(BaseModel):
-    """Request body for POST /rag/benchmark/run.
-
-    Issue #5074: callers must declare which split they are benchmarking
-    against so held-out scores are auditable.
-    """
-
-    split: str = Field(
-        ...,
-        description=(
-            "Which portion of the dataset to run: 'dev' (tuning), 'test' "
-            "(held-out final score), or 'all' (combined — not a held-out score)."
-        ),
-        pattern="^(dev|test|all)$",
-    )
-    k: int = Field(default=5, ge=1, le=50, description="Top-k results per query.")
 
 
 @with_error_handling(

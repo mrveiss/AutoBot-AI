@@ -175,8 +175,6 @@ class ReindexWithContextStatusResponse(BaseModel):
 class BatchVectorizeRequest(BaseModel):
     """Request model for POST /vectorize_documents (#2077)."""
 
-    model_config = ConfigDict(extra="allow")
-
     document_ids: List[str] = Field(
         ...,
         min_length=1,
@@ -198,8 +196,6 @@ class BatchVectorizeRequest(BaseModel):
 
 class ReindexWithContextRequest(BaseModel):
     """Request model for POST /reindex_with_context (#1513)."""
-
-    model_config = ConfigDict(extra="allow")
 
     collection_name: Optional[str] = Field(
         default=None,
