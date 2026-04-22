@@ -81,6 +81,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { apiService } from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 
@@ -98,7 +99,10 @@ const emit = defineEmits(['open-full-view', 'workflow-cancelled'])
 const activeWorkflow = ref(null)
 const workflowSteps = ref([])
 const expanded = ref(false)
-const refreshInterval = ref(null)
+const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
+  async () => { await loadWorkflowData(); return null },
+  { intervalMs: 3000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 // Computed properties
 const progressPercentage = computed(() => {
@@ -164,17 +168,11 @@ const cancelWorkflow = async () => {
 // Lifecycle
 onMounted(() => {
   loadWorkflowData()
-
-  // Refresh every 3 seconds
-  refreshInterval.value = setInterval(() => {
-    loadWorkflowData()
-  }, 3000)
+  _startRefresh('')
 })
 
 onUnmounted(() => {
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
-  }
+  _stopRefresh()
 })
 </script>
 

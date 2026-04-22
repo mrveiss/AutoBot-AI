@@ -186,6 +186,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 const logger = createLogger('AgentActivityVisualization')
@@ -505,22 +506,21 @@ function simulateActivity() {
 }
 
 // Lifecycle
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
+  async () => { simulateActivity(); return null },
+  { intervalMs: props.refreshInterval || 0, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 onMounted(async () => {
   await Promise.all([fetchAgents(), fetchEvents()])
 
   if (props.refreshInterval > 0) {
-    refreshTimer = setInterval(() => {
-      simulateActivity()
-    }, props.refreshInterval)
+    _startRefresh('')
   }
 })
 
 onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-  }
+  _stopRefresh()
 })
 
 // Expose

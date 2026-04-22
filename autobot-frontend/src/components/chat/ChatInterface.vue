@@ -272,6 +272,7 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
@@ -887,33 +888,25 @@ const checkConnection = async () => {
   }
 }
 
-// Interval refs for proper cleanup
-const heartbeatInterval = ref<number | null>(null)
-const autoSaveInterval = ref<number | null>(null)
+// Heartbeat: check connection every 60 s (reduced from 30 to minimise UI updates)
+const heartbeatPoller = usePollingJob(
+  async () => { await checkConnection(); return null },
+  { intervalMs: 60_000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
-const startHeartbeat = () => {
-  // Clear any existing interval first
-  if (heartbeatInterval.value) {
-    clearInterval(heartbeatInterval.value)
-  }
-  // Check connection every 60 seconds (reduced from 30 to minimize UI updates)
-  heartbeatInterval.value = setInterval(checkConnection, 60000) as unknown as number
-}
-
-// Auto-save functionality
-const enableAutoSave = () => {
-  // Clear any existing interval first
-  if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
-  }
-  // Auto-save current session every 2 minutes
-  autoSaveInterval.value = setInterval(() => {
+// Auto-save current session every 2 minutes
+const autoSavePoller = usePollingJob(
+  async () => {
     if (store.settings.autoSave && store.currentSessionId) {
-      controller.saveChatSession()
-        .catch((error: any) => logger.warn('Auto-save failed:', error))
+      await controller.saveChatSession().catch((error: any) => logger.warn('Auto-save failed:', error))
     }
-  }, 2 * 60 * 1000) as unknown as number
-}
+    return null
+  },
+  { intervalMs: 2 * 60 * 1000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
+
+const startHeartbeat = () => heartbeatPoller.start('')
+const enableAutoSave = () => autoSavePoller.start('')
 
 // Message polling with exponential backoff + circuit breaker (#1100)
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
@@ -1071,15 +1064,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyboardShortcuts)
 
   // Clean up intervals
-  if (heartbeatInterval.value) {
-    clearInterval(heartbeatInterval.value)
-    heartbeatInterval.value = null
-  }
-
-  if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
-    autoSaveInterval.value = null
-  }
+  heartbeatPoller.stop()
+  autoSavePoller.stop()
 
   _stopCountdown()
   messagePoller.stop()
@@ -1114,16 +1100,9 @@ onDeactivated(() => {
   // Pause message polling (will resume on onActivated)
   messagePoller.stop()
 
-  // Clean up intervals while cached
-  if (heartbeatInterval.value) {
-    clearInterval(heartbeatInterval.value)
-    heartbeatInterval.value = null
-  }
-
-  if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
-    autoSaveInterval.value = null
-  }
+  // Pause intervals while cached
+  heartbeatPoller.stop()
+  autoSavePoller.stop()
 
   // Clean up keyboard shortcuts while cached
   document.removeEventListener('keydown', handleKeyboardShortcuts)
