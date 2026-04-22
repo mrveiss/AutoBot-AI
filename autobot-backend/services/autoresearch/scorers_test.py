@@ -98,11 +98,6 @@ class TestValBpbScorer:
 
 class TestLLMJudgeScorer:
     @pytest.fixture
-    def mock_llm(self):
-        llm = AsyncMock()
-        return llm
-
-    @pytest.fixture
     def scorer(self, mock_llm):
         return LLMJudgeScorer(
             llm_service=mock_llm,

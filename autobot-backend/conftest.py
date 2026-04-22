@@ -13,7 +13,7 @@ import os
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -286,6 +286,16 @@ def test_data_dir() -> Path:
 def temp_dir(tmp_path) -> Path:
     """Provide temporary directory for test files."""
     return tmp_path
+
+
+@pytest.fixture
+def mock_llm():
+    """Minimal LLM mock — tests attach .return_value / .side_effect as needed.
+
+    Extracted from 4+ inline duplicates (#5432). Tests that need richer
+    response-mock setup define their own local fixture which overrides this.
+    """
+    return AsyncMock()
 
 
 @pytest.fixture(autouse=True)
