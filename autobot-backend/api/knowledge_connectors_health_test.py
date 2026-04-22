@@ -23,18 +23,7 @@ from api.knowledge_connectors import _hydrate_all_instances, router
 from auth_middleware import check_admin_permission
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
-
-
-class _FakeConnector:
-    def __init__(self, config: ConnectorConfig, result=True):
-        self.config = config
-        self._result = result
-
-    async def test_connection(self):
-        if isinstance(self._result, Exception):
-            raise self._result
-        return self._result
-
+from tests.helpers.fake_connector import FakeConnector
 
 def _make_app() -> FastAPI:
     app = FastAPI()
@@ -42,7 +31,6 @@ def _make_app() -> FastAPI:
     app.dependency_overrides[check_admin_permission] = lambda: None
     app.include_router(router, prefix="/api")
     return app
-
 
 def _make_cfg(connector_id: str, connector_type: str, name: str) -> ConnectorConfig:
     return ConnectorConfig(
@@ -52,13 +40,11 @@ def _make_cfg(connector_id: str, connector_type: str, name: str) -> ConnectorCon
         config={},
     )
 
-
 @pytest.fixture(autouse=True)
 def _clear_registry():
     ConnectorRegistry._instances.clear()
     yield
     ConnectorRegistry._instances.clear()
-
 
 def test_health_endpoint_empty_registry():
     app = _make_app()
@@ -78,19 +64,18 @@ def test_health_endpoint_empty_registry():
     assert body["errors"] == {}
     assert "checked_at" in body
 
-
 def test_health_endpoint_aggregates_mixed_results():
     app = _make_app()
     client = TestClient(app)
 
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_cfg("a", "file_server", "docs-nfs"), result=True)
+        FakeConnector(_make_cfg("a", "file_server", "docs-nfs"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_cfg("b", "web_crawler", "internal-wiki"), result=True)
+        FakeConnector(_make_cfg("b", "web_crawler", "internal-wiki"), result=True)
     )
     ConnectorRegistry.add_instance(
-        _FakeConnector(
+        FakeConnector(
             _make_cfg("c", "notion", "workspace-1"),
             result=RuntimeError("401 Unauthorized"),
         )
@@ -112,7 +97,6 @@ def test_health_endpoint_aggregates_mixed_results():
     assert "401 Unauthorized" in body["errors"]["notion:workspace-1"]
     assert "checked_at" in body
 
-
 def test_health_route_matched_before_connector_id_path():
     """Ensure FastAPI dispatches /health to the aggregate endpoint,
     not /{connector_id} (Issue #4420 route-ordering guard)."""
@@ -129,11 +113,9 @@ def test_health_route_matched_before_connector_id_path():
     assert resp.status_code == 200
     assert "healthy" in resp.json()
 
-
 # ---------------------------------------------------------------------------
 # Issue #5054 / #5055: hydration resiliency
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.asyncio
 async def test_hydration_returns_gracefully_when_redis_down():
@@ -146,7 +128,6 @@ async def test_hydration_returns_gracefully_when_redis_down():
         # to the in-memory registry.
         await _hydrate_all_instances()
 
-
 @pytest.mark.asyncio
 async def test_hydration_returns_gracefully_on_connection_error():
     """Issue #5054: OSError/ConnectionError from the Redis client must also
@@ -157,7 +138,6 @@ async def test_hydration_returns_gracefully_on_connection_error():
     ):
         await _hydrate_all_instances()
 
-
 def test_health_endpoint_works_when_redis_hydration_fails():
     """Issue #5054: /connectors/health must return 200 using the in-memory
     registry even when Redis is unreachable during hydration."""
@@ -165,7 +145,7 @@ def test_health_endpoint_works_when_redis_hydration_fails():
     client = TestClient(app)
 
     ConnectorRegistry.add_instance(
-        _FakeConnector(_make_cfg("in-mem", "file_server", "local-only"), result=True)
+        FakeConnector(_make_cfg("in-mem", "file_server", "local-only"), result=True)
     )
 
     with patch(
@@ -178,7 +158,6 @@ def test_health_endpoint_works_when_redis_hydration_fails():
     body = resp.json()
     assert "file_server:local-only" in body["healthy"]
     assert body["errors"] == {}
-
 
 @pytest.mark.asyncio
 async def test_hydration_skips_corrupted_record_and_continues():
