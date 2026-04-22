@@ -80,9 +80,17 @@ async function navigate(): Promise<void> {
   loading.value = true
   error.value = null
 
+  // #5139: if no scheme is present, normalize to a usable URL:
+  //   - `localhost` / `localhost:PORT` → `http://…` (HTTPS would fail for local dev)
+  //   - anything with a `.` → `https://…` (treat as domain)
+  //   - bare words → route through DuckDuckGo as a search query
+  // The prior branch excluded `localhost` at the outer condition AND then
+  // re-checked for it in the inner branch — dead code on both sides.
   let targetUrl = url.value.trim()
-  if (!targetUrl.includes('://') && !targetUrl.startsWith('localhost')) {
-    if (targetUrl.includes('.') || targetUrl.startsWith('localhost')) {
+  if (!targetUrl.includes('://')) {
+    if (targetUrl.startsWith('localhost')) {
+      targetUrl = `http://${targetUrl}`
+    } else if (targetUrl.includes('.')) {
       targetUrl = `https://${targetUrl}`
     } else {
       targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(targetUrl)}`
