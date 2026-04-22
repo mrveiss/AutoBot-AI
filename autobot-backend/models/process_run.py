@@ -52,8 +52,8 @@ class ProcessRun(Base):
     log_excerpt = Column(Text, nullable=True)
     log_path = Column(String(1024), nullable=True)
     timeout_seconds = Column(Integer, nullable=False, default=300)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
     decompositions = relationship(
         "TaskDecomposition",
@@ -113,7 +113,7 @@ class AgentSession(Base):
     task_id = Column(String(255), nullable=False, index=True)
     session_state = Column(JSONB, nullable=True)
     ttl_seconds = Column(Integer, nullable=False, default=3600)
-    expires_at = Column(DateTime, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
 
     def __repr__(self) -> str:
         return (
