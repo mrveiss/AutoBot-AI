@@ -89,7 +89,7 @@
         >
           <div
             class="summary-card-header"
-            @click="toggleSection(section.id)"
+            @click="toggle(section.id)"
           >
             <span class="level-badge section">{{ $t('knowledge.summaries.overview.section') }}</span>
             <div class="section-topics-preview">
@@ -104,7 +104,7 @@
             <i
               :class="[
                 'fas',
-                expandedSections.has(section.id)
+                isExpanded(section.id)
                   ? 'fa-chevron-up'
                   : 'fa-chevron-down',
               ]"
@@ -112,7 +112,7 @@
             />
           </div>
 
-          <div v-if="expandedSections.has(section.id)">
+          <div v-if="isExpanded(section.id)">
             <p class="summary-content">{{ section.content }}</p>
 
             <button
@@ -140,11 +140,12 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import {
   useKnowledgeGraph,
   type DocumentOverview,
 } from '@/composables/useKnowledgeGraph'
+import { useExpansion } from '@/composables/useExpansion'
 
 const props = defineProps<{
   documentId: string
@@ -156,19 +157,11 @@ defineEmits<{
 
 const { getOverview, loading, error } = useKnowledgeGraph()
 const overview = ref<DocumentOverview | null>(null)
-const expandedSections = reactive(new Set<string>())
-
-function toggleSection(sectionId: string): void {
-  if (expandedSections.has(sectionId)) {
-    expandedSections.delete(sectionId)
-  } else {
-    expandedSections.add(sectionId)
-  }
-}
+const { isExpanded, toggle, collapseAll } = useExpansion<string>()
 
 async function loadOverview(): Promise<void> {
   if (!props.documentId) return
-  expandedSections.clear()
+  collapseAll()
   overview.value = await getOverview(props.documentId)
 }
 
