@@ -28,6 +28,7 @@ from api.knowledge_boards import (
 )
 from api.knowledge_boards import router as boards_router
 from tests.helpers.fake_redis import AsyncHashFakeRedis
+from tests.helpers.fake_kb import MinimalFakeKB
 
 
 # ---------------------------------------------------------------------------
@@ -38,14 +39,8 @@ from tests.helpers.fake_redis import AsyncHashFakeRedis
 def _make_app(fake_redis: AsyncHashFakeRedis) -> FastAPI:
     """Build a minimal FastAPI app with the boards router wired up."""
 
-    class _FakeKB:
-        _aioredis_client = fake_redis
-
-        def redis(self):
-            return self._aioredis_client
-
     async def _fake_get_kb(app, force_refresh=False):  # noqa: ANN001
-        return _FakeKB()
+        return MinimalFakeKB(fake_redis)
 
     app = FastAPI()
     # Patch module-level factory so _get_redis() resolves correctly
