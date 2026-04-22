@@ -49,15 +49,15 @@
             v-for="item in pendingItems"
             :key="item.id"
             class="knowledge-item"
-            :class="{ 'selected': selectedItems[item.id] }"
+            :class="{ 'selected': isSelected(item) }"
           >
             <div class="item-header">
               <div class="item-selection">
                 <input
                   type="checkbox"
                   :id="`item-${item.id}`"
-                  v-model="selectedItems[item.id]"
-                  @change="updateItemDecision(item.id)"
+                  :checked="isSelected(item)"
+                  @change="handleItemToggle(item)"
                 >
                 <label :for="`item-${item.id}`" class="item-preview">
                   {{ truncateContent(item.content, 100) }}
@@ -68,7 +68,7 @@
               </div>
             </div>
 
-            <div v-if="selectedItems[item.id]" class="item-details">
+            <div v-if="isSelected(item)" class="item-details">
               <div class="content-preview">
                 <pre>{{ item.content }}</pre>
               </div>
@@ -257,6 +257,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/composables/useToast';
+import { useBatchSelection } from '@/composables/useBatchSelection';
 import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
@@ -292,8 +293,16 @@ const { showToast } = useToast();
 
 // Reactive data
 const pendingItems = ref([]);
-const selectedItems = ref({});
 const itemDecisions = ref({});
+
+const {
+  isSelected,
+  toggle: toggleItemSelection,
+  selectAll,
+  clear: deselectAllItems,
+  selectedItems: selectedPendingItems,
+  someSelected: hasSelectedItems,
+} = useBatchSelection(pendingItems, item => item.id);
 const compileOptions = ref({
   includeSystemMessages: false,
   title: ''
@@ -301,9 +310,6 @@ const compileOptions = ref({
 const loading = ref(false);
 
 // Computed properties
-const hasSelectedItems = computed(() => {
-  return Object.values(selectedItems.value).some(selected => selected);
-});
 
 const hasDecisions = computed(() => {
   return Object.keys(itemDecisions.value).length > 0;
@@ -335,9 +341,8 @@ const loadPendingItems = async () => {
     if (response.success) {
       pendingItems.value = response.pending_items;
 
-      // Initialize selections and decisions
+      // Initialize decisions (useBatchSelection handles selection state)
       pendingItems.value.forEach(item => {
-        selectedItems.value[item.id] = false;
         itemDecisions.value[item.id] = item.suggested_action || 'keep_temporary';
       });
     }
@@ -365,30 +370,22 @@ const getSuggestionText = (action) => {
 
 // NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
 
-const updateItemDecision = (itemId) => {
-  if (!selectedItems.value[itemId]) {
-    delete itemDecisions.value[itemId];
+const handleItemToggle = (item) => {
+  const wasSelected = isSelected(item);
+  toggleItemSelection(item);
+  if (wasSelected) {
+    delete itemDecisions.value[item.id];
   }
 };
 
-const selectAll = () => {
-  pendingItems.value.forEach(item => {
-    selectedItems.value[item.id] = true;
-  });
-};
-
 const deselectAll = () => {
-  pendingItems.value.forEach(item => {
-    selectedItems.value[item.id] = false;
-  });
+  deselectAllItems();
   itemDecisions.value = {};
 };
 
 const applyBulkDecision = (decision) => {
-  Object.keys(selectedItems.value).forEach(itemId => {
-    if (selectedItems.value[itemId]) {
-      itemDecisions.value[itemId] = decision;
-    }
+  selectedPendingItems.value.forEach(item => {
+    itemDecisions.value[item.id] = decision;
   });
 };
 
@@ -397,12 +394,13 @@ const applyAllDecisions = async () => {
     loading.value = true;
     const decisions = [];
 
-    // Collect all decisions
-    Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
-      if (selectedItems.value[itemId]) {
+    // Collect all decisions for selected items
+    selectedPendingItems.value.forEach(item => {
+      const decision = itemDecisions.value[item.id];
+      if (decision) {
         decisions.push({
           chat_id: props.chatId,
-          knowledge_id: itemId,
+          knowledge_id: item.id,
           decision: decision
         });
       }
