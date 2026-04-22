@@ -43,12 +43,11 @@
               @keydown.space.prevent="column.sortable ? handleSort(column.key) : null"
             >
               {{ column.label }}
-              <i
+              <Icon
                 v-if="column.sortable"
-                class="fas"
-                :class="getSortIcon(column.key)"
-                aria-hidden="true"
-              ></i>
+                :name="getSortIcon(column.key)"
+                size="xs"
+              />
             </th>
             <th v-if="$slots.actions" scope="col" class="actions-column">{{ t('ui.dataTable.actions') }}</th>
           </tr>
@@ -117,7 +116,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from './EmptyState.vue'
 import LoadingSpinner from './LoadingSpinner.vue'
-import Icon from './Icon.vue'
+import Icon, { type IconName } from './Icon.vue'
 
 /**
  * Reusable Data Table Component
@@ -205,9 +204,9 @@ const handleSort = (key: string) => {
   emit('sort-change', key, sortDirection.value)
 }
 
-const getSortIcon = (key: string) => {
-  if (sortKey.value !== key) return 'fa-sort'
-  return sortDirection.value === 'asc' ? 'fa-sort-up' : 'fa-sort-down'
+const getSortIcon = (key: string): IconName => {
+  if (sortKey.value !== key) return 'sort'
+  return sortDirection.value === 'asc' ? 'chevron-up' : 'chevron-down'
 }
 
 // Pagination
