@@ -13,9 +13,17 @@
       >
         <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
       </BaseButton>
-      <!-- Mobile header: title + close button -->
-      <div class="lg:hidden flex items-center justify-between w-full px-3 py-2">
-        <span class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.sidebar.chatHistory') }}</span>
+      <!--
+        Mobile header: close button only.
+
+        #5456: previously also rendered a `<span>{{ chatHistory }}</span>`
+        title which duplicated the `<h3>` below on L36 — in the DOM at
+        all viewports (CSS media queries don't hide the subtree from
+        jsdom / a11y readers in every case). The `<h3>` serves as the
+        single accessible section heading; the mobile header keeps just
+        the close button, which already has an `aria-label`.
+      -->
+      <div class="lg:hidden flex items-center justify-end w-full px-3 py-2">
         <BaseButton
           variant="ghost"
           class="p-2 text-autobot-text-secondary"
