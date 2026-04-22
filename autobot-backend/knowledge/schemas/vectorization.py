@@ -147,6 +147,15 @@ class VectorizationStatusPollResponse(BaseModel):
     batch_size: int
 
 
+class ReindexWithContextResponse(BaseModel):
+    """Response for POST /reindex_with_context (#1513)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    message: str
+
+
 class ReindexWithContextStatusResponse(BaseModel):
     """Response for GET /reindex_with_context/status (#1761)."""
 

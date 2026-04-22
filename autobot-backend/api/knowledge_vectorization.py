@@ -24,6 +24,7 @@ from knowledge.schemas.vectorization import (
     ClearFailedJobsResponse,
     DeleteJobResponse,
     FailedJobsResponse,
+    ReindexWithContextResponse,
     ReindexWithContextStatusResponse,
     RetryJobResponse,
     VectorizationStatusPollResponse,
@@ -1580,13 +1581,6 @@ class ReindexWithContextRequest(BaseModel):
         le=500,
         description="Chunks to process per batch",
     )
-
-
-class ReindexWithContextResponse(BaseModel):
-    """Response model for reindex_with_context (#1513)."""
-
-    status: str
-    message: str
 
 
 async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
