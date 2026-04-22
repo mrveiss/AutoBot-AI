@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from enum import Enum
 from typing import Optional
 
@@ -109,7 +110,7 @@ class DocumentVersion:
     @classmethod
     def from_dict(cls, data: Metadata) -> "DocumentVersion":
         """Create from dictionary"""
-        data["created_at"] = datetime.fromisoformat(data["created_at"])
+        data["created_at"] = parse_utc_iso(data["created_at"])
         data["change_type"] = ChangeType(data["change_type"])
         return cls(**data)
 
@@ -218,7 +219,7 @@ class DocumentChangeTracker:
             machine_id=machine_id,
             os_type=os_type,
             os_version=os_version,
-            created_at=datetime.utcnow(),
+            created_at=now_utc(),
             change_type=change_type,
             previous_hash=previous_hash,
             metadata=metadata or {},

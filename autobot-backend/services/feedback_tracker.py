@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
@@ -66,7 +66,7 @@ class FeedbackTracker:
             try:
                 # Create feedback record
                 feedback = CompletionFeedback(
-                    timestamp=datetime.utcnow(),
+                    timestamp=now_utc(),
                     user_id=user_id,
                     context=context,
                     suggestion=suggestion,
@@ -125,7 +125,7 @@ class FeedbackTracker:
             pattern.acceptance_rate = pattern.times_accepted / pattern.times_suggested
 
         # Update last_seen timestamp
-        pattern.last_seen = datetime.utcnow()
+        pattern.last_seen = now_utc()
 
         logger.debug(
             f"Updated pattern {pattern_id}: "
@@ -158,7 +158,7 @@ class FeedbackTracker:
             # Get feedback count since last retrain
             last_retrain_str = self.redis_client.get(self.last_retrain_key)
             if last_retrain_str:
-                last_retrain = datetime.fromisoformat(last_retrain_str.decode())
+                last_retrain = parse_utc_iso(last_retrain_str.decode())
             else:
                 last_retrain = now_utc() - timedelta(days=30)
 

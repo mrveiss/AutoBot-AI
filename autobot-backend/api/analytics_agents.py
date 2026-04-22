@@ -300,11 +300,12 @@ def _check_agent_metrics(metrics) -> list:
             )
 
     if metrics.total_tasks > 0 and metrics.last_activity:
-        from datetime import datetime, timedelta
+        from datetime import timedelta
+        from autobot_shared.time_utils import now_utc, parse_utc_iso
 
         try:
-            last = datetime.fromisoformat(metrics.last_activity)
-            if datetime.utcnow() - last > timedelta(days=7):
+            last = parse_utc_iso(metrics.last_activity)
+            if now_utc() - last > timedelta(days=7):
                 recommendations.append(
                     {
                         "type": "low_activity",

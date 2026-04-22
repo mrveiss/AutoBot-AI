@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Any, Dict, List
 from uuid import uuid4
 
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 
 class ChannelType(str, Enum):
@@ -110,9 +110,9 @@ class UnifiedMessage:
             content=data.get("content"),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
+                parse_utc_iso(data["created_at"])
                 if "created_at" in data
-                else datetime.utcnow()
+                else now_utc()
             ),
         )
 
@@ -148,7 +148,7 @@ class GatewaySession:
 
     def update_activity(self) -> None:
         """Update last activity timestamp."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = now_utc()
 
     def add_message(self, message_id: str) -> None:
         """Add message to history."""
