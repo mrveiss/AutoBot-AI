@@ -29,9 +29,9 @@ divergence from the canonical GPU chunker.
 
 from __future__ import annotations
 
-import threading
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from utils.semantic_chunker_base import SemanticChunk
 from utils.semantic_chunker_gpu import GPUSemanticChunker
 
@@ -74,17 +74,4 @@ class OptimizedSemanticChunker(GPUSemanticChunker):
         return chunks
 
 
-_optimized_instance: Optional[OptimizedSemanticChunker] = None
-_optimized_lock = threading.Lock()
-
-
-def get_optimized_semantic_chunker(
-    *args: Any, **kwargs: Any
-) -> OptimizedSemanticChunker:
-    """Return the process-wide :class:`OptimizedSemanticChunker` singleton."""
-    global _optimized_instance
-    if _optimized_instance is None:
-        with _optimized_lock:
-            if _optimized_instance is None:
-                _optimized_instance = OptimizedSemanticChunker(*args, **kwargs)
-    return _optimized_instance
+get_optimized_semantic_chunker = lazy_singleton(OptimizedSemanticChunker)
