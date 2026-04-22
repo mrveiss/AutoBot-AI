@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)

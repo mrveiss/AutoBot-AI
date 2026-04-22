@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc
 from type_defs.common import JSONObject, Metadata
 
 logger = logging.getLogger(__name__)

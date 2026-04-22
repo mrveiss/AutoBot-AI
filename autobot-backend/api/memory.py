@@ -39,6 +39,7 @@ from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
 

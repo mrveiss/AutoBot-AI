@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import check_admin_permission
+from autobot_shared.time_utils import now_utc
 from skills.db import get_skills_engine
 from skills.generator import SkillGenerator
 from skills.models import (
