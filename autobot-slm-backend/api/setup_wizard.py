@@ -643,6 +643,58 @@ def _write_provision_log(line: str) -> None:
         pass
 
 
+def _extract_failure_summary(output: str) -> str:
+    """Parse Ansible stdout and return a human-readable failure summary.
+
+    Extracts failed hosts, the task that failed, and the error message so
+    users see e.g. '172.16.168.26 failed at "Common | Update apt cache":
+    Failed to update apt cache: unknown reason' instead of 'exit code 2'.
+    """
+    import re
+
+    lines = output.splitlines()
+    failures: list[str] = []
+    current_task = ""
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Track the current task name
+        if line.startswith("TASK ["):
+            task_match = re.search(r"TASK \[(.+?)\]", line)
+            if task_match:
+                current_task = task_match.group(1).strip()
+
+        # Fatal failure or unreachable
+        if line.startswith("fatal:"):
+
+            host_match = re.search(r"fatal: \[([^\]]+)\]", line)
+            host = host_match.group(1) if host_match else "unknown host"
+            failure_type = "UNREACHABLE" if "UNREACHABLE" in line else "FAILED"
+
+            # Look ahead for msg: field in the next few lines
+            msg = ""
+            for j in range(i + 1, min(i + 10, len(lines))):
+                msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\']?\s*$', lines[j].strip())
+                if msg_match:
+                    msg = msg_match.group(1).strip().strip("'\"")
+                    break
+
+            task_part = f' at "{current_task}"' if current_task else ""
+            msg_part = f": {msg}" if msg else ""
+            failures.append(f"{host} {failure_type.lower()}{task_part}{msg_part}")
+
+        i += 1
+
+    if not failures:
+        return ""
+
+    count = len(failures)
+    noun = "host" if count == 1 else "hosts"
+    return f"{count} {noun} failed — " + "; ".join(failures)
+
+
 def _handle_provision_result(result: dict) -> None:
     """Record provisioning result to state and log (#1455)."""
     raw_output = result.get("output", "")
@@ -658,9 +710,10 @@ def _handle_provision_result(result: dict) -> None:
     else:
         rc = result.get("returncode", -1)
         _provision_state["status"] = "failed"
-        _provision_state["error"] = f"Ansible exited with code {rc}"
-        _write_provision_log(f"FAILED: Ansible exited with code {rc}")
-        logger.error("Fleet provisioning failed (rc=%s)", rc)
+        summary = _extract_failure_summary(raw_output)
+        _provision_state["error"] = summary or f"Ansible exited with code {rc}"
+        _write_provision_log(f"FAILED: {_provision_state['error']}")
+        logger.error("Fleet provisioning failed (rc=%s): %s", rc, _provision_state["error"])
 
 
 async def _create_wizard_deployments(
@@ -875,7 +928,7 @@ async def _run_provisioning_task(
             node_to_deployment,
             success=bool(result.get("success")),
             output=result.get("output", ""),
-            error=(None if result.get("success") else f"Ansible exited with code {result.get('returncode', -1)}"),
+            error=(None if result.get("success") else _provision_state.get("error")),
             reachable_nodes=None,
         )
 
@@ -888,9 +941,9 @@ async def _run_provisioning_task(
             await ws_manager.send_provision_status("completed", "complete", elapsed)
             await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
         else:
-            rc = result.get("returncode", -1)
-            await ws_manager.send_provision_status("failed", "", elapsed, error=f"Ansible exited with code {rc}")
-            await ws_manager.send_provision_log("error", f"Provisioning failed (exit code {rc})")
+            human_error = _provision_state.get("error", "Provisioning failed")
+            await ws_manager.send_provision_status("failed", "", elapsed, error=human_error)
+            await ws_manager.send_provision_log("error", f"Provisioning failed — {human_error}")
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
