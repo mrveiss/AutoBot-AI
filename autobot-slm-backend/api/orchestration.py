@@ -778,7 +778,7 @@ async def _apply_fleet_action(
             svc.status = running_state
             svc.active_state = active_state
             svc.sub_state = sub_state
-            svc.last_checked = datetime.utcnow()
+            svc.last_checked = datetime.now(timezone.utc)
             await ws_manager.send_service_status(
                 node_id=svc.node_id,
                 service_name=service_name,

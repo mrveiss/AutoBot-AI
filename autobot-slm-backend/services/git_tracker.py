@@ -138,7 +138,7 @@ class GitTracker:
         _, returncode = await self._run_git_command("fetch", self.remote)
 
         if returncode == 0:
-            self.last_fetch = datetime.utcnow()
+            self.last_fetch = datetime.now(timezone.utc)
             return True
         return False
 

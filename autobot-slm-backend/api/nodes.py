@@ -1326,10 +1326,10 @@ async def _cleanup_decommissioned_node(
     await db.execute(delete(NodeCredential).where(NodeCredential.node_id == node.node_id))
     await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
-    node.updated_at = datetime.utcnow()
+    node.updated_at = datetime.now(timezone.utc)
 
     deployment.status = DeploymentStatus.COMPLETED.value
-    deployment.completed_at = datetime.utcnow()
+    deployment.completed_at = datetime.now(timezone.utc)
     deployment.playbook_output = ansible_result.get("output", "")
     await db.commit()
 
@@ -1342,7 +1342,7 @@ async def _fail_deployment(
 ) -> None:
     """Mark a deployment as failed and persist (#1369)."""
     deployment.status = DeploymentStatus.FAILED.value
-    deployment.completed_at = datetime.utcnow()
+    deployment.completed_at = datetime.now(timezone.utc)
     deployment.error = error_msg[:2000]
     if output:
         deployment.playbook_output = output
@@ -1467,7 +1467,7 @@ def _create_decommission_deployment(
         node_id=node_id,
         roles=[r["role_name"] for r in all_roles],
         status=DeploymentStatus.IN_PROGRESS.value,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
         triggered_by=current_user.get("username", "unknown"),
         extra_data={
             "action": "decommission",
@@ -1505,7 +1505,7 @@ async def reenroll_node(
     await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node_id))
 
     node.status = NodeStatus.PENDING.value
-    node.updated_at = datetime.utcnow()
+    node.updated_at = datetime.now(timezone.utc)
 
     await _create_node_event(
         db,
@@ -2357,7 +2357,7 @@ async def get_node_certificate(
     # Calculate days until expiry
     days_until_expiry = None
     if cert.not_after:
-        delta = cert.not_after - datetime.utcnow()
+        delta = cert.not_after - datetime.now(timezone.utc)
         days_until_expiry = delta.days
 
     response = CertificateResponse.model_validate(cert)
@@ -2395,8 +2395,8 @@ async def renew_node_certificate(
             node_id=node_id,
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
-            not_before=datetime.utcnow(),
-            not_after=datetime.utcnow().replace(year=datetime.utcnow().year + 1),
+            not_before=datetime.now(timezone.utc),
+            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
             status="active",
         )
         db.add(new_cert)
@@ -2458,8 +2458,8 @@ async def deploy_node_certificate(
             node_id=node_id,
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
-            not_before=datetime.utcnow(),
-            not_after=datetime.utcnow().replace(year=datetime.utcnow().year + 1),
+            not_before=datetime.now(timezone.utc),
+            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
             status="active",
         )
         db.add(new_cert)
@@ -2554,7 +2554,7 @@ async def apply_node_updates(
     for update in updates:
         try:
             update.is_applied = True
-            update.applied_at = datetime.utcnow()
+            update.applied_at = datetime.now(timezone.utc)
             applied.append(update.update_id)
         except Exception as e:
             logger.error("Failed to apply update %s: %s", update.update_id, e)

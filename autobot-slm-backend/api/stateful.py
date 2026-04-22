@@ -513,7 +513,7 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
             logger.error("Node %s not found for backup %s", backup.node_id, backup_id)
             backup.status = BackupStatus.FAILED.value
             backup.error = "Node not found"
-            backup.completed_at = datetime.utcnow()
+            backup.completed_at = datetime.now(timezone.utc)
             await db.commit()
             return
 
@@ -526,7 +526,7 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
             # For unsupported service types, mark as failed
             backup.status = BackupStatus.FAILED.value
             backup.error = f"Unsupported service type: {service_type}"
-            backup.completed_at = datetime.utcnow()
+            backup.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.warning("Backup %s failed: unsupported service type", backup_id)
 

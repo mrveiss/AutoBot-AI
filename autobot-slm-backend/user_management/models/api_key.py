@@ -152,7 +152,7 @@ class APIKey(Base, TimestampMixin):
         """Check if the key has expired."""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     @property
     def is_revoked(self) -> bool:
@@ -166,13 +166,13 @@ class APIKey(Base, TimestampMixin):
 
     def record_usage(self) -> None:
         """Record a usage of this API key."""
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc)
         self.usage_count += 1
 
     def revoke(self, revoked_by_user_id: Optional[uuid.UUID] = None) -> None:
         """Revoke the API key."""
         self.is_active = False
-        self.revoked_at = datetime.utcnow()
+        self.revoked_at = datetime.now(timezone.utc)
         self.revoked_by = revoked_by_user_id
 
     def has_scope(self, scope: str) -> bool:

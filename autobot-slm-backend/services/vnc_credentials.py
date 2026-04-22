@@ -165,7 +165,7 @@ class VNCCredentialService:
         if data.extra_data is not None:
             credential.encrypted_data = encrypt_data(data.extra_data)
 
-        credential.updated_at = datetime.utcnow()
+        credential.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(credential)
 
@@ -213,11 +213,11 @@ class VNCCredentialService:
         token_expires_at = None
         if generate_token:
             connection_token = self._generate_connection_token()
-            token_expires_at = datetime.utcnow() + timedelta(minutes=5)
+            token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
             _connection_tokens[connection_token] = (credential_id, token_expires_at)
 
         # Update last_used timestamp
-        credential.last_used = datetime.utcnow()
+        credential.last_used = datetime.now(timezone.utc)
         await db.commit()
 
         return VNCConnectionInfo(
@@ -240,7 +240,7 @@ class VNCCredentialService:
         credential_id, expires_at = _connection_tokens.pop(token)
 
         # Check expiration
-        if datetime.utcnow() > expires_at:
+        if datetime.now(timezone.utc) > expires_at:
             logger.warning("Connection token expired for credential %s", credential_id)
             return None
 

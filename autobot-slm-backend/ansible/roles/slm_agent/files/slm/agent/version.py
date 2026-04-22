@@ -97,7 +97,7 @@ class AgentVersion:
             True if saved successfully
         """
         if built_at is None:
-            built_at = datetime.utcnow()
+            built_at = datetime.now(timezone.utc)
 
         version_info = {
             "commit": commit,

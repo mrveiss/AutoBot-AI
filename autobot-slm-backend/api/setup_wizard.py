@@ -702,7 +702,7 @@ async def _create_wizard_deployments(
                         node_id=node.node_id,
                         roles=roles,
                         status=DeploymentStatus.IN_PROGRESS.value,
-                        started_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
                         triggered_by="setup-wizard",
                         extra_data={"source": "setup_wizard"},
                     )
@@ -746,7 +746,7 @@ async def _complete_wizard_deployments(
                     continue
                 node_succeeded = success and (reachable_nodes is None or node_id in reachable_nodes)
                 dep.status = DeploymentStatus.COMPLETED.value if node_succeeded else DeploymentStatus.FAILED.value
-                dep.completed_at = datetime.utcnow()
+                dep.completed_at = datetime.now(timezone.utc)
                 dep.playbook_output = output
                 if not node_succeeded:
                     dep.error = error or "Provisioning failed or node unreachable"

@@ -221,7 +221,7 @@ async def _get_node_hostname_map(db: AsyncSession, node_ids: List[str]) -> Dict[
 
 async def _get_error_counts_by_period(db: AsyncSession) -> Dict[str, int]:
     """Get error counts for different time periods."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoffs = {
         "24h": now - timedelta(hours=24),
         "7d": now - timedelta(days=7),
@@ -243,7 +243,7 @@ async def _get_error_counts_by_period(db: AsyncSession) -> Dict[str, int]:
 
 async def _calculate_error_trend(db: AsyncSession) -> str:
     """Calculate error trend based on recent vs previous period."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     recent_cutoff = now - timedelta(hours=12)
     prev_cutoff = now - timedelta(hours=24)
 
@@ -411,7 +411,7 @@ async def get_error_categories(
     hours: int = Query(24, ge=1, le=720),
 ) -> CategoriesResponse:
     """Get error categories breakdown."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     result = await db.execute(
         select(NodeEvent.event_type, func.count(NodeEvent.id).label("count"))
@@ -445,7 +445,7 @@ async def get_error_components(
     hours: int = Query(24, ge=1, le=720),
 ) -> ComponentsResponse:
     """Get errors by component/node."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     result = await db.execute(
         select(NodeEvent.node_id, func.count(NodeEvent.id).label("count"))
@@ -487,7 +487,7 @@ async def get_error_health(
     critical_threshold = await _get_setting_value(db, "error_alert_threshold_critical", 50)
 
     # Calculate current error rate (errors in last hour)
-    cutoff = datetime.utcnow() - timedelta(hours=1)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
     result = await db.execute(
         select(func.count(NodeEvent.id)).where(
             NodeEvent.created_at >= cutoff,
@@ -539,7 +539,7 @@ async def clear_errors(
     if severity:
         query = delete(NodeEvent).where(NodeEvent.severity == severity)
     if older_than_hours:
-        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
         query = query.where(NodeEvent.created_at < cutoff)
 
     result = await db.execute(query)
@@ -626,7 +626,7 @@ async def get_metrics_summary(
     total, unresolved = await _get_metrics_total_and_unresolved(db)
 
     # Critical count (last 24h)
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     critical_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
             NodeEvent.created_at >= cutoff,
@@ -685,7 +685,7 @@ async def get_error_timeline(
     interval: str = Query("hour", regex="^(hour|day)$"),
 ) -> TimelineResponse:
     """Get error timeline data."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start = now - timedelta(hours=hours)
 
     result = await db.execute(
@@ -711,7 +711,7 @@ async def get_top_errors(
     limit: int = Query(10, ge=1, le=50),
 ) -> TopErrorsResponse:
     """Get most frequent errors."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     # Get error counts by type and message
     result = await db.execute(
@@ -771,7 +771,7 @@ async def resolve_error(
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Error not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     username = user.get("username", "unknown")
 
     await db.execute(
@@ -840,7 +840,7 @@ async def cleanup_old_errors(
     if days is None:
         days = await _get_setting_value(db, "error_retention_days", 30)
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     result = await db.execute(
         delete(NodeEvent).where(

@@ -321,7 +321,7 @@ async def list_expiring_certificates(
 
             days_until = None
             if cred.tls_expires_at:
-                delta = cred.tls_expires_at - datetime.utcnow()
+                delta = cred.tls_expires_at - datetime.now(timezone.utc)
                 days_until = delta.days
 
             endpoints.append(

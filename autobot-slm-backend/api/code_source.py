@@ -452,7 +452,7 @@ async def _upsert_node_code_version(
         if cache_path:
             row.cache_path = cache_path
         if status == CodeStatus.UP_TO_DATE:
-            row.deployed_at = datetime.utcnow()
+            row.deployed_at = datetime.now(timezone.utc)
     else:
         db.add(
             NodeCodeVersion(
@@ -461,7 +461,7 @@ async def _upsert_node_code_version(
                 commit_hash=commit,
                 status=status.value,
                 cache_path=cache_path,
-                deployed_at=(datetime.utcnow() if status == CodeStatus.UP_TO_DATE else None),
+                deployed_at=(datetime.now(timezone.utc) if status == CodeStatus.UP_TO_DATE else None),
             )
         )
 
@@ -518,7 +518,7 @@ async def notify_new_commit(
 
     # Update source with new commit
     source.last_known_commit = notification.commit
-    source.last_notified_at = datetime.utcnow()
+    source.last_notified_at = datetime.now(timezone.utc)
 
     # Update source node's code_version and mark as up-to-date
     node_result = await db.execute(select(Node).where(Node.node_id == notification.node_id))

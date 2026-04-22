@@ -678,13 +678,13 @@ class ServiceOrchestrator:
 
         if service:
             service.status = status
-            service.last_checked = datetime.utcnow()
+            service.last_checked = datetime.now(timezone.utc)
         else:
             service = Service(
                 node_id=node_id,
                 service_name=service_name,
                 status=status,
-                last_checked=datetime.utcnow(),
+                last_checked=datetime.now(timezone.utc),
             )
             db.add(service)
 

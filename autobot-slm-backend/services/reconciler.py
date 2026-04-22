@@ -189,7 +189,7 @@ class ReconcilerService:
             if setting and setting.value:
                 self._heartbeat_timeout = int(setting.value)
 
-            cutoff = datetime.utcnow() - timedelta(seconds=self._heartbeat_timeout)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._heartbeat_timeout)
 
             # Get nodes with stale or missing heartbeats
             result = await db.execute(
@@ -403,7 +403,7 @@ class ReconcilerService:
         Returns True if remediation was attempted, False if skipped.
         """
         node_id = node.node_id
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
@@ -675,7 +675,7 @@ class ReconcilerService:
         Returns True if remediation was attempted, False if skipped.
         """
         key = (node.node_id, service.service_name)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         tracker = self._service_remediation_tracker.get(key, {"count": 0, "last_attempt": None})
 
@@ -771,7 +771,7 @@ class ReconcilerService:
             window_setting = rollback_window_setting.scalar_one_or_none()
             rollback_window = int(window_setting.value) if window_setting else DEFAULT_ROLLBACK_WINDOW
 
-            cutoff = datetime.utcnow() - timedelta(seconds=rollback_window)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=rollback_window)
 
             # Find nodes that are degraded/error with recent completed deployments
             degraded_nodes = await db.execute(
@@ -1043,7 +1043,7 @@ class ReconcilerService:
         node.cpu_percent = cpu_percent
         node.memory_percent = memory_percent
         node.disk_percent = disk_percent
-        node.last_heartbeat = datetime.utcnow()
+        node.last_heartbeat = datetime.now(timezone.utc)
 
         if agent_version:
             node.agent_version = agent_version
@@ -1304,7 +1304,7 @@ class ReconcilerService:
         if not discovered_services:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for svc_data in discovered_services:
             await self._upsert_service(db, node_id, svc_data, now)
@@ -1467,7 +1467,7 @@ class ReconcilerService:
 
             pem = Path(cert_path).read_bytes()
             cert = cryptography.x509.load_pem_x509_certificate(pem, default_backend())
-            delta = cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()
+            delta = cert.not_valid_after_utc.replace(tzinfo=None) - datetime.now(timezone.utc)
             return max(0, delta.days)
         except Exception as exc:
             logger.debug("Could not read cert %s: %s", cert_path, exc)

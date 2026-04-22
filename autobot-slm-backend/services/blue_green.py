@@ -306,7 +306,7 @@ class BlueGreenService:
 
         deployment.status = BlueGreenStatus.FAILED.value
         deployment.error = "Cancelled by user"
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
         return True, "Deployment cancelled"
@@ -458,7 +458,7 @@ class BlueGreenService:
         deployment.status = BlueGreenStatus.COMPLETED.value
         deployment.progress_percent = 100
         deployment.current_step = "Deployment completed (monitoring stopped manually)"
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
         logger.info("Monitoring stopped for deployment: %s", bg_deployment_id)
@@ -652,7 +652,7 @@ class BlueGreenService:
         """Phase 1-2: Borrow roles and deploy to green node."""
         # Phase 1: Start borrowing
         deployment.status = BlueGreenStatus.BORROWING.value
-        deployment.started_at = datetime.utcnow()
+        deployment.started_at = datetime.now(timezone.utc)
         deployment.progress_percent = 10
         deployment.current_step = "Borrowing roles to green node"
         await db.commit()
@@ -711,7 +711,7 @@ class BlueGreenService:
         else:
             deployment.status = BlueGreenStatus.FAILED.value
             deployment.error = "Health verification failed"
-            deployment.completed_at = datetime.utcnow()
+            deployment.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
     async def _phase_switch_traffic(
@@ -734,7 +734,7 @@ class BlueGreenService:
         green_node = await self._get_node(db, deployment.green_node_id)
         blue_node.roles = list(set(blue_node.roles or []) - set(deployment.blue_roles))
         green_node.roles = list(set(green_node.roles or []) | set(deployment.blue_roles))
-        deployment.switched_at = datetime.utcnow()
+        deployment.switched_at = datetime.now(timezone.utc)
         await db.commit()
 
     async def _phase_activate_and_monitor(
@@ -768,7 +768,7 @@ class BlueGreenService:
     ) -> None:
         """Start post-deployment health monitoring task."""
         deployment.status = BlueGreenStatus.MONITORING.value
-        deployment.monitoring_started_at = datetime.utcnow()
+        deployment.monitoring_started_at = datetime.now(timezone.utc)
         deployment.current_step = (
             f"Post-deployment monitoring ({deployment.post_deploy_monitor_duration}s, "
             f"threshold: {deployment.health_failure_threshold} failures)"
@@ -807,7 +807,7 @@ class BlueGreenService:
         deployment.status = BlueGreenStatus.COMPLETED.value
         deployment.progress_percent = 100
         deployment.current_step = "Deployment completed successfully"
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
         await self._broadcast_deployment_event(
@@ -834,7 +834,7 @@ class BlueGreenService:
             await self._execute_rollback(bg_deployment_id)
         else:
             deployment.status = BlueGreenStatus.FAILED.value
-            deployment.completed_at = datetime.utcnow()
+            deployment.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
     # =========================================================================
@@ -861,7 +861,7 @@ class BlueGreenService:
                 logger.error("Rollback failed for %s: %s", bg_deployment_id, e)
                 deployment.status = BlueGreenStatus.FAILED.value
                 deployment.error = f"Rollback failed: {e}"
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
     async def _rollback_restore_blue(self, db: AsyncSession, deployment: BlueGreenDeployment) -> None:
@@ -896,8 +896,8 @@ class BlueGreenService:
     ) -> None:
         """Complete the rollback process."""
         deployment.status = BlueGreenStatus.ROLLED_BACK.value
-        deployment.rollback_at = datetime.utcnow()
-        deployment.completed_at = datetime.utcnow()
+        deployment.rollback_at = datetime.now(timezone.utc)
+        deployment.completed_at = datetime.now(timezone.utc)
         deployment.current_step = "Rollback completed"
         await db.commit()
 
@@ -952,7 +952,7 @@ class BlueGreenService:
 
     def _get_monitoring_config(self, deployment: BlueGreenDeployment) -> dict:
         """Extract monitoring configuration from deployment."""
-        monitoring_start = deployment.monitoring_started_at or datetime.utcnow()
+        monitoring_start = deployment.monitoring_started_at or datetime.now(timezone.utc)
         return {
             "deadline": monitoring_start + timedelta(seconds=deployment.post_deploy_monitor_duration),
             "interval": deployment.health_check_interval,
@@ -970,7 +970,7 @@ class BlueGreenService:
     ) -> None:
         """Run the health monitoring loop."""
 
-        while datetime.utcnow() < config["deadline"]:
+        while datetime.now(timezone.utc) < config["deadline"]:
             # Check if deployment status changed externally
             should_continue = await self._check_monitoring_should_continue(bg_deployment_id)
             if not should_continue:
@@ -1118,7 +1118,7 @@ class BlueGreenService:
                 f"Deployment completed - monitoring passed "
                 f"({stats['successful_checks']}/{stats['total_checks']} health checks)"
             )
-            deployment.completed_at = datetime.utcnow()
+            deployment.completed_at = datetime.now(timezone.utc)
             await complete_db.commit()
 
         await self._broadcast_deployment_event(
@@ -1139,7 +1139,7 @@ class BlueGreenService:
             if deployment and deployment.status == BlueGreenStatus.MONITORING.value:
                 deployment.status = BlueGreenStatus.FAILED.value
                 deployment.error = f"Health monitoring error: {error}"
-                deployment.completed_at = datetime.utcnow()
+                deployment.completed_at = datetime.now(timezone.utc)
                 await error_db.commit()
 
     # =========================================================================
@@ -1259,10 +1259,10 @@ class BlueGreenService:
         """Verify node health after deployment."""
         from services.database import db_service
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         deadline = start_time + timedelta(seconds=timeout)
 
-        while datetime.utcnow() < deadline:
+        while datetime.now(timezone.utc) < deadline:
             async with db_service.session() as db:
                 node = await self._get_node(db, node_id)
                 if not node:

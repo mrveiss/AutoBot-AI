@@ -125,7 +125,7 @@ class ReplicationService:
             return None
 
         replication.status = ReplicationStatus.SYNCING.value
-        replication.started_at = datetime.utcnow()
+        replication.started_at = datetime.now(timezone.utc)
         await db.commit()
         return replication
 
@@ -311,7 +311,7 @@ class ReplicationService:
 
             # Update replication status
             replication.status = ReplicationStatus.STOPPED.value
-            replication.completed_at = datetime.utcnow()
+            replication.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
             logger.info("Replica promoted: %s", replication_id)
@@ -337,7 +337,7 @@ class ReplicationService:
 
         # Update status
         replication.status = ReplicationStatus.STOPPED.value
-        replication.completed_at = datetime.utcnow()
+        replication.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
         logger.info("Replication stopped: %s", replication_id)
@@ -646,9 +646,9 @@ class ReplicationService:
         timeout: int = 60,
     ) -> bool:
         """Wait for replica to sync with master."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
-        while (datetime.utcnow() - start_time).seconds < timeout:
+        while (datetime.now(timezone.utc) - start_time).seconds < timeout:
             repl_info = await self._get_replication_info(target_ip, ssh_user, ssh_port, redis_password)
 
             if repl_info.get("master_link_status") == "up":

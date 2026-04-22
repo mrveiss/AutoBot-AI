@@ -124,7 +124,7 @@ async def _get_update_job_data(db: AsyncSession, job_id: str, node_id: str, upda
     if not node:
         job.status = UpdateJobStatus.FAILED.value
         job.error = "Node not found"
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         await db.commit()
         return None
 
@@ -134,7 +134,7 @@ async def _get_update_job_data(db: AsyncSession, job_id: str, node_id: str, upda
     if not updates:
         job.status = UpdateJobStatus.FAILED.value
         job.error = "No valid updates found"
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         await db.commit()
         return None
 
@@ -185,7 +185,7 @@ async def _handle_successful_update(
 
     for update in updates:
         update.is_applied = True
-        update.applied_at = datetime.utcnow()
+        update.applied_at = datetime.now(timezone.utc)
 
     await db.commit()
     await _broadcast_job_update(job.job_id, "completed", 100, f"Completed: {len(updates)} updates applied")
@@ -235,7 +235,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
         job, node, updates = job_data
 
         job.status = UpdateJobStatus.RUNNING.value
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         job.total_steps = len(updates)
         await db.commit()
 
@@ -253,12 +253,12 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             else:
                 await _handle_failed_update(db, job, node_id, result["output"])
 
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
         except asyncio.CancelledError:
             job.status = UpdateJobStatus.CANCELLED.value
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info("Update job cancelled: %s", job_id)
             raise
@@ -267,7 +267,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             logger.error("Update job failed: %s - %s", job_id, e)
             job.status = UpdateJobStatus.FAILED.value
             job.error = "Internal server error"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             await db.commit()
             await _broadcast_job_update(job_id, "failed", job.progress, "Update job failed")
 
@@ -936,14 +936,14 @@ async def _execute_upgrade_playbook(
             )
             .values(
                 is_applied=True,
-                applied_at=datetime.utcnow(),
+                applied_at=datetime.now(timezone.utc),
             )
         )
     else:
         j.status = UpdateJobStatus.FAILED.value
         j.error = r["output"][:500]
         j.output = r["output"]
-    j.completed_at = datetime.utcnow()
+    j.completed_at = datetime.now(timezone.utc)
     await sess.commit()
     await _broadcast_job_update(job_id, j.status, j.progress, j.current_step)
 
@@ -962,12 +962,12 @@ async def _run_upgrade_all(jid: str, nid: str) -> None:
         if not n:
             j.status = UpdateJobStatus.FAILED.value
             j.error = "Node not found"
-            j.completed_at = datetime.utcnow()
+            j.completed_at = datetime.now(timezone.utc)
             await sess.commit()
             return
 
         j.status = UpdateJobStatus.RUNNING.value
-        j.started_at = datetime.utcnow()
+        j.started_at = datetime.now(timezone.utc)
         j.current_step = "Running apt upgrade on node"
         await sess.commit()
         await _broadcast_job_update(jid, "running", 10, j.current_step)
@@ -978,7 +978,7 @@ async def _run_upgrade_all(jid: str, nid: str) -> None:
             logger.exception("Upgrade all failed: %s", jid)
             j.status = UpdateJobStatus.FAILED.value
             j.error = "Internal server error"
-            j.completed_at = datetime.utcnow()
+            j.completed_at = datetime.now(timezone.utc)
             await sess.commit()
 
 
@@ -1096,7 +1096,7 @@ async def cancel_job(
         del _running_jobs[job_id]
 
     job.status = UpdateJobStatus.CANCELLED.value
-    job.completed_at = datetime.utcnow()
+    job.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
     logger.info("Update job cancelled: %s", job_id)

@@ -193,7 +193,7 @@ async def get_security_overview(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> SecurityOverviewResponse:
     """Get security dashboard overview metrics."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     last_24h = now - timedelta(hours=24)
     last_30d = now - timedelta(days=30)
 
@@ -459,7 +459,7 @@ async def get_threat_summary(
     hours: int = Query(24, ge=1, le=720, description="Hours to look back"),
 ) -> ThreatSummary:
     """Get threat detection summary statistics."""
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     severity_counts = await _get_threat_severity_counts(db, since)
     by_type, by_source_ip = await _get_threat_distribution(db, since)
@@ -564,7 +564,7 @@ async def acknowledge_security_event(
 
     event.is_acknowledged = True
     event.acknowledged_by = current_user.get("sub", "unknown")
-    event.acknowledged_at = datetime.utcnow()
+    event.acknowledged_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(event)
@@ -592,7 +592,7 @@ async def resolve_security_event(
 
     event.is_resolved = True
     event.resolved_by = current_user.get("sub", "unknown")
-    event.resolved_at = datetime.utcnow()
+    event.resolved_at = datetime.now(timezone.utc)
     event.resolution_notes = resolve_data.resolution_notes
 
     # Also mark as acknowledged if not already
@@ -848,7 +848,8 @@ def _parse_openssl_date(raw: Optional[str]) -> Optional[datetime]:
             continue
     # Last resort: try ISO-8601 for already-formatted inputs
     try:
-        return datetime.fromisoformat(raw)
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
 
@@ -857,7 +858,7 @@ def _days_until(dt: Optional[datetime]) -> Optional[int]:
     """Return days until datetime from now (negative = already expired)."""
     if dt is None:
         return None
-    return (dt - datetime.utcnow()).days
+    return (dt - datetime.now(timezone.utc)).days
 
 
 @router.get("/certificates", response_model=List[CertificateResponse])
@@ -879,7 +880,7 @@ async def list_certificates(
     certs = result.scalars().all()
 
     responses = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for cert in certs:
         resp = CertificateResponse.model_validate(cert)
         resp.days_until_expiry = _days_until(cert.not_after)
@@ -899,7 +900,7 @@ async def list_expiring_certificates(
     days: int = Query(30, ge=1, le=365, description="Expiring within N days"),
 ) -> List[CertificateResponse]:
     """List certificates expiring within the given number of days."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     threshold = now + timedelta(days=days)
 
     result = await db.execute(
@@ -936,7 +937,7 @@ async def report_certificate(
     cert = existing.scalar_one_or_none()
 
     if cert is None:
-        cert = Certificate(cert_id=f"{report.node_id}-{int(datetime.utcnow().timestamp())}")
+        cert = Certificate(cert_id=f"{report.node_id}-{int(datetime.now(timezone.utc).timestamp())}")
         db.add(cert)
 
     cert.node_id = report.node_id
