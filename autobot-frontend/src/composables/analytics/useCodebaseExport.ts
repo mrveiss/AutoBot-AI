@@ -381,21 +381,25 @@ export function useCodebaseExport(deps: {
    * analytics fetcher. The old hand-rolled try/catch + manual
    * exportingReport flag + status-string juggling collapses to hooks.
    */
-  let _currentReportType: 'quick' | 'full' = 'quick'
-  const reportEndpoint = useFetchEndpoint<string, string>(
+  // #5455: per-request context type for the export endpoint, threaded
+  // through onSuccess via the context hook (#5457). Replaces the prior
+  // module-scope `_currentReportType` let that raced on concurrent calls.
+  type ReportContext = { reportType: 'quick' | 'full' }
+
+  const reportEndpoint = useFetchEndpoint<string, string, ReportContext>(
     {
       path: '/api/analytics/codebase/report',
       scopeToSource: true,
       parseResponse: async (r) => await r.text(),
       pickData: (raw) => raw,
-      onSuccess: (content) => {
+      onSuccess: (content, _raw, ctx) => {
         const timestamp = new Date()
           .toISOString()
           .replace(/[:.]/g, '-')
           .slice(0, 19)
         _downloadFile(
           content,
-          `code-analysis-report-${_currentReportType}-${timestamp}.md`,
+          `code-analysis-report-${ctx.reportType}-${timestamp}.md`,
           'text/markdown;charset=utf-8',
         )
         deps.notify(deps.t('analytics.codebase.notify.reportExported'), 'success')
@@ -425,16 +429,16 @@ export function useCodebaseExport(deps: {
   // The Vue template binds to `deps.exportingReport` (component-owned).
   // Keep the bridge so consumers see the single flag they already wire.
   const exportReport = async (quick: boolean = true): Promise<void> => {
-    _currentReportType = quick ? 'quick' : 'full'
+    const reportType: 'quick' | 'full' = quick ? 'quick' : 'full'
     deps.exportingReport.value = true
     deps.progressStatus.value = quick
       ? deps.t('analytics.codebase.status.generatingQuickReport')
       : deps.t('analytics.codebase.status.generatingFullReport')
     try {
-      await reportEndpoint.load({
-        format: 'markdown',
-        quick: String(quick),
-      })
+      await reportEndpoint.load(
+        { format: 'markdown', quick: String(quick) },
+        { reportType },
+      )
     } finally {
       deps.exportingReport.value = false
     }
