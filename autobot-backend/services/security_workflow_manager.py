@@ -26,6 +26,7 @@ from typing import Any, List, Optional
 from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

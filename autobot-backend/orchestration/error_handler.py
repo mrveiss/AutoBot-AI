@@ -31,6 +31,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS
 from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
 

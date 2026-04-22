@@ -15,6 +15,7 @@ import pytest
 
 from .distributed_management import DistributedAgentManager
 from .types import CircuitState, DistributedAgentInfo
+from autobot_shared.time_utils import now_utc
 
 # ---------------------------------------------------------------------------
 # Helpers

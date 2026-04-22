@@ -9,6 +9,7 @@ from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase
+from autobot_shared.time_utils import now_utc
 
 
 class SkillsBase(DeclarativeBase):

@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist

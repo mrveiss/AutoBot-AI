@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

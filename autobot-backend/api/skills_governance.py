@@ -25,6 +25,7 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

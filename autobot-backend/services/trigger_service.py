@@ -40,6 +40,7 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
 

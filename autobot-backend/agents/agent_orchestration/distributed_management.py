@@ -19,6 +19,7 @@ from .types import CircuitState, DistributedAgentInfo
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

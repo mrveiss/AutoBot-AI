@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from autobot_shared.time_utils import now_utc
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

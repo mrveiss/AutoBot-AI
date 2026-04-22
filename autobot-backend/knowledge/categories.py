@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 if TYPE_CHECKING:
     import aioredis
     import redis
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

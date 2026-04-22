@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 from llm_interface_pkg import LLMInterface
