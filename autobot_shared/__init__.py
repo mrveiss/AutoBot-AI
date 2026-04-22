@@ -33,6 +33,8 @@ __all__ = [
     "get_enabled_features",
     "require_feature",
     "FeatureDisabledError",
+    # Singleton factory — issue #5423
+    "lazy_singleton",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -53,6 +55,8 @@ _LAZY_IMPORTS = {
     "get_enabled_features": (".feature_flags", "get_enabled_features"),
     "require_feature": (".feature_flags", "require_feature"),
     "FeatureDisabledError": (".feature_flags", "FeatureDisabledError"),
+    # Singleton factory — issue #5423
+    "lazy_singleton": (".singleton_factory", "lazy_singleton"),
 }
 
 
