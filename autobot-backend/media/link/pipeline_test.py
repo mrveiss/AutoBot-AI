@@ -151,16 +151,11 @@ class TestLinkPipelineErrorHandling:
         assert result["processing_status"] == "error"
         assert result["error"] == "Connection refused"
 
-    def test_empty_url_returns_error(self):
+    @pytest.mark.asyncio
+    async def test_empty_url_returns_error(self):
         pipe = LinkPipeline()
-
-        async def _run():
-            media_input = _make_input("")
-            return await pipe._process_link(media_input)
-
-        import asyncio
-
-        result = asyncio.run(_run())
+        media_input = _make_input("")
+        result = await pipe._process_link(media_input)
         assert result["processing_status"] == "error"
 
 

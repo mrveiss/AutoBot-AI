@@ -16,13 +16,14 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import math
 import sys
 import types
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Bootstrap stub modules so the package can be imported without the full
@@ -303,41 +304,37 @@ class TestProcessQuery:
 
         return proc
 
-    def test_process_query_empty_string_returns_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_process_query_empty_string_returns_empty(self) -> None:
         redis_mock = MagicMock()
         proc = MemoryGraphQueryProcessor(redis_client=redis_mock)
-        result = asyncio.run(
-            proc.process_query("")
-        )
+        result = await proc.process_query("")
         assert result == []
 
-    def test_process_query_returns_search_results(self) -> None:
+    @pytest.mark.asyncio
+    async def test_process_query_returns_search_results(self) -> None:
         entities = [
             self._make_entity("Redis Bug Fix", "BUG"),
             self._make_entity("New Feature", "FEATURE"),
         ]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("redis bug")
-        )
+        results = await proc.process_query("redis bug")
         assert isinstance(results, list)
         for r in results:
             assert isinstance(r, SearchResult)
 
-    def test_process_query_limit_respected(self) -> None:
+    @pytest.mark.asyncio
+    async def test_process_query_limit_respected(self) -> None:
         entities = [self._make_entity(f"Entity {i}", "TASK") for i in range(20)]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("task", limit=3)
-        )
+        results = await proc.process_query("task", limit=3)
         assert len(results) <= 3
 
-    def test_search_result_has_required_fields(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_result_has_required_fields(self) -> None:
         entities = [self._make_entity("Test Bug", "BUG")]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.run(
-            proc.process_query("test bug")
-        )
+        results = await proc.process_query("test bug")
         if results:
             r = results[0]
             assert hasattr(r, "entity")
@@ -366,22 +363,24 @@ class TestProcessQuery:
 
 
 class TestEnsureIndexes:
-    def test_ensure_indexes_calls_ft_create(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ensure_indexes_calls_ft_create(self) -> None:
         redis_mock = AsyncMock()
         # First call to FT.INFO raises (index doesn't exist) → triggers FT.CREATE
         redis_mock.execute_command = AsyncMock(side_effect=Exception("not found"))
 
-        asyncio.run(ensure_indexes(redis_mock))
+        await ensure_indexes(redis_mock)
 
         # Should have been called for both FT.INFO and FT.CREATE per index
         assert redis_mock.execute_command.call_count >= 2
 
-    def test_ensure_indexes_skips_existing(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ensure_indexes_skips_existing(self) -> None:
         redis_mock = AsyncMock()
         # FT.INFO succeeds → index exists → FT.CREATE should NOT be called
         redis_mock.execute_command = AsyncMock(return_value=["some", "info"])
 
-        asyncio.run(ensure_indexes(redis_mock))
+        await ensure_indexes(redis_mock)
 
         calls = [str(c) for c in redis_mock.execute_command.call_args_list]
         assert not any("FT.CREATE" in c for c in calls)

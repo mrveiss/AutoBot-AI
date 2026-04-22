@@ -3,8 +3,9 @@
 # Author: mrveiss
 """Tests for SkillResearcherSkill (Issue #1182)."""
 
-import asyncio
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from skills.builtin.skill_researcher import (
     SkillResearcherSkill,
@@ -90,9 +91,10 @@ def test_parse_synthesis_returns_empty_on_malformed_json():
 # ---------------------------------------------------------------------------
 
 
-def test_execute_unknown_action_returns_error():
+@pytest.mark.asyncio
+async def test_execute_unknown_action_returns_error():
     skill = SkillResearcherSkill()
-    result = asyncio.run(skill.execute("nonexistent", {}))
+    result = await skill.execute("nonexistent", {})
     assert result["success"] is False
     assert "Unknown action" in result["error"]
 
@@ -102,17 +104,19 @@ def test_execute_unknown_action_returns_error():
 # ---------------------------------------------------------------------------
 
 
-def test_research_requires_capability():
+@pytest.mark.asyncio
+async def test_research_requires_capability():
     skill = SkillResearcherSkill()
-    result = asyncio.run(skill.execute("research_capability", {}))
+    result = await skill.execute("research_capability", {})
     assert result["success"] is False
     assert "capability" in result["error"].lower()
 
 
-def test_research_fails_gracefully_without_llm():
+@pytest.mark.asyncio
+async def test_research_fails_gracefully_without_llm():
     with patch("skills.builtin.skill_researcher.LLMInterface", None):
         skill = SkillResearcherSkill()
-        result = asyncio.run(skill.execute("research_capability", {"capability": "test"}))
+        result = await skill.execute("research_capability", {"capability": "test"})
     assert result["success"] is False
     assert "LLMInterface" in result["error"]
 
@@ -122,7 +126,8 @@ def test_research_fails_gracefully_without_llm():
 # ---------------------------------------------------------------------------
 
 
-def test_research_returns_structured_findings():
+@pytest.mark.asyncio
+async def test_research_returns_structured_findings():
     source_response = _mock_llm_response("Technical explanation of voice transcription.")
     synthesis_response = _mock_llm_response(
         '{"summary": "Converts speech to text", '
@@ -143,7 +148,7 @@ def test_research_returns_structured_findings():
     with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
         MockLLM.return_value.chat_completion = mock_chat
         skill = SkillResearcherSkill()
-        result = asyncio.run(skill.execute("research_capability", {"capability": "voice transcription"}))
+        result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
     assert result["success"] is True
     assert result["capability"] == "voice transcription"
@@ -157,7 +162,8 @@ def test_research_returns_structured_findings():
 # ---------------------------------------------------------------------------
 
 
-def test_research_continues_when_some_queries_fail():
+@pytest.mark.asyncio
+async def test_research_continues_when_some_queries_fail():
     """One LLM failure does not abort the whole research pipeline."""
     call_count = 0
 
@@ -177,7 +183,7 @@ def test_research_continues_when_some_queries_fail():
     with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
         MockLLM.return_value.chat_completion = mock_chat
         skill = SkillResearcherSkill()
-        result = asyncio.run(skill.execute("research_capability", {"capability": "voice transcription"}))
+        result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
     assert result["success"] is True
     assert result["sources_consulted"] == 2  # one query failed, two succeeded
@@ -188,7 +194,8 @@ def test_research_continues_when_some_queries_fail():
 # ---------------------------------------------------------------------------
 
 
-def test_research_returns_empty_findings_when_synthesis_fails():
+@pytest.mark.asyncio
+async def test_research_returns_empty_findings_when_synthesis_fails():
     """If synthesis LLM call fails, return empty findings (not an error)."""
 
     async def mock_chat(messages, llm_type="task"):
@@ -197,7 +204,7 @@ def test_research_returns_empty_findings_when_synthesis_fails():
     with patch("skills.builtin.skill_researcher.LLMInterface") as MockLLM:
         MockLLM.return_value.chat_completion = mock_chat
         skill = SkillResearcherSkill()
-        result = asyncio.run(skill.execute("research_capability", {"capability": "voice transcription"}))
+        result = await skill.execute("research_capability", {"capability": "voice transcription"})
 
     # sources_consulted == 0 means synthesis returns empty but success=True
     assert result["success"] is True

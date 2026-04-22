@@ -11,11 +11,12 @@ Covers issues #3868, #3874, and #3877:
            prevents further iterations even if _should_iterate() does not detect the error.
 """
 
-import asyncio
 import hashlib
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig, LoopState, TaskContext
@@ -141,7 +142,8 @@ def test_hash_dict_args_unchanged():
 # ---------------------------------------------------------------------------
 
 
-def test_halted_on_repetition_flag_set():
+@pytest.mark.asyncio
+async def test_halted_on_repetition_flag_set():
     """_execute_tools sets _halted_on_repetition when repetition is detected."""
     loop = _make_loop(max_identical=2)
     tool = _make_tool("bash", {"cmd": "ls"})
@@ -150,7 +152,7 @@ def test_halted_on_repetition_flag_set():
     h = AgentLoop._compute_tool_call_hash(tool)
     loop._current_context.tool_call_hashes[h] = 2  # already at threshold
 
-    result = asyncio.run(loop._execute_tools([tool]))
+    result = await loop._execute_tools([tool])
 
     assert loop._halted_on_repetition is True
     assert "bash" in result
@@ -174,7 +176,8 @@ def test_should_continue_true_before_halt():
     assert loop._should_continue() is True
 
 
-def test_loop_stops_after_repetition_halt():
+@pytest.mark.asyncio
+async def test_loop_stops_after_repetition_halt():
     """Integration: the main loop executes at most one extra iteration after halt fires.
 
     The pattern under test:
@@ -205,16 +208,13 @@ def test_loop_stops_after_repetition_halt():
         call_count += 1
         return [tool]
 
-    async def run():
-        loop._init_task_context("t-halt", "halt test", {})
-        loop._state = LoopState.RUNNING
-        # Patch _select_tools to always return the same tool
-        loop._select_tools = fake_select_tools  # type: ignore[method-assign]
-        # Patch _think_before_tools to no-op
-        loop._think_before_tools = AsyncMock()  # type: ignore[method-assign]
-        return await loop._execute_main_loop()
-
-    results = asyncio.run(run())
+    loop._init_task_context("t-halt", "halt test", {})
+    loop._state = LoopState.RUNNING
+    # Patch _select_tools to always return the same tool
+    loop._select_tools = fake_select_tools  # type: ignore[method-assign]
+    # Patch _think_before_tools to no-op
+    loop._think_before_tools = AsyncMock()  # type: ignore[method-assign]
+    results = await loop._execute_main_loop()
 
     # Halt fires on iteration 2; the loop breaks inside _execute_main_loop
     # because result.should_continue is False (error in tool_results) OR
