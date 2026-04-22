@@ -1680,7 +1680,7 @@ def _parse_and_filter_facts(items: dict, category: Optional[str], limit: int) ->
     return entries
 
 
-@router.get("/entries")
+@router.get("/entries", response_model=KnowledgeEntriesResponse)
 async def get_knowledge_entries(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1838,7 +1838,7 @@ async def get_detailed_stats(
     operation="get_machine_profile",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/machine_profile")
+@router.get("/machine_profile", response_model=MachineProfileResponse)
 async def get_machine_profile(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1890,7 +1890,7 @@ async def get_machine_profile(
     operation="get_man_pages_summary",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/man_pages/summary")
+@router.get("/man_pages/summary", response_model=ManPagesSummaryResponse)
 async def get_man_pages_summary(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1970,7 +1970,7 @@ async def get_man_pages_summary(
     operation="initialize_machine_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/machine_knowledge/initialize")
+@router.post("/machine_knowledge/initialize", response_model=MachineKnowledgeInitResponse)
 async def initialize_machine_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2022,7 +2022,7 @@ async def initialize_machine_knowledge(
     operation="integrate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/man_pages/integrate")
+@router.post("/man_pages/integrate", response_model=ManPagesIntegrateResponse)
 async def integrate_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2066,7 +2066,7 @@ async def integrate_man_pages(
     operation="search_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/man_pages/search")
+@router.get("/man_pages/search", response_model=ManPageSearchResponse)
 async def search_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2136,7 +2136,7 @@ async def _clear_kb_via_redis(kb) -> int:
     operation="clear_all_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/clear_all")
+@router.post("/clear_all", response_model=ClearAllResponse)
 async def clear_all_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2195,7 +2195,7 @@ async def clear_all_knowledge(
     operation="add_document_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/add_document")
+@router.post("/add_document", response_model=AddTextResponse)
 async def add_document_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2213,7 +2213,7 @@ async def add_document_to_knowledge(
     operation="query_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/query")
+@router.post("/query", response_model=QueryKnowledgeResponse)
 async def query_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2385,7 +2385,7 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
     operation="get_facts_by_category",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/facts/by_category")
+@router.get("/facts/by_category", response_model=FactsByCategoryResponse)
 async def get_facts_by_category(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2611,7 +2611,7 @@ def _extract_fact_created_at(fact_data: dict) -> str:
     operation="get_fact_by_key",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/fact/{fact_key}")
+@router.get("/fact/{fact_key}", response_model=FactByKeyResponse)
 async def get_fact_by_key(
     admin_check: bool = Depends(check_admin_permission),
     fact_key: str = Path(..., pattern=r"^[a-zA-Z0-9_:-]+$", max_length=255),
@@ -2654,7 +2654,7 @@ async def get_fact_by_key(
     operation="get_import_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/import/status")
+@router.get("/import/status", response_model=ImportStatusResponse)
 async def get_import_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2678,7 +2678,7 @@ async def get_import_status(
     operation="get_import_statistics",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/import/statistics")
+@router.get("/import/statistics", response_model=ImportStatisticsResponse)
 async def get_import_statistics(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2829,7 +2829,7 @@ def _paginate_docs(docs: list, page: int, page_size: int) -> tuple:
     operation="browse_documentation",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/docs/browse")
+@router.post("/docs/browse", response_model=DocsBrowseResponse)
 async def browse_documentation(
     admin_check: bool = Depends(check_admin_permission),
     request: DocsBrowseRequest = None,
@@ -2890,7 +2890,7 @@ async def browse_documentation(
     operation="get_doc_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/categories")
+@router.get("/docs/categories", response_model=DocsCategoriesResponse)
 async def get_documentation_categories(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2961,7 +2961,7 @@ async def get_documentation_categories(
     operation="get_doc_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/stats")
+@router.get("/docs/stats", response_model=DocsStatsResponse)
 async def get_documentation_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -3017,7 +3017,7 @@ async def get_documentation_stats(
     operation="get_doc_watcher_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/watcher/status")
+@router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
 async def get_documentation_watcher_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -3053,7 +3053,7 @@ async def get_documentation_watcher_status(
     operation="control_doc_watcher",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/docs/watcher/control")
+@router.post("/docs/watcher/control", response_model=DocsWatcherControlResponse)
 async def control_documentation_watcher(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -3142,7 +3142,7 @@ def _resolve_target_org_id(
     return (current_user or {}).get("org_id")
 
 
-@router.get("/org-config")
+@router.get("/org-config", response_model=OrgKnowledgeConfigResponse)
 async def get_org_model_config(
     org_id: Optional[str] = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
@@ -3169,7 +3169,7 @@ async def get_org_model_config(
     }
 
 
-@router.put("/org-config")
+@router.put("/org-config", response_model=OrgKnowledgeConfigResponse)
 async def set_org_model_config(
     payload: OrgKnowledgeConfigPayload,
     org_id: Optional[str] = Query(default=None, max_length=128),
