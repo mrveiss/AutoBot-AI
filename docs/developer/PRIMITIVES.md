@@ -6,4 +6,4 @@ See #5060 for the extraction-first methodology.
 | Primitive | Module | Signature | Consumers | Issue |
 |-----------|--------|-----------|-----------|-------|
 | `bounded_gather` | `autobot-backend/orchestration/primitives/concurrency.py` | `bounded_gather(coros, max_parallel, *, return_exceptions=True)` | `Orchestrator._execute_agents_in_parallel`, `SubagentDispatcher.spawn_parallel_tasks` | #5059 |
-| `lazy_singleton` | `autobot_shared/singleton_factory.py` | `lazy_singleton(factory) -> Callable` | `utils/semantic_chunker.py`, `utils/semantic_chunker_gpu.py`, `utils/semantic_chunker_gpu_optimized.py` | #5423 |
+| `lazy_singleton` | `autobot_shared/singleton_factory.py` | `lazy_singleton(factory) -> Callable` — double-checked locking; raises `RuntimeError` if called again with **different** args (#5445) | `utils/semantic_chunker.py`, `utils/semantic_chunker_gpu.py`, `utils/semantic_chunker_gpu_optimized.py` | #5423 |
