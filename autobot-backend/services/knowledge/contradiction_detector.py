@@ -57,7 +57,7 @@ class ContradictionReport:
 
     contradictions: list[ConflictPair] = field(default_factory=list)
     gaps: list[str] = field(default_factory=list)
-    checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    checked_at: datetime = field(default_factory=lambda: now_utc())
 
 
 # ---------------------------------------------------------------------------

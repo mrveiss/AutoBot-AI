@@ -148,7 +148,7 @@ class ConnectorRegistry:
                 "healthy": [],
                 "unavailable": [],
                 "errors": {},
-                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "checked_at": now_utc().isoformat(),
             }
 
         results = await asyncio.gather(
@@ -171,7 +171,7 @@ class ConnectorRegistry:
             "healthy": sorted(healthy),
             "unavailable": sorted(unavailable),
             "errors": errors,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": now_utc().isoformat(),
         }
 
     @classmethod

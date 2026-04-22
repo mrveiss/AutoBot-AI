@@ -182,7 +182,7 @@ class HeartbeatScheduler:
                 status=HeartbeatRunStatus.RUNNING.value,
                 trigger=trigger.value,
                 wakeup_context=wakeup_req.context if wakeup_req else None,
-                started_at=datetime.now(timezone.utc),
+                started_at=now_utc(),
             )
             session.add(run)
             await session.flush()
@@ -238,7 +238,7 @@ class HeartbeatScheduler:
             run_row = await session.get(HeartbeatRun, run_id)
             if run_row:
                 run_row.status = final_status
-                run_row.finished_at = datetime.now(timezone.utc)
+                run_row.finished_at = now_utc()
                 run_row.error_message = error_msg
                 run_row.tokens_used = usage.get("tokens_used")
                 run_row.cost_usd = usage.get("cost_usd")
@@ -246,7 +246,7 @@ class HeartbeatScheduler:
                 run_row.provider = usage.get("provider")
             state_row = await session.get(AgentRuntimeState, state_id)
             if state_row:
-                state_row.last_heartbeat_at = datetime.now(timezone.utc)
+                state_row.last_heartbeat_at = now_utc()
                 if usage.get("session_params") is not None:
                     state_row.session_params = usage["session_params"]
             await _append_event(
@@ -319,7 +319,7 @@ async def _consume_top_wakeup(
     )
     req = result.scalar_one_or_none()
     if req is not None:
-        req.consumed_at = datetime.now(timezone.utc)
+        req.consumed_at = now_utc()
         await session.flush()
     return req
 
@@ -339,6 +339,6 @@ async def _append_event(
             event_type=event_type,
             message=message,
             payload=payload,
-            occurred_at=datetime.now(timezone.utc).isoformat(),
+            occurred_at=now_utc().isoformat(),
         )
     )

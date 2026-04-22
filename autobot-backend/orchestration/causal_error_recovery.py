@@ -87,7 +87,7 @@ class RecoveryPlan:
     # Metadata
     confidence: float = 0.0  # Overall confidence in this plan
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -457,7 +457,7 @@ class CausalErrorRecovery:
                 resolution_data = {
                     "action": action_taken.value,
                     "outcome": outcome or "success",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": now_utc().isoformat(),
                 }
                 redis.hset(
                     f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_RESOLUTIONS_SUFFIX}",

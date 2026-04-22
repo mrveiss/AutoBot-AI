@@ -89,7 +89,7 @@ def test_cleanup_stuck_with_naive_iso_started_no_typeerror(
     elapsed-beyond-threshold). With the fix, the timeout check actually runs.
     """
     # Naive ISO — what pre-migration code paths wrote to Redis
-    past_naive = (datetime.now(timezone.utc) - timedelta(seconds=120)).replace(
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(
         tzinfo=None
     ).isoformat()
     _add_running_task(manager, "t3", past_naive)
@@ -121,7 +121,7 @@ def test_cleanup_stuck_within_timeout_with_naive_iso_keeps_running(
     ``stuck = True`` default, causing false-positive failure marking.
     """
     recent_naive = (
-        datetime.now(timezone.utc) - timedelta(seconds=10)
+        now_utc() - timedelta(seconds=10)
     ).replace(tzinfo=None).isoformat()
     _add_running_task(manager, "t5", recent_naive)
 
@@ -165,7 +165,7 @@ def test_cleanup_stuck_non_running_tasks_untouched(
 ) -> None:
     """Only ``status == 'running'`` tasks are considered."""
     past_naive = (
-        datetime.now(timezone.utc) - timedelta(seconds=120)
+        now_utc() - timedelta(seconds=120)
     ).replace(tzinfo=None).isoformat()
     manager._tasks["t8"] = {
         "status": "pending",
@@ -224,7 +224,7 @@ async def test_mark_orphans_with_naive_iso_beyond_timeout_marks_failed(
     Post-#5462: elapsed check actually runs; only truly-expired tasks marked.
     """
     past_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        (now_utc() - timedelta(seconds=120))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -257,7 +257,7 @@ async def test_mark_orphans_with_naive_iso_within_timeout_keeps_running(
     false-positive orphan marking for recent naive-timestamp tasks.
     """
     recent_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=10))
+        (now_utc() - timedelta(seconds=10))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -288,7 +288,7 @@ async def test_mark_orphans_skips_in_memory_tasks(
 ) -> None:
     """Tasks currently tracked in self._tasks (any worker) are not orphaned."""
     past_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        (now_utc() - timedelta(seconds=120))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -316,7 +316,7 @@ async def test_mark_orphans_skips_non_running_tasks(
 ) -> None:
     """Only ``status == 'running'`` Redis tasks are considered."""
     past_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        (now_utc() - timedelta(seconds=120))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -376,7 +376,7 @@ async def test_get_status_auto_recovers_timed_out_naive_task(
     indefinitely. The frontend would see infinite spinner.
     """
     past_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        (now_utc() - timedelta(seconds=120))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -412,7 +412,7 @@ async def test_get_status_keeps_recent_naive_task_running(
 ) -> None:
     """Recent task (within timeout) with naive started_at stays running."""
     recent_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=10))
+        (now_utc() - timedelta(seconds=10))
         .replace(tzinfo=None)
         .isoformat()
     )
@@ -441,7 +441,7 @@ async def test_get_status_returns_in_memory_task_without_auto_recovery(
 ) -> None:
     """In-memory tasks bypass Redis + auto-recovery entirely."""
     past_naive = (
-        (datetime.now(timezone.utc) - timedelta(seconds=120))
+        (now_utc() - timedelta(seconds=120))
         .replace(tzinfo=None)
         .isoformat()
     )

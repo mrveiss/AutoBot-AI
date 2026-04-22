@@ -1683,7 +1683,7 @@ async def invalidate_entity(
     request_id = generate_request_id()
 
     ended_at = body.ended_at if body else None
-    effective_ended_at = ended_at or datetime.now(timezone.utc).isoformat()
+    effective_ended_at = ended_at or now_utc().isoformat()
 
     try:
         logger.info(
@@ -1744,7 +1744,7 @@ async def invalidate_relation(
     """
     request_id = generate_request_id()
 
-    effective_ended_at = body.ended_at or datetime.now(timezone.utc).isoformat()
+    effective_ended_at = body.ended_at or now_utc().isoformat()
 
     try:
         logger.info(

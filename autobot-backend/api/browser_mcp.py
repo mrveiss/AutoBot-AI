@@ -68,7 +68,7 @@ ALLOWED_URL_PATTERNS = [
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
-request_counter = {"count": 0, "reset_time": datetime.now(timezone.utc)}
+request_counter = {"count": 0, "reset_time": now_utc()}
 _rate_limit_lock = asyncio.Lock()
 
 # Blocked JavaScript patterns (security) - enhanced to prevent bypass vectors
@@ -153,7 +153,7 @@ async def check_rate_limit() -> bool:
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
     async with _rate_limit_lock:
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         elapsed = (now - request_counter["reset_time"]).total_seconds()
 
         # Reset counter every minute (in-place modification for thread safety)

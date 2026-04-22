@@ -325,7 +325,7 @@ def next_cron_run(expression: str, after: Optional[datetime] = None) -> datetime
     months = _parse_cron_field(parts[3], 1, 12)
     weekdays = _parse_cron_field(_normalize_dow_field(parts[4]), 0, 6)
 
-    base = after or datetime.now(timezone.utc)
+    base = after or now_utc()
     # Advance by at least one minute
     from datetime import timedelta
 
@@ -469,7 +469,7 @@ class TriggerService:
         self._validate_config(config)
 
         trigger_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
 
         tdef = TriggerDefinition(
             id=trigger_id,
@@ -632,7 +632,7 @@ class TriggerService:
 
         while True:
             try:
-                now = datetime.now(timezone.utc)
+                now = now_utc()
                 next_run = next_cron_run(expression, after=now)
                 delay = (next_run - now).total_seconds()
                 logger.debug(
@@ -649,7 +649,7 @@ class TriggerService:
                     logger.info("Cron trigger %s disabled — stopping loop", tdef.id)
                     return
 
-                fired_at = datetime.now(timezone.utc).isoformat()
+                fired_at = now_utc().isoformat()
                 await self._launch_workflow(current, {"trigger_type": "cron", "fired_at": fired_at})
 
             except asyncio.CancelledError:
@@ -751,7 +751,7 @@ class TriggerService:
                         "trigger_type": "file_watch",
                         "redis_key": redis_key,
                         "value": current_value,
-                        "fired_at": datetime.now(timezone.utc).isoformat(),
+                        "fired_at": now_utc().isoformat(),
                     }
                     if last_value is not None:
                         payload["previous_value"] = last_value
@@ -849,7 +849,7 @@ class TriggerService:
             if not raw:
                 return
             data = json.loads(raw)
-            data["last_fired"] = datetime.now(timezone.utc).isoformat()
+            data["last_fired"] = now_utc().isoformat()
             data["fire_count"] = data.get("fire_count", 0) + 1
             redis.setex(key, _TRIGGER_TTL_SECONDS, json.dumps(data))
         except Exception as exc:

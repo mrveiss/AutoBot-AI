@@ -55,7 +55,7 @@ def sample_user():
     user.username = "testuser"
     user.password_hash = UserService.hash_password("OldPass123")
     user.is_active = True
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = now_utc()
     return user
 
 

@@ -198,7 +198,7 @@ class SecretsService:
         """Check if a secret has expired"""
         if not expires_at:
             return False
-        return parse_utc_iso(expires_at) < datetime.now(timezone.utc)
+        return parse_utc_iso(expires_at) < now_utc()
 
     def _update_access_tracking(
         self, cursor: sqlite3.Cursor, secret_id: str, accessed_by: Optional[str]
@@ -211,7 +211,7 @@ class SecretsService:
                 last_accessed_at = ?
             WHERE id = ?
         """,
-            (datetime.now(timezone.utc).isoformat(), secret_id),
+            (now_utc().isoformat(), secret_id),
         )
         self._audit_action(cursor, secret_id, "accessed", accessed_by)
 
@@ -253,7 +253,7 @@ class SecretsService:
         """Create a new secret with encryption"""
         secret_id = str(uuid4())
         encrypted_value = self._encrypt_value(value)
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -473,7 +473,7 @@ class SecretsService:
 
         # Add timestamp and secret_id
         updates.append("updated_at = ?")
-        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(now_utc().isoformat())
         params.append(secret_id)
 
         query = (
@@ -509,7 +509,7 @@ class SecretsService:
         else:
             cursor.execute(
                 "UPDATE secrets SET is_active = 0, updated_at = ? WHERE id = ? AND is_active = 1",
-                (datetime.now(timezone.utc).isoformat(), secret_id),
+                (now_utc().isoformat(), secret_id),
             ),
             action = "deactivated"
 
@@ -550,7 +550,7 @@ class SecretsService:
             (
                 to_scope,
                 target_chat_id,
-                datetime.now(timezone.utc).isoformat(),
+                now_utc().isoformat(),
                 secret_id,
             ),
         )
@@ -643,7 +643,7 @@ class SecretsService:
                 secret_id,
                 action,
                 performed_by,
-                datetime.now(timezone.utc).isoformat(),
+                now_utc().isoformat(),
                 json.dumps(details) if details else None,
             ),
         )

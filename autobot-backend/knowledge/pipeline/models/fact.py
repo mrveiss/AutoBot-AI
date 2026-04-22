@@ -27,7 +27,7 @@ FactType = Literal[
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return datetime.now(timezone.utc)
+    return now_utc()
 
 
 class AtomicFact(BaseModel):

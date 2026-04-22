@@ -53,7 +53,7 @@ class SynthesisRun:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):
-            ts = datetime.now(timezone.utc)
+            ts = now_utc()
 
         synthesis_ids: List[str] = entry.get("synthesis_ids") or []
         output_id = synthesis_ids[0] if synthesis_ids else entry.get("run_id", "")

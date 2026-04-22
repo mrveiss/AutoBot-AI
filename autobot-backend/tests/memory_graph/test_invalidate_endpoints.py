@@ -189,12 +189,12 @@ class TestInvalidateEntityEndpoint:
     def test_default_ended_at_is_utc_now(self):
         graph = self._make_graph(True)
         client = _make_client(graph)
-        before = datetime.now(timezone.utc)
+        before = now_utc()
         resp = client.patch(
             "/memory/entities/aaaa-1111-2222-3333/invalidate",
             json={},
         )
-        after = datetime.now(timezone.utc)
+        after = now_utc()
         assert resp.status_code == 200
         valid_to_str = resp.json()["data"]["valid_to"]
         valid_to = datetime.fromisoformat(valid_to_str)
@@ -262,9 +262,9 @@ class TestInvalidateRelationEndpoint:
     def test_default_ended_at_is_utc_now(self):
         graph = self._make_graph(True)
         client = _make_client(graph)
-        before = datetime.now(timezone.utc)
+        before = now_utc()
         resp = client.patch("/memory/relations/invalidate", json=self._VALID_BODY)
-        after = datetime.now(timezone.utc)
+        after = now_utc()
         assert resp.status_code == 200
         valid_to_str = resp.json()["data"]["valid_to"]
         valid_to = datetime.fromisoformat(valid_to_str)

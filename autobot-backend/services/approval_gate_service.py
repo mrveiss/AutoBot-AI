@@ -317,7 +317,7 @@ class ApprovalGateService:
 
         approval.status = new_status.value
         approval.decided_by_user = decided_by
-        approval.decided_at = datetime.now(timezone.utc)
+        approval.decided_at = now_utc()
 
         if comment:
             c = ApprovalComment(
