@@ -1013,18 +1013,11 @@ class EnterpriseFeatureManager:
 
 
 # Singleton instance (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
 _enterprise_manager: Optional[EnterpriseFeatureManager] = None
-_enterprise_manager_lock = threading.Lock()
 
 
 def get_enterprise_manager() -> EnterpriseFeatureManager:
     """Get singleton enterprise feature manager (thread-safe)"""
-    global _enterprise_manager
-    if _enterprise_manager is None:
-        with _enterprise_manager_lock:
-            # Double-check after acquiring lock
-            if _enterprise_manager is None:
-                _enterprise_manager = EnterpriseFeatureManager()
-    return _enterprise_manager
+    return _enterprise_manager()

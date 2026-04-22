@@ -13,7 +13,6 @@ Issue #357: Wrapped blocking SQLite operations with asyncio.to_thread().
 import asyncio
 import json
 import logging
-import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -56,6 +55,7 @@ from .types import (
 
 try:
     from autobot_shared.error_boundaries import get_error_boundary_manager
+from autobot_shared.singleton_factory import lazy_singleton
 except ImportError:
 
     def get_error_boundary_manager():
@@ -578,15 +578,9 @@ class EnhancedProjectStateTracker:
 
 
 # Global instance (thread-safe)
-_state_tracker = None
-_state_tracker_lock = threading.Lock()
+_state_tracker = lazy_singleton(EnhancedProjectStateTracker)
 
 
 def get_state_tracker() -> EnhancedProjectStateTracker:
     """Get singleton instance of state tracker (thread-safe)."""
-    global _state_tracker
-    if _state_tracker is None:
-        with _state_tracker_lock:
-            if _state_tracker is None:
-                _state_tracker = EnhancedProjectStateTracker()
-    return _state_tracker
+    return _state_tracker()

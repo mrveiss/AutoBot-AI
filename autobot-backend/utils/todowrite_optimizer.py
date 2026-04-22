@@ -720,23 +720,16 @@ class TodoWriteInterceptor:
 
 
 # Global optimizer instance for easy access (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_global_optimizer: Optional[TodoWriteOptimizer] = None
-_global_optimizer_lock = threading.Lock()
+_global_optimizer = lazy_singleton(TodoWriteOptimizer)
 
 
 def get_todowrite_optimizer(
     config: Optional[Dict[str, Any]] = None,
 ) -> TodoWriteOptimizer:
     """Get global TodoWrite optimizer instance (thread-safe)"""
-    global _global_optimizer
-    if _global_optimizer is None:
-        with _global_optimizer_lock:
-            # Double-check after acquiring lock
-            if _global_optimizer is None:
-                _global_optimizer = TodoWriteOptimizer(config)
-    return _global_optimizer
+    return _global_optimizer()
 
 
 async def optimized_todowrite(todos: List[Dict[str, Any]]) -> bool:

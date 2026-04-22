@@ -26,7 +26,6 @@ Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 import asyncio
 import logging
 import re
-import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -34,6 +33,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from constants.network_constants import NetworkConstants
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -1631,7 +1631,6 @@ class SlashCommandHandler:
 
 # Module-level instance for easy access (thread-safe)
 _handler_instance: Optional[SlashCommandHandler] = None
-_handler_instance_lock = threading.Lock()
 
 
 def get_slash_command_handler() -> SlashCommandHandler:
@@ -1641,7 +1640,6 @@ def get_slash_command_handler() -> SlashCommandHandler:
     Returns:
         SlashCommandHandler singleton instance
     """
-    global _handler_instance
     if _handler_instance is None:
         with _handler_instance_lock:
             # Double-check after acquiring lock

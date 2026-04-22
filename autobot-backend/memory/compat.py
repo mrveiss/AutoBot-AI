@@ -8,13 +8,13 @@ Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 import asyncio
 import hashlib
 import logging
-import threading
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
 from .manager import UnifiedMemoryManager
 from .models import MemoryEntry, TaskExecutionRecord
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -392,15 +392,12 @@ class LongTermMemoryManager:
 # ============================================================================
 
 # Lazy initialization - only create when first accessed
-_enhanced_memory_instance = None
-_long_term_memory_instance = None
-_enhanced_memory_lock = threading.Lock()
-_long_term_memory_lock = threading.Lock()
+_enhanced_memory_instance = lazy_singleton(EnhancedMemoryManager)
+_long_term_memory_instance = lazy_singleton(LongTermMemoryManager)
 
 
 def get_enhanced_memory_manager() -> EnhancedMemoryManager:
     """Get global EnhancedMemoryManager instance (singleton, thread-safe)"""
-    global _enhanced_memory_instance
     if _enhanced_memory_instance is None:
         with _enhanced_memory_lock:
             # Double-check after acquiring lock
@@ -411,7 +408,6 @@ def get_enhanced_memory_manager() -> EnhancedMemoryManager:
 
 def get_long_term_memory_manager() -> LongTermMemoryManager:
     """Get global LongTermMemoryManager instance (singleton, thread-safe)"""
-    global _long_term_memory_instance
     if _long_term_memory_instance is None:
         with _long_term_memory_lock:
             # Double-check after acquiring lock
