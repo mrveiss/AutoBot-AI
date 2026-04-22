@@ -44,6 +44,16 @@ from knowledge.schemas.operations import (
     OrgKnowledgeConfigResponse,
     TestCategoriesResponse,
 )
+from knowledge.schemas.search import (
+    EnhancedSearchResponse,
+    EnhancedSearchV2Response,
+    ExpandQueryResponse,
+    KnowledgeSearchResponse,
+    RagSearchResponse,
+    RecordClickResponse,
+    SearchAnalyticsResponse,
+    SimilaritySearchResponse,
+)
 from knowledge.schemas.stats import (
     DetailedKnowledgeSizeMetrics,
     DetailedKnowledgeStats,
@@ -89,6 +99,15 @@ __all__ = [
     "DocsStatsResponse",
     "DocsWatcherControlResponse",
     "DocsWatcherStatusResponse",
+    # search.py
+    "EnhancedSearchResponse",
+    "EnhancedSearchV2Response",
+    "ExpandQueryResponse",
+    "KnowledgeSearchResponse",
+    "RagSearchResponse",
+    "RecordClickResponse",
+    "SearchAnalyticsResponse",
+    "SimilaritySearchResponse",
     # operations.py
     "ImportStatisticsResponse",
     "ImportStatusResponse",
