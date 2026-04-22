@@ -232,7 +232,7 @@
                 :key="fileItem.id"
                 class="file-item"
                 :class="{
-                  'expanded': expandedFileId === fileItem.id,
+                  'expanded': isFileExpanded(fileItem.id),
                   'uploading': fileItem.status === 'uploading',
                   'completed': fileItem.status === 'completed',
                   'failed': fileItem.status === 'failed'
@@ -265,11 +265,11 @@
                     <button
                       v-if="fileItem.previewAvailable"
                       class="preview-toggle-btn"
-                      :class="{ 'active': expandedFileId === fileItem.id }"
+                      :class="{ 'active': isFileExpanded(fileItem.id) }"
                       @click.stop="toggleFilePreview(fileItem.id)"
                       :title="$t('knowledge.upload.previewContentTitle')"
                     >
-                      <i :class="expandedFileId === fileItem.id ? 'fas fa-chevron-up' : 'fas fa-eye'"></i>
+                      <i :class="isFileExpanded(fileItem.id) ? 'fas fa-chevron-up' : 'fas fa-eye'"></i>
                     </button>
                     <button
                       class="remove-file-btn"
@@ -304,7 +304,7 @@
 
                 <!-- File Preview Panel -->
                 <Transition name="slide">
-                  <div v-if="expandedFileId === fileItem.id && fileItem.preview" class="file-preview">
+                  <div v-if="isFileExpanded(fileItem.id) && fileItem.preview" class="file-preview">
                     <div class="preview-header">
                       <span class="preview-label">{{ $t('knowledge.upload.contentPreview') }}</span>
                       <span class="preview-chars">
@@ -421,6 +421,7 @@ import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useUploadProgress } from '@/composables/useUploadProgress'
+import { useExpansion } from '@/composables/useExpansion'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -494,7 +495,7 @@ const isDragging = ref(false)
 const dragValid = ref(true)
 const dragCounter = ref(0)
 const selectedFiles = ref<FileItem[]>([])
-const expandedFileId = ref<string | null>(null)
+const { isExpanded: isFileExpanded, expand: expandFile, collapseAll: collapseAllFiles } = useExpansion<string>()
 const fileInput = ref<HTMLInputElement | null>(null)
 const successMessage = ref('')
 const errorMessage = ref('')
@@ -794,22 +795,24 @@ function readFileAsText(file: File): Promise<string> {
 
 function removeFile(index: number): void {
   const file = selectedFiles.value[index]
-  if (file && expandedFileId.value === file.id) {
-    expandedFileId.value = null
+  if (file && isFileExpanded(file.id)) {
+    collapseAllFiles()
   }
   selectedFiles.value.splice(index, 1)
 }
 
 function clearAllFiles(): void {
   selectedFiles.value = []
-  expandedFileId.value = null
+  collapseAllFiles()
   if (fileInput.value) {
     fileInput.value.value = ''
   }
 }
 
 function toggleFilePreview(fileId: string): void {
-  expandedFileId.value = expandedFileId.value === fileId ? null : fileId
+  const wasExpanded = isFileExpanded(fileId)
+  collapseAllFiles()
+  if (!wasExpanded) expandFile(fileId)
 }
 
 // =============================================================================
