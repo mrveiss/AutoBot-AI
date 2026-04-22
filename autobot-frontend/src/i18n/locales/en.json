@@ -5196,6 +5196,9 @@
     },
     "skeletonLoader": {
       "loadingContent": "Loading content"
+    },
+    "loadingSpinner": {
+      "loading": "Loading…"
     }
   },
   "base": {

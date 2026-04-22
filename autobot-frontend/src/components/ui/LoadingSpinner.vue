@@ -1,5 +1,5 @@
 <template>
-  <div class="loading-spinner" :class="sizeClass" :style="customStyle">
+  <div class="loading-spinner" :class="sizeClass" :style="customStyle" role="status" :aria-label="label || t('ui.loadingSpinner.loading')">
     <div v-if="variant === 'dots'" class="loading-dots">
       <div class="dot"></div>
       <div class="dot"></div>
@@ -42,6 +42,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   variant?: 'circle' | 'dots' | 'pulse' | 'bars'
