@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
+
 
 class FactType(Enum):
     """Classification of fact types based on their nature."""
@@ -242,14 +244,14 @@ class AtomicFact:
     def from_dict(cls, data: Dict[str, Any]) -> "AtomicFact":
         """Create an AtomicFact from a dictionary representation."""
         # Parse datetime fields
-        valid_from = datetime.fromisoformat(data["valid_from"])
+        valid_from = parse_utc_iso(data["valid_from"])
         valid_until = (
-            datetime.fromisoformat(data["valid_until"])
+            parse_utc_iso(data["valid_until"])
             if data.get("valid_until")
             else None
         )
         last_verified = (
-            datetime.fromisoformat(data["last_verified"])
+            parse_utc_iso(data["last_verified"])
             if data.get("last_verified")
             else None
         )
