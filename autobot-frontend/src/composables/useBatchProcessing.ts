@@ -7,9 +7,10 @@
  * Issue #584 - Batch Processing Manager
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
+import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import type {
   BatchJob,
   BatchTemplate,
@@ -315,7 +316,6 @@ export function useBatchProcessingState() {
   const schedulesLoading = ref(false)
 
   // Polling state
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
   const isPolling = ref(false)
   const pollingIntervalMs = ref(5000)
 
@@ -557,39 +557,40 @@ export function useBatchProcessingState() {
     return result
   }
 
+  let _stopBatchPoller: (() => void) | null = null
+
   /**
    * Start polling for updates
    */
   function startPolling(intervalMs = 5000) {
-    if (pollingInterval) {
-      stopPolling()
-    }
+    if (_stopBatchPoller) _stopBatchPoller()
 
     pollingIntervalMs.value = intervalMs
     isPolling.value = true
-
-    pollingInterval = setInterval(async () => {
-      if (hasActiveJobs.value) {
-        logger.debug('Polling for batch job updates...')
-        await loadJobs()
-
-        if (selectedJob.value && !isTerminalStatus(selectedJob.value.status)) {
-          await refreshJob(selectedJob.value.job_id)
-        }
-      }
-    }, intervalMs)
-
     logger.debug(`Started polling every ${intervalMs}ms`)
+
+    const poller = usePollingJob<void>(
+      async () => {
+        if (hasActiveJobs.value) {
+          logger.debug('Polling for batch job updates...')
+          await loadJobs()
+          if (selectedJob.value && !isTerminalStatus(selectedJob.value.status)) {
+            await refreshJob(selectedJob.value.job_id)
+          }
+        }
+      },
+      { intervalMs }
+    )
+    _stopBatchPoller = poller.stop
+    poller.start('')
   }
 
   /**
    * Stop polling
    */
   function stopPolling() {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-    }
+    if (_stopBatchPoller) _stopBatchPoller()
+    _stopBatchPoller = null
     isPolling.value = false
     logger.debug('Stopped polling')
   }
@@ -601,12 +602,7 @@ export function useBatchProcessingState() {
     return jobs.value.filter((job) => job.status === status)
   }
 
-  // Cleanup when effect scope disposes (component unmount or scope.stop())
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
-    })
-  }
+  // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
     // State

@@ -7,10 +7,11 @@
  * Wraps /api/service-messages/* endpoints.
  */
 
-import { ref, onScopeDispose, getCurrentScope } from 'vue'
+import { ref } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('useServiceMessages')
 
@@ -59,7 +60,6 @@ export function useServiceMessages() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  let pollingTimer: ReturnType<typeof setInterval> | null = null
   const isPolling = ref(false)
 
   async function fetchLatest(params?: {
@@ -144,23 +144,24 @@ export function useServiceMessages() {
     }
   }
 
+  let _stopServiceMessagesPoller: (() => void) | null = null
+
   function startPolling(intervalMs = 15000, params?: Parameters<typeof fetchLatest>[0]) {
-    stopPolling()
+    if (_stopServiceMessagesPoller) _stopServiceMessagesPoller()
     isPolling.value = true
-    pollingTimer = setInterval(() => fetchLatest(params), intervalMs)
     logger.debug(`Polling service messages every ${intervalMs}ms`)
+    const poller = usePollingJob<void>(
+      async () => { await fetchLatest(params) },
+      { intervalMs }
+    )
+    _stopServiceMessagesPoller = poller.stop
+    poller.start('')
   }
 
   function stopPolling() {
-    if (pollingTimer) {
-      clearInterval(pollingTimer)
-      pollingTimer = null
-    }
+    if (_stopServiceMessagesPoller) _stopServiceMessagesPoller()
+    _stopServiceMessagesPoller = null
     isPolling.value = false
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => stopPolling())
   }
 
   return {
