@@ -48,6 +48,11 @@ SLOW_TASK_HINTS: dict[str, str] = {
     r"wait.*healthy": "up to 10 min",
     r"wait.*backend": "up to 10 min",
     r"create.*venv|virtualenv": "30-60s",
+    r"filtered.*requirements": "2-5 min",
+    r"requirements.*filtered": "2-5 min",
+    r"install.*package": "1-3 min",
+    r"sync.*code": "30-60s",
+    r"rsync": "30-60s",
 }
 
 _TASK_NAME_MAX_LEN = 60
