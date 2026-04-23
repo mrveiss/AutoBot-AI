@@ -14,6 +14,7 @@ import re
 import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -500,19 +501,4 @@ and suggest alternatives."""
         return any(pattern in message_lower for pattern in command_patterns)
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_enhanced_system_commands_agent_instance = None
-_enhanced_system_commands_agent_lock = threading.Lock()
-
-
-def get_enhanced_system_commands_agent() -> EnhancedSystemCommandsAgent:
-    """Get the singleton Enhanced System Commands Agent instance (thread-safe)."""
-    global _enhanced_system_commands_agent_instance
-    if _enhanced_system_commands_agent_instance is None:
-        with _enhanced_system_commands_agent_lock:
-            # Double-check after acquiring lock
-            if _enhanced_system_commands_agent_instance is None:
-                _enhanced_system_commands_agent_instance = EnhancedSystemCommandsAgent()
-    return _enhanced_system_commands_agent_instance
+get_enhanced_system_commands_agent = lazy_singleton(EnhancedSystemCommandsAgent)

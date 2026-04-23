@@ -26,6 +26,7 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
 from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
 
@@ -711,23 +712,7 @@ class AgentCommunicationManager:
         logger.info("All agent communication protocols shutdown")
 
 
-# Global communication manager instance
-# Singleton instance (thread-safe)
-import threading
-
-_communication_manager = None
-_communication_manager_lock = threading.Lock()
-
-
-def get_communication_manager() -> AgentCommunicationManager:
-    """Get global communication manager instance (thread-safe)"""
-    global _communication_manager
-    if _communication_manager is None:
-        with _communication_manager_lock:
-            # Double-check after acquiring lock
-            if _communication_manager is None:
-                _communication_manager = AgentCommunicationManager()
-    return _communication_manager
+get_communication_manager = lazy_singleton(AgentCommunicationManager)
 
 
 # Utility functions for common communication patterns

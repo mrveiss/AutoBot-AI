@@ -13,7 +13,6 @@ graph (chat_workflow/graph.py).
 
 import asyncio
 import logging
-import threading
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
@@ -33,6 +32,7 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from constants.model_constants import ModelConstants
@@ -44,25 +44,7 @@ from utils.service_registry import get_service_url
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
-# Initialize components with thread-safe locks (Issue #395)
-knowledge_base = None
-_knowledge_base_lock = threading.Lock()
-
-
-def get_knowledge_base():
-    """Get or create knowledge base instance with Redis vector store.
-
-    Issue #395: Added thread-safe lazy initialization with double-check locking.
-    Issue #3374: Replaced direct global_config_manager import with get_config()
-    DI provider so tests can override config via dependency_overrides.
-    """
-    global knowledge_base
-    if knowledge_base is None:
-        with _knowledge_base_lock:
-            # Double-check after acquiring lock to prevent race condition
-            if knowledge_base is None:
-                knowledge_base = KnowledgeBase(config_manager=get_config())
-    return knowledge_base
+get_knowledge_base = lazy_singleton(lambda: KnowledgeBase(config_manager=get_config()))
 
 
 def get_vectors_redis_client():

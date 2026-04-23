@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
@@ -653,22 +654,7 @@ class AgentAnalytics:
             return {"error": "Failed to retrieve performance trends"}
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_agent_analytics: Optional[AgentAnalytics] = None
-_agent_analytics_lock = threading.Lock()
-
-
-def get_agent_analytics() -> AgentAnalytics:
-    """Get the singleton agent analytics instance (thread-safe)."""
-    global _agent_analytics
-    if _agent_analytics is None:
-        with _agent_analytics_lock:
-            # Double-check after acquiring lock
-            if _agent_analytics is None:
-                _agent_analytics = AgentAnalytics()
-    return _agent_analytics
+get_agent_analytics = lazy_singleton(AgentAnalytics)
 
 
 @asynccontextmanager

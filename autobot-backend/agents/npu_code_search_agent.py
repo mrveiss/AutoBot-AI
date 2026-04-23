@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.security.path_validator import validate_path
 from code_embedding_generator import get_code_embedding_generator
@@ -1528,22 +1529,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return {"status": "error", "error": "Failed to retrieve index status"}
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_npu_code_search = None
-_npu_code_search_lock = threading.Lock()
-
-
-def get_npu_code_search():
-    """Get or create the NPU code search agent instance (thread-safe)"""
-    global _npu_code_search
-    if _npu_code_search is None:
-        with _npu_code_search_lock:
-            # Double-check after acquiring lock
-            if _npu_code_search is None:
-                _npu_code_search = NPUCodeSearchAgent()
-    return _npu_code_search
+get_npu_code_search = lazy_singleton(NPUCodeSearchAgent)
 
 
 async def search_codebase(

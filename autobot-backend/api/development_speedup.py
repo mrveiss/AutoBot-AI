@@ -19,6 +19,7 @@ from agents.development_speedup_agent import (
     find_duplicates,
     get_development_speedup_agent,
 )
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -30,22 +31,7 @@ _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 # Type alias for analysis handlers (Issue #336)
 AnalysisHandler = Callable[[str], Awaitable[Any]]
 
-# Lazy initialization for development speedup agent (thread-safe)
-import threading
-
-_development_speedup_instance = None
-_development_speedup_lock = threading.Lock()
-
-
-def _get_dev_speedup_agent():
-    """Get or create the development speedup agent instance (lazy initialization, thread-safe)"""
-    global _development_speedup_instance
-    if _development_speedup_instance is None:
-        with _development_speedup_lock:
-            # Double-check after acquiring lock
-            if _development_speedup_instance is None:
-                _development_speedup_instance = get_development_speedup_agent()
-    return _development_speedup_instance
+_get_dev_speedup_agent = lazy_singleton(get_development_speedup_agent)
 
 
 # Issue #336: Analysis type handlers extracted from elif chain

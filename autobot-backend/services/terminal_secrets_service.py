@@ -38,6 +38,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.security.path_validator import validate_relative_path
 from services.agent_secrets_integration import (
     AgentSecretsIntegration,
@@ -582,21 +583,4 @@ class TerminalSecretsService:
             return list(self._sessions.keys())
 
 
-# Thread-safe singleton instance
-_terminal_secrets_service: Optional[TerminalSecretsService] = None
-_service_lock = threading.Lock()
-
-
-def get_terminal_secrets_service() -> TerminalSecretsService:
-    """Get or create the TerminalSecretsService singleton (thread-safe).
-
-    Returns:
-        TerminalSecretsService singleton instance
-    """
-    global _terminal_secrets_service
-    if _terminal_secrets_service is None:
-        with _service_lock:
-            # Double-check after acquiring lock
-            if _terminal_secrets_service is None:
-                _terminal_secrets_service = TerminalSecretsService()
-    return _terminal_secrets_service
+get_terminal_secrets_service = lazy_singleton(TerminalSecretsService)

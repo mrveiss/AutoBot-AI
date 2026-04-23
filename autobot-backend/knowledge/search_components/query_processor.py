@@ -10,8 +10,8 @@ Contains query preprocessing and expansion functionality.
 
 import logging
 import re
-import threading
 from typing import List
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -100,21 +100,4 @@ class QueryProcessor:
         return queries
 
 
-# Module-level instance for convenience (thread-safe, Issue #613)
-_query_processor = None
-_query_processor_lock = threading.Lock()
-
-
-def get_query_processor() -> QueryProcessor:
-    """Get the shared QueryProcessor instance (thread-safe).
-
-    Uses double-check locking pattern to ensure thread safety while
-    minimizing lock contention after initialization (Issue #613).
-    """
-    global _query_processor
-    if _query_processor is None:
-        with _query_processor_lock:
-            # Double-check after acquiring lock
-            if _query_processor is None:
-                _query_processor = QueryProcessor()
-    return _query_processor
+get_query_processor = lazy_singleton(QueryProcessor)
