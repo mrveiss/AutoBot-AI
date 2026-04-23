@@ -59,9 +59,10 @@
 
       <!-- Host list -->
       <div class="host-list" v-if="!loading">
-        <div
+        <button
           v-for="host in filteredHosts"
           :key="host.id"
+          type="button"
           class="host-item"
           :class="{ selected: selectedHost?.id === host.id }"
           @click="selectHost(host)"
@@ -86,7 +87,7 @@
               {{ cap.toUpperCase() }}
             </span>
           </div>
-        </div>
+        </button>
 
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
@@ -489,6 +490,14 @@ defineExpose({
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-150);
+  appearance: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
 .host-item:hover {
