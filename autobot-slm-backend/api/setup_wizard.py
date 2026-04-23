@@ -852,7 +852,11 @@ async def _run_provisioning_task(
                 _write_provision_log(msg)
                 # Broadcast via WebSocket (#2754)
                 log_type = "task"
-                if stage.endswith("_complete") or stage == "complete":
+                if stage == "heartbeat":
+                    log_type = "heartbeat"
+                elif stage == "phase":
+                    log_type = "phase"
+                elif stage.endswith("_complete") or stage == "complete":
                     log_type = "success"
                 elif "error" in msg.lower() or "failed" in msg.lower():
                     log_type = "error"

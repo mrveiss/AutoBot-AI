@@ -11,6 +11,7 @@ Used by Code Sync, Updates, and Infrastructure pages.
 import asyncio
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -60,6 +61,21 @@ class PlaybookExecutor:
                 return path
 
         raise FileNotFoundError("ansible-playbook not found. Install: apt install ansible")
+
+    @staticmethod
+    def _clean_task_name(task_name: str) -> str:
+        """Strip Ansible role/display prefix and issue-number suffixes."""
+        # "backend : Backend | Create venv" → "Create venv"
+        if " | " in task_name:
+            task_name = task_name.split(" | ", 1)[-1]
+        # "[PRE-FLIGHT] Check SSH" → "Check SSH"
+        if task_name.startswith("["):
+            end = task_name.find("] ")
+            if end != -1:
+                task_name = task_name[end + 2:]
+        # Strip trailing "(#4679)" issue refs
+        task_name = re.sub(r"\s*\(#\d+\)\s*$", "", task_name)
+        return task_name.strip()
 
     def _parse_play1_task(self, task_name: str) -> Optional[Dict[str, str]]:
         """
@@ -176,7 +192,10 @@ class PlaybookExecutor:
         if "TASK [" in line:
             try:
                 task_name = line.split("TASK [")[1].split("]")[0]
-                return {"stage": "task", "message": task_name}
+                # Detect provision phase markers: "Provision Phase 4a: Backend"
+                if task_name.startswith("Provision Phase"):
+                    return {"stage": "phase", "message": task_name}
+                return {"stage": "task", "message": self._clean_task_name(task_name)}
             except (IndexError, ValueError):
                 pass
 
