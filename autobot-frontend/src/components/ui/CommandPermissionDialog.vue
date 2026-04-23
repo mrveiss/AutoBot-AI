@@ -1,6 +1,6 @@
 <template>
   <div v-if="showDialog" class="command-overlay">
-    <div class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="cmd-permission-title">
+    <div ref="dialogRef" class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="cmd-permission-title" @keydown="onKeydown">
       <div class="command-header">
         <div class="command-icon" aria-hidden="true">
           <Icon name="terminal" size="md" />
@@ -126,297 +126,173 @@
   </div>
 </template>
 
-<script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useI18n } from 'vue-i18n';
-import { apiService } from '@/services/api';
-import appConfig from '@/config/AppConfig.js';
-import StatusBadge from '@/components/ui/StatusBadge.vue';
-import BaseButton from '@/components/base/BaseButton.vue';
-import Icon from '@/components/ui/Icon.vue';
-import { useModal } from '@/composables/useModal';
-import { useAsyncOperation } from '@/composables/useAsyncOperation';
-import { createLogger } from '@/utils/debugUtils';
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { apiService } from '@/services/api'
+import appConfig from '@/config/AppConfig.js'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import Icon from '@/components/ui/Icon.vue'
+import { useModal } from '@/composables/useModal'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusRestore } from '@/composables/useFocusRestore'
+import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 
-const logger = createLogger('CommandPermissionDialog');
+const logger = createLogger('CommandPermissionDialog')
+const { t } = useI18n()
 
-export default {
-  name: 'CommandPermissionDialog',
-  components: {
-    StatusBadge,
-    BaseButton,
-    Icon
-  },
-  props: {
-    show: {
-      type: Boolean,
-      default: false
-    },
-    command: {
-      type: String,
-      default: ''
-    },
-    purpose: {
-      type: String,
-      default: ''
-    },
-    riskLevel: {
-      type: String,
-      default: 'LOW',
-      validator: value => ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(value)
-    },
-    chatId: {
-      type: String,
-      required: false,
-      default: null
-    },
-    originalMessage: {
-      type: String,
-      default: ''
-    },
-    terminalSessionId: {
-      type: String,
-      required: false,
-      default: null
-    }
-  },
-  emits: ['approved', 'denied', 'commented', 'close'],
-  setup(props, { emit }) {
-    const { t } = useI18n();
-    const { isOpen: showDialog } = useModal('command-permission-dialog');
-    const { execute: executeAllow, loading: isProcessingAllow, error: errorAllow } = useAsyncOperation();
-    const { execute: executeComment, loading: isProcessingComment, error: errorComment } = useAsyncOperation();
-    const rememberForSession = ref(false);
-    const showCommentInput = ref(false);
-    const commentText = ref('');
+const props = defineProps<{
+  show?: boolean
+  command?: string
+  purpose?: string
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  chatId?: string | null
+  originalMessage?: string
+  terminalSessionId?: string | null
+}>()
 
-    // Computed to unify loading states for template
-    const isProcessing = computed(() => isProcessingAllow.value || isProcessingComment.value);
-    // Computed to unify error states for template
-    const error = computed(() => errorAllow.value || errorComment.value);
+const emit = defineEmits<{
+  (e: 'approved', payload: { command: string; result: unknown; rememberChoice: boolean }): void
+  (e: 'denied', payload: { command: string; reason: string }): void
+  (e: 'commented', payload: { command: string; comment: string; response: unknown }): void
+  (e: 'close'): void
+}>()
 
-    const allowCommandFn = async () => {
-      // Verify terminal_session_id is available
-      if (!props.terminalSessionId) {
-        throw new Error(t('ui.commandPermission.missingSessionId'));
-      }
+const { isOpen: showDialog } = useModal('command-permission-dialog')
+const { execute: executeAllow, loading: isProcessingAllow, error: errorAllow } = useAsyncOperation()
+const { execute: executeComment, loading: isProcessingComment, error: errorComment } = useAsyncOperation()
+const rememberForSession = ref(false)
+const showCommentInput = ref(false)
+const commentText = ref('')
 
-      // REFACTORED: Use AppConfig for dynamic API URL resolution
-      const approvalUrl = await appConfig.getApiUrl(
-        `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`
-      );
+const isProcessing = computed(() => isProcessingAllow.value || isProcessingComment.value)
+const error = computed(() => errorAllow.value || errorComment.value)
 
-      // Send approval using direct fetch
-      const fetchResponse = await fetchWithAuth(
-        approvalUrl,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            approved: true,
-            user_id: 'web_user'
-          })
-        }
-      );
+// Focus trap and restore
+const dialogRef = ref<HTMLElement | null>(null)
+const { onKeydown } = useFocusTrap(dialogRef)
+useFocusRestore(showDialog)
 
-      const data = await fetchResponse.json();
-
-      // DEBUG: Log exact response to understand what we're getting
-      logger.debug('Status check result:', {
-        isApproved: data.status === 'approved',
-        isSuccess: data.status === 'success',
-        isError: data.status === 'error',
-        error: data.error,
-        willClose: data.status === 'approved' || data.status === 'success'
-      });
-
-      // CRITICAL FIX: Handle "No pending approval" error (stale dialog from cleared session)
-      if (data.status === 'error' && data.error === 'No pending approval') {
-        logger.warn('No pending approval found - this approval request is stale');
-        logger.warn('Closing dialog - session may have been cleared or approval already processed');
-
-        // Close the dialog without emitting approval event
-        // The session no longer has a pending approval to process
-        closeDialog();
-
-        // Show user-friendly message (optional - could use a toast notification)
-        logger.info('Dialog closed: This approval request is no longer valid');
-        return;
-      }
-
-      // CRITICAL FIX: Backend returns "approved" status, not "success"
-      if (data.status === 'approved' || data.status === 'success') {
-        emit('approved', {
-          command: props.command,
-          result: data,
-          rememberChoice: rememberForSession.value
-        });
-        closeDialog();
-      } else {
-        logger.error('Status did NOT match - showing error');
-        throw new Error(data.error || t('ui.commandPermission.executionFailed'));
-      }
-    };
-
-    const handleAllow = async () => {
-      // CRITICAL: Prevent double-click/concurrent execution
-      if (isProcessing.value) {
-        logger.warn('handleAllow: Already processing, ignoring duplicate click');
-        return;
-      }
-
-      await executeAllow(allowCommandFn).catch(err => {
-        // Error already handled by useAsyncOperation
-        logger.error('Command approval error:', err);
-      });
-    };
-
-    const handleDeny = async () => {
-      try {
-        // Verify terminal_session_id is available
-        if (props.terminalSessionId) {
-          // Send denial to agent terminal API
-          const response = await apiService.post(
-            `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`,
-            {
-              approved: false,
-              user_id: 'web_user'
-            }
-          );
-
-          // CRITICAL FIX: Handle "No pending approval" error (stale dialog from cleared session)
-          if (response.data?.status === 'error' && response.data?.error === 'No pending approval') {
-            logger.warn('No pending approval found when denying - this approval request is stale');
-            logger.warn('Closing dialog - session may have been cleared or approval already processed');
-
-            // Close the dialog without emitting denial event
-            // The session no longer has a pending approval to process
-            closeDialog();
-            return;
-          }
-        } else {
-          logger.warn('handleDeny: terminal_session_id is missing - continuing with client-side denial');
-        }
-
-        emit('denied', {
-          command: props.command,
-          reason: 'User denied permission'
-        });
-        closeDialog();
-      } catch (err) {
-        logger.error('Command denial error:', err);
-        // Still close dialog even if API call fails
-        emit('denied', {
-          command: props.command,
-          reason: 'User denied permission'
-        });
-        closeDialog();
-      }
-    };
-
-    const handleComment = () => {
-      showCommentInput.value = true;
-    };
-
-    const submitCommentFn = async () => {
-      if (!commentText.value.trim()) {
-        throw new Error(t('ui.commandPermission.enterComment'));
-      }
-
-      // Send comment to backend
-      // Issue #552: Fixed missing /api prefix
-      const response = await apiService.post(`${getApiBase()}/chat/direct`, {
-        message: `Command feedback: ${commentText.value}`,
-        chat_id: props.chatId
-      });
-
-      emit('commented', {
-        command: props.command,
-        comment: commentText.value,
-        response: response.data
-      });
-      closeDialog();
-    };
-
-    const submitComment = async () => {
-      await executeComment(submitCommentFn).catch(err => {
-        // Error already handled by useAsyncOperation
-        logger.error('Comment submission error:', err);
-      });
-    };
-
-    const cancelComment = () => {
-      showCommentInput.value = false;
-      commentText.value = '';
-    };
-
-    const closeDialog = () => {
-      showDialog.value = false;
-      rememberForSession.value = false;
-      emit('close');
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape' && showDialog.value && !isProcessing.value) {
-        handleDeny();
-      }
-    };
-
-    onMounted(() => {
-      showDialog.value = props.show;
-      document.addEventListener('keydown', handleEscape);
-    });
-
-    onUnmounted(() => {
-      document.removeEventListener('keydown', handleEscape);
-    });
-
-    // Watch for show prop changes
-    const updateShow = (newValue) => {
-      showDialog.value = newValue;
-    };
-
-    // StatusBadge variant mapping function
-    const getRiskVariant = (riskLevel) => {
-      const variantMap = {
-        'LOW': 'success',
-        'MEDIUM': 'warning',
-        'HIGH': 'danger',
-        'CRITICAL': 'danger'
-      };
-      return variantMap[riskLevel] || 'secondary';
-    };
-
-    return {
-      showDialog,
-      rememberForSession,
-      isProcessing,
-      error,
-      showCommentInput,
-      commentText,
-      handleAllow,
-      handleDeny,
-      handleComment,
-      submitComment,
-      cancelComment,
-      updateShow,
-      getRiskVariant,
-      t
-    };
-  },
-  watch: {
-    show: {
-      handler(newValue) {
-        this.updateShow(newValue);
-      },
-      immediate: true
-    }
+const allowCommandFn = async () => {
+  if (!props.terminalSessionId) {
+    throw new Error(t('ui.commandPermission.missingSessionId'))
   }
-};
+
+  const approvalUrl = await appConfig.getApiUrl(
+    `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`
+  )
+
+  const fetchResponse = await fetchWithAuth(approvalUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approved: true, user_id: 'web_user' })
+  })
+
+  const data = await fetchResponse.json()
+
+  logger.debug('Status check result:', {
+    isApproved: data.status === 'approved',
+    isSuccess: data.status === 'success',
+    isError: data.status === 'error',
+    error: data.error,
+    willClose: data.status === 'approved' || data.status === 'success'
+  })
+
+  if (data.status === 'error' && data.error === 'No pending approval') {
+    logger.warn('No pending approval found - this approval request is stale')
+    closeDialog()
+    return
+  }
+
+  if (data.status === 'approved' || data.status === 'success') {
+    emit('approved', { command: props.command ?? '', result: data, rememberChoice: rememberForSession.value })
+    closeDialog()
+  } else {
+    throw new Error(data.error || t('ui.commandPermission.executionFailed'))
+  }
+}
+
+const handleAllow = async () => {
+  if (isProcessing.value) return
+  await executeAllow(allowCommandFn).catch(err => logger.error('Command approval error:', err))
+}
+
+const handleDeny = async () => {
+  try {
+    if (props.terminalSessionId) {
+      const response = await apiService.post(
+        `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`,
+        { approved: false, user_id: 'web_user' }
+      )
+      if (response.data?.status === 'error' && response.data?.error === 'No pending approval') {
+        logger.warn('No pending approval found when denying - stale dialog, closing')
+        closeDialog()
+        return
+      }
+    } else {
+      logger.warn('handleDeny: terminal_session_id is missing')
+    }
+    emit('denied', { command: props.command ?? '', reason: 'User denied permission' })
+    closeDialog()
+  } catch (err) {
+    logger.error('Command denial error:', err)
+    emit('denied', { command: props.command ?? '', reason: 'User denied permission' })
+    closeDialog()
+  }
+}
+
+const handleComment = () => { showCommentInput.value = true }
+
+const submitCommentFn = async () => {
+  if (!commentText.value.trim()) throw new Error(t('ui.commandPermission.enterComment'))
+  const response = await apiService.post(`${getApiBase()}/chat/direct`, {
+    message: `Command feedback: ${commentText.value}`,
+    chat_id: props.chatId
+  })
+  emit('commented', { command: props.command ?? '', comment: commentText.value, response: response.data })
+  closeDialog()
+}
+
+const submitComment = async () => {
+  await executeComment(submitCommentFn).catch(err => logger.error('Comment submission error:', err))
+}
+
+const cancelComment = () => {
+  showCommentInput.value = false
+  commentText.value = ''
+}
+
+const closeDialog = () => {
+  showDialog.value = false
+  rememberForSession.value = false
+  emit('close')
+}
+
+const handleEscape = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && showDialog.value && !isProcessing.value) handleDeny()
+}
+
+onMounted(() => {
+  showDialog.value = props.show ?? false
+  document.addEventListener('keydown', handleEscape)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleEscape)
+})
+
+watch(() => props.show, (newValue) => {
+  showDialog.value = newValue ?? false
+}, { immediate: true })
+
+const getRiskVariant = (riskLevel: string) => {
+  const variantMap: Record<string, string> = { LOW: 'success', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' }
+  return variantMap[riskLevel] ?? 'secondary'
+}
 </script>
 
 <style scoped>
