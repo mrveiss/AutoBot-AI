@@ -5,7 +5,7 @@
 # nginx reverse proxy for AutoBot backend on .20 (WSL2)
 # Issue #957: nginx holds port {{ backend_nginx_port }} permanently so Windows Defender
 # Firewall evaluates the rule once (for nginx), not on every uvicorn restart.
-# uvicorn binds plain HTTP on 127.0.0.1:{{ backend_port }} (localhost only).
+# uvicorn binds plain HTTP on {{ backend_host }}:{{ backend_port }} (localhost only).
 
 server {
     listen {{ backend_nginx_port }} ssl;
@@ -35,7 +35,7 @@ server {
 
     # API — plain HTTP upstream (uvicorn no longer terminates TLS)
     location / {
-        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_pass http://{{ backend_host }}:{{ backend_port }};
     }
 
     # WebSocket paths — must set Upgrade/Connection headers

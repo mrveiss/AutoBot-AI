@@ -61,6 +61,15 @@
     - backend_chromadb_host == '127.0.0.1'
   tags: ['backend', 'config']
 
+- name: "Backend | Set backend_host=10.255.255.254 on WSL2 hosts (#5608)"
+  ansible.builtin.set_fact:
+    backend_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
@@ -648,7 +657,7 @@
 
 - name: "Backend | Wait for backend to be healthy (#3687)"
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ backend_health_check_port }}/api/health"
+    url: "http://{{ backend_host }}:{{ backend_health_check_port }}/api/health"
     status_code: 200
   retries: "{{ backend_health_check_retries | default(60) }}"
   delay: "{{ backend_health_check_delay | default(5) }}"
