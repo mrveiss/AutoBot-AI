@@ -19,6 +19,7 @@ import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -612,30 +613,7 @@ class PromptInjectionDetector:
         }
 
 
-# Global instance for easy access (thread-safe)
-import threading
-
-_detector_instance = None
-_detector_instance_lock = threading.Lock()
-
-
-def get_prompt_injection_detector(strict_mode: bool = True) -> PromptInjectionDetector:
-    """
-    Get singleton prompt injection detector instance (thread-safe).
-
-    Args:
-        strict_mode: Enable strict validation mode
-
-    Returns:
-        PromptInjectionDetector instance
-    """
-    global _detector_instance
-    if _detector_instance is None:
-        with _detector_instance_lock:
-            # Double-check after acquiring lock
-            if _detector_instance is None:
-                _detector_instance = PromptInjectionDetector(strict_mode=strict_mode)
-    return _detector_instance
+get_prompt_injection_detector = lazy_singleton(PromptInjectionDetector)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from security.prompt_injection_detector import (
     get_prompt_injection_detector,
 )
 from utils.command_validator import CommandValidator
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -427,30 +428,7 @@ class SecureLLMCommandParser:
         }
 
 
-# Global instance for easy access (thread-safe)
-import threading
-
-_parser_instance = None
-_parser_instance_lock = threading.Lock()
-
-
-def get_secure_llm_parser(strict_mode: bool = True) -> SecureLLMCommandParser:
-    """
-    Get singleton secure LLM command parser instance (thread-safe).
-
-    Args:
-        strict_mode: Enable strict validation mode
-
-    Returns:
-        SecureLLMCommandParser instance
-    """
-    global _parser_instance
-    if _parser_instance is None:
-        with _parser_instance_lock:
-            # Double-check after acquiring lock
-            if _parser_instance is None:
-                _parser_instance = SecureLLMCommandParser(strict_mode=strict_mode)
-    return _parser_instance
+get_secure_llm_parser = lazy_singleton(SecureLLMCommandParser)
 
 
 if __name__ == "__main__":

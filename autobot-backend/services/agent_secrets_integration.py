@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from services.secrets_service import SecretsService, get_secrets_service
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -465,21 +466,4 @@ class AgentSecretsIntegration:
         return mapping.auto_inject
 
 
-# Thread-safe singleton instance
-_agent_secrets_integration: Optional[AgentSecretsIntegration] = None
-_integration_lock = threading.Lock()
-
-
-def get_agent_secrets_integration() -> AgentSecretsIntegration:
-    """Get or create the AgentSecretsIntegration singleton (thread-safe).
-
-    Returns:
-        AgentSecretsIntegration singleton instance
-    """
-    global _agent_secrets_integration
-    if _agent_secrets_integration is None:
-        with _integration_lock:
-            # Double-check after acquiring lock
-            if _agent_secrets_integration is None:
-                _agent_secrets_integration = AgentSecretsIntegration()
-    return _agent_secrets_integration
+get_agent_secrets_integration = lazy_singleton(AgentSecretsIntegration)

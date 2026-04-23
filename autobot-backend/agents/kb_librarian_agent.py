@@ -11,6 +11,7 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -367,20 +368,4 @@ class KBLibrarianAgent(StandardizedAgent):
             raise
 
 
-# Global instance for API access (thread-safe)
-import threading
-
-_kb_librarian_instance = None
-_kb_librarian_lock = threading.Lock()
-
-
-def get_kb_librarian() -> KBLibrarianAgent:
-    """Get or create the KB Librarian Agent instance (thread-safe)."""
-    global _kb_librarian_instance
-    if _kb_librarian_instance is None:
-        with _kb_librarian_lock:
-            # Double-check after acquiring lock
-            if _kb_librarian_instance is None:
-                _kb_librarian_instance = KBLibrarianAgent()
-                logger.info("KB-LIBRARIAN: Created new instance")
-    return _kb_librarian_instance
+get_kb_librarian = lazy_singleton(KBLibrarianAgent)

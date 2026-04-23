@@ -9,10 +9,10 @@ Contains QueryKnowledgeIntentDetector for smart RAG triggering.
 """
 
 import re
-import threading
 from typing import Optional
 
 from .types import QueryIntentResult, QueryKnowledgeIntent
+from autobot_shared.singleton_factory import lazy_singleton
 
 
 class QueryKnowledgeIntentDetector:
@@ -178,17 +178,4 @@ class QueryKnowledgeIntentDetector:
         return self._classify_by_query_length(query)
 
 
-# Global detector instance for reuse (thread-safe)
-_query_intent_detector: Optional[QueryKnowledgeIntentDetector] = None
-_query_intent_detector_lock = threading.Lock()
-
-
-def get_query_intent_detector() -> QueryKnowledgeIntentDetector:
-    """Get or create the global query intent detector instance (thread-safe)."""
-    global _query_intent_detector
-    if _query_intent_detector is None:
-        with _query_intent_detector_lock:
-            # Double-check after acquiring lock
-            if _query_intent_detector is None:
-                _query_intent_detector = QueryKnowledgeIntentDetector()
-    return _query_intent_detector
+get_query_intent_detector = lazy_singleton(QueryKnowledgeIntentDetector)

@@ -23,6 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -540,18 +541,4 @@ class ConfounderControlAnalyzer:
             return []
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_analyzer: Optional[ConfounderControlAnalyzer] = None
-_analyzer_lock = threading.Lock()
-
-
-def get_confounder_control_analyzer() -> ConfounderControlAnalyzer:
-    """Get the singleton analyzer instance (thread-safe)."""
-    global _analyzer
-    if _analyzer is None:
-        with _analyzer_lock:
-            if _analyzer is None:
-                _analyzer = ConfounderControlAnalyzer()
-    return _analyzer
+get_confounder_control_analyzer = lazy_singleton(ConfounderControlAnalyzer)

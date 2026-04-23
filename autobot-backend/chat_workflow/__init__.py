@@ -22,11 +22,10 @@ Usage:
 """
 
 import logging
-import threading
-from typing import Optional
 
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -40,20 +39,7 @@ except ImportError:
     get_compiled_graph = None  # type: ignore[assignment]
     logger.warning("langgraph not installed — graph features disabled")
 
-# Global instance for easy access (thread-safe)
-_workflow_manager: Optional[ChatWorkflowManager] = None
-_workflow_manager_lock = threading.Lock()
-
-
-def get_chat_workflow_manager() -> ChatWorkflowManager:
-    """Get the global chat workflow manager instance (thread-safe)."""
-    global _workflow_manager
-    if _workflow_manager is None:
-        with _workflow_manager_lock:
-            # Double-check after acquiring lock
-            if _workflow_manager is None:
-                _workflow_manager = ChatWorkflowManager()
-    return _workflow_manager
+get_chat_workflow_manager = lazy_singleton(ChatWorkflowManager)
 
 
 async def initialize_chat_workflow_manager() -> bool:

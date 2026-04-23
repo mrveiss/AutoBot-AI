@@ -11,9 +11,9 @@ fusion weights can be adapted per query rather than using static globals.
 
 import logging
 import re
-import threading
 from enum import Enum
 from typing import List, Tuple
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -155,23 +155,4 @@ class QueryClassifier:
         return clause_count, word_count
 
 
-# ---------------------------------------------------------------------------
-# Module-level singleton (thread-safe, mirrors QueryProcessor pattern)
-# ---------------------------------------------------------------------------
-
-_query_classifier: "QueryClassifier | None" = None
-_query_classifier_lock = threading.Lock()
-
-
-def get_query_classifier() -> QueryClassifier:
-    """Return the shared QueryClassifier singleton (thread-safe).
-
-    Uses double-check locking to minimise contention after initialisation.
-    Issue #1719: Mirrors get_query_processor() pattern from query_processor.py.
-    """
-    global _query_classifier
-    if _query_classifier is None:
-        with _query_classifier_lock:
-            if _query_classifier is None:
-                _query_classifier = QueryClassifier()
-    return _query_classifier
+get_query_classifier = lazy_singleton(QueryClassifier)

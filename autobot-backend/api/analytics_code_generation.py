@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # LLM Interface for real code generation
@@ -939,21 +940,7 @@ class CodeGenerationEngine:
 # Create singleton instance
 # =============================================================================
 
-import threading
-
-_engine: Optional[CodeGenerationEngine] = None
-_engine_lock = threading.Lock()
-
-
-def get_code_generation_engine() -> CodeGenerationEngine:
-    """Get or create code generation engine singleton (thread-safe)"""
-    global _engine
-    if _engine is None:
-        with _engine_lock:
-            # Double-check after acquiring lock
-            if _engine is None:
-                _engine = CodeGenerationEngine()
-    return _engine
+get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 
 
 # =============================================================================

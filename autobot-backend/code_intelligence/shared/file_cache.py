@@ -44,6 +44,7 @@ from typing import Dict, FrozenSet, List, Optional
 
 from constants.path_constants import PATH
 from utils.file_categorization import SKIP_DIRS
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -354,23 +355,7 @@ class FileListCache:
 # Convenience Functions (Module-Level API)
 # =============================================================================
 
-_cache_instance: Optional[FileListCache] = None
-_cache_instance_lock = threading.Lock()
-
-
-def _get_cache() -> FileListCache:
-    """Get or create the global cache instance (thread-safe).
-
-    Uses double-check locking pattern to ensure thread safety while
-    minimizing lock contention after initialization (Issue #613).
-    """
-    global _cache_instance
-    if _cache_instance is None:
-        with _cache_instance_lock:
-            # Double-check after acquiring lock
-            if _cache_instance is None:
-                _cache_instance = FileListCache()
-    return _cache_instance
+_get_cache = lazy_singleton(FileListCache)
 
 
 async def get_python_files(root_path: Optional[Path] = None) -> List[Path]:

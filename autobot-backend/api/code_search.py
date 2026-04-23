@@ -23,6 +23,7 @@ from agents.npu_code_search_agent import (
     index_project,
     search_codebase,
 )
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 
@@ -132,22 +133,7 @@ SEARCH_EXAMPLES_DATA = {
     ),
 }
 
-# Lazy initialization for NPU code search agent (thread-safe)
-import threading
-
-_npu_code_search_instance = None
-_npu_code_search_lock = threading.Lock()
-
-
-def _get_code_search_agent():
-    """Get or create the NPU code search agent instance (lazy initialization, thread-safe)"""
-    global _npu_code_search_instance
-    if _npu_code_search_instance is None:
-        with _npu_code_search_lock:
-            # Double-check after acquiring lock
-            if _npu_code_search_instance is None:
-                _npu_code_search_instance = get_npu_code_search()
-    return _npu_code_search_instance
+_get_code_search_agent = lazy_singleton(get_npu_code_search)
 
 
 class IndexRequest(BaseModel):

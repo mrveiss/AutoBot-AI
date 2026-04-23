@@ -9,10 +9,10 @@ Contains ConversationContextEnhancer for conversation-aware RAG.
 """
 
 import re
-import threading
 from typing import Dict, List, Optional
 
 from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
+from autobot_shared.singleton_factory import lazy_singleton
 
 
 class ConversationContextEnhancer:
@@ -286,17 +286,4 @@ class ConversationContextEnhancer:
         return "; ".join(reasons)
 
 
-# Global context enhancer instance (thread-safe)
-_context_enhancer: Optional[ConversationContextEnhancer] = None
-_context_enhancer_lock = threading.Lock()
-
-
-def get_context_enhancer() -> ConversationContextEnhancer:
-    """Get or create the global context enhancer instance (thread-safe)."""
-    global _context_enhancer
-    if _context_enhancer is None:
-        with _context_enhancer_lock:
-            # Double-check after acquiring lock
-            if _context_enhancer is None:
-                _context_enhancer = ConversationContextEnhancer()
-    return _context_enhancer
+get_context_enhancer = lazy_singleton(ConversationContextEnhancer)

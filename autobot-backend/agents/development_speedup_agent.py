@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiofiles
 
 from agents.npu_code_search_agent import get_npu_code_search
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -874,22 +875,7 @@ class DevelopmentSpeedupAgent:
         }
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_development_speedup_instance = None
-_development_speedup_lock = threading.Lock()
-
-
-def get_development_speedup_agent() -> DevelopmentSpeedupAgent:
-    """Get or create the development speedup agent instance (thread-safe)"""
-    global _development_speedup_instance
-    if _development_speedup_instance is None:
-        with _development_speedup_lock:
-            # Double-check after acquiring lock
-            if _development_speedup_instance is None:
-                _development_speedup_instance = DevelopmentSpeedupAgent()
-    return _development_speedup_instance
+get_development_speedup_agent = lazy_singleton(DevelopmentSpeedupAgent)
 
 
 async def analyze_codebase(root_path: str) -> Dict[str, Any]:

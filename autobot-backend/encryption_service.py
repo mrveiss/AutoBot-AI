@@ -25,6 +25,7 @@ from typing import Optional, Union
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -249,30 +250,7 @@ class EncryptionService:
         }
 
 
-# Global encryption service instance (thread-safe)
-import threading
-
-_encryption_service: Optional[EncryptionService] = None
-_encryption_service_lock = threading.Lock()
-
-
-def get_encryption_service() -> EncryptionService:
-    """
-    Get the global encryption service instance (thread-safe).
-
-    Returns:
-        EncryptionService instance
-
-    Raises:
-        ValueError: If encryption service cannot be initialized
-    """
-    global _encryption_service
-    if _encryption_service is None:
-        with _encryption_service_lock:
-            # Double-check after acquiring lock
-            if _encryption_service is None:
-                _encryption_service = EncryptionService()
-    return _encryption_service
+get_encryption_service = lazy_singleton(EncryptionService)
 
 
 def is_encryption_enabled() -> bool:

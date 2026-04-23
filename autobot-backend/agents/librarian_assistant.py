@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.http_client import get_http_client
 from config import config
 from knowledge_base import KnowledgeBase
@@ -654,22 +655,4 @@ class LibrarianAssistant:
             return "Research completed but summary generation failed"
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_librarian_assistant = None
-_librarian_assistant_lock = threading.Lock()
-
-
-def get_librarian_assistant() -> LibrarianAssistant:
-    """Get the singleton Librarian Assistant Agent instance (thread-safe).
-
-    Returns:
-        The Librarian Assistant Agent instance
-    """
-    global _librarian_assistant
-    if _librarian_assistant is None:
-        with _librarian_assistant_lock:
-            if _librarian_assistant is None:
-                _librarian_assistant = LibrarianAssistant()
-    return _librarian_assistant
+get_librarian_assistant = lazy_singleton(LibrarianAssistant)
