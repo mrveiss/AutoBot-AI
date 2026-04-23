@@ -10,7 +10,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
