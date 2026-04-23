@@ -90,6 +90,20 @@
   become: true
   when: _pg_installed.rc != 0
 
+- name: Check if PostgreSQL cluster data directory exists
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: _pg_cluster_exists
+  become: true
+
+- name: Initialize PostgreSQL cluster if missing
+  ansible.builtin.command:
+    cmd: "pg_createcluster {{ postgresql_version }} main"
+  become: true
+  become_user: postgres
+  when: not _pg_cluster_exists.stat.exists
+  changed_when: true
+
 - name: Ensure PostgreSQL service is enabled
   ansible.builtin.systemd:
     name: "{{ postgresql_service }}"
