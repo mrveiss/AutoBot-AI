@@ -166,7 +166,7 @@ class TestTaskProgressTracker:
 
     @pytest.mark.asyncio
     async def test_no_hint_for_unknown_task(self):
-        """Heartbeat for an unknown task does NOT include an estimate bracket."""
+        """Heartbeat for unknown task shows task name but no 'est.' estimate."""
         received: list[dict] = []
 
         async def callback(progress: dict) -> None:
@@ -178,8 +178,9 @@ class TestTaskProgressTracker:
 
         assert received
         msg = received[0]["message"]
-        # Square-bracket hint section should be absent
-        assert "[" not in msg
+        # Task name always shown; no "est." hint for tasks not in SLOW_TASK_HINTS
+        assert "Restart nginx" in msg
+        assert "est." not in msg
 
     @pytest.mark.asyncio
     async def test_no_heartbeat_when_no_callback(self):
