@@ -18,6 +18,7 @@ import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('useBackgroundTask')
 
@@ -185,78 +186,75 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
   /**
    * Poll GET /status/{id} every 2 s until completed or failed.
    * Resilient to transient network errors (up to MAX_CONSECUTIVE_ERRORS).
+   * Uses usePollingJob internally; returns a Promise for caller convenience.
    *
    * @returns 'completed', 'failed', or 'orphaned' to let callers decide on retry.
    */
   const poll = (id: string): Promise<'completed' | 'failed' | 'orphaned' | 'error'> => {
     let consecutiveErrors = 0
-    let intervalId: ReturnType<typeof setInterval> | null = null
+    let resolved = false
+
+    type PollResult = { done: boolean; outcome: 'completed' | 'failed' | 'orphaned' | 'error' | 'running' }
 
     return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
-      const stop = () => {
-        if (intervalId !== null) {
-          clearInterval(intervalId)
-          intervalId = null
-        }
+      const settle = (outcome: 'completed' | 'failed' | 'orphaned' | 'error') => {
+        if (!resolved) { resolved = true; resolve(outcome) }
       }
 
-      const tick = async () => {
-        try {
-          const backendUrl = await getBackendUrl()
-          const resp = await fetchWithAuth(
-            `${backendUrl}${baseUrl}/status/${id}`,
-          )
-          if (!resp.ok) throw new Error(`Status ${resp.status}`)
+      const poller = usePollingJob<PollResult>(
+        async () => {
+          try {
+            const backendUrl = await getBackendUrl()
+            const resp = await fetchWithAuth(`${backendUrl}${baseUrl}/status/${id}`)
+            if (!resp.ok) throw new Error(`Status ${resp.status}`)
 
-          const data: TaskStatus = await resp.json()
-          taskStatus.value = data
-          progress.value = data.progress ?? 0
-          currentStep.value = data.current_step ?? null
-          consecutiveErrors = 0
+            const data: TaskStatus = await resp.json()
+            taskStatus.value = data
+            progress.value = data.progress ?? 0
+            currentStep.value = data.current_step ?? null
+            consecutiveErrors = 0
 
-          if (data.status === 'completed') {
-            result.value = data.result ?? null
-            progress.value = 100
-            running.value = false
-            stop()
-            resolve('completed')
-            return
-          }
-
-          if (data.status === 'failed') {
-            const orphaned = data.reason === 'orphaned'
-              || data.error?.includes('orphaned')
-            if (orphaned) {
-              wasInterrupted.value = true
-              error.value = 'Previous task was interrupted by a server restart.'
+            if (data.status === 'completed') {
+              result.value = data.result ?? null
+              progress.value = 100
               running.value = false
-              stop()
-              resolve('orphaned')
-            } else {
-              error.value = data.error || 'Task failed'
-              running.value = false
-              stop()
-              resolve('failed')
+              return { done: true, outcome: 'completed' }
             }
-            return
-          }
-        } catch (e: unknown) {
-          consecutiveErrors++
-          const msg = e instanceof Error ? e.message : String(e)
-          logger.warn(
-            `Poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`,
-          )
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            error.value = `Lost connection after ${MAX_CONSECUTIVE_ERRORS} retries`
-            running.value = false
-            stop()
-            resolve('error')
-          }
-        }
-      }
 
-      tick()
-      intervalId = setInterval(tick, POLL_INTERVAL_MS)
+            if (data.status === 'failed') {
+              const orphaned = data.reason === 'orphaned' || data.error?.includes('orphaned')
+              if (orphaned) {
+                wasInterrupted.value = true
+                error.value = 'Previous task was interrupted by a server restart.'
+              } else {
+                error.value = data.error || 'Task failed'
+              }
+              running.value = false
+              return { done: true, outcome: orphaned ? 'orphaned' : 'failed' }
+            }
+
+            return { done: false, outcome: 'running' }
+          } catch (e: unknown) {
+            consecutiveErrors++
+            const msg = e instanceof Error ? e.message : String(e)
+            logger.warn(`Poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`)
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              error.value = `Lost connection after ${MAX_CONSECUTIVE_ERRORS} retries`
+              running.value = false
+              return { done: true, outcome: 'error' }
+            }
+            return { done: false, outcome: 'running' }
+          }
+        },
+        {
+          intervalMs: POLL_INTERVAL_MS,
+          maxAttempts: 600, // 20 minutes max — terminal status settles much earlier
+          isComplete: (r) => r.done,
+          onDone: (r) => settle(r.outcome as 'completed' | 'failed' | 'orphaned' | 'error'),
+        }
+      )
+
+      poller.start(id)
     })
   }
 

@@ -11,12 +11,13 @@
  * Resolved: Issue #76 - Replaced mockup data with real backend metrics
  */
 
-import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 // Create scoped logger
 const logger = createLogger('usePrometheusMetrics')
@@ -252,9 +253,6 @@ export function usePrometheusMetrics(
   const lastUpdate = ref<Date | null>(null)
   const isConnected = ref(false)
 
-  // Polling state
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
-
   // Build the monitoring WebSocket URL
   const _buildWsUrl = (): string => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -442,21 +440,14 @@ export function usePrometheusMetrics(
 
   // ===== Polling Methods =====
 
+  const { start: _startDashboardPoller, stop: stopPolling } = usePollingJob<void>(
+    async () => { await fetchAll() },
+    { intervalMs: pollInterval }
+  )
+
   function startPolling(): void {
-    if (pollingInterval) return // Already polling
-
     logger.debug(`Starting polling with interval: ${pollInterval}ms`)
-    pollingInterval = setInterval(() => {
-      fetchAll()
-    }, pollInterval)
-  }
-
-  function stopPolling(): void {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-      logger.debug('Polling stopped')
-    }
+    _startDashboardPoller('')
   }
 
   // ===== WebSocket Methods =====
@@ -488,12 +479,8 @@ export function usePrometheusMetrics(
     })
   }
 
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
-      // useWebSocket handles WebSocket cleanup via its own scope-dispose hook
-    })
-  }
+  // usePollingJob handles polling cleanup via its own onScopeDispose hook.
+  // useWebSocket handles WebSocket cleanup via its own scope-dispose hook.
 
   return {
     // State
@@ -547,8 +534,6 @@ export function useSystemMetrics(pollInterval = 10000) {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  let interval: ReturnType<typeof setInterval> | null = null
-
   async function fetch() {
     isLoading.value = true
     try {
@@ -562,28 +547,14 @@ export function useSystemMetrics(pollInterval = 10000) {
     }
   }
 
-  function startPolling() {
-    if (interval) return
-    fetch()
-    interval = setInterval(fetch, pollInterval)
-  }
-
-  function stopPolling() {
-    if (interval) {
-      clearInterval(interval)
-      interval = null
-    }
-  }
+  const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
+    async () => { await fetch() },
+    { intervalMs: pollInterval }
+  )
 
   if (getCurrentInstance()) {
     onMounted(() => {
-      startPolling()
-    })
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
+      startPolling('')
     })
   }
 
@@ -592,7 +563,7 @@ export function useSystemMetrics(pollInterval = 10000) {
     isLoading,
     error,
     fetch,
-    startPolling,
+    startPolling: () => startPolling(''),
     stopPolling
   }
 }
@@ -608,8 +579,6 @@ export function useServiceHealth(pollInterval = 15000) {
   const summary = ref<Pick<ServicesSummary, 'total_services' | 'healthy_services' | 'degraded_services' | 'critical_services' | 'overall_status' | 'health_percentage'> | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-
-  let interval: ReturnType<typeof setInterval> | null = null
 
   async function fetch() {
     isLoading.value = true
@@ -637,28 +606,14 @@ export function useServiceHealth(pollInterval = 15000) {
   const healthPercentage = computed(() => summary.value?.health_percentage ?? 0)
   const overallStatus = computed(() => summary.value?.overall_status ?? 'unknown')
 
-  function startPolling() {
-    if (interval) return
-    fetch()
-    interval = setInterval(fetch, pollInterval)
-  }
-
-  function stopPolling() {
-    if (interval) {
-      clearInterval(interval)
-      interval = null
-    }
-  }
+  const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
+    async () => { await fetch() },
+    { intervalMs: pollInterval }
+  )
 
   if (getCurrentInstance()) {
     onMounted(() => {
-      startPolling()
-    })
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
+      startPolling('')
     })
   }
 
@@ -672,7 +627,7 @@ export function useServiceHealth(pollInterval = 15000) {
     isLoading,
     error,
     fetch,
-    startPolling,
+    startPolling: () => startPolling(''),
     stopPolling
   }
 }
@@ -699,8 +654,6 @@ export function useAlerts(pollInterval = 30000) {
     alertmanager: 0,
     autobot_monitor: 0
   })
-
-  let interval: ReturnType<typeof setInterval> | null = null
 
   async function fetch() {
     isLoading.value = true
@@ -732,28 +685,14 @@ export function useAlerts(pollInterval = 30000) {
     alerts.value.filter((a: PerformanceAlert) => a.source === 'alertmanager')
   )
 
-  function startPolling() {
-    if (interval) return
-    fetch()
-    interval = setInterval(fetch, pollInterval)
-  }
-
-  function stopPolling() {
-    if (interval) {
-      clearInterval(interval)
-      interval = null
-    }
-  }
+  const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
+    async () => { await fetch() },
+    { intervalMs: pollInterval }
+  )
 
   if (getCurrentInstance()) {
     onMounted(() => {
-      startPolling()
-    })
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
+      startPolling('')
     })
   }
 
@@ -772,7 +711,7 @@ export function useAlerts(pollInterval = 30000) {
     isLoading,
     error,
     fetch,
-    startPolling,
+    startPolling: () => startPolling(''),
     stopPolling
   }
 }

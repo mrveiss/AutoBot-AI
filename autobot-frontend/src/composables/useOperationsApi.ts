@@ -7,9 +7,10 @@
  * Issue #591 - Long-Running Operations Tracker
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
+import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import type {
   Operation,
   OperationsListResponse,
@@ -160,7 +161,6 @@ export function useOperationsState() {
   })
 
   // Polling state
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
   const isPolling = ref(false)
   const pollingIntervalMs = ref(5000)
 
@@ -287,40 +287,40 @@ export function useOperationsState() {
   }
 
   /**
-   * Start polling for updates
+   * Start polling for updates.
+   * usePollingJob is recreated on each call to support dynamic intervalMs.
    */
+  let _stopOperationsPoller: (() => void) | null = null
+
   function startPolling(intervalMs = 5000) {
-    if (pollingInterval) {
-      stopPolling()
-    }
+    if (_stopOperationsPoller) _stopOperationsPoller()
 
     pollingIntervalMs.value = intervalMs
     isPolling.value = true
-
-    pollingInterval = setInterval(async () => {
-      // Only poll if we have active operations
-      if (hasActiveOperations.value) {
-        logger.debug('Polling for operation updates...')
-        await loadOperations()
-
-        // Check if selected operation needs refresh
-        if (selectedOperation.value && !isTerminalStatus(selectedOperation.value.status)) {
-          await refreshOperation(selectedOperation.value.operation_id)
-        }
-      }
-    }, intervalMs)
-
     logger.debug(`Started polling every ${intervalMs}ms`)
+
+    const poller = usePollingJob<void>(
+      async () => {
+        if (hasActiveOperations.value) {
+          logger.debug('Polling for operation updates...')
+          await loadOperations()
+          if (selectedOperation.value && !isTerminalStatus(selectedOperation.value.status)) {
+            await refreshOperation(selectedOperation.value.operation_id)
+          }
+        }
+      },
+      { intervalMs }
+    )
+    _stopOperationsPoller = poller.stop
+    poller.start('')
   }
 
   /**
    * Stop polling
    */
   function stopPolling() {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-    }
+    if (_stopOperationsPoller) _stopOperationsPoller()
+    _stopOperationsPoller = null
     isPolling.value = false
     logger.debug('Stopped polling')
   }
@@ -332,12 +332,7 @@ export function useOperationsState() {
     return operations.value.filter((op) => op.status === status)
   }
 
-  // Cleanup when effect scope disposes (component unmount or scope.stop())
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
-    })
-  }
+  // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
     // State

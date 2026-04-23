@@ -8,6 +8,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { getApiBase } from '@/config/ssot-config'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('useAutoResearch')
 
@@ -104,8 +105,6 @@ export function useAutoResearch() {
   const pendingApprovals: Ref<ApprovalRequest[]> = ref([])
 
   const insights: Ref<ExperimentInsight[]> = ref([])
-
-  let pollTimer: ReturnType<typeof setInterval> | null = null
 
   // --- Experiments ---
 
@@ -241,23 +240,28 @@ export function useAutoResearch() {
 
   // --- Polling ---
 
+  let _stopAutoResearchPoller: (() => void) | null = null
+
   function startPolling(intervalMs: number = 10000): void {
-    stopPolling()
-    pollTimer = setInterval(async () => {
-      await Promise.all([
-        fetchExperiments(),
-        fetchStats(),
-        fetchOptimizerStatus(),
-        fetchPendingApprovals(),
-      ])
-    }, intervalMs)
+    if (_stopAutoResearchPoller) _stopAutoResearchPoller()
+    const poller = usePollingJob<void>(
+      async () => {
+        await Promise.all([
+          fetchExperiments(),
+          fetchStats(),
+          fetchOptimizerStatus(),
+          fetchPendingApprovals(),
+        ])
+      },
+      { intervalMs }
+    )
+    _stopAutoResearchPoller = poller.stop
+    poller.start('')
   }
 
   function stopPolling(): void {
-    if (pollTimer) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
+    if (_stopAutoResearchPoller) _stopAutoResearchPoller()
+    _stopAutoResearchPoller = null
   }
 
   return {
