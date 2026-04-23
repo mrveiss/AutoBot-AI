@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from live_event_manager import publish_live_event
 from autobot_shared.time_utils import now_utc
 from models.heartbeat import (
-from events.event_types import HEARTBEAT_RUN_STARTED, HEARTBEAT_RUN_COMPLETED
     AgentRuntimeState,
     AgentWakeupRequest,
     HeartbeatRun,
@@ -32,6 +31,7 @@ from events.event_types import HEARTBEAT_RUN_STARTED, HEARTBEAT_RUN_COMPLETED
     HeartbeatRunStatus,
     WakeupTrigger,
 )
+from events.event_types import HEARTBEAT_RUN_STARTED, HEARTBEAT_RUN_COMPLETED
 
 logger = logging.getLogger(__name__)
 
