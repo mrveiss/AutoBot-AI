@@ -167,7 +167,7 @@ interface Props {
   itemsPerPage?: number
   /** Loading state */
   loading?: boolean
-  /** Empty state icon */
+  /** Empty state icon (IconName from Icon.vue registry) */
   emptyIcon?: string
   /** Empty state title */
   emptyTitle?: string
@@ -182,7 +182,7 @@ const props = withDefaults(defineProps<Props>(), {
   pagination: false,
   itemsPerPage: 10,
   loading: false,
-  emptyIcon: 'fas fa-inbox'
+  emptyIcon: 'inbox'
 })
 
 const emit = defineEmits<{
