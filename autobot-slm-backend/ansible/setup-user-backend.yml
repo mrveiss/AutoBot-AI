@@ -40,7 +40,7 @@
     npu_worker_host: "{{ infrastructure.hosts.npu }}"
     npu_worker_port: 8081
     browser_worker_host: "{{ infrastructure.hosts.browser }}"
-    browser_worker_port: 3000
+    browser_worker_port: 9001  # Port 9001 is canonical; 3000 was Grafana's port (#5608)
 
   pre_tasks:
     - name: Display provisioning info
