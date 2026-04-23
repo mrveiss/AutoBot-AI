@@ -53,9 +53,10 @@ from .types import (
     TrackingMetric,
 )
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 try:
     from autobot_shared.error_boundaries import get_error_boundary_manager
-from autobot_shared.singleton_factory import lazy_singleton
 except ImportError:
 
     def get_error_boundary_manager():
