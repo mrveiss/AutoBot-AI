@@ -38,7 +38,6 @@ class ConnectorStatusDict(BaseModel):
     documents_indexed: Optional[int] = None
     last_error: Optional[str] = None
     scheduled: Optional[bool] = None
-    error: Optional[str] = None
 
 
 class ConnectorConfigDict(BaseModel):
