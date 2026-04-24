@@ -24,7 +24,7 @@ Package Structure:
 from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
 
 # Issue #551: L1/L2 dual-tier caching
-from .cache import CachedResponse, LLMResponseCache, get_llm_cache, get_llm_cache_async
+from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 
 # Hardware detection
 from .hardware import TORCH_AVAILABLE, HardwareDetector
@@ -72,7 +72,6 @@ __all__ = [
     "LLMResponseCache",
     "CachedResponse",
     "get_llm_cache",
-    "get_llm_cache_async",
     # Mock providers
     "LocalLLM",
     "MockPalm",

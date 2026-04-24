@@ -434,14 +434,8 @@ class LLMResponseCache:
 get_llm_cache = lazy_singleton(LLMResponseCache)
 
 
-async def get_llm_cache_async() -> LLMResponseCache:
-    """Async accessor for the LLM response cache — delegates to get_llm_cache()."""
-    return get_llm_cache()
-
-
 __all__ = [
     "LLMResponseCache",
     "CachedResponse",
     "get_llm_cache",
-    "get_llm_cache_async",
 ]
