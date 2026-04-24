@@ -50,7 +50,8 @@
       "dataError": "Certaines données sont manquantes ou corrompues. Le rechargement peut aider.",
       "chunkLoadError": "Mise à jour de l'application détectée. Veuillez recharger la page pour obtenir la dernière version.",
       "resizeObserverError": "Actualisation de l'affichage nécessaire. Cette erreur est généralement inoffensive.",
-      "component": "Component error"
+      "component": "Component error",
+      "resizeError": "Display resize error. Please reload the page."
     },
     "permissionDenied": {
       "title": "Accès refusé",
@@ -204,7 +205,19 @@
       "failedToLoadContent": "Échec du chargement du contenu de la conversation",
       "failedToInit": "Échec de l'initialisation",
       "sessionNoMessages": "Session {sessionId} - Pas encore de messages",
-      "sessionInfo": "Session {sessionId} - Messages {count}, dernier à {time}"
+      "sessionInfo": "Session {sessionId} - Messages {count}, dernier à {time}",
+      "toolApprovalTitle": "Agent Tool Approval Required",
+      "toolApprovalTool": "Tool",
+      "toolApprovalRisk": "Risk",
+      "toolApprovalReason": "Reason",
+      "toolApprovalArgs": "Arguments",
+      "toolApprovalApprove": "Approve",
+      "toolApprovalDeny": "Deny",
+      "toolApprovalSubmitting": "Submitting…",
+      "toolApprovalApprovedMsg": "Tool execution approved",
+      "toolApprovalDeniedMsg": "Tool execution denied",
+      "toolApprovalErrorMsg": "Failed to submit approval decision",
+      "toolApprovalCountdown": "Auto-denying in {seconds}s"
     },
     "input": {
       "retryUpload": "Réessayez de télécharger",
@@ -236,7 +249,8 @@
       "explainDesc": "Expliquer un concept en détail",
       "sendingMessage": "Envoi d'un message...",
       "aiResponding": "L'IA répond...",
-      "typeMessage": "Tapez un message..."
+      "typeMessage": "Tapez un message...",
+      "overseerLabel": "Overseer"
     },
     "translate": {
       "title": "Traduire le texte",
@@ -557,6 +571,18 @@
       "formulating": "Formuler une réponse...",
       "crafting": "Élaboration d'une réponse détaillée...",
       "reviewing": "Examen de la qualité des réponses..."
+    },
+    "compare": {
+      "toggleTitle": "Compare models",
+      "panelLabel": "Multi-model comparison",
+      "selectModels": "Models:",
+      "promptPlaceholder": "Enter a prompt to compare across models…",
+      "promptLabel": "Comparison prompt",
+      "sendLabel": "Send comparison prompt",
+      "send": "Compare",
+      "streaming": "Streaming…",
+      "done": "Done",
+      "error": "Error"
     }
   },
   "settings": {
@@ -633,6 +659,10 @@
       "statusSkipped": "Skipped (optional)",
       "stepKeys": "API Keys",
       "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed."
+    },
+    "connection": {
+      "title": "Connection",
+      "desc": "Configure backend connection settings"
     }
   },
   "voice": {
@@ -1103,7 +1133,8 @@
         "sectionExported": "{section} exporté en {format}",
         "cacheCleared": "Cache vidé : {count} entrées supprimées",
         "cacheClearFailed": "Vidage du cache échoué : {error}",
-        "sourceNotFound": "Source introuvable"
+        "sourceNotFound": "Source introuvable",
+        "codeIntelPartial": "Code Intelligence analysis partially complete: {count} suggestions (some scans failed — check console)"
       },
       "charts": {
         "problemsBySeverity": "Problèmes par sévérité",
@@ -2161,7 +2192,51 @@
     "upload": {
       "tagsPlaceholder": "Saisir les tags séparés par des virgules...",
       "selectCategory": "Sélectionner une catégorie...",
-      "category": "Catégorie"
+      "category": "Catégorie",
+      "accessAutobot": "Access autobot",
+      "accessGeneral": "Access general",
+      "accessHint": "Access hint",
+      "accessLevel": "Access level",
+      "accessSystem": "Access system",
+      "accessUser": "Access user",
+      "addToKnowledgeBase": "Add to knowledge base",
+      "browse": "Browse",
+      "categoryForAll": "Category for all",
+      "characters": "Characters",
+      "clearAll": "Clear all",
+      "clearAllTitle": "Clear all title",
+      "contentLabel": "Content label",
+      "contentPlaceholder": "Content placeholder",
+      "contentPreview": "Content preview",
+      "description": "Description",
+      "dragAndDrop": "Drag and drop",
+      "dropToAdd": "Drop to add",
+      "importContent": "Import content",
+      "importFromUrl": "Import from url",
+      "invalidFileType": "Invalid file type",
+      "orAutoDetected": "Or auto detected",
+      "previewContentTitle": "Preview content title",
+      "previewTruncated": "Preview truncated",
+      "removeFileTitle": "Remove file title",
+      "supportedFormats": "Supported formats",
+      "tags": "Tags",
+      "tagsForAll": "Tags for all",
+      "textEntry": "Text entry",
+      "titleLabel": "Title label",
+      "titlePlaceholder": "Title placeholder",
+      "uploadFailed": "Upload failed",
+      "uploadFiles": "Upload files",
+      "uploadedSuccessfully": "Uploaded successfully",
+      "uploading": "Uploading",
+      "urlLabel": "Url label",
+      "useAutoDetected": "Use auto detected",
+      "visGroup": "Vis group",
+      "visOrganization": "Vis organization",
+      "visPrivate": "Vis private",
+      "visShared": "Vis shared",
+      "visSystem": "Vis system",
+      "visibility": "Visibility",
+      "visibilityHint": "Visibility hint"
     },
     "documents": "Documents",
     "categories": {
@@ -2823,7 +2898,10 @@
         "commonToAll": "Communs à toutes les sélections",
         "typeTagsToRemove": "Ou saisissez les tags à supprimer...",
         "willRemove": "Supprimera :",
-        "cancel": "Annuler"
+        "cancel": "Annuler",
+        "changeScope": "Change Scope",
+        "changeScopeDesc": "Change the visibility scope for {count} selected entries",
+        "visibilityScope": "Visibility Scope"
       },
       "categoryEdit": {
         "editTitle": "Modifier la catégorie : {name}",
@@ -3024,7 +3102,59 @@
       },
       "closeError": "Fermer le message d'erreur",
       "vectorNotGeneratedDesc": "Les vecteurs n'ont pas encore été générés pour {count} faits dans la base de connaissances.",
-      "vectorNotGeneratedHint": "Cliquez sur 'Générer les vecteurs' ci-dessus pour créer les embeddings pour la recherche sémantique."
+      "vectorNotGeneratedHint": "Cliquez sur 'Générer les vecteurs' ci-dessus pour créer les embeddings pour la recherche sémantique.",
+      "available": "Available",
+      "avgDocsPerCategory": "Avg docs per category",
+      "avgDocsPerCategoryValue": "Avg docs per category value",
+      "avgPerDoc": "Avg per doc",
+      "avgTagsPerDoc": "Avg tags per doc",
+      "categories": "Categories",
+      "databaseSize": "Database size",
+      "docsByCategory": "Docs by category",
+      "docsByType": "Docs by type",
+      "documentLifecycle": "Document lifecycle",
+      "embeddingModel": "Embedding model",
+      "embeddingsGenerated": "Embeddings generated",
+      "exportStats": "Export stats",
+      "factsCount": "Facts count",
+      "generateReport": "Generate report",
+      "goToManage": "Go to manage",
+      "indexAvailable": "Index available",
+      "indexName": "Index name",
+      "indexedDocuments": "Indexed documents",
+      "initialized": "Initialized",
+      "knowledgeItemsInRedis": "Knowledge items in redis",
+      "knowledgeItemsStored": "Knowledge items stored",
+      "lastUpdated": "Last updated",
+      "noRecentActivity": "No recent activity",
+      "notVectorized": "Not vectorized",
+      "optimizeDb": "Optimize db",
+      "overviewAriaLabel": "Overview aria label",
+      "popularTags": "Popular tags",
+      "popularTagsAriaLabel": "Popular tags aria label",
+      "rag": "Rag",
+      "ragAvailable": "Rag available",
+      "realTimeTracking": "Real time tracking",
+      "redisDb": "Redis db",
+      "refresh": "Refresh",
+      "refreshVectorStats": "Refresh vector stats",
+      "status": "Status",
+      "storageUsed": "Storage used",
+      "storageUsedTitle": "Storage used title",
+      "systemKnowledgeDesc": "System knowledge desc",
+      "systemKnowledgeMgmt": "System knowledge mgmt",
+      "textSplitter": "Text splitter",
+      "totalDocuments": "Total documents",
+      "totalFacts": "Total facts",
+      "totalVectors": "Total vectors",
+      "unavailable": "Unavailable",
+      "uniqueTags": "Unique tags",
+      "vectorDbTitle": "Vector db title",
+      "vectorDistribution": "Vector distribution",
+      "vectorFramework": "Vector framework",
+      "vectorIndexHealth": "Vector index health",
+      "vectorNotGenerated": "Vector not generated",
+      "vectorizedForRag": "Vectorized for rag"
     },
     "summaries": {
       "search": {
@@ -3107,7 +3237,8 @@
         "causalLinks": "Liens causaux",
         "entity": "Entité",
         "unknownTime": "Heure inconnue"
-      }
+      },
+      "timeline": {}
     },
     "persistence": {
       "closeDialog": "Fermer la boîte de dialogue",
@@ -3121,7 +3252,40 @@
       "cancelAria": "Annuler",
       "toKbCount": "To kb count",
       "toDeleteCount": "To delete count",
-      "temporaryCount": "Temporary count"
+      "temporaryCount": "Temporary count",
+      "addSelectedToKb": "Add selected to kb",
+      "addToKbDescription": "Add to kb description",
+      "addToKbLabel": "Add to kb label",
+      "applyDecisions": "Apply decisions",
+      "associatedFiles": "Associated files",
+      "bulkActionsTitle": "Bulk actions title",
+      "cancel": "Cancel",
+      "compileButton": "Compile button",
+      "compileDescription": "Compile description",
+      "compileTitle": "Compile title",
+      "compileTitleLabel": "Compile title label",
+      "compileTitlePlaceholder": "Compile title placeholder",
+      "createdLabel": "Created label",
+      "defaultTopic": "Default topic",
+      "deleteDescription": "Delete description",
+      "deleteLabel": "Delete label",
+      "deleteSelected": "Delete selected",
+      "deselectAll": "Deselect all",
+      "includeSystemMessages": "Include system messages",
+      "keepSelectedTemporarily": "Keep selected temporarily",
+      "keepTemporaryDescription": "Keep temporary description",
+      "keepTemporaryLabel": "Keep temporary label",
+      "keywordsLabel": "Keywords label",
+      "knowledgeItems": "Knowledge items",
+      "reviewTitle": "Review title",
+      "selectAll": "Select all",
+      "sourceLabel": "Source label",
+      "title": "Title",
+      "topicLabel": "Topic label",
+      "decisionsApplied": "{count} decision(s) applied successfully",
+      "compiledSuccess": "Chat compiled successfully",
+      "failedToLoad": "Failed to load knowledge items",
+      "decisionsApplyFailed": "Failed to apply decisions"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Générer des embeddings vectoriels pour toutes les entrées de la base de connaissances afin d'activer la recherche sémantique",
@@ -3132,7 +3296,29 @@
       "aboutRefreshManPages": "Relit toutes les pages man du système et met à jour ou crée les entrées de connaissances correspondantes. Utile après l'installation de nouveaux paquets.",
       "aboutPopulateCommands": "Découvre les commandes système disponibles et crée des entrées de connaissances avec les informations d'utilisation, les options et des exemples.",
       "aboutIndexDocs": "Indexe les fichiers de documentation depuis les répertoires configurés (ex. : /usr/share/doc) dans la base de connaissances.",
-      "aboutWhenToUse": "Exécutez <strong>Initialiser</strong> en premier sur les nouveaux systèmes. Utilisez <strong>Actualiser les pages man</strong> et <strong>Alimenter les commandes</strong> après l'installation de nouveaux logiciels. <strong>Réindexer</strong> si les performances de recherche se dégradent."
+      "aboutWhenToUse": "Exécutez <strong>Initialiser</strong> en premier sur les nouveaux systèmes. Utilisez <strong>Actualiser les pages man</strong> et <strong>Alimenter les commandes</strong> après l'installation de nouveaux logiciels. <strong>Réindexer</strong> si les performances de recherche se dégradent.",
+      "aboutTitle": "About title",
+      "allHosts": "All hosts",
+      "commandsIndexed": "Commands indexed",
+      "docsIndexed": "Docs indexed",
+      "error": "Error",
+      "indexAutoBotDocs": "Index auto bot docs",
+      "initializeMachineKnowledge": "Initialize machine knowledge",
+      "initializing": "Initializing",
+      "populateCommands": "Populate commands",
+      "populating": "Populating",
+      "recentActivity": "Recent activity",
+      "refreshManPages": "Refresh man pages",
+      "refreshStats": "Refresh stats",
+      "refreshing": "Refreshing",
+      "reindexDocuments": "Reindex documents",
+      "reindexing": "Reindexing",
+      "searchableVectors": "Searchable vectors",
+      "subtitle": "Subtitle",
+      "success": "Success",
+      "targetHost": "Target host",
+      "totalFacts": "Total facts",
+      "vectorizing": "Vectorizing"
     },
     "vectorization": {
       "actionVectorize": "Vectoriser",
@@ -3142,7 +3328,16 @@
       "tooltipVectorize": "Vectoriser ce document",
       "tooltipRetry": "Réessayer la vectorisation",
       "tooltipInProgress": "Vectorisation en cours",
-      "tooltipAlreadyDone": "Déjà vectorisé"
+      "tooltipAlreadyDone": "Déjà vectorisé",
+      "cancelButton": "Cancel button",
+      "completed": "Completed",
+      "done": "Done",
+      "failed": "Failed",
+      "inProgress": "In progress",
+      "noDocuments": "No documents",
+      "progressTitle": "Progress title",
+      "retryFailed": "Retry failed",
+      "total": "Total"
     },
     "batchSelection": {
       "selected": "{count} sélectionné(s)",
@@ -3159,26 +3354,253 @@
     "treeNode": {
       "itemsCount": "Items count",
       "unvectorized": "Unvectorized",
-      "vectorizeFolderTitle": "Vectorize folder title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "retryTitle": "Retry title",
+      "vectorizeTitle": "Vectorize title"
     },
     "share": {
       "searching": "Searching...",
       "noResults": "No results found",
       "title": "Share \"{name}\"",
       "searchError": "Search failed",
-      "searchUnavailable": "Search unavailable"
+      "searchUnavailable": "Search unavailable",
+      "admin": "Admin",
+      "cancel": "Cancel",
+      "closeAriaLabel": "Close dialog",
+      "currentAccess": "Current Access",
+      "noAccess": "No one else has access yet",
+      "read": "Read",
+      "removeAccess": "Remove access",
+      "saveChanges": "Save changes",
+      "saving": "Saving...",
+      "searchPlaceholder": "Search users or teams...",
+      "shareWith": "Share with",
+      "team": "Team",
+      "user": "User",
+      "write": "Write"
     },
     "memoryOrphan": {
       "entitiesToClean": "Entities to clean",
-      "moreOrphans": "More orphans"
+      "moreOrphans": "More orphans",
+      "activeSessions": "Active sessions",
+      "cleanUp": "Clean up",
+      "cleaning": "Cleaning",
+      "cleanupDescription": "Cleanup description",
+      "cleanupTitle": "Cleanup title",
+      "conversationEntities": "Conversation entities",
+      "description": "Description",
+      "orphanedEntities": "Orphaned entities",
+      "previewTitle": "Preview title",
+      "scanDescription": "Scan description",
+      "scanMeta": "Scan meta",
+      "scanNow": "Scan now",
+      "scanTitle": "Scan title",
+      "scanning": "Scanning",
+      "title": "Title",
+      "allActive": "All {count} entities are active — no orphans found",
+      "confirmCleanup": "Delete {count} orphaned entities? This cannot be undone.",
+      "deleteSuccess": "Deleted {count} orphaned entities",
+      "foundOrphans": "Found {count} orphaned entities",
+      "partialDelete": "Deleted {deleted} entities; {failed} failed",
+      "cleanupError": "Cleanup failed",
+      "scanError": "Scan failed"
     },
     "verification": {
       "pageInfo": "Page info",
-      "selectedCount": "Selected count"
+      "selectedCount": "Selected count",
+      "approve": "Approve",
+      "approveSelected": "Approve selected",
+      "approvedToday": "Approved today",
+      "autonomous": "Autonomous",
+      "clearSelection": "Clear selection",
+      "collaborative": "Collaborative",
+      "emptyMessage": "Empty message",
+      "emptyTitle": "Empty title",
+      "loading": "Loading",
+      "modeLabel": "Mode label",
+      "pending": "Pending",
+      "qualityThreshold": "Quality threshold",
+      "reject": "Reject",
+      "rejectSelected": "Reject selected",
+      "rejectedToday": "Rejected today",
+      "selectAll": "Select all",
+      "title": "Title",
+      "untitled": "Untitled"
     },
     "sessionOrphan": {
       "moreOrphans": "More orphans",
-      "factsToClean": "Facts to clean"
+      "factsToClean": "Facts to clean",
+      "cleanUp": "Clean up",
+      "cleaning": "Cleaning",
+      "cleanupDescription": "Cleanup description",
+      "cleanupTitle": "Cleanup title",
+      "deletedSessions": "Deleted sessions",
+      "description": "Description",
+      "factsChecked": "Facts checked",
+      "important": "Important",
+      "orphanedFacts": "Orphaned facts",
+      "previewTitle": "Preview title",
+      "scanDescription": "Scan description",
+      "scanMeta": "Scan meta",
+      "scanNow": "Scan now",
+      "scanTitle": "Scan title",
+      "scanning": "Scanning",
+      "title": "Title",
+      "withSessionTracking": "With session tracking",
+      "allActive": "All {count} facts are active — no orphans found",
+      "confirmCleanup": "Delete {count} orphaned facts across {sessions} session(s)? This cannot be undone.",
+      "deleteSuccess": "Removed {count} orphaned fact(s){preserved}",
+      "foundOrphans": "Found {count} orphaned facts across {sessions} session(s)",
+      "preservedSuffix": "; {count} preserved",
+      "cleanupError": "Cleanup failed",
+      "scanError": "Scan failed"
+    },
+    "emptyState": {
+      "title": "Your knowledge base is empty",
+      "description": "Each category shows 0 facts because nothing has been indexed yet.",
+      "hint": "Click 'Populate' on any category card to seed it, or upload documents under User Knowledge."
+    },
+    "categoriesFetchError": {
+      "title": "Failed to load knowledge base",
+      "description": "The server returned an error. Check the backend service logs."
+    },
+    "categoriesError": {
+      "title": "Knowledge base is unreachable",
+      "description": "Redis connection failed. Check that the backend has Redis running."
+    },
+    "mainCategories": {
+      "facts": "facts",
+      "import": "Import",
+      "populate": "Populate"
+    },
+    "maintenance": {
+      "critical": "Critical",
+      "databaseSize": "Database Size",
+      "healthDashboard": "Health Dashboard",
+      "healthError": "Failed to load health data",
+      "issuesFound": "Issues Found",
+      "loadingHealth": "Loading health data...",
+      "maintenanceHistory": "Maintenance History",
+      "noHistory": "No maintenance history",
+      "qualityDimensions": "Quality Dimensions",
+      "qualityScore": "Quality Score",
+      "refreshAll": "Refresh All",
+      "refreshing": "Refreshing...",
+      "subtitle": "Monitor and maintain your knowledge base health",
+      "title": "Knowledge Maintenance",
+      "topRecommendations": "Top Recommendations",
+      "totalFacts": "Total Facts",
+      "totalVectors": "Total Vectors",
+      "warnings": "Warnings"
+    },
+    "manager": {
+      "errorFallback": "Error fallback"
+    },
+    "promptEditor": {
+      "allCategories": "All categories",
+      "characters": "Characters",
+      "contentPlaceholder": "Content placeholder",
+      "filterAgents": "Filter agents",
+      "filterSystem": "Filter system",
+      "filterTemplates": "Filter templates",
+      "history": "History",
+      "loadingHistory": "Loading history",
+      "loadingPrompts": "Loading prompts",
+      "noHistory": "No history",
+      "noPrompts": "No prompts",
+      "noSearchResults": "No search results",
+      "previewVersion": "Preview version",
+      "revert": "Revert",
+      "save": "Save",
+      "searchPlaceholder": "Search placeholder",
+      "selectPrompt": "Select prompt",
+      "subtitle": "Subtitle",
+      "title": "Title",
+      "unsavedChanges": "Unsaved changes",
+      "variables": "Variables",
+      "versionHistory": "Version history",
+      "versionNumber": "Version number",
+      "confirmRevert": "Revert to version {version}? Unsaved changes will be lost.",
+      "confirmDiscardChanges": "Discard unsaved changes?",
+      "categoryAgents": "Agents",
+      "categorySystem": "System",
+      "categoryTemplates": "Templates",
+      "errorLoadPrompts": "Failed to load prompts",
+      "errorRevert": "Failed to revert prompt",
+      "errorSavePrompt": "Failed to save prompt",
+      "successReverted": "Prompt reverted successfully",
+      "successSaved": "Prompt saved successfully",
+      "unknown": "Unknown"
+    },
+    "qualityScore": {
+      "title": "Title"
+    },
+    "research": {
+      "accept": "Accept",
+      "acceptTitle": "Accept title",
+      "accepted": "Accepted",
+      "browserConnected": "Browser connected",
+      "browserDisconnected": "Browser disconnected",
+      "btnResearch": "Btn research",
+      "btnStop": "Btn stop",
+      "emptyState": "Empty state",
+      "foundSources": "Found sources",
+      "open": "Open",
+      "queryPlaceholder": "Query placeholder",
+      "refreshScreenshot": "Refresh screenshot",
+      "reject": "Reject",
+      "rejectTitle": "Reject title",
+      "rejected": "Rejected",
+      "searching": "Searching",
+      "startQuery": "Start query",
+      "waitingBrowser": "Waiting browser",
+      "boardLabel": "Research Board",
+      "statusAssessed": "Assessed {domain} — relevance: {score}",
+      "statusExtracted": "Extracted content from {domain}",
+      "statusStored": "Stored result from {domain}",
+      "errorConnect": "Failed to connect to research service",
+      "errorGeneric": "An error occurred during research",
+      "errorWebSocket": "WebSocket connection failed",
+      "liveBrowserView": "Live Browser View",
+      "statusConnecting": "Connecting...",
+      "statusDisconnected": "Disconnected",
+      "statusDone": "Done",
+      "statusError": "Error",
+      "statusFound": "Source found",
+      "statusReady": "Ready",
+      "statusSearching": "Searching...",
+      "statusStarting": "Starting...",
+      "statusStopped": "Stopped"
+    },
+    "scopeSelector": {
+      "group": "Group",
+      "helpGroup": "Help group",
+      "helpOrganization": "Help organization",
+      "helpPrivate": "Help private",
+      "helpShared": "Help shared",
+      "helpSystem": "Help system",
+      "label": "Label",
+      "organization": "Organization",
+      "private": "Private",
+      "selectTeams": "Select teams",
+      "shared": "Shared",
+      "system": "System"
+    },
+    "systemDocs": {
+      "copied": "Copied",
+      "copy": "Copy",
+      "export": "Export",
+      "exportAll": "Export all",
+      "loadingCategories": "Loading categories",
+      "loadingDocs": "Loading docs",
+      "noDocs": "No docs",
+      "noSearchResults": "No search results",
+      "searchPlaceholder": "Search placeholder",
+      "selectCategory": "Select category",
+      "selectDocument": "Select document",
+      "subtitle": "Subtitle",
+      "title": "Title",
+      "words": "Words"
     }
   },
   "workflow": {
@@ -3582,7 +4004,10 @@
       "noModel": "aucun modèle",
       "defaultModel": "par défaut",
       "moreCount": "+{count} de plus",
-      "summaryStats": "{backend} backend • {specialized} agents spécialisés"
+      "summaryStats": "{backend} backend • {specialized} agents spécialisés",
+      "modelLabel": "Model",
+      "providerErrors": "Provider errors: {providers}",
+      "someProvidersUnavailable": "Some providers unavailable"
     },
     "settings": {
       "retry": {
@@ -4616,7 +5041,12 @@
       "actions": "Actions",
       "noDataAvailable": "No data available",
       "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}"
+      "pageOf": "Page {current} of {total}",
+      "pagination": "Table pagination",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "dataTable": "Data table",
+      "loading": "Loading data..."
     },
     "hostSelection": {
       "title": "Select Host",
@@ -4687,7 +5117,8 @@
       "fontSizeChanged": "Font size changed to {size}",
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
-      "preferencesReset": "All preferences reset to defaults"
+      "preferencesReset": "All preferences reset to defaults",
+      "theme": "Theme"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -4726,6 +5157,9 @@
     },
     "skeletonLoader": {
       "loadingContent": "Loading content"
+    },
+    "loadingSpinner": {
+      "loading": "Loading…"
     }
   },
   "base": {
@@ -4744,7 +5178,21 @@
   },
   "views": {
     "about": {
-      "title": "This is an about page"
+      "title": "This is an about page",
+      "tagline": "AI-powered automation platform for intelligent workflows",
+      "descriptionHeading": "What is AutoBot?",
+      "description": "AutoBot is an open-source AI orchestration platform that routes user requests to specialized agents, integrates with your infrastructure, and learns from every interaction through a vector knowledge base.",
+      "capabilitiesHeading": "Key Capabilities",
+      "capability1": "Multi-agent chat workflows with A2A task routing",
+      "capability2": "RAG-powered knowledge retrieval with ChromaDB",
+      "capability3": "Browser automation, voice I/O, and code execution",
+      "capability4": "Secure secrets management and host-based SSH execution",
+      "capability5": "Pluggable LLM backends — Ollama, OpenAI-compatible, SLM",
+      "versionLabel": "Version",
+      "authorLabel": "Author",
+      "authorName": "mrveiss",
+      "licenseLabel": "License",
+      "licenseValue": "Proprietary — © 2026 mrveiss"
     },
     "notFound": {
       "title": "404",
@@ -5062,6 +5510,30 @@
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
       "saveFailed": "Failed to save configuration."
+    },
+    "marketplace": {
+      "title": "Plugin Marketplace",
+      "subtitle": "Discover, install, and manage community plugins and agents",
+      "refresh": "Refresh",
+      "searchPlaceholder": "Search plugins...",
+      "allCategories": "All categories",
+      "sortDownloads": "Most downloaded",
+      "sortRating": "Top rated",
+      "sortName": "Name A–Z",
+      "installedOnly": "Installed only",
+      "showing": "Showing {count} of {total} plugins",
+      "installedCount": "{count} installed",
+      "loading": "Loading marketplace...",
+      "noResults": "No plugins found",
+      "noResultsHint": "Try adjusting your search or category filter.",
+      "installed": "Installed",
+      "available": "Available",
+      "install": "Install",
+      "uninstall": "Uninstall",
+      "source": "Source",
+      "loadError": "Failed to load marketplace catalog.",
+      "installError": "Failed to install plugin.",
+      "uninstallError": "Failed to uninstall plugin."
     }
   },
   "auth": {
@@ -5086,7 +5558,8 @@
       "tooManyAttempts": "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
       "serverError": "Erreur du serveur. Veuillez réessayer plus tard.",
       "unexpectedError": "Une erreur inattendue s'est produite",
-      "footer": "© 2026 AutoBot. Tous droits réservés."
+      "footer": "© 2026 AutoBot. Tous droits réservés.",
+      "usernameTooShort": "Username must be at least 3 characters"
     }
   },
   "browser": {
@@ -5131,7 +5604,10 @@
       "onlineCount": "{count} en ligne",
       "secretsCount": "{count} secret(s)",
       "noRecentActivity": "Aucune activité récente",
-      "activitiesWillAppear": "Les activités des collaborateurs apparaîtront ici"
+      "activitiesWillAppear": "Les activités des collaborateurs apparaîtront ici",
+      "justNow": "Just now",
+      "minutesAgo": "{count} minute(s) ago",
+      "hoursAgo": "{count} hour(s) ago"
     },
     "activityTimeline": {
       "title": "Chronologie d'activité",
@@ -5216,7 +5692,15 @@
       "noUsersFound": "No users found",
       "title": "Invite Collaborators",
       "inSession": "In session",
-      "sending": "Sending..."
+      "sending": "Sending...",
+      "failedToLoadUsers": "Failed to load users",
+      "genericError": "An unexpected error occurred",
+      "roleEditor": "Editor",
+      "roleEditorDesc": "Can edit and contribute to the session",
+      "roleViewer": "Viewer",
+      "roleViewerDesc": "Can view but not modify the session",
+      "selectUserError": "Please select a user to invite",
+      "sendFailed": "Failed to send invitation"
     },
     "participants": {
       "you": "You",
@@ -5229,7 +5713,11 @@
       "inviteToCollaborate": "Invite to collaborate",
       "changeRoleFor": "Change role for",
       "loading": "Loading participants...",
-      "title": "Participants"
+      "title": "Participants",
+      "removeConfirm": "Remove this participant from the session?",
+      "roleEditor": "Editor",
+      "roleOwner": "Owner",
+      "roleViewer": "Viewer"
     },
     "presence": {
       "tabLabel": "Active tab",
@@ -5307,7 +5795,8 @@
     },
     "panel": {
       "selectOperation": "Select an operation to view details"
-    }
+    },
+    "progress": {}
   },
   "secrets": {
     "auditLog": {
@@ -5359,7 +5848,12 @@
       "noSecretsSearch": "Essayez une recherche différente",
       "noSecretsHint": "Ajoutez un secret pour commencer",
       "deleteBtn": "Delete",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "copiedSuccess": "Copied to clipboard",
+      "errorNoValue": "No value available to copy",
+      "loadError": "Failed to load secrets",
+      "revokeError": "Failed to revoke secret",
+      "revokeSuccess": "Secret revoked successfully"
     },
     "share": {
       "title": "Partager le secret",
@@ -6171,7 +6665,26 @@
       "modeLogOnly": "Log Only",
       "modeEnforced": "Enforced",
       "actionUpdated": "Configuration was updated"
-    }
+    },
+    "loading": "Loading feature flags...",
+    "retry": "Retry",
+    "loadError": "Failed to load feature flags",
+    "failedToLoadStatus": "Failed to load enforcement status",
+    "failedToUpdateMode": "Failed to update enforcement mode",
+    "modeUpdatedSuccess": "Enforcement mode updated successfully",
+    "updateModeError": "Error updating enforcement mode",
+    "failedToAddOverride": "Failed to add endpoint override",
+    "overrideAddedSuccess": "Override added successfully",
+    "addOverrideError": "Error adding override",
+    "failedToUpdateOverride": "Failed to update endpoint override",
+    "overrideUpdatedSuccess": "Override updated successfully",
+    "updateOverrideError": "Error updating override",
+    "failedToRemoveOverride": "Failed to remove endpoint override",
+    "overrideRemovedSuccess": "Override removed successfully",
+    "removeOverrideError": "Error removing override",
+    "failedToLoadMetrics": "Failed to load access metrics",
+    "metricsRefreshed": "Metrics refreshed",
+    "refreshMetricsError": "Error refreshing metrics"
   },
   "audit": {
     "filters": {
@@ -6450,12 +6963,38 @@
     "applicationError": "Application Error",
     "unexpectedError": "An unexpected error occurred",
     "loadingTimeout": "Loading Timed Out",
-    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing."
+    "loadingTimeoutMessage": "Some content took too long to load. Try refreshing.",
+    "home": "Home",
+    "about": "About",
+    "experiments": "Experiments",
+    "marketplace": "Marketplace",
+    "usage": "Usage & Costs",
+    "more": "More",
+    "moreItems": "More navigation items"
   },
   "reasoningTrace": {
     "title": "Trace de raisonnement",
     "toggleLabel": "Basculer le panneau de trace de raisonnement",
     "success": "Succes",
     "error": "Erreur"
+  },
+  "knowledge.manager.tabSystemDocs": "System Docs",
+  "knowledge.manager.tabPromptEditor": "Prompts",
+  "knowledge.share.title": "Share: {name}",
+  "knowledge.share.searching": "Searching...",
+  "knowledge.share.noResults": "No users found",
+  "knowledge.share.searchUnavailable": "User search is not available",
+  "knowledge.share.searchError": "Failed to search users",
+  "commands": {
+    "search": "Search commands...",
+    "noResults": "No commands found",
+    "newTask": "New Task",
+    "newTaskDesc": "Create a new task agent",
+    "newResearch": "New Research",
+    "newResearchDesc": "Start a research session",
+    "newCode": "New Code Agent",
+    "newCodeDesc": "Start a code analysis session",
+    "newAnalysis": "New Analysis",
+    "newAnalysisDesc": "Start an analysis session"
   }
 }
