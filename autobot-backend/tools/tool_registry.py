@@ -9,6 +9,7 @@ the standard orchestrator and LangChain orchestrator, eliminating code
 duplication.
 """
 
+import asyncio
 import logging
 import time
 import uuid
@@ -544,6 +545,29 @@ class ToolRegistry:
             "result": f"Unknown tool: {tool_name}",
             "status": "error",
         }
+
+    async def get_compressed_descriptions(self) -> Dict[str, str]:
+        """Return a mapping of tool_name -> compressed description for all registered tools.
+
+        Uses :func:`tools.description_compressor.compress_description` with Redis
+        caching and Ollama LLM compression.  Falls back to the raw description
+        string for any tool whose spec lacks one, and skips compression entirely
+        for tools without a spec dict (SDK-only tools are not iterated here).
+        """
+        from tools.description_compressor import compress_description  # noqa: PLC0415
+
+        tool_names = self.get_available_tools()
+        tasks = [compress_description(name, {"name": name}) for name in tool_names]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        compressed: Dict[str, str] = {}
+        for name, result in zip(tool_names, results):
+            if isinstance(result, Exception):
+                logger.warning("compress_description failed for tool '%s': %s", name, result)
+                compressed[name] = name
+            else:
+                compressed[name] = result
+        return compressed
 
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
