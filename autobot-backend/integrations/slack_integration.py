@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from integrations.base import IntegrationAction
 from integrations.communication_integration import SlackIntegration
 
@@ -581,7 +581,7 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns False instead.
         """
         try:
-            client = await get_redis_client(async_client=True, database="main")
+            client = await get_async_redis_client(database="main")
             if client is None:
                 logger.warning(
                     "Redis client unavailable for saving channel mapping (project_id=%s)",
@@ -628,7 +628,7 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns None instead.
         """
         try:
-            client = await get_redis_client(async_client=True, database="main")
+            client = await get_async_redis_client(database="main")
             if client is None:
                 logger.warning(
                     "Redis client unavailable for loading channel mapping (project_id=%s)",
@@ -683,7 +683,7 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns False instead.
         """
         try:
-            client = await get_redis_client(async_client=True, database="main")
+            client = await get_async_redis_client(database="main")
             if client is None:
                 logger.warning(
                     "Redis client unavailable for storing approval thread (approval_id=%s)",
@@ -734,7 +734,7 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns None instead.
         """
         try:
-            client = await get_redis_client(async_client=True, database="main")
+            client = await get_async_redis_client(database="main")
             if client is None:
                 logger.warning(
                     "Redis client unavailable for loading approval thread (approval_id=%s)",

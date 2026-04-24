@@ -86,8 +86,8 @@ class HybridScorer:
     async def _get_redis(self):
         """Lazily obtain the async Redis client (cached on self._redis)."""
         if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
-            self._redis = await get_redis_client(async_client=True, database="knowledge")
+            from autobot_shared.redis_client import get_async_redis_client
+            self._redis = await get_async_redis_client(database="knowledge")
         return self._redis
 
     # ------------------------------------------------------------------
