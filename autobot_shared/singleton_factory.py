@@ -1,14 +1,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Thread-safe lazy singleton factory primitive.
+"""Thread-safe lazy singleton factory primitives.
 
 Issue #5423: extracted from the repeated double-checked locking pattern in
 ``utils/semantic_chunker*.py``.  Third-occurrence rule triggered extraction.
+Issue #5632: ``async_lazy_singleton`` added for async-context singletons.
 """
 
+import asyncio
 from threading import Lock
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 T = TypeVar("T")
 
@@ -68,5 +70,32 @@ def lazy_singleton(factory: Callable[..., T]) -> Callable[..., T]:
                     f"Now: args={args!r}, kwargs={kwargs!r}."
                 )
         return instance
+
+    return get
+
+
+def async_lazy_singleton(factory: Callable[..., Any]) -> Callable[[], Awaitable[T]]:
+    """Return an async factory that creates and caches a lazy singleton.
+
+    Like ``lazy_singleton`` but uses ``asyncio.Lock`` for async contexts.
+    The factory may be a plain callable (sync) or a coroutine function (async def).
+    Construction runs exactly once; subsequent ``await get()`` calls return the
+    cached instance.
+
+    Issue #5632: extracted from ~7 repeated async double-checked locking patterns.
+    """
+    instance: Optional[T] = None
+    lock = asyncio.Lock()
+
+    async def get() -> T:
+        nonlocal instance
+        if instance is None:
+            async with lock:
+                if instance is None:
+                    if asyncio.iscoroutinefunction(factory):
+                        instance = await factory()
+                    else:
+                        instance = factory()
+        return instance  # type: ignore[return-value]
 
     return get

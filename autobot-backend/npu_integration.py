@@ -872,58 +872,29 @@ class NPUTaskQueue:
             return {"success": False, "error": "NPU task timeout", "fallback": True}
 
 
-# Global NPU client instance (thread-safe)
-_npu_client = None
-_npu_queue = None
-_npu_pool = None
-_npu_client_lock = asyncio.Lock()
-_npu_queue_lock = asyncio.Lock()
-_npu_pool_lock = asyncio.Lock()
+from autobot_shared.singleton_factory import async_lazy_singleton
 
 
-async def get_npu_client() -> NPUWorkerClient:
-    """Get or create global NPU client instance (thread-safe)"""
-    global _npu_client
-    if _npu_client is None:
-        async with _npu_client_lock:
-            # Double-check after acquiring lock
-            if _npu_client is None:
-                _npu_client = NPUWorkerClient()
-                await _npu_client.check_health()
-    return _npu_client
+async def _init_npu_client() -> NPUWorkerClient:
+    client = NPUWorkerClient()
+    await client.check_health()
+    return client
 
 
-async def get_npu_queue() -> NPUTaskQueue:
-    """Get or create global NPU task queue (thread-safe)"""
-    global _npu_queue
-    if _npu_queue is None:
-        async with _npu_queue_lock:
-            # Double-check after acquiring lock
-            if _npu_queue is None:
-                client = await get_npu_client()
-                _npu_queue = NPUTaskQueue(client)
-    return _npu_queue
+async def _init_npu_pool() -> NPUWorkerPool:
+    pool = NPUWorkerPool()
+    await pool.start_health_monitor()
+    logger.info("NPU worker pool initialized (Issue #168)")
+    return pool
 
 
-async def get_npu_pool() -> NPUWorkerPool:
-    """
-    Get or create global NPU worker pool instance (thread-safe).
+async def _init_npu_queue() -> NPUTaskQueue:
+    return NPUTaskQueue(await get_npu_client())
 
-    Issue #168: The pool provides load-balanced access to multiple NPU workers
-    with automatic failover, health monitoring, and circuit breaker protection.
 
-    Returns:
-        NPUWorkerPool singleton instance
-    """
-    global _npu_pool
-    if _npu_pool is None:
-        async with _npu_pool_lock:
-            # Double-check after acquiring lock
-            if _npu_pool is None:
-                _npu_pool = NPUWorkerPool()
-                await _npu_pool.start_health_monitor()
-                logger.info("NPU worker pool initialized (Issue #168)")
-    return _npu_pool
+get_npu_client = async_lazy_singleton(_init_npu_client)
+get_npu_pool = async_lazy_singleton(_init_npu_pool)
+get_npu_queue = async_lazy_singleton(_init_npu_queue)
 
 
 async def process_with_npu_fallback(
