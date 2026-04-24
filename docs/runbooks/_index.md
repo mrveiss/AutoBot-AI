@@ -18,3 +18,4 @@ aliases:
 | [ROTATE_CERTS](ROTATE_CERTS.md) | Rotate TLS certificates |
 | [ROTATE_SSH_KEYS](ROTATE_SSH_KEYS.md) | Rotate SSH keys |
 | [EMERGENCY_RECOVERY](EMERGENCY_RECOVERY.md) | Emergency recovery procedure |
+| [KB_REDIS_UNREACHABLE](KB_REDIS_UNREACHABLE.md) | KB Redis unreachable degradation |

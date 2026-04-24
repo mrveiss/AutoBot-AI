@@ -452,3 +452,45 @@ groups:
           summary: "Unusual Error Pattern Detected"
           description: "Error rate is {{ $value }}x higher than normal"
           recommendation: "Review error logs for potential security issues"
+
+  # Knowledge Base Degradation Alerts (Issue #5408)
+  - name: autobot_kb_degradation
+    rules:
+      # KB Redis unreachable — counter added in PR #5346 / issue #5319
+      - alert: KBRedisUnreachable
+        expr: rate(autobot_kb_degradation_total{reason="redis_down"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: knowledge_base
+        annotations:
+          summary: "KB Redis unreachable (endpoint={{ $labels.endpoint }})"
+          description: >-
+            Knowledge Base endpoint {{ $labels.endpoint }} is returning
+            kb_connected=false. Redis is unreachable from the backend.
+            Frontend shows \"Knowledge base is unreachable\" banner.
+          recommendation: >-
+            1. sudo systemctl status autobot-redis
+            2. redis-cli -h 127.0.0.7 ping
+            3. journalctl -u autobot-backend | grep kb_connected=false
+            See runbook: docs/runbooks/KB_REDIS_UNREACHABLE.md
+          runbook: "docs/runbooks/KB_REDIS_UNREACHABLE.md"
+
+      # KB uninitialized — cold start or factory config problem (not an infra page)
+      - alert: KBUninitialized
+        expr: rate(autobot_kb_degradation_total{reason="kb_uninit"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: knowledge_base
+        annotations:
+          summary: "KB instance not initialized (endpoint={{ $labels.endpoint }})"
+          description: >-
+            Knowledge Base endpoint {{ $labels.endpoint }} is serving
+            degraded responses because the KB instance is not yet
+            initialized. This is expected during cold starts; investigate if
+            it persists beyond 5 minutes after backend startup.
+          recommendation: >-
+            Check backend startup logs:
+            journalctl -u autobot-backend | grep "Knowledge base initialization"
+            If persistent, restart backend: sudo systemctl restart autobot-backend
