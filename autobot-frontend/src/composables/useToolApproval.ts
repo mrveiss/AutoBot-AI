@@ -38,6 +38,8 @@ export interface PendingToolApproval {
   risk_level: string
   /** How many seconds until the loop times out waiting */
   timeout_seconds: number
+  /** Unix epoch seconds when approval expires — used for drift-free countdown (Issue #5024) */
+  deadline_ts?: number
   /** Optional task_id carried from the agent context */
   task_id?: string | null
 }

@@ -19,6 +19,7 @@ Event Types:
 
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -626,6 +627,7 @@ class ApprovalContent:
     reason: str  # Human-readable explanation of why approval is needed
     risk_level: str = "high"  # low | medium | high | critical
     timeout_seconds: int = 300  # How long to wait before treating as denied
+    deadline_ts: float = 0.0  # Unix epoch seconds when approval expires (Issue #5024)
 
     def to_dict(self) -> dict:
         return {
@@ -635,6 +637,7 @@ class ApprovalContent:
             "reason": self.reason,
             "risk_level": self.risk_level,
             "timeout_seconds": self.timeout_seconds,
+            "deadline_ts": self.deadline_ts,
         }
 
     @classmethod
@@ -646,6 +649,7 @@ class ApprovalContent:
             reason=data.get("reason", ""),
             risk_level=data.get("risk_level", "high"),
             timeout_seconds=data.get("timeout_seconds", 300),
+            deadline_ts=data.get("deadline_ts", 0.0),
         )
 
 
@@ -694,6 +698,7 @@ def create_approval_required_event(
         reason=reason,
         risk_level=risk_level,
         timeout_seconds=timeout_seconds,
+        deadline_ts=time.time() + timeout_seconds,
     )
     return AgentEvent(
         event_type=EventType.APPROVAL_REQUIRED,

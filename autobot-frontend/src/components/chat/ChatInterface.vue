@@ -223,7 +223,7 @@
               <div class="tool-approval-countdown-bar-track">
                 <div
                   class="tool-approval-countdown-bar-fill"
-                  :style="{ width: `${(toolApprovalSecondsLeft / pendingToolApproval.timeout_seconds) * 100}%` }"
+                  :style="{ width: `${(toolApprovalSecondsLeft / Math.max(1, pendingToolApproval?.timeout_seconds ?? 1)) * 100}%` }"
                   :class="toolApprovalSecondsLeft <= 10 ? 'tool-approval-countdown-bar-fill--urgent' : ''"
                 ></div>
               </div>
@@ -352,15 +352,19 @@ const _stopCountdown = (): void => {
   }
 }
 
-const _startCountdown = (timeoutSeconds: number): void => {
+const _startCountdown = (timeoutSeconds: number, deadlineTs?: number): void => {
   _stopCountdown()
   toolApprovalSecondsLeft.value = timeoutSeconds
   _countdownInterval = setInterval(() => {
-    if (toolApprovalSecondsLeft.value <= 1) {
-      _stopCountdown()
-      toolApprovalSecondsLeft.value = 0
+    // Issue #5024: use server deadline_ts for drift-free countdown when available
+    const currentApproval = pendingToolApproval.value
+    if (currentApproval?.deadline_ts) {
+      toolApprovalSecondsLeft.value = Math.max(0, Math.round(currentApproval.deadline_ts - Date.now() / 1000))
     } else {
-      toolApprovalSecondsLeft.value -= 1
+      toolApprovalSecondsLeft.value = Math.max(0, toolApprovalSecondsLeft.value - 1)
+    }
+    if (toolApprovalSecondsLeft.value <= 0) {
+      _stopCountdown()
     }
   }, 1000)
 }
@@ -368,7 +372,7 @@ const _startCountdown = (timeoutSeconds: number): void => {
 // Start countdown when a new approval arrives; stop when cleared
 watch(pendingToolApproval, (approval: PendingToolApproval | null) => {
   if (approval) {
-    _startCountdown(approval.timeout_seconds)
+    _startCountdown(approval.timeout_seconds, approval.deadline_ts)
   } else {
     _stopCountdown()
   }
