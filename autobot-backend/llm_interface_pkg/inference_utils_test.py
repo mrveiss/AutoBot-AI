@@ -7,8 +7,14 @@ Unit tests for only-last-logit inference optimization.
 Issue #1968: Only-last-logit optimization for autoregressive generation.
 """
 
+import types
+
 import pytest
 import torch
+
+# Detect conftest MagicMock torch stub; skip tensor-operation tests when absent (#5737)
+_TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
+requires_torch = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
 
 from llm_interface_pkg.optimization.inference_utils import (
     InferenceConfig,
@@ -19,6 +25,7 @@ from llm_interface_pkg.optimization.inference_utils import (
 )
 
 
+@requires_torch
 class TestLastLogitOptimizer:
     """Tests for LastLogitOptimizer class."""
 
@@ -147,6 +154,7 @@ class TestLastLogitOptimizer:
         assert stats.total_saved_mb == pytest.approx(50.0)
 
 
+@requires_torch
 class TestSliceHiddenForGeneration:
     """Tests for the convenience function."""
 
