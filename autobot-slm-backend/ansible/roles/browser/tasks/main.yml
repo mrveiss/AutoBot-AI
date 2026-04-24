@@ -192,14 +192,42 @@
     - _chromium_binary.matched == 0
   tags: ['browser', 'packages']
 
-- name: "Browser | Ensure Playwright browsers are world-readable (#4662)"
+- name: "Browser | Find Playwright browser directories for permission fix (#5085)"
+  ansible.builtin.find:
+    paths: /var/lib/autobot/playwright-browsers
+    file_type: directory
+    recurse: yes
+  register: _pb_dirs
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Set Playwright browser directories world-executable (#5085)"
   ansible.builtin.file:
-    path: /var/lib/autobot/playwright-browsers
+    path: "{{ item.path }}"
     state: directory
-    owner: root
-    group: root
     mode: "0755"
-    recurse: true
+  loop: "{{ _pb_dirs.files | default([]) }}"
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Find Playwright browser data files for permission fix (#5085)"
+  ansible.builtin.find:
+    paths: /var/lib/autobot/playwright-browsers
+    file_type: file
+    recurse: yes
+  register: _pb_files
+  become: yes
+  when: _browser_worker_dir.stat.exists | default(false)
+  tags: ['browser', 'packages']
+
+- name: "Browser | Set Playwright browser data files world-readable (#5085)"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: file
+    mode: "0644"
+  loop: "{{ _pb_files.files | default([]) }}"
   become: yes
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
