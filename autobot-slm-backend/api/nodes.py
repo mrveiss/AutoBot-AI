@@ -1024,9 +1024,10 @@ async def remove_role_from_node(
     if service_name:
         ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
         if not ansible_result["success"]:
+            logger.error("Role removal failed for node %s role %s: %s", node_id, role_name, ansible_result['output'])
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Role removal failed: {ansible_result['output'][:300]}",
+                detail="Role removal failed",
             )
 
     # Remove DB assignment only after successful cleanup
@@ -1369,10 +1370,11 @@ async def _execute_decommission(
 
     if not result["success"]:
         output = result.get("output", "")
+        logger.error("Decommission failed for node %s: %s", ip_address, output)
         await _fail_deployment(db, deployment, output, output)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Decommission failed: {output[:300]}",
+            detail="Decommission failed",
         )
     return result
 
@@ -2779,12 +2781,12 @@ async def exec_node_command(
             success=False,
         )
     except Exception as exc:
-        logger.error("SSH exec failed on node %s: %s", node_id, exc)
+        logger.error("Node exec failed for %s: %s", node_id, exc)
         return NodeExecResponse(
             node_id=node_id,
             command=body.command,
             stdout="",
-            stderr=str(exc),
+            stderr="execution_error",
             exit_code=-1,
             success=False,
         )
