@@ -28,6 +28,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_client import get_async_redis_client
+
 logger = logging.getLogger(__name__)
 
 # Issue #640 / #5231: NPU availability caching now lives inside the canonical
@@ -215,10 +217,8 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._redis_client is None:
                     try:
-                        from autobot_shared.redis_client import get_redis_client
-
-                        self._redis_client = get_redis_client(
-                            async_client=True, database=self._redis_database
+                        self._redis_client = await get_async_redis_client(
+                            database=self._redis_database
                         )
                         logger.info(
                             "Redis client initialized for '%s'", self._redis_database

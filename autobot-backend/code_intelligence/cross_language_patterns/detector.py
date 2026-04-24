@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.redis_client import get_async_redis_client
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,
@@ -166,11 +167,7 @@ class CrossLanguagePatternDetector:
         """Get Redis client for caching."""
         if self._redis_client is None and self.use_cache:
             try:
-                from autobot_shared.redis_client import get_redis_client
-
-                self._redis_client = get_redis_client(
-                    async_client=True, database="analytics"
-                )
+                self._redis_client = await get_async_redis_client(database="analytics")
                 logger.info("Redis client initialized for analytics")
             except Exception as e:
                 logger.warning("Redis not available for caching: %s", e)
