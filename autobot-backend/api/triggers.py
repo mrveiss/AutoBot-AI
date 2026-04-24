@@ -123,7 +123,7 @@ async def create_trigger(
         trigger_id = await service.register_trigger(config)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)  # user-facing validation error
         ) from exc
 
     webhook_url: Optional[str] = None

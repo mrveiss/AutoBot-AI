@@ -365,14 +365,14 @@ class GitHubIntegration(BaseIntegration):
                 logger.warning("GitHub connection error for %s %s: %s", method, path, exc)
                 return {
                     "status_code": 0,
-                    "body": {"message": str(exc)},
+                    "body": {"message": "integration_error"},
                     "error": "connection_error",
                 }
             except aiohttp.ClientError as exc:
                 logger.warning("GitHub request error for %s %s: %s", method, path, exc)
                 return {
                     "status_code": 0,
-                    "body": {"message": str(exc)},
+                    "body": {"message": "integration_error"},
                     "error": "client_error",
                 }
 

@@ -348,7 +348,7 @@ async def refine_document(
         )
     except Exception as exc:
         logger.error("Refinement LLM call failed for document %s: %s", doc_id, exc)
-        raise HTTPException(status_code=502, detail=f"LLM refinement failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="LLM refinement failed") from exc
 
     doc.content = refined_content
     doc.touch()
