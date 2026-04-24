@@ -29,6 +29,17 @@ from services.access_control_metrics import AccessControlMetrics, get_metrics_se
 from services.audit_logger import audit_log
 from services.feature_flags import EnforcementMode, FeatureFlags, get_feature_flags
 
+from .schemas_common import (
+    AccessControlCleanupResponse,
+    AccessControlEndpointMetricsResponse,
+    AccessControlMetricsResponse,
+    AccessControlUserMetricsResponse,
+    FeatureFlagEndpointRemoveResponse,
+    FeatureFlagEndpointSetResponse,
+    FeatureFlagEnforcementModeResponse,
+    FeatureFlagStatusResponse,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["admin", "feature-flags"])
@@ -100,7 +111,7 @@ async def require_admin(
     operation="get_feature_flags_status",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/feature-flags/status")
+@router.get("/feature-flags/status", response_model=FeatureFlagStatusResponse)
 async def get_feature_flags_status(
     admin: Dict = Depends(require_admin),
     flags: FeatureFlags = Depends(get_feature_flags),
@@ -125,7 +136,7 @@ async def get_feature_flags_status(
     operation="update_enforcement_mode",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.put("/feature-flags/enforcement-mode")
+@router.put("/feature-flags/enforcement-mode", response_model=FeatureFlagEnforcementModeResponse)
 async def update_enforcement_mode(
     update: EnforcementModeUpdate,
     admin: Dict = Depends(require_admin),
@@ -193,7 +204,7 @@ async def update_enforcement_mode(
     operation="set_endpoint_enforcement",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.put("/feature-flags/endpoint/{endpoint:path}")
+@router.put("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointSetResponse)
 async def set_endpoint_enforcement(
     endpoint: str,
     update: EnforcementModeUpdate,
@@ -247,7 +258,7 @@ async def set_endpoint_enforcement(
     operation="remove_endpoint_enforcement",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.delete("/feature-flags/endpoint/{endpoint:path}")
+@router.delete("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointRemoveResponse)
 async def remove_endpoint_enforcement(
     endpoint: str,
     admin: Dict = Depends(require_admin),
@@ -290,7 +301,7 @@ async def remove_endpoint_enforcement(
     operation="get_access_control_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/metrics")
+@router.get("/access-control/metrics", response_model=AccessControlMetricsResponse)
 async def get_access_control_metrics(
     days: int = Query(7, ge=1, le=30, description="Number of days to include"),
     include_details: bool = Query(
@@ -336,7 +347,7 @@ async def get_access_control_metrics(
     operation="get_endpoint_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/endpoint/{endpoint:path}")
+@router.get("/access-control/endpoint/{endpoint:path}", response_model=AccessControlEndpointMetricsResponse)
 async def get_endpoint_metrics(
     endpoint: str,
     days: int = Query(7, ge=1, le=30),
@@ -368,7 +379,7 @@ async def get_endpoint_metrics(
     operation="get_user_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.get("/access-control/user/{username}")
+@router.get("/access-control/user/{username}", response_model=AccessControlUserMetricsResponse)
 async def get_user_metrics(
     username: str,
     days: int = Query(7, ge=1, le=30),
@@ -400,7 +411,7 @@ async def get_user_metrics(
     operation="cleanup_old_metrics",
     error_code_prefix="FEATURE_FLAGS",
 )
-@router.post("/access-control/cleanup")
+@router.post("/access-control/cleanup", response_model=AccessControlCleanupResponse)
 async def cleanup_old_metrics(
     admin: Dict = Depends(require_admin),
     metrics: AccessControlMetrics = Depends(get_metrics_service),

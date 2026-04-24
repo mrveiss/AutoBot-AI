@@ -39,6 +39,16 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc
 from type_defs.common import JSONObject, Metadata
 
+from .schemas_common import (
+    DatabaseDescribeSchemaResponse,
+    DatabaseExecuteResponse,
+    DatabaseListDatabasesResponse,
+    DatabaseListTablesResponse,
+    DatabaseMCPStatusResponse,
+    DatabaseQueryResponse,
+    DatabaseStatisticsResponse,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter(
     tags=["database_mcp", "mcp"],
@@ -699,7 +709,7 @@ def _get_database_schema_tools() -> List[MCPTool]:
     operation="get_database_mcp_tools",
     error_code_prefix="DB_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_database_mcp_tools() -> List[MCPTool]:
     """
     Return all available Database MCP tools
@@ -721,7 +731,7 @@ async def get_database_mcp_tools() -> List[MCPTool]:
     operation="database_query_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/query")
+@router.post("/mcp/query", response_model=DatabaseQueryResponse)
 async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     """
     Execute SELECT query on SQLite database
@@ -792,7 +802,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     operation="database_execute_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/execute")
+@router.post("/mcp/execute", response_model=DatabaseExecuteResponse)
 async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
     # Security checks
@@ -858,7 +868,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     operation="database_list_tables_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/list_tables")
+@router.post("/mcp/list_tables", response_model=DatabaseListTablesResponse)
 async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     """
     List all tables in a SQLite database
@@ -911,7 +921,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     operation="database_describe_schema_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/describe_schema")
+@router.post("/mcp/describe_schema", response_model=DatabaseDescribeSchemaResponse)
 async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     """
     Get schema information for database tables
@@ -968,7 +978,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     operation="database_list_databases_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.get("/mcp/list_databases")
+@router.get("/mcp/list_databases", response_model=DatabaseListDatabasesResponse)
 async def database_list_databases_mcp() -> Metadata:
     """
     List all available whitelisted databases
@@ -1014,7 +1024,7 @@ async def database_list_databases_mcp() -> Metadata:
     operation="database_statistics_mcp",
     error_code_prefix="DATABASE_MCP",
 )
-@router.post("/mcp/statistics")
+@router.post("/mcp/statistics", response_model=DatabaseStatisticsResponse)
 async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     """
     Get statistics for a database
@@ -1069,7 +1079,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     operation="get_database_mcp_status",
     error_code_prefix="DB_MCP",
 )
-@router.get("/mcp/status")
+@router.get("/mcp/status", response_model=DatabaseMCPStatusResponse)
 async def get_database_mcp_status() -> Metadata:
     """
     Get Database MCP service status

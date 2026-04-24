@@ -2185,3 +2185,263 @@ class SkillsGovernanceUpdateResponse(BaseModel):
     mode: Any
 
 
+
+# ---------------------------------------------------------------------------
+# mcp_registry.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class MCPRegistryToolsResponse(BaseModel):
+    """Response for GET /tools — aggregated tool list from all bridges."""
+
+    status: str
+    total_tools: int
+    total_bridges: int
+    healthy_bridges: int
+    tools: List[Any]
+    last_updated: str
+    cached: bool
+
+
+class MCPRegistryBridgesResponse(BaseModel):
+    """Response for GET /bridges — bridge health and metadata."""
+
+    status: str
+    total_bridges: int
+    healthy_bridges: int
+    bridges: List[Any]
+    last_checked: str
+    cached: bool
+
+
+class MCPRegistryCacheInvalidateResponse(BaseModel):
+    """Response for POST /cache/invalidate."""
+
+    status: str
+    message: str
+    timestamp: str
+    cache_stats: Dict[str, Any]
+
+
+class MCPRegistryCacheStatsResponse(BaseModel):
+    """Response for GET /cache/stats."""
+
+    status: str
+    cache: Dict[str, Any]
+    timestamp: str
+
+
+class MCPRegistryToolDetailResponse(BaseModel):
+    """Response for GET /tools/{bridge_name}/{tool_name}."""
+
+    status: str
+    tool: Dict[str, Any]
+
+
+class MCPRegistryHealthResponse(BaseModel):
+    """Response for GET /health."""
+
+    status: str
+    total_bridges: int
+    healthy_bridges: int
+    checks: List[Any]
+    cache_stats: Dict[str, Any]
+    timestamp: str
+
+
+class MCPRegistryStatsResponse(BaseModel):
+    """Response for GET /stats."""
+
+    status: str
+    overview: Dict[str, Any]
+    tools_by_bridge: Dict[str, Any]
+    bridge_health: Dict[str, Any]
+    available_features: List[str]
+    cache: Dict[str, Any]
+    timestamp: str
+
+
+class MCPRegistryInfoResponse(BaseModel):
+    """Response for GET / — registry info and architecture overview."""
+
+    name: str
+    version: str
+    description: str
+    architecture: Dict[str, Any]
+    endpoints: Dict[str, str]
+    performance: Dict[str, Any]
+    note: str
+
+
+# ---------------------------------------------------------------------------
+# feature_flags.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class FeatureFlagStatusResponse(BaseModel):
+    """Response for GET /feature-flags/status."""
+
+    success: bool
+    data: Optional[Any] = None
+
+
+class FeatureFlagEnforcementModeResponse(BaseModel):
+    """Response for PUT /feature-flags/enforcement-mode."""
+
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
+class FeatureFlagEndpointSetResponse(BaseModel):
+    """Response for PUT /feature-flags/endpoint/{endpoint:path}."""
+
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
+class FeatureFlagEndpointRemoveResponse(BaseModel):
+    """Response for DELETE /feature-flags/endpoint/{endpoint:path}."""
+
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
+class AccessControlMetricsResponse(BaseModel):
+    """Response for GET /access-control/metrics."""
+
+    success: bool
+    data: Optional[Dict[str, Any]] = None
+
+
+class AccessControlEndpointMetricsResponse(BaseModel):
+    """Response for GET /access-control/endpoint/{endpoint:path}."""
+
+    success: bool
+    data: Optional[Any] = None
+
+
+class AccessControlUserMetricsResponse(BaseModel):
+    """Response for GET /access-control/user/{username}."""
+
+    success: bool
+    data: Optional[Any] = None
+
+
+class AccessControlCleanupResponse(BaseModel):
+    """Response for POST /access-control/cleanup."""
+
+    success: bool
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# http_client_mcp.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class HTTPClientMCPStatusResponse(BaseModel):
+    """Response for GET /mcp/status — HTTP client service status."""
+
+    status: str
+    service: str
+    rate_limit: Dict[str, Any]
+    configuration: Dict[str, Any]
+    timestamp: str
+
+
+class HTTPRequestResultResponse(BaseModel):
+    """Response for POST /mcp/get|post|put|patch|delete|head.
+
+    Shape is the standardised HTTP response dict from _build_http_response().
+    Extra fields allowed to handle dynamic headers dict.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+    status_code: int
+    url: str
+    method: str
+    is_json: bool
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# database_mcp.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class DatabaseQueryResponse(BaseModel):
+    """Response for POST /mcp/query."""
+
+    success: bool
+    database: str
+    query: str
+    row_count: int
+    columns: List[str]
+    results: List[Any]
+    timestamp: str
+
+
+class DatabaseExecuteResponse(BaseModel):
+    """Response for POST /mcp/execute."""
+
+    success: bool
+    database: str
+    statement: str
+    rows_affected: int
+    timestamp: str
+
+
+class DatabaseListTablesResponse(BaseModel):
+    """Response for POST /mcp/list_tables."""
+
+    success: bool
+    database: str
+    table_count: int
+    tables: List[Any]
+    timestamp: str
+
+
+class DatabaseDescribeSchemaResponse(BaseModel):
+    """Response for POST /mcp/describe_schema."""
+
+    success: bool
+    database: str
+    table_count: int
+    schemas: Dict[str, Any]
+    timestamp: str
+
+
+class DatabaseListDatabasesResponse(BaseModel):
+    """Response for GET /mcp/list_databases."""
+
+    success: bool
+    database_count: int
+    databases: List[Any]
+    timestamp: str
+
+
+class DatabaseStatisticsResponse(BaseModel):
+    """Response for POST /mcp/statistics."""
+
+    success: bool
+    database: str
+    statistics: Dict[str, Any]
+    timestamp: str
+
+
+class DatabaseMCPStatusResponse(BaseModel):
+    """Response for GET /mcp/status — database service status."""
+
+    status: str
+    service: str
+    rate_limit: Dict[str, Any]
+    configuration: Dict[str, Any]
+    database_availability: Dict[str, Any]
+    timestamp: str
+
+
