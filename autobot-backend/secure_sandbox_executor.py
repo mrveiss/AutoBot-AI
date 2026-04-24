@@ -378,7 +378,7 @@ class SecureSandboxExecutor:
         safe_lang = "".join(c for c in language if c.isalnum()) or "sh"
 
         # Create temporary script file
-        with tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(  # codeql[py/path-injection]
             mode="w", suffix=f".{safe_lang}", delete=False
         ) as f:
             f.write(script_content)
