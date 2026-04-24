@@ -25,7 +25,7 @@ from typing import Any, List, Optional
 
 from redis.exceptions import RedisError
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
@@ -306,7 +306,7 @@ class SecurityWorkflowManager:
     async def _get_redis(self) -> Any:
         """Get Redis client for workflow database."""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(async_client=True, database="workflows")
+            self._redis_client = await get_async_redis_client(database="workflows")
         return self._redis_client
 
     def _assessment_key(self, assessment_id: str) -> str:
