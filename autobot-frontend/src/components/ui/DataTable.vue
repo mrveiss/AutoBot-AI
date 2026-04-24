@@ -168,7 +168,7 @@ interface Props {
   /** Loading state */
   loading?: boolean
   /** Empty state icon (IconName from Icon.vue registry) */
-  emptyIcon?: string
+  emptyIcon?: IconName
   /** Empty state title */
   emptyTitle?: string
   /** Empty state message */
