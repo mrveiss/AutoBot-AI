@@ -15,7 +15,7 @@ import json
 import logging
 from typing import Any, List, Optional
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
 
 logger = logging.getLogger(__name__)
@@ -28,16 +28,10 @@ def _make_key(session_id: str, key: str) -> str:
     return _KEY_PREFIX.format(session_id=session_id, key=key)
 
 
-class WorkingMemoryService:
+class WorkingMemoryService(AsyncRedisClientMixin):
     """Session-scoped working memory backed by Redis with TTL support."""
 
-    def __init__(self) -> None:
-        self._redis = None
-
-    async def _get_redis(self):
-        if self._redis is None:
-            self._redis = await get_async_redis_client(database="knowledge")
-        return self._redis
+    _redis_database = "knowledge"
 
     async def store(
         self,

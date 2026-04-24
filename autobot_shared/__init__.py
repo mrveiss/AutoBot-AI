@@ -38,6 +38,8 @@ __all__ = [
     # HTTP safety helpers — issue #5680
     "safe_http_detail",
     "user_facing_detail",
+    # Async Redis mixin — issue #5671
+    "AsyncRedisClientMixin",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -63,6 +65,8 @@ _LAZY_IMPORTS = {
     # HTTP safety helpers — issue #5680
     "safe_http_detail": (".error_utils", "safe_http_detail"),
     "user_facing_detail": (".error_utils", "user_facing_detail"),
+    # Async Redis mixin — issue #5671
+    "AsyncRedisClientMixin": (".redis_mixin", "AsyncRedisClientMixin"),
 }
 
 

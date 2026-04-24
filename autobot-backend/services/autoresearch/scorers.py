@@ -19,6 +19,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+
 if TYPE_CHECKING:
     from services.llm_service import LLMService
 
@@ -273,7 +275,7 @@ class LLMJudgeScorer(PromptScorer):
         return 0
 
 
-class HumanReviewScorer(PromptScorer):
+class HumanReviewScorer(AsyncRedisClientMixin, PromptScorer):
     """Queue a prompt variant for human review and wait for a score via BLPOP.
 
     Stores the variant in Redis; the API endpoint allows humans to
@@ -288,6 +290,7 @@ class HumanReviewScorer(PromptScorer):
     _PENDING_KEY = "autoresearch:prompt_review:pending:{session_id}:{variant_id}"
     _NOTIFY_KEY = HUMAN_REVIEW_NOTIFY_KEY
     _TTL_SECONDS = TTL_24_HOURS
+    _redis_database = "main"
 
     def __init__(
         self,
@@ -298,14 +301,6 @@ class HumanReviewScorer(PromptScorer):
         # internally — BLPOP blocks efficiently without periodic wakeups.
         self._poll_interval = poll_interval
         self._timeout = timeout
-        self._redis = None
-
-    async def _get_redis(self):
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     @property
     def name(self) -> str:

@@ -9,13 +9,15 @@ import logging
 import time
 from typing import List
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = logging.getLogger(__name__)
 
 
-class TerminalHistoryService:
+class TerminalHistoryService(AsyncRedisClientMixin):
     """Manages persistent command history in Redis."""
+
+    _redis_database = "main"
 
     def __init__(self, max_entries: int = 10000):
         """Initialize history service.
@@ -23,19 +25,7 @@ class TerminalHistoryService:
         Args:
             max_entries: Maximum commands to store per user
         """
-        self._redis = None
         self.max_entries = max_entries
-
-    async def _get_redis(self):
-        """Get async Redis client, initializing lazily on first use.
-
-        Issue #2956: get_async_client is a coroutine so it cannot be called
-        from __init__. Lazy initialization ensures the client is awaited
-        correctly in an async context.
-        """
-        if self._redis is None:
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     async def add_command(self, user_id: str, command: str) -> None:
         """Add command to history with current timestamp.

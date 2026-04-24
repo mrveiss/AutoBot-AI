@@ -25,6 +25,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -64,7 +66,7 @@ class SearchResult:
 # ---------------------------------------------------------------------------
 
 
-class HybridScorer:
+class HybridScorer(AsyncRedisClientMixin):
     """
     Combines cosine-similarity (semantic) and BM25 (keyword) scores.
 
@@ -75,20 +77,16 @@ class HybridScorer:
     entity embeddings from Redis asynchronously.
     """
 
+    _redis_database = "knowledge"
+
     def __init__(self, redis_client=None) -> None:
         """
         Args:
             redis_client: Optional async Redis client for embedding lookups.
                           When None a client is acquired lazily on first use.
         """
-        self._redis = redis_client
-
-    async def _get_redis(self):
-        """Lazily obtain the async Redis client (cached on self._redis)."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-            self._redis = await get_async_redis_client(database="knowledge")
-        return self._redis
+        if redis_client is not None:
+            self._redis = redis_client
 
     # ------------------------------------------------------------------
     # Public API
