@@ -16,6 +16,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    WorkflowExportResponse,
+    WorkflowImportResponse,
+    WorkflowListSharesResponse,
+    WorkflowShareResponse,
+    WorkflowUnshareResponse,
+    WorkflowValidateImportResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.workflow_automation.routes import get_workflow_manager
@@ -86,7 +94,7 @@ def _get_sharing_service() -> WorkflowSharingService:
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.get("/export/{workflow_id}")
+@router.get("/export/{workflow_id}", response_model=WorkflowExportResponse)
 async def export_workflow(
     workflow_id: str,
     current_user: dict = Depends(get_current_user),
@@ -125,7 +133,7 @@ async def export_workflow(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.post("/validate")
+@router.post("/validate", response_model=WorkflowValidateImportResponse)
 async def validate_import(
     body: ImportWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -152,7 +160,7 @@ async def validate_import(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.post("/import")
+@router.post("/import", response_model=WorkflowImportResponse)
 async def import_workflow(
     body: ImportWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -191,7 +199,7 @@ async def import_workflow(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.post("/share")
+@router.post("/share", response_model=WorkflowShareResponse)
 async def share_workflow(
     body: ShareWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -230,7 +238,7 @@ async def share_workflow(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.delete("/share/{share_id}")
+@router.delete("/share/{share_id}", response_model=WorkflowUnshareResponse)
 async def unshare_workflow(
     share_id: str,
     current_user: dict = Depends(get_current_user),
@@ -255,7 +263,7 @@ async def unshare_workflow(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.get("/shares")
+@router.get("/shares", response_model=WorkflowListSharesResponse)
 async def list_shared_workflows(
     current_user: dict = Depends(get_current_user),
     sharing: WorkflowSharingService = Depends(_get_sharing_service),
@@ -277,7 +285,7 @@ async def list_shared_workflows(
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
-@router.post("/share/{share_id}/clone")
+@router.post("/share/{share_id}/clone", response_model=WorkflowImportResponse)
 async def clone_shared_workflow(
     share_id: str,
     body: CloneWorkflowRequest,

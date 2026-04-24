@@ -2445,3 +2445,287 @@ class DatabaseMCPStatusResponse(BaseModel):
     timestamp: str
 
 
+# ---------------------------------------------------------------------------
+# workflow_export.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowExportResponse(BaseModel):
+    """Response for GET /export/{workflow_id}."""
+
+    success: bool
+    export: Dict[str, Any]
+
+
+class WorkflowValidateImportResponse(BaseModel):
+    """Response for POST /validate."""
+
+    success: bool
+    valid: bool
+    issues: List[Any]
+
+
+class WorkflowImportResponse(BaseModel):
+    """Response for POST /import and POST /share/{share_id}/clone."""
+
+    success: bool
+    workflow_id: str
+
+
+class WorkflowShareResponse(BaseModel):
+    """Response for POST /share."""
+
+    success: bool
+    share_id: str
+
+
+class WorkflowUnshareResponse(BaseModel):
+    """Response for DELETE /share/{share_id}."""
+
+    success: bool
+    share_id: str
+
+
+class WorkflowListSharesResponse(BaseModel):
+    """Response for GET /shares."""
+
+    success: bool
+    shares: List[Any]
+    total_count: int
+
+
+# ---------------------------------------------------------------------------
+# rum.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class RUMConfigResponse(BaseModel):
+    """Response for POST /rum/config."""
+
+    status: str
+    message: str
+    config: Dict[str, Any]
+
+
+class RUMEventResponse(BaseModel):
+    """Response for POST /rum/event (both success and disabled/error paths).
+
+    'session_event_count' is absent on the disabled/error path — Optional.
+    """
+
+    status: str
+    message: str
+    session_event_count: Optional[int] = None
+
+
+class RUMDisableResponse(BaseModel):
+    """Response for POST /rum/disable."""
+
+    status: str
+    message: str
+
+
+class RUMClearResponse(BaseModel):
+    """Response for POST /rum/clear."""
+
+    status: str
+    message: str
+    events_cleared: int
+    sessions_cleared: int
+
+
+class RUMStatusResponse(BaseModel):
+    """Response for GET /rum/status."""
+
+    status: str
+    rum_status: Dict[str, Any]
+
+
+class RUMMetricsResponse(BaseModel):
+    """Response for POST /rum/metrics (both success and error paths).
+
+    'metrics_recorded' is absent on the error path — Optional.
+    """
+
+    status: str
+    message: str
+    session_id: str
+    metrics_recorded: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# registry.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class RegistryEndpointsResponse(BaseModel):
+    """Response for GET /endpoints."""
+
+    endpoints: List[Any]
+    total: int
+
+
+class RegistryRouterDetailResponse(BaseModel):
+    """Response for GET /router/{router_name}.
+
+    Includes a possible 'error' key when not found; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class RegistryTagsResponse(BaseModel):
+    """Response for GET /tags."""
+
+    tags: List[str]
+
+
+class RegistryTagRoutersResponse(BaseModel):
+    """Response for GET /tags/{tag}."""
+
+    tag: str
+    routers: List[Any]
+    count: int
+
+
+class RegistryValidateResponse(BaseModel):
+    """Response for GET /validate."""
+
+    valid: bool
+    errors: Dict[str, Any]
+
+
+class RegistryHealthResponse(BaseModel):
+    """Response for GET /health."""
+
+    status: str
+    total_routers: int
+    enabled_routers: int
+    disabled_routers: int
+
+
+# ---------------------------------------------------------------------------
+# elevation.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class ElevationRequestResponse(BaseModel):
+    """Response for POST /elevation/request."""
+
+    success: bool
+    request_id: str
+    message: str
+
+
+class ElevationAuthorizeResponse(BaseModel):
+    """Response for POST /elevation/authorize."""
+
+    success: bool
+    session_token: str
+    expires_in: int
+    message: str
+
+
+class ElevationStatusResponse(BaseModel):
+    """Response for GET /elevation/status/{request_id}."""
+
+    success: bool
+    request_id: str
+    status: str
+    operation: str
+    timestamp: Any  # datetime object serialised as string by FastAPI
+
+
+class ElevationExecuteResponse(BaseModel):
+    """Response for POST /elevation/execute/{session_token}."""
+
+    success: bool
+    output: str
+    error: str
+    return_code: int
+
+
+class ElevationPendingResponse(BaseModel):
+    """Response for GET /elevation/pending."""
+
+    success: bool
+    pending_requests: Dict[str, Any]
+    count: int
+
+
+class ElevationHealthResponse(BaseModel):
+    """Response for GET /elevation/health."""
+
+    status: str
+    service: str
+    active_sessions: int
+    pending_requests: int
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# usage.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class UsageSummaryPeriod(BaseModel):
+    days: int
+    start: str
+    end: str
+
+
+class UsageSummaryTokens(BaseModel):
+    input: int
+    output: int
+    total: int
+
+
+class UsageSummaryResponse(BaseModel):
+    """Response for GET /usage/summary."""
+
+    period: UsageSummaryPeriod
+    tokens: UsageSummaryTokens
+    cost_usd: float
+    requests: int
+    daily_costs: Dict[str, Any]
+    by_model: Dict[str, Any]
+    active_users: int
+
+
+class UsageByUserAllResponse(BaseModel):
+    """Response for GET /usage/by-user."""
+
+    timestamp: str
+    users: List[Any]
+    total_users: int
+
+
+class UsageRecordResponse(BaseModel):
+    """Response for POST /usage/record."""
+
+    recorded: bool
+    cost_usd: float
+    record_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# structured_thinking_mcp.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class StructuredThinkingClearResponse(BaseModel):
+    """Response for POST /mcp/clear_history."""
+
+    success: bool
+    session_id: str
+    thoughts_cleared: int
+    message: str
+
+
+class StructuredThinkingSessionsResponse(BaseModel):
+    """Response for GET /sessions."""
+
+    session_count: int
+    sessions: List[Any]
+
+

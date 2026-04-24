@@ -23,6 +23,11 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    UsageByUserAllResponse,
+    UsageRecordResponse,
+    UsageSummaryResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -57,7 +62,7 @@ router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
     operation="get_usage_summary",
     error_code_prefix="USAGE",
 )
-@router.get("/summary")
+@router.get("/summary", response_model=UsageSummaryResponse)
 async def get_usage_summary(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -105,7 +110,7 @@ async def get_usage_summary(
     operation="get_usage_by_user_all",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user")
+@router.get("/by-user", response_model=UsageByUserAllResponse)
 async def get_usage_by_user_all(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -129,7 +134,7 @@ async def get_usage_by_user_all(
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user/{user_id}")
+@router.get("/by-user/{user_id}", response_model=None)
 async def get_usage_by_user_single(
     user_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -148,7 +153,7 @@ async def get_usage_by_user_single(
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
-@router.get("/me")
+@router.get("/me", response_model=None)
 async def get_my_usage(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -186,7 +191,7 @@ async def get_my_usage(
     operation="record_usage_event",
     error_code_prefix="USAGE",
 )
-@router.post("/record")
+@router.post("/record", response_model=UsageRecordResponse)
 async def record_usage_event(
     body: UsageRecordRequest,
     current_user: dict = Depends(get_current_user),
@@ -230,7 +235,7 @@ async def record_usage_event(
     operation="export_usage_csv",
     error_code_prefix="USAGE",
 )
-@router.get("/export/csv")
+@router.get("/export/csv", response_model=None)
 async def export_usage_csv(
     days: int = Query(default=30, ge=1, le=365, description="Days of data to export"),
     admin_check: bool = Depends(check_admin_permission),
