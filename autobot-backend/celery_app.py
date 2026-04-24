@@ -188,4 +188,11 @@ celery_app.conf.beat_schedule = {
         ),
         "kwargs": {"dry_run": False},
     },
+    # Issue #5081: prune expired entries from the doc_sync:queue:done zset
+    "knowledge-sync-queue-prune": {
+        "task": "tasks.prune_sync_queue_done",
+        "schedule": _crontab_from_string(
+            ssot_config.knowledge_sync_queue_prune_schedule
+        ),
+    },
 }
