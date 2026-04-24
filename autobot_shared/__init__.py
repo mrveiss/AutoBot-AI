@@ -40,6 +40,7 @@ __all__ = [
     "user_facing_detail",
     # Async Redis mixin — issue #5671
     "AsyncRedisClientMixin",
+    "AsyncRedisClientLockedMixin",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -67,6 +68,7 @@ _LAZY_IMPORTS = {
     "user_facing_detail": (".error_utils", "user_facing_detail"),
     # Async Redis mixin — issue #5671
     "AsyncRedisClientMixin": (".redis_mixin", "AsyncRedisClientMixin"),
+    "AsyncRedisClientLockedMixin": (".redis_mixin", "AsyncRedisClientLockedMixin"),
 }
 
 

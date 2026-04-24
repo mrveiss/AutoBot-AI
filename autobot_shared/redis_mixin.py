@@ -19,6 +19,7 @@ Usage::
 
     # The mixin provides _get_redis(); no inline method needed.
 """
+import asyncio
 from typing import Any, Optional, Union
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -38,4 +39,25 @@ class AsyncRedisClientMixin:
     async def _get_redis(self) -> Optional[Any]:
         if self._redis is None:
             self._redis = await get_async_redis_client(database=self._redis_database)
+        return self._redis
+
+
+class AsyncRedisClientLockedMixin(AsyncRedisClientMixin):
+    """Thread-safe variant with asyncio.Lock for concurrent initialization.
+
+    Use when multiple concurrent callers could race to initialize the same
+    Redis connection — avoids creating duplicate clients under load.
+    """
+
+    _redis_lock: Optional[asyncio.Lock] = None
+
+    async def _get_redis(self) -> Optional[Any]:
+        if self._redis is None:
+            if self._redis_lock is None:
+                self._redis_lock = asyncio.Lock()
+            async with self._redis_lock:
+                if self._redis is None:
+                    self._redis = await get_async_redis_client(
+                        database=self._redis_database
+                    )
         return self._redis
