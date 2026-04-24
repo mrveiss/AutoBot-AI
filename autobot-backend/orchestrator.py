@@ -839,7 +839,12 @@ class Orchestrator:
         agent_names: List[str],
         context: Optional[Dict],
     ) -> tuple[Dict[str, Any], List[str]]:
-        """Execute agents in parallel for simpler tasks. Issue #620."""
+        """Execute agents in parallel for simpler tasks. Issue #620.
+
+        Concurrency note: The bound here is intentionally set to len(coros) — unbounded
+        dispatch — because self.resource_semaphore (acquired per-agent in _run_agent)
+        already limits concurrent execution to max_parallel_tasks.
+        """
         tasks = [
             (
                 agent_name,
@@ -851,6 +856,10 @@ class Orchestrator:
         ]
 
         coros = [coro for _, coro in tasks]
+        # Intentionally unbounded at the dispatch level: resource_semaphore (initialized
+        # to max_parallel_tasks=5) is acquired inside each agent's execution path and
+        # provides the actual concurrency cap. Capping here too would add a redundant
+        # outer limit without benefit. Issue #5114.
         results = await bounded_gather(coros, max(len(coros), 1))
 
         agent_results = {}
