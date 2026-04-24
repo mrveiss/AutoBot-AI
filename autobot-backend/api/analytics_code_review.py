@@ -26,6 +26,17 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
     resolve_source_or_404 as _resolve_source_or_404,
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
+from api.schemas_common import (
+    CodeReviewAnalyzeResponse,
+    CodeReviewFeedbackResponse,
+    CodeReviewFileResponse,
+    CodeReviewHistoryResponse,
+    CodeReviewMetricsResponse,
+    CodeReviewPatternPreferencesResponse,
+    CodeReviewPatternToggleResponse,
+    CodeReviewReviewByIdResponse,
+    CodeReviewSummaryResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
@@ -457,7 +468,7 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 # ============================================================================
 
 
-@router.get("/analyze")
+@router.get("/analyze", response_model=CodeReviewAnalyzeResponse)
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
     commit_range: Optional[str] = Query(
@@ -576,7 +587,7 @@ async def analyze_diff(
     }
 
 
-@router.get("/review/{review_id}")
+@router.get("/review/{review_id}", response_model=CodeReviewReviewByIdResponse)
 async def get_review_by_id(
     review_id: str,
     _user: dict = Depends(get_current_user),
@@ -617,7 +628,7 @@ async def get_review_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
-@router.post("/review-file")
+@router.post("/review-file", response_model=CodeReviewFileResponse)
 async def review_file(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,
@@ -659,7 +670,7 @@ async def review_file(
     }
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=None)
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -684,7 +695,7 @@ async def get_review_patterns(
     ]
 
 
-@router.get("/history")
+@router.get("/history", response_model=CodeReviewHistoryResponse)
 async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
@@ -744,7 +755,7 @@ async def get_review_history(
         )
 
 
-@router.get("/metrics")
+@router.get("/metrics", response_model=CodeReviewMetricsResponse)
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -765,7 +776,7 @@ async def get_review_metrics(
     )
 
 
-@router.post("/feedback")
+@router.post("/feedback", response_model=CodeReviewFeedbackResponse)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     comment_id: str = None,
@@ -811,7 +822,7 @@ async def submit_feedback(
     }
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=CodeReviewSummaryResponse)
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -831,7 +842,7 @@ async def get_review_summary(
     )
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=None)
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -858,7 +869,7 @@ class PatternToggleRequest(BaseModel):
     enabled: bool
 
 
-@router.post("/patterns/toggle")
+@router.post("/patterns/toggle", response_model=CodeReviewPatternToggleResponse)
 async def toggle_pattern_preference(
     request: PatternToggleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -907,7 +918,7 @@ async def toggle_pattern_preference(
         raise HTTPException(status_code=500, detail="Failed to save preference")
 
 
-@router.get("/patterns/preferences")
+@router.get("/patterns/preferences", response_model=CodeReviewPatternPreferencesResponse)
 async def get_pattern_preferences(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
