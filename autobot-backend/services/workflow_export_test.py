@@ -326,7 +326,7 @@ class TestShareWorkflow:
         sharing, manager = self._make_sharing()
         mock_redis = AsyncMock()
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             share_id = await sharing.share_workflow(workflow_id="wf-test", owner_id="owner-1", public=True)
@@ -339,7 +339,7 @@ class TestShareWorkflow:
         sharing, _ = self._make_sharing()
         mock_redis = AsyncMock()
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             share_id = await sharing.share_workflow(
@@ -360,7 +360,7 @@ class TestShareWorkflow:
     @pytest.mark.asyncio
     async def test_returns_none_when_redis_unavailable(self):
         sharing, _ = self._make_sharing()
-        with patch("services.workflow_sharing_service.get_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
             share_id = await sharing.share_workflow(workflow_id="wf-test", owner_id="owner-1", public=True)
         assert share_id is None
 
@@ -391,7 +391,7 @@ class TestUnshareWorkflow:
         mock_redis.get.return_value = record
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             result = await sharing.unshare_workflow(share_id)
@@ -406,7 +406,7 @@ class TestUnshareWorkflow:
         mock_redis.get.return_value = None
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             result = await sharing.unshare_workflow("nonexistent-share")
@@ -416,7 +416,7 @@ class TestUnshareWorkflow:
     @pytest.mark.asyncio
     async def test_returns_false_when_redis_unavailable(self):
         sharing = WorkflowSharingService(MagicMock())
-        with patch("services.workflow_sharing_service.get_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
             result = await sharing.unshare_workflow("any-share")
         assert result is False
 
@@ -457,7 +457,7 @@ class TestListShared:
         mock_redis.get = AsyncMock(return_value=record)
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             shares = await sharing.list_shared(user_id="stranger")
@@ -477,7 +477,7 @@ class TestListShared:
         mock_redis.get = AsyncMock(return_value=record)
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             shares = await sharing.list_shared(user_id="user-2")
@@ -495,7 +495,7 @@ class TestListShared:
         mock_redis.get = AsyncMock(return_value=record)
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             shares = await sharing.list_shared(user_id="user-3")
@@ -505,7 +505,7 @@ class TestListShared:
     @pytest.mark.asyncio
     async def test_returns_empty_when_redis_unavailable(self):
         sharing = WorkflowSharingService(MagicMock())
-        with patch("services.workflow_sharing_service.get_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
             shares = await sharing.list_shared(user_id="anyone")
         assert shares == []
 
@@ -563,7 +563,7 @@ class TestCloneWorkflow:
         mock_redis.get = AsyncMock(return_value=record)
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             new_id = await sharing.clone_workflow(share_id, new_owner_id="user-2")
@@ -577,7 +577,7 @@ class TestCloneWorkflow:
         mock_redis.get = AsyncMock(return_value=None)
 
         with patch(
-            "services.workflow_sharing_service.get_redis_client",
+            "services.workflow_sharing_service.get_async_redis_client",
             return_value=mock_redis,
         ):
             result = await sharing.clone_workflow("missing-share", new_owner_id="user-2")
@@ -587,7 +587,7 @@ class TestCloneWorkflow:
     @pytest.mark.asyncio
     async def test_returns_none_when_redis_unavailable(self):
         sharing = self._make_sharing_with_export({})
-        with patch("services.workflow_sharing_service.get_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
             result = await sharing.clone_workflow("any-share", new_owner_id="u")
         assert result is None
 

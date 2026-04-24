@@ -246,7 +246,7 @@ class TestRememberApproval:
         mock_redis.get.return_value = None
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.remember_approval(
                 project_path="/home/user/project",
@@ -280,7 +280,7 @@ class TestRememberApproval:
         mock_redis.get.return_value = json.dumps(existing)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             await manager.remember_approval(
                 project_path="/home/user/project",
@@ -296,7 +296,7 @@ class TestRememberApproval:
     @pytest.mark.asyncio
     async def test_redis_unavailable_returns_false(self, manager):
         """Returns False when Redis is unavailable."""
-        with patch("services.approval_memory.get_redis_client", return_value=None):
+        with patch("services.approval_memory.get_async_redis_client", return_value=None):
             result = await manager.remember_approval("/path", "ls", "user", "safe")
         assert result is False
 
@@ -342,7 +342,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = json.dumps(records)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
@@ -367,7 +367,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = json.dumps(records)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
@@ -392,7 +392,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = json.dumps(records)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
@@ -409,7 +409,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = None
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered("/path", "ls", "user", "safe")
         assert result is False
@@ -429,7 +429,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = json.dumps(records)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
@@ -454,7 +454,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = json.dumps(records)
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered(
                 project_path="/home/user/project",
@@ -472,7 +472,7 @@ class TestCheckRemembered:
         mock_redis.get.return_value = "not valid json{"
 
         with patch(
-            "services.approval_memory.get_redis_client", return_value=mock_redis
+            "services.approval_memory.get_async_redis_client", return_value=mock_redis
         ):
             result = await manager.check_remembered("/path", "ls", "user", "safe")
         assert result is False
