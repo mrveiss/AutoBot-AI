@@ -69,7 +69,8 @@
     "vue3-apexcharts": "^1.11.1"
   },
   "overrides": {
-    "minimatch": ">=9.0.7"
+    "minimatch": ">=9.0.7",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@pinia/testing": "^1.0.3",
