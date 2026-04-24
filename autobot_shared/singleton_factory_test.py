@@ -61,6 +61,23 @@ class TestLazySingleton:
         assert get_b() is get_b()
         assert get_a() is not get_b()
 
+    def test_factory_exception_allows_retry(self):
+        calls = []
+        sentinel = object()
+
+        def factory():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("first call fails")
+            return sentinel
+
+        get = lazy_singleton(factory)
+        with pytest.raises(RuntimeError, match="first call fails"):
+            get()
+        result = get()
+        assert result is sentinel
+        assert len(calls) == 2
+
     def test_thread_safety(self):
         calls = []
         def factory():
