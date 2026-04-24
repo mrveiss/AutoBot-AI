@@ -673,7 +673,7 @@ def audit_log(
     status = "SUCCESS" if success else "FAILED"
     # Redact secret_id to prevent sensitive data in logs
     safe_id = secret_id[:8] + "..." if secret_id and len(secret_id) > 8 else secret_id
-    logger.info(
+    logger.info(  # codeql[py/clear-text-logging-sensitive-data]
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
         operation,
@@ -912,7 +912,7 @@ async def get_secret(
                             "original_scope": secret.get("scope"),
                         },
                     )
-                    logger.debug(
+                    logger.debug(  # codeql[py/clear-text-logging-sensitive-data]
                         "[Issue #608] Created secret entity for %s... in session %s",
                         secret_id[:8],
                         chat_id,
