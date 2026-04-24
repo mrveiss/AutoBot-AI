@@ -130,6 +130,7 @@ class CrossLanguagePatternDetector:
         # Thread-safe initialization locks
         self._cache_lock = asyncio.Lock()
         self._redis_lock = asyncio.Lock()
+        self._chromadb_lock = asyncio.Lock()
 
         # Statistics
         self._cache_hits = 0
@@ -139,29 +140,33 @@ class CrossLanguagePatternDetector:
     async def _get_chromadb_collection(self):
         """Get or create ChromaDB collection for patterns."""
         if self._chromadb_collection is None:
-            try:
-                from knowledge.backends import get_async_default_client
+            async with self._chromadb_lock:
+                if self._chromadb_collection is None:
+                    try:
+                        from knowledge.backends import get_async_default_client
 
-                chromadb_path = self.project_root / "data" / "chromadb"
-                self._chromadb_client = await get_async_default_client(
-                    db_path=str(chromadb_path)
-                )
-                self._chromadb_collection = (
-                    await self._chromadb_client.get_or_create_collection(
-                        name=PATTERNS_COLLECTION,
-                        metadata={
-                            "description": "Cross-language code pattern semantics",
-                            "hnsw:space": "cosine",
-                            "hnsw:construction_ef": 200,
-                            "hnsw:search_ef": 100,
-                            "hnsw:M": 24,
-                        },
-                    )
-                )
-                logger.info("ChromaDB collection '%s' initialized", PATTERNS_COLLECTION)
-            except Exception as e:
-                logger.error("Failed to initialize ChromaDB: %s", e)
-                self._chromadb_collection = None
+                        chromadb_path = self.project_root / "data" / "chromadb"
+                        self._chromadb_client = await get_async_default_client(
+                            db_path=str(chromadb_path)
+                        )
+                        self._chromadb_collection = (
+                            await self._chromadb_client.get_or_create_collection(
+                                name=PATTERNS_COLLECTION,
+                                metadata={
+                                    "description": "Cross-language code pattern semantics",
+                                    "hnsw:space": "cosine",
+                                    "hnsw:construction_ef": 200,
+                                    "hnsw:search_ef": 100,
+                                    "hnsw:M": 24,
+                                },
+                            )
+                        )
+                        logger.info(
+                            "ChromaDB collection '%s' initialized", PATTERNS_COLLECTION
+                        )
+                    except Exception as e:
+                        logger.error("Failed to initialize ChromaDB: %s", e)
+                        self._chromadb_collection = None
         return self._chromadb_collection
 
     async def _get_redis_client(self):
