@@ -175,17 +175,15 @@ class _RAGEvaluator:
         self._collection: Optional[Any] = None
 
     async def _ensure_collection(self) -> Optional[Any]:
-        """Lazy-init an ephemeral ChromaDB collection seeded with the corpus."""
+        """Lazy-init an in-memory collection seeded with the corpus."""
         if self._collection is not None:
             return self._collection
         try:
-            import chromadb
-
+            from knowledge.backends import AsyncInMemoryClient
             from knowledge.rag_benchmarks import _TOPIC_DOCS, _deterministic_embed
 
-            client = await asyncio.to_thread(chromadb.EphemeralClient)
-            collection = await asyncio.to_thread(
-                client.create_collection,
+            client = AsyncInMemoryClient()
+            collection = await client.create_collection(
                 "loop_eval_bench",
                 metadata={"hnsw:space": "cosine"},
             )
@@ -193,18 +191,17 @@ class _RAGEvaluator:
             embeddings = [_deterministic_embed(d[1], self._DIM) for d in _TOPIC_DOCS]
             documents = [d[1] for d in _TOPIC_DOCS]
             metadatas = [{"topic": d[2]} for d in _TOPIC_DOCS]
-            await asyncio.to_thread(
-                collection.add,
+            await collection.add(
                 ids=ids,
                 embeddings=embeddings,
                 documents=documents,
                 metadatas=metadatas,
             )
             self._collection = collection
-            logger.debug("_RAGEvaluator: seeded ephemeral collection (%d docs)", len(ids))
+            logger.debug("_RAGEvaluator: seeded in-memory collection (%d docs)", len(ids))
             return collection
         except Exception:
-            logger.exception("_RAGEvaluator: failed to initialise ephemeral collection")
+            logger.exception("_RAGEvaluator: failed to initialise in-memory collection")
             return None
 
     async def score_variant(self, params: Dict[str, Any]) -> float:
@@ -228,8 +225,7 @@ class _RAGEvaluator:
 
             for query, expected in self._GROUND_TRUTH.items():
                 q_vec = _deterministic_embed(query, self._DIM)
-                raw = await asyncio.to_thread(
-                    collection.query,
+                raw = await collection.query(
                     query_embeddings=[q_vec],
                     n_results=self._K,
                     include=["distances"],
