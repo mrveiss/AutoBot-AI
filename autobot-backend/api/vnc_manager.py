@@ -15,7 +15,7 @@ import subprocess  # nosec B404
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -37,6 +37,116 @@ from constants.threshold_constants import TimingConstants
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Response models
+class VncRunningResponse(BaseModel):
+    """Response for VNC running status check"""
+    running: bool
+
+
+class VncStatusMessageResponse(BaseModel):
+    """Generic status + message response"""
+    status: str
+    message: str
+
+
+class VncScreenshotResponse(BaseModel):
+    """Response for screenshot capture"""
+    status: str
+    message: str
+    image_data: str
+
+
+class MacroStopResponse(BaseModel):
+    """Response for stop-macro-recording"""
+    status: str
+    message: str
+    action_count: int
+
+
+class MacroListResponse(BaseModel):
+    """Response for list-macros"""
+    macros: List[Dict[str, Any]]
+
+
+class VncQualityMetricsResponse(BaseModel):
+    """Response for connection quality metrics"""
+    vnc_running: bool
+    timestamp: str
+    vnc_port_reachable: Optional[bool] = None
+    latency_ms: Optional[float] = None
+    websockify_running: Optional[bool] = None
+    websockify_processes: Optional[int] = None
+
+
+class VncDesktopContextResponse(BaseModel):
+    """Response for desktop context info"""
+    system: Dict[str, str]
+    desktop: Dict[str, str]
+    processes: List[Dict[str, str]]
+    timestamp: str
+
+
+class VncOcrResponse(BaseModel):
+    """Response for OCR text recognition"""
+    status: str
+    text: str
+    message: str
+
+
+class VncFindImageResponse(BaseModel):
+    """Response for image template matching"""
+    status: str
+    found: bool
+    message: str
+    x: Optional[int] = None
+    y: Optional[int] = None
+    confidence: Optional[float] = None
+
+
+class WaitForTextResponse(BaseModel):
+    """Response for wait-for-text"""
+    status: str
+    found: bool
+    message: str
+
+
+class WaitForImageResponse(BaseModel):
+    """Response for wait-for-image"""
+    status: str
+    found: bool
+    message: str
+    x: Optional[int] = None
+    y: Optional[int] = None
+    confidence: Optional[float] = None
+
+
+class RestoreStateResponse(BaseModel):
+    """Response for restore-session-desktop-state"""
+    status: str
+    message: str
+    state: Optional[Dict[str, Any]] = None
+
+
+class SessionActionLogResponse(BaseModel):
+    """Response for get-session-action-log"""
+    status: str
+    actions: List[Dict[str, Any]]
+    message: str
+
+
+class SessionScreenshotsResponse(BaseModel):
+    """Response for get-session-screenshots"""
+    status: str
+    screenshots: List[str]
+    message: str
+
+
+class SessionScreenshotSaveResponse(BaseModel):
+    """Response for save-session-screenshot"""
+    status: str
+    message: str
+    screenshot_path: Optional[str] = None
 
 
 # Pydantic models for request bodies (Issue #74)
@@ -210,7 +320,7 @@ def start_vnc_server() -> Dict[str, str]:
         return {"status": "error", "message": "Operation failed"}
 
 
-@router.get("/status")
+@router.get("/status", response_model=VncRunningResponse)
 @with_error_handling(error_code_prefix="VNC_STATUS")
 async def get_vnc_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -226,7 +336,7 @@ async def get_vnc_status(
     return {"running": running}
 
 
-@router.post("/ensure-running")
+@router.post("/ensure-running", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_ENSURE")
 async def ensure_vnc_running(
     admin_check: bool = Depends(check_admin_permission),
@@ -245,7 +355,7 @@ async def ensure_vnc_running(
     return start_vnc_server()
 
 
-@router.post("/restart")
+@router.post("/restart", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_RESTART")
 async def restart_vnc_server(
     admin_check: bool = Depends(check_admin_permission),
@@ -374,7 +484,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
         return {"status": "error", "message": "Internal server error"}
 
 
-@router.post("/click")
+@router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
     request: MouseClickRequest,
@@ -405,7 +515,7 @@ async def vnc_mouse_click(
     )
 
 
-@router.post("/type")
+@router.post("/type", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_TYPE")
 async def vnc_keyboard_type(
     request: KeyboardTypeRequest,
@@ -452,7 +562,7 @@ async def vnc_keyboard_type(
         return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", request.text])
 
 
-@router.post("/key")
+@router.post("/key", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_KEY")
 async def vnc_special_key(
     request: SpecialKeyRequest,
@@ -471,7 +581,7 @@ async def vnc_special_key(
     return _run_xdotool_cmd(["key", request.key])
 
 
-@router.post("/scroll")
+@router.post("/scroll", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SCROLL")
 async def vnc_mouse_scroll(
     request: MouseScrollRequest,
@@ -498,7 +608,7 @@ async def vnc_mouse_scroll(
     return _run_xdotool_cmd(args)
 
 
-@router.post("/drag")
+@router.post("/drag", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_DRAG")
 async def vnc_mouse_drag(
     request: MouseDragRequest,
@@ -538,7 +648,7 @@ async def vnc_mouse_drag(
     return _run_xdotool_cmd(["mouseup", "1"])
 
 
-@router.get("/screenshot")
+@router.get("/screenshot", response_model=VncScreenshotResponse)
 @with_error_handling(error_code_prefix="VNC_SCREENSHOT")
 async def vnc_screenshot(
     admin_check: bool = Depends(check_admin_permission),
@@ -602,7 +712,7 @@ async def vnc_screenshot(
         return {"status": "error", "message": "Operation failed", "image_data": ""}
 
 
-@router.post("/clipboard")
+@router.post("/clipboard", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLIPBOARD")
 async def vnc_clipboard_sync(
     request: ClipboardSyncRequest,
@@ -648,7 +758,7 @@ async def vnc_clipboard_sync(
 # Connection Settings Management (Issue #74 - Area 4)
 
 
-@router.get("/connection/settings")
+@router.get("/connection/settings", response_model=ConnectionSettings)
 @with_error_handling(error_code_prefix="VNC_CONN_GET")
 async def get_connection_settings(
     session_id: str = "default",
@@ -670,7 +780,7 @@ async def get_connection_settings(
         return _connection_settings[session_id]
 
 
-@router.post("/connection/settings")
+@router.post("/connection/settings", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CONN_SET")
 async def update_connection_settings(
     settings: ConnectionSettings,
@@ -701,7 +811,7 @@ async def update_connection_settings(
     return {"status": "success", "message": "Connection settings updated"}
 
 
-@router.get("/connection/quality-metrics")
+@router.get("/connection/quality-metrics", response_model=VncQualityMetricsResponse)
 @with_error_handling(error_code_prefix="VNC_QUALITY")
 async def get_connection_quality_metrics(
     admin_check: bool = Depends(check_admin_permission),
@@ -921,7 +1031,7 @@ def _get_process_list() -> List[Dict[str, str]]:
     return processes
 
 
-@router.get("/desktop/context")
+@router.get("/desktop/context", response_model=VncDesktopContextResponse)
 @with_error_handling(error_code_prefix="VNC_CONTEXT")
 async def get_desktop_context(
     admin_check: bool = Depends(check_admin_permission),
@@ -973,7 +1083,7 @@ _recording_session: Dict[str, MacroRecording] = {}
 _macros_lock = asyncio.Lock()
 
 
-@router.post("/macro/record/start")
+@router.post("/macro/record/start", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_START")
 async def start_macro_recording(
     name: str, admin_check: bool = Depends(check_admin_permission)
@@ -998,7 +1108,7 @@ async def start_macro_recording(
     return {"status": "success", "message": f"Started recording macro '{name}'"}
 
 
-@router.post("/macro/record/stop")
+@router.post("/macro/record/stop", response_model=MacroStopResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_STOP")
 async def stop_macro_recording(
     name: str, admin_check: bool = Depends(check_admin_permission)
@@ -1030,7 +1140,7 @@ async def stop_macro_recording(
     }
 
 
-@router.get("/macros")
+@router.get("/macros", response_model=MacroListResponse)
 @with_error_handling(error_code_prefix="VNC_MACROS_LIST")
 async def list_macros(
     admin_check: bool = Depends(check_admin_permission),
@@ -1055,7 +1165,7 @@ async def list_macros(
     return {"macros": macro_list}
 
 
-@router.post("/macro/playback")
+@router.post("/macro/playback", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_PLAY")
 async def playback_macro(
     name: str, admin_check: bool = Depends(check_admin_permission)
@@ -1113,7 +1223,7 @@ async def playback_macro(
     }
 
 
-@router.delete("/macro/{name}")
+@router.delete("/macro/{name}", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_DELETE")
 async def delete_macro(
     name: str, admin_check: bool = Depends(check_admin_permission)
@@ -1150,7 +1260,7 @@ class OCRRequest(BaseModel):
     )
 
 
-@router.post("/ocr")
+@router.post("/ocr", response_model=VncOcrResponse)
 @with_error_handling(error_code_prefix="VNC_OCR")
 async def vnc_ocr_text(
     request: OCRRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1290,7 +1400,7 @@ def _build_match_result(
     }
 
 
-@router.post("/find-image")
+@router.post("/find-image", response_model=VncFindImageResponse)
 @with_error_handling(error_code_prefix="VNC_FIND_IMAGE")
 async def vnc_find_image(
     request: FindImageRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1359,7 +1469,7 @@ class WaitForTextRequest(BaseModel):
     )
 
 
-@router.post("/wait-for-text")
+@router.post("/wait-for-text", response_model=WaitForTextResponse)
 @with_error_handling(error_code_prefix="VNC_WAIT_TEXT")
 async def vnc_wait_for_text(
     request: WaitForTextRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1409,7 +1519,7 @@ class WaitForImageRequest(BaseModel):
     threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
-@router.post("/wait-for-image")
+@router.post("/wait-for-image", response_model=WaitForImageResponse)
 @with_error_handling(error_code_prefix="VNC_WAIT_IMAGE")
 async def vnc_wait_for_image(
     request: WaitForImageRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1497,7 +1607,7 @@ _session_states: Dict[str, DesktopSessionState] = {}
 _session_lock = asyncio.Lock()
 
 
-@router.post("/session/save-state")
+@router.post("/session/save-state", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SAVE")
 async def save_session_desktop_state(
     session_id: str,
@@ -1544,7 +1654,7 @@ async def save_session_desktop_state(
     }
 
 
-@router.get("/session/restore-state")
+@router.get("/session/restore-state", response_model=RestoreStateResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_RESTORE")
 async def restore_session_desktop_state(
     session_id: str,
@@ -1580,7 +1690,7 @@ async def restore_session_desktop_state(
     }
 
 
-@router.post("/session/log-action")
+@router.post("/session/log-action", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_LOG")
 async def log_session_action(
     session_id: str,
@@ -1610,7 +1720,7 @@ async def log_session_action(
     return {"status": "success", "message": "Action logged to session"}
 
 
-@router.get("/session/action-log")
+@router.get("/session/action-log", response_model=SessionActionLogResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_LOG_GET")
 async def get_session_action_log(
     session_id: str,
@@ -1648,7 +1758,7 @@ async def get_session_action_log(
     }
 
 
-@router.post("/session/save-screenshot")
+@router.post("/session/save-screenshot", response_model=SessionScreenshotSaveResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOT")
 async def save_session_screenshot(
     session_id: str,
@@ -1710,7 +1820,7 @@ async def save_session_screenshot(
     }
 
 
-@router.get("/session/screenshots")
+@router.get("/session/screenshots", response_model=SessionScreenshotsResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOTS")
 async def get_session_screenshots(
     session_id: str,
@@ -1748,7 +1858,7 @@ async def get_session_screenshots(
     }
 
 
-@router.delete("/session/clear-state")
+@router.delete("/session/clear-state", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_CLEAR")
 async def clear_session_state(
     session_id: str,
