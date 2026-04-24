@@ -14,6 +14,10 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
+from api.schemas_common import (
+    KnowledgeSyncQueuePruneResponse,
+    KnowledgeSyncQueueResponse,
+)
 from auth_middleware import check_admin_permission
 from services.knowledge.sync_queue import (
     SyncStatus,
@@ -26,7 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["knowledge-sync-queue"])
 
 
-@router.get("/sync-queue")
+@router.get("/sync-queue", response_model=KnowledgeSyncQueueResponse)
 async def get_sync_queue(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -51,7 +55,7 @@ async def get_sync_queue(
     }
 
 
-@router.post("/sync-queue/prune")
+@router.post("/sync-queue/prune", response_model=KnowledgeSyncQueuePruneResponse)
 async def prune_done_entries(
     older_than_seconds: int = Query(7 * 24 * 3600, ge=60),
     admin_check: bool = Depends(check_admin_permission),

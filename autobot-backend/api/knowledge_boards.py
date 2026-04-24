@@ -29,6 +29,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from api.schemas_common import (
+    KnowledgeBoardCreateResponse,
+    KnowledgeBoardDeleteResponse,
+    KnowledgeBoardsListResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
@@ -103,7 +108,7 @@ async def _get_redis(req: Request):
     operation="list_boards",
     error_code_prefix="KB_BOARDS",
 )
-@router.get("/boards")
+@router.get("/boards", response_model=KnowledgeBoardsListResponse)
 async def list_boards(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -139,7 +144,7 @@ async def list_boards(
     operation="create_board",
     error_code_prefix="KB_BOARDS",
 )
-@router.post("/boards", status_code=201)
+@router.post("/boards", status_code=201, response_model=KnowledgeBoardCreateResponse)
 async def create_board(
     request: CreateBoardRequest = None,
     admin_check: bool = Depends(check_admin_permission),
@@ -170,7 +175,7 @@ async def create_board(
     operation="delete_board",
     error_code_prefix="KB_BOARDS",
 )
-@router.delete("/boards/{board_id}")
+@router.delete("/boards/{board_id}", response_model=KnowledgeBoardDeleteResponse)
 async def delete_board(
     board_id: str,
     admin_check: bool = Depends(check_admin_permission),

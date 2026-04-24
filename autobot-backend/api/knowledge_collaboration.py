@@ -19,6 +19,13 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeAccessInfoResponse,
+    KnowledgePermissionsUpdateResponse,
+    KnowledgeScopedFactsResponse,
+    KnowledgeShareResponse,
+    KnowledgeUnshareResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
@@ -275,7 +282,7 @@ async def _unshare_fact_by_entity(
 # =============================================================================
 
 
-@router.get("/facts")
+@router.get("/facts", response_model=KnowledgeScopedFactsResponse)
 async def get_knowledge_by_scope(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -332,7 +339,7 @@ async def get_knowledge_by_scope(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/organization/{organization_id}")
+@router.get("/facts/organization/{organization_id}", response_model=KnowledgeScopedFactsResponse)
 async def get_organization_knowledge(
     organization_id: str,
     request: Request,
@@ -381,7 +388,7 @@ async def get_organization_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/group/{group_id}")
+@router.get("/facts/group/{group_id}", response_model=KnowledgeScopedFactsResponse)
 async def get_group_knowledge(
     group_id: str,
     request: Request,
@@ -432,7 +439,7 @@ async def get_group_knowledge(
 # =============================================================================
 
 
-@router.post("/facts/{fact_id}/share")
+@router.post("/facts/{fact_id}/share", response_model=KnowledgeShareResponse)
 async def share_knowledge(
     fact_id: str,
     share_request: ShareKnowledgeRequest,
@@ -497,7 +504,7 @@ async def share_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/facts/{fact_id}/share/{entity_id}")
+@router.delete("/facts/{fact_id}/share/{entity_id}", response_model=KnowledgeUnshareResponse)
 async def unshare_knowledge(
     fact_id: str,
     entity_id: str,
@@ -556,7 +563,7 @@ async def unshare_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/facts/{fact_id}/permissions")
+@router.put("/facts/{fact_id}/permissions", response_model=KnowledgePermissionsUpdateResponse)
 async def update_knowledge_permissions(
     fact_id: str,
     permissions_request: UpdatePermissionsRequest,
@@ -619,7 +626,7 @@ async def update_knowledge_permissions(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/{fact_id}/access")
+@router.get("/facts/{fact_id}/access", response_model=KnowledgeAccessInfoResponse)
 async def get_knowledge_access_info(
     fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)
 ):

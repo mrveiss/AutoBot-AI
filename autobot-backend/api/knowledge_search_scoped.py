@@ -13,6 +13,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeAccessibleScopesResponse,
+    KnowledgeScopedSearchResponse,
+)
 from auth_middleware import get_current_user
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
@@ -144,7 +148,7 @@ async def _build_scoped_search_response(
     }
 
 
-@router.post("/scoped")
+@router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_search(
     search_request: ScopedSearchRequest,
     request: Request,
@@ -234,7 +238,7 @@ async def _synthesize_rag_response(
         }
 
 
-@router.post("/rag/scoped")
+@router.post("/rag/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_rag_search(
     search_request: ScopedSearchRequest,
     request: Request,
@@ -286,7 +290,7 @@ async def scoped_rag_search(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/accessible-scopes")
+@router.get("/accessible-scopes", response_model=KnowledgeAccessibleScopesResponse)
 async def get_accessible_scopes(
     request: Request, current_user: User = Depends(get_current_user)
 ):

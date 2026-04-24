@@ -15,6 +15,11 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeAuditEventsResponse,
+    KnowledgeComplianceReportResponse,
+    KnowledgePermissionChangesResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.audit_log import AuditEventType, KnowledgeAuditLog
@@ -70,7 +75,7 @@ async def _get_audit_log(kb) -> KnowledgeAuditLog:
 # =============================================================================
 
 
-@router.get("/user-activity")
+@router.get("/user-activity", response_model=KnowledgeAuditEventsResponse)
 async def get_user_activity_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -112,7 +117,7 @@ async def get_user_activity_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/fact/{fact_id}/access-log")
+@router.get("/fact/{fact_id}/access-log", response_model=KnowledgeAuditEventsResponse)
 async def get_fact_access_log(
     fact_id: str,
     request: Request,
@@ -175,7 +180,7 @@ async def get_fact_access_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/organization/audit-log")
+@router.get("/organization/audit-log", response_model=KnowledgeAuditEventsResponse)
 async def get_organization_audit_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -241,7 +246,7 @@ async def get_organization_audit_log(
 # =============================================================================
 
 
-@router.get("/permission-changes")
+@router.get("/permission-changes", response_model=KnowledgePermissionChangesResponse)
 async def get_permission_changes(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -290,7 +295,7 @@ async def get_permission_changes(
 # =============================================================================
 
 
-@router.post("/compliance-report")
+@router.post("/compliance-report", response_model=KnowledgeComplianceReportResponse)
 async def generate_compliance_report(
     report_request: ComplianceReportRequest,
     request: Request,
@@ -359,7 +364,7 @@ async def generate_compliance_report(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/compliance-summary")
+@router.get("/compliance-summary", response_model=KnowledgeComplianceReportResponse)
 async def get_compliance_summary(
     request: Request,
     current_user: Dict = Depends(get_current_user),

@@ -24,6 +24,14 @@ from typing import Any, Dict, List, Optional, Set
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeDocumentationSearchResponse,
+    KnowledgeDocumentationStatsResponse,
+    KnowledgeUnifiedContextResponse,
+    KnowledgeUnifiedGraphResponse,
+    KnowledgeUnifiedSearchResponse,
+    KnowledgeUnifiedStatsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
 
@@ -362,7 +370,7 @@ def _search_documentation(
     operation="unified_search",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.post("/search")
+@router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
 async def unified_search(req: Request, body: UnifiedSearchRequest):
     """
     Search across all knowledge sources in a unified query.
@@ -411,7 +419,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     operation="unified_stats",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
 async def unified_stats(req: Request):
     """Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -479,7 +487,7 @@ async def unified_stats(req: Request):
     operation="get_llm_context",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.post("/context")
+@router.post("/context", response_model=KnowledgeUnifiedContextResponse)
 async def get_llm_context(req: Request, body: ContextRequest):
     """
     Get formatted context for LLM prompts from unified knowledge sources.
@@ -550,7 +558,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
     operation="search_documentation",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.get("/documentation/search")
+@router.get("/documentation/search", response_model=KnowledgeDocumentationSearchResponse)
 async def search_documentation(
     query: str,
     n_results: int = 5,
@@ -603,7 +611,7 @@ async def search_documentation(
     operation="documentation_stats",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.get("/documentation/stats")
+@router.get("/documentation/stats", response_model=KnowledgeDocumentationStatsResponse)
 async def documentation_stats():
     """
     Get statistics about indexed documentation.
@@ -943,7 +951,7 @@ def _update_category_fact_counts(
     operation="get_unified_graph",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.post("/graph")
+@router.post("/graph", response_model=KnowledgeUnifiedGraphResponse)
 async def get_unified_graph(req: Request, body: GraphRequest):
     """
     Get unified knowledge graph combining categories, facts, and relations.
@@ -1013,7 +1021,7 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     operation="get_unified_graph_simple",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
-@router.get("/graph")
+@router.get("/graph", response_model=KnowledgeUnifiedGraphResponse)
 async def get_unified_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),

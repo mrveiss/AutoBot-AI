@@ -11,6 +11,11 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
+from api.schemas_common import (
+    KnowledgeDebugRedisResponse,
+    KnowledgeFreshStatsResponse,
+    KnowledgeRebuildIndexResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -27,7 +32,7 @@ logger = logging.getLogger(__name__)
     operation="get_fresh_knowledge_stats",
     error_code_prefix="KNOWLEDGE_FRESH",
 )
-@router.get("/fresh_stats")
+@router.get("/fresh_stats", response_model=KnowledgeFreshStatsResponse)
 async def get_fresh_knowledge_stats(request: Request = None):
     """Get knowledge base stats using a completely fresh instance (bypasses all cache)"""
     try:
@@ -98,7 +103,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
     operation="debug_redis_connection",
     error_code_prefix="KNOWLEDGE_FRESH",
 )
-@router.get("/debug_redis")
+@router.get("/debug_redis", response_model=KnowledgeDebugRedisResponse)
 async def debug_redis_connection():
     """Debug Redis connection and vector counts using canonical utility.
 
@@ -169,7 +174,7 @@ async def debug_redis_connection():
     operation="rebuild_search_index",
     error_code_prefix="KNOWLEDGE_FRESH",
 )
-@router.post("/rebuild_index")
+@router.post("/rebuild_index", response_model=KnowledgeRebuildIndexResponse)
 async def rebuild_search_index():
     """Rebuild the search index to sync vectors with search index"""
     try:

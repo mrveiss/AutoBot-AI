@@ -29,6 +29,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from api.knowledge_models import SearchRequest
+from api.schemas_common import (
+    KnowledgeConflictsListResponse,
+    KnowledgeGroundingStatsResponse,
+    KnowledgeGroundResponseResponse,
+    KnowledgeResolveConflictResponse,
+    KnowledgeVerifyClaimResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
@@ -108,7 +115,7 @@ class ConflictSchema(BaseModel):
 # ===== ENDPOINTS =====
 
 
-@router.post("/ground-response")
+@router.post("/ground-response", response_model=KnowledgeGroundResponseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="ground_response",
@@ -187,7 +194,7 @@ async def ground_response(
     }
 
 
-@router.post("/verify-claim")
+@router.post("/verify-claim", response_model=KnowledgeVerifyClaimResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="verify_claim",
@@ -260,7 +267,7 @@ async def verify_claim(
     }
 
 
-@router.get("/kb-conflicts")
+@router.get("/kb-conflicts", response_model=KnowledgeConflictsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conflicts",
@@ -396,7 +403,7 @@ async def list_conflicts(
     }
 
 
-@router.post("/kb-conflicts/{conflict_id}/resolve")
+@router.post("/kb-conflicts/{conflict_id}/resolve", response_model=KnowledgeResolveConflictResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resolve_conflict",
@@ -461,7 +468,7 @@ async def resolve_conflict(
     }
 
 
-@router.get("/kb-stats")
+@router.get("/kb-stats", response_model=KnowledgeGroundingStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_stats",
