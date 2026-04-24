@@ -347,7 +347,7 @@ const { start: _startAutoRefresh, stop: _stopAutoRefresh } = usePollingJob(
     }
     return null;
   },
-  { intervalMs: refreshInterval.value, maxAttempts: Number.MAX_SAFE_INTEGER }
+  { intervalMs: refreshInterval, maxAttempts: Number.MAX_SAFE_INTEGER }
 );
 
 watch(autoRefresh, (enabled) => {
@@ -355,13 +355,6 @@ watch(autoRefresh, (enabled) => {
     _startAutoRefresh('');
   } else {
     _stopAutoRefresh();
-  }
-});
-
-watch(refreshInterval, (ms) => {
-  if (autoRefresh.value) {
-    _stopAutoRefresh();
-    _startAutoRefresh('');
   }
 });
 
