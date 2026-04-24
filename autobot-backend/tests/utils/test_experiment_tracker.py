@@ -60,7 +60,7 @@ class TestExperimentTracker:
     def tracker(self):
         return ExperimentTracker()
 
-    @patch("utils.experiment_tracker.get_redis_client")
+    @patch("utils.experiment_tracker.get_async_redis_client")
     @pytest.mark.asyncio
     async def test_log_experiment(self, mock_redis_factory, tracker):
         mock_client = AsyncMock()
@@ -77,7 +77,7 @@ class TestExperimentTracker:
         assert record.name == "Test experiment"
         assert record.experiment_id.startswith("exp-")
 
-    @patch("utils.experiment_tracker.get_redis_client")
+    @patch("utils.experiment_tracker.get_async_redis_client")
     @pytest.mark.asyncio
     async def test_list_experiments(self, mock_redis_factory, tracker):
         mock_client = AsyncMock()
@@ -86,7 +86,7 @@ class TestExperimentTracker:
         results = await tracker.list_experiments()
         assert len(results) == 1
 
-    @patch("utils.experiment_tracker.get_redis_client")
+    @patch("utils.experiment_tracker.get_async_redis_client")
     @pytest.mark.asyncio
     async def test_list_by_area(self, mock_redis_factory, tracker):
         mock_client = AsyncMock()
@@ -99,7 +99,7 @@ class TestExperimentTracker:
         assert len(results) == 1
         assert results[0]["area"] == "inference"
 
-    @patch("utils.experiment_tracker.get_redis_client")
+    @patch("utils.experiment_tracker.get_async_redis_client")
     @pytest.mark.asyncio
     async def test_log_with_no_redis(self, mock_redis_factory, tracker):
         mock_redis_factory.side_effect = _async_return(None)
