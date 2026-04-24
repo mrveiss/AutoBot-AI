@@ -358,6 +358,13 @@ watch(autoRefresh, (enabled) => {
   }
 });
 
+watch(refreshInterval, () => {
+  if (autoRefresh.value) {
+    _stopAutoRefresh();
+    _startAutoRefresh('');
+  }
+});
+
 // Lifecycle
 onMounted(() => {
   loadElementTypes();
