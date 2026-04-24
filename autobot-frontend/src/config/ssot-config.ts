@@ -342,7 +342,7 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 function buildConfig(): AutoBotConfig {
   // VM IP addresses
   const vm: VMConfig = {
-    main: getEnv('VITE_BACKEND_HOST', ''),
+    main: getEnv('VITE_BACKEND_HOST', '') || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'),
     frontend: getEnv('VITE_FRONTEND_HOST', ''),
     npu: getEnv('VITE_NPU_WORKER_HOST', ''),
     redis: getEnv('VITE_REDIS_HOST', ''),
