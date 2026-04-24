@@ -71,6 +71,146 @@ from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_in
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
+
+# ---------------------------------------------------------------------------
+# Response models for filesystem_mcp endpoints
+# ---------------------------------------------------------------------------
+
+
+class FilesystemReadTextResponse(BaseModel):
+    """Response for POST /mcp/read_text_file."""
+
+    success: bool
+    path: str
+    content: str
+    lines: int
+    size_bytes: int
+
+
+class FilesystemReadMediaResponse(BaseModel):
+    """Response for POST /mcp/read_media_file."""
+
+    success: bool
+    path: str
+    mime_type: str
+    base64_data: str
+    size_bytes: int
+
+
+class FilesystemReadMultipleResponse(BaseModel):
+    """Response for POST /mcp/read_multiple_files."""
+
+    success: bool
+    files_read: int
+    files_failed: int
+    results: List[Dict]
+    errors: Optional[List[Dict]] = None
+
+
+class FilesystemWriteFileResponse(BaseModel):
+    """Response for POST /mcp/write_file."""
+
+    success: bool
+    path: str
+    size_bytes: int
+    message: str
+
+
+class FilesystemEditFileResponse(BaseModel):
+    """Response for POST /mcp/edit_file."""
+
+    success: bool
+    path: str
+    edits_applied: int
+    dry_run: bool
+    changes: List[Dict]
+    size_before: int
+    size_after: int
+
+
+class FilesystemCreateDirectoryResponse(BaseModel):
+    """Response for POST /mcp/create_directory."""
+
+    success: bool
+    path: str
+    message: str
+
+
+class FilesystemListDirectoryResponse(BaseModel):
+    """Response for POST /mcp/list_directory."""
+
+    success: bool
+    path: str
+    entry_count: int
+    entries: List[str]
+
+
+class FilesystemListDirectoryWithSizesResponse(BaseModel):
+    """Response for POST /mcp/list_directory_with_sizes."""
+
+    success: bool
+    path: str
+    entry_count: int
+    sorted_by: Optional[str] = None
+    entries: List[Dict]
+
+
+class FilesystemMoveFileResponse(BaseModel):
+    """Response for POST /mcp/move_file."""
+
+    success: bool
+    source: str
+    destination: str
+    message: str
+
+
+class FilesystemSearchFilesResponse(BaseModel):
+    """Response for POST /mcp/search_files."""
+
+    success: bool
+    search_path: str
+    pattern: str
+    matches_found: int
+    matches: List[str]
+
+
+class FilesystemDirectoryTreeResponse(BaseModel):
+    """Response for POST /mcp/directory_tree."""
+
+    success: bool
+    root_path: str
+    tree: Dict
+
+
+class FilesystemFileInfoResponse(BaseModel):
+    """Response for POST /mcp/get_file_info."""
+
+    success: bool
+    path: str
+    name: str
+    type: str
+    size_bytes: int
+    created: str
+    modified: str
+    accessed: str
+    permissions: str
+    mime_type: Optional[str] = None
+
+
+class FilesystemSecurityInfo(BaseModel):
+    path_traversal_blocked: bool
+    symlink_validation: bool
+    max_file_size_bytes: int
+
+
+class FilesystemListAllowedResponse(BaseModel):
+    """Response for GET /mcp/list_allowed_directories."""
+
+    success: bool
+    allowed_directories: List[str]
+    directory_count: int
+    security_info: FilesystemSecurityInfo
+
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
@@ -641,7 +781,7 @@ def _get_discovery_analysis_tools() -> List[MCPTool]:
     operation="get_filesystem_mcp_tools",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_filesystem_mcp_tools(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[MCPTool]:
@@ -667,7 +807,7 @@ async def get_filesystem_mcp_tools(
     operation="read_text_file_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/read_text_file")
+@router.post("/mcp/read_text_file", response_model=FilesystemReadTextResponse)
 async def read_text_file_mcp(
     request: ReadTextFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -725,7 +865,7 @@ async def read_text_file_mcp(
     operation="read_media_file_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/read_media_file")
+@router.post("/mcp/read_media_file", response_model=FilesystemReadMediaResponse)
 async def read_media_file_mcp(
     request: ReadMediaFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -850,7 +990,7 @@ def _separate_batch_read_results(all_results: list) -> tuple:
     operation="read_multiple_files_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/read_multiple_files")
+@router.post("/mcp/read_multiple_files", response_model=FilesystemReadMultipleResponse)
 async def read_multiple_files_mcp(
     request: ReadMultipleFilesRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -884,7 +1024,7 @@ async def read_multiple_files_mcp(
     operation="write_file_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/write_file")
+@router.post("/mcp/write_file", response_model=FilesystemWriteFileResponse)
 async def write_file_mcp(
     request: WriteFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -984,7 +1124,7 @@ def _apply_edits_to_content(content: str, edits: list) -> tuple:
     operation="edit_file_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/edit_file")
+@router.post("/mcp/edit_file", response_model=FilesystemEditFileResponse)
 async def edit_file_mcp(
     request: EditFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1034,7 +1174,7 @@ async def edit_file_mcp(
     operation="create_directory_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/create_directory")
+@router.post("/mcp/create_directory", response_model=FilesystemCreateDirectoryResponse)
 async def create_directory_mcp(
     request: CreateDirectoryRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1063,7 +1203,7 @@ async def create_directory_mcp(
     operation="list_directory_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/list_directory")
+@router.post("/mcp/list_directory", response_model=FilesystemListDirectoryResponse)
 async def list_directory_mcp(
     request: ListDirectoryRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1189,7 +1329,7 @@ async def _build_directory_entries_with_sizes(path: str) -> list:
     operation="list_directory_with_sizes_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/list_directory_with_sizes")
+@router.post("/mcp/list_directory_with_sizes", response_model=FilesystemListDirectoryWithSizesResponse)
 async def list_directory_with_sizes_mcp(
     request: ListDirectoryWithSizesRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1231,7 +1371,7 @@ async def list_directory_with_sizes_mcp(
     operation="move_file_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/move_file")
+@router.post("/mcp/move_file", response_model=FilesystemMoveFileResponse)
 async def move_file_mcp(
     request: MoveFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1272,7 +1412,7 @@ async def move_file_mcp(
     operation="search_files_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/search_files")
+@router.post("/mcp/search_files", response_model=FilesystemSearchFilesResponse)
 async def search_files_mcp(
     request: SearchFilesRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1324,7 +1464,7 @@ async def search_files_mcp(
     operation="directory_tree_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/directory_tree")
+@router.post("/mcp/directory_tree", response_model=FilesystemDirectoryTreeResponse)
 async def directory_tree_mcp(
     request: DirectoryTreeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1380,7 +1520,7 @@ async def directory_tree_mcp(
     operation="get_file_info_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.post("/mcp/get_file_info")
+@router.post("/mcp/get_file_info", response_model=FilesystemFileInfoResponse)
 async def get_file_info_mcp(
     request: GetFileInfoRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1427,7 +1567,7 @@ async def get_file_info_mcp(
     operation="list_allowed_directories_mcp",
     error_code_prefix="FILESYSTEM_MCP",
 )
-@router.get("/mcp/list_allowed_directories")
+@router.get("/mcp/list_allowed_directories", response_model=FilesystemListAllowedResponse)
 async def list_allowed_directories_mcp(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Metadata:

@@ -28,6 +28,142 @@ from workflow_scheduler import WorkflowStatus, workflow_scheduler
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
+# ---------------------------------------------------------------------------
+# Response models for scheduler endpoints
+# ---------------------------------------------------------------------------
+
+from typing import Any, Dict  # noqa: E402 — after logger init
+
+
+class SchedulerWorkflowCreateResponse(BaseModel):
+    """Response for POST /schedule."""
+
+    success: bool
+    workflow_id: str
+    scheduled_workflow: Any
+
+
+class SchedulerWorkflowListResponse(BaseModel):
+    """Response for GET /workflows."""
+
+    success: bool
+    workflows: List[Any]
+    total: int
+
+
+class SchedulerWorkflowDetailResponse(BaseModel):
+    """Response for GET /workflows/{workflow_id}."""
+
+    success: bool
+    workflow: Any
+
+
+class SchedulerRescheduleWorkflowItem(BaseModel):
+    id: str
+    scheduled_time: str
+    priority: str
+    status: str
+    complexity: str
+
+
+class SchedulerRescheduleResponse(BaseModel):
+    """Response for PUT /workflows/{workflow_id}/reschedule."""
+
+    success: bool
+    message: str
+    workflow: SchedulerRescheduleWorkflowItem
+
+
+class SchedulerCancelResponse(BaseModel):
+    """Response for DELETE /workflows/{workflow_id}."""
+
+    success: bool
+    message: str
+    workflow_id: str
+
+
+class SchedulerStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    success: bool
+    scheduler_status: Any
+
+
+class SchedulerQueueWorkflowItem(BaseModel):
+    id: str
+    name: str
+    priority: str
+    complexity: str
+    estimated_duration_minutes: int
+
+
+class SchedulerQueueResponse(BaseModel):
+    """Response for GET /queue."""
+
+    success: bool
+    queue_status: Any
+    queued_workflows: List[SchedulerQueueWorkflowItem]
+    running_workflows: List[SchedulerQueueWorkflowItem]
+
+
+class SchedulerQueueControlResponse(BaseModel):
+    """Response for POST /queue/control."""
+
+    success: bool
+    message: str
+    queue_status: Any
+
+
+class SchedulerStartResponse(BaseModel):
+    """Response for POST /start."""
+
+    success: bool
+    message: str
+    status: Any
+
+
+class SchedulerStopResponse(BaseModel):
+    """Response for POST /stop."""
+
+    success: bool
+    message: str
+
+
+class SchedulerTemplateWorkflowItem(BaseModel):
+    id: str
+    name: str
+    scheduled_time: str
+    priority: str
+    status: str
+    complexity: str
+
+
+class SchedulerTemplateScheduleResponse(BaseModel):
+    """Response for GET /templates/schedule/{template_id}."""
+
+    success: bool
+    workflow_id: str
+    template_info: Dict[str, Any]
+    scheduled_workflow: SchedulerTemplateWorkflowItem
+
+
+class SchedulerStatsResponse(BaseModel):
+    """Response for GET /stats."""
+
+    success: bool
+    statistics: Dict[str, Any]
+
+
+class SchedulerBatchScheduleResponse(BaseModel):
+    """Response for POST /batch-schedule."""
+
+    success: bool
+    scheduled_workflows: List[str]
+    errors: List[str]
+    total_scheduled: int
+    total_errors: int
+
+
 class ScheduleWorkflowRequest(BaseModel):
     user_message: str
     scheduled_time: Union[str, datetime]
@@ -59,7 +195,7 @@ class QueueControlRequest(BaseModel):
     operation="schedule_workflow",
     error_code_prefix="SCHEDULER",
 )
-@router.post("/schedule")
+@router.post("/schedule", response_model=SchedulerWorkflowCreateResponse)
 async def schedule_workflow(request: ScheduleWorkflowRequest):
     """Schedule a workflow for future execution"""
     # Validate priority
@@ -103,7 +239,7 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
     operation="list_scheduled_workflows",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/workflows")
+@router.get("/workflows", response_model=SchedulerWorkflowListResponse)
 async def list_scheduled_workflows(
     status: Optional[str] = Query(None, description="Filter by status"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
@@ -142,7 +278,7 @@ async def list_scheduled_workflows(
     operation="get_workflow_details",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/workflows/{workflow_id}")
+@router.get("/workflows/{workflow_id}", response_model=SchedulerWorkflowDetailResponse)
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific scheduled workflow (Issue #372)"""
     workflow = workflow_scheduler.get_workflow(workflow_id)
@@ -161,7 +297,7 @@ async def get_workflow_details(workflow_id: str):
     operation="reschedule_workflow",
     error_code_prefix="SCHEDULER",
 )
-@router.put("/workflows/{workflow_id}/reschedule")
+@router.put("/workflows/{workflow_id}/reschedule", response_model=SchedulerRescheduleResponse)
 async def reschedule_workflow(workflow_id: str, request: RescheduleRequest):
     """Reschedule an existing workflow"""
     # Parse new priority if provided
@@ -204,7 +340,7 @@ async def reschedule_workflow(workflow_id: str, request: RescheduleRequest):
     operation="cancel_workflow",
     error_code_prefix="SCHEDULER",
 )
-@router.delete("/workflows/{workflow_id}")
+@router.delete("/workflows/{workflow_id}", response_model=SchedulerCancelResponse)
 async def cancel_workflow(workflow_id: str):
     """Cancel a scheduled or queued workflow"""
     success = workflow_scheduler.cancel_workflow(workflow_id)
@@ -226,7 +362,7 @@ async def cancel_workflow(workflow_id: str):
     operation="get_scheduler_status",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/status")
+@router.get("/status", response_model=SchedulerStatusResponse)
 async def get_scheduler_status():
     """Get current scheduler and queue status"""
     status = workflow_scheduler.get_scheduler_status()
@@ -239,7 +375,7 @@ async def get_scheduler_status():
     operation="get_queue_status",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/queue")
+@router.get("/queue", response_model=SchedulerQueueResponse)
 async def get_queue_status():
     """Get current queue status and workflows"""
     queue_status = workflow_scheduler.queue.get_queue_status()
@@ -284,7 +420,7 @@ async def get_queue_status():
     operation="control_queue",
     error_code_prefix="SCHEDULER",
 )
-@router.post("/queue/control")
+@router.post("/queue/control", response_model=SchedulerQueueControlResponse)
 async def control_queue(request: QueueControlRequest):
     """Control queue operations (pause, resume, set max concurrent)"""
     if request.action == "pause":
@@ -316,7 +452,7 @@ async def control_queue(request: QueueControlRequest):
     operation="start_scheduler",
     error_code_prefix="SCHEDULER",
 )
-@router.post("/start")
+@router.post("/start", response_model=SchedulerStartResponse)
 async def start_scheduler():
     """Start the workflow scheduler"""
     await workflow_scheduler.start()
@@ -333,7 +469,7 @@ async def start_scheduler():
     operation="stop_scheduler",
     error_code_prefix="SCHEDULER",
 )
-@router.post("/stop")
+@router.post("/stop", response_model=SchedulerStopResponse)
 async def stop_scheduler():
     """Stop the workflow scheduler"""
     await workflow_scheduler.stop()
@@ -416,7 +552,7 @@ def _build_template_schedule_request(
     operation="schedule_template_workflow",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/templates/schedule/{template_id}")
+@router.get("/templates/schedule/{template_id}", response_model=SchedulerTemplateScheduleResponse)
 async def schedule_template_workflow(
     template_id: str,
     scheduled_time: str = Query(..., description="When to execute the workflow"),
@@ -476,7 +612,7 @@ async def schedule_template_workflow(
     operation="get_scheduler_statistics",
     error_code_prefix="SCHEDULER",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=SchedulerStatsResponse)
 async def get_scheduler_statistics():
     """Get detailed scheduler statistics"""
     status = workflow_scheduler.get_scheduler_status()
@@ -531,7 +667,7 @@ async def get_scheduler_statistics():
     operation="batch_schedule_workflows",
     error_code_prefix="SCHEDULER",
 )
-@router.post("/batch-schedule")
+@router.post("/batch-schedule", response_model=SchedulerBatchScheduleResponse)
 async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
     """Schedule multiple workflows in batch"""
     scheduled_workflows = []
