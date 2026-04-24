@@ -520,7 +520,7 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
     operation="calculate_debt",
     error_code_prefix="DEBT",
 )
-@router.post("/calculate")
+@router.post("/calculate", response_model=None)
 async def calculate_technical_debt(
     request: DebtCalculationRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -569,7 +569,7 @@ async def calculate_technical_debt(
     operation="get_debt_summary",
     error_code_prefix="DEBT",
 )
-@router.get("/summary")
+@router.get("/summary", response_model=None)
 async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     """
     Get summary of current technical debt (Issue #543 - refactored).
@@ -601,7 +601,7 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     operation="get_debt_by_category",
     error_code_prefix="DEBT",
 )
-@router.get("/by-category/{category}")
+@router.get("/by-category/{category}", response_model=None)
 async def get_debt_by_category(
     category: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -701,7 +701,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     operation="get_debt_trends",
     error_code_prefix="DEBT",
 )
-@router.get("/trends")
+@router.get("/trends", response_model=None)
 async def get_debt_trends(
     days: int = Query(default=30, ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
@@ -733,7 +733,7 @@ async def get_debt_trends(
     operation="get_roi_priorities",
     error_code_prefix="DEBT",
 )
-@router.get("/roi-priorities")
+@router.get("/roi-priorities", response_model=None)
 async def get_roi_priorities(
     limit: int = Query(default=20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -859,7 +859,7 @@ def _generate_markdown_report(debt_data: dict) -> str:
     operation="get_debt_report",
     error_code_prefix="DEBT",
 )
-@router.get("/report")
+@router.get("/report", response_model=None)
 async def get_debt_report(
     format: str = Query(default="json", description="json or markdown"),
     admin_check: bool = Depends(check_admin_permission),
