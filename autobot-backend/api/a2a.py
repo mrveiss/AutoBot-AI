@@ -42,6 +42,12 @@ from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.types import Task
 from auth_middleware import check_admin_permission
+from .schemas_common import (
+    A2ATaskCancelResponse,
+    A2ATaskStatsResponse,
+    A2ATaskSubmitResponse,
+    A2ATaskTraceResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +207,7 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     summary="Submit A2A task",
     tags=["a2a"],
     status_code=202,
+    response_model=A2ATaskSubmitResponse,
 )
 async def submit_task(
     body: TaskSendRequest,
@@ -260,6 +267,7 @@ async def submit_task(
     "/tasks",
     summary="List A2A tasks",
     tags=["a2a"],
+    response_model=None,
 )
 async def list_tasks() -> list:
     """Return all A2A tasks with their current state and artifacts."""
@@ -271,6 +279,7 @@ async def list_tasks() -> list:
     "/tasks/{task_id}",
     summary="Get A2A task",
     tags=["a2a"],
+    response_model=None,
 )
 async def get_task(task_id: str) -> Dict[str, Any]:
     """Return a specific task by ID, including state and any artifacts."""
@@ -285,6 +294,7 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     "/tasks/{task_id}/stream",
     summary="Stream A2A task events (SSE)",
     tags=["a2a"],
+    response_model=None,
 )
 async def stream_task_events(task_id: str) -> StreamingResponse:
     """
@@ -398,6 +408,7 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
     "/tasks/{task_id}/trace",
     summary="Get A2A task audit trace",
     tags=["a2a"],
+    response_model=A2ATaskTraceResponse,
 )
 async def get_task_trace(task_id: str) -> Dict[str, Any]:
     """
@@ -423,6 +434,7 @@ async def get_task_trace(task_id: str) -> Dict[str, Any]:
     "/tasks/{task_id}",
     summary="Cancel A2A task",
     tags=["a2a"],
+    response_model=A2ATaskCancelResponse,
 )
 async def cancel_task(task_id: str) -> Dict[str, str]:
     """Cancel a pending or in-progress task."""
@@ -442,6 +454,7 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
     "/stats",
     summary="A2A task statistics",
     tags=["a2a"],
+    response_model=A2ATaskStatsResponse,
 )
 async def task_stats() -> Dict[str, Any]:
     """Return task counts broken down by state."""
@@ -463,6 +476,7 @@ async def task_stats() -> Dict[str, Any]:
     "/capabilities",
     summary="Verify local capability claims",
     tags=["a2a"],
+    response_model=None,
 )
 async def local_capabilities() -> Dict[str, Any]:
     """
@@ -480,6 +494,7 @@ async def local_capabilities() -> Dict[str, Any]:
     "/capabilities/verify",
     summary="Verify a remote agent's capabilities",
     tags=["a2a"],
+    response_model=None,
 )
 async def verify_remote_capabilities(body: RemoteVerifyRequest) -> Dict[str, Any]:
     """

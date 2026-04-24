@@ -3749,3 +3749,159 @@ class AdminFileReadResponse(BaseModel):
     """Response for GET /files/read (admin read file)."""
 
     content: str
+# ---------------------------------------------------------------------------
+# a2a.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class A2ATaskSubmitResponse(BaseModel):
+    """Response for POST /a2a/tasks — task accepted."""
+
+    id: str
+    state: str
+    traceId: str
+
+
+class A2ATaskTraceResponse(BaseModel):
+    """Response for GET /a2a/tasks/{id}/trace — audit trace."""
+
+    task_id: str
+    trace: Optional[Any]
+    events: List[Any]
+
+
+class A2ATaskCancelResponse(BaseModel):
+    """Response for DELETE /a2a/tasks/{id} — task cancelled."""
+
+    id: str
+    state: str
+
+
+class A2ATaskStatsResponse(BaseModel):
+    """Response for GET /a2a/stats — task state counts."""
+
+    counts: Dict[str, int]
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# analytics_agents.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class AgentPerformanceSummary(BaseModel):
+    """Nested summary block in AgentAllPerformanceResponse."""
+
+    total_tasks: int
+    total_completed: int
+    total_failed: int
+    avg_success_rate: float
+
+
+class AgentAllPerformanceResponse(BaseModel):
+    """Response for GET /analytics/agents/performance."""
+
+    agents: List[Any]
+    total_agents: int
+    summary: AgentPerformanceSummary
+
+
+class AgentHistoryResponse(BaseModel):
+    """Response for GET /analytics/agents/{id}/history."""
+
+    agent_id: str
+    tasks: List[Any]
+    count: int
+
+
+class AgentRecentTasksResponse(BaseModel):
+    """Response for GET /analytics/agents/tasks/recent."""
+
+    tasks: List[Any]
+    count: int
+
+
+class AgentRecommendationSummaryResponse(BaseModel):
+    """Response for GET /analytics/agents/recommendations."""
+
+    recommendations: List[Any]
+    total_agents_analyzed: int
+    agents_with_issues: int
+
+
+class AgentTypesResponse(BaseModel):
+    """Response for GET /analytics/agents/types."""
+
+    types: List[str]
+    statuses: List[str]
+
+
+class AgentTrackTaskStartResponse(BaseModel):
+    """Response for POST /analytics/agents/tasks/start."""
+
+    status: str
+    task: Any
+
+
+# ---------------------------------------------------------------------------
+# analytics_behavior.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class BehaviorTrackEventResponse(BaseModel):
+    """Response for POST /analytics/behavior/track."""
+
+    status: str
+    event_type: str
+    feature: str
+    timestamp: str
+
+
+class BehaviorRecentEventsResponse(BaseModel):
+    """Response for GET /analytics/behavior/events/recent."""
+
+    count: int
+    events: List[Any]
+
+
+class BehaviorFeatureComparisonResponse(BaseModel):
+    """Response for GET /analytics/behavior/features/comparison."""
+
+    timestamp: str
+    comparison: List[Any]
+    total_features: int
+
+
+class BehaviorPeakUsageResponse(BaseModel):
+    """Response for GET /analytics/behavior/stats/peak."""
+
+    period_days: int
+    peak_hours: List[Any]
+    peak_period: str
+    recommendation: str
+
+
+class BehaviorSummaryResponse(BaseModel):
+    """Response for GET /analytics/behavior/summary."""
+
+    timestamp: str
+    engagement: Any
+    feature_popularity: List[Any]
+    most_popular_feature: Optional[str]
+    weekly_stats: Any
+    peak_hours: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# analytics_performance.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class PerformanceTogglePatternResponse(BaseModel):
+    """Response for POST /performance/patterns/{id}/toggle."""
+
+    pattern_id: str
+    enabled: bool
+    message: str
+
+
