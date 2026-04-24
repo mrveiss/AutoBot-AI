@@ -17,6 +17,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
@@ -1410,19 +1411,4 @@ class SystemValidator:
         return recommendations
 
 
-# Global validator instance (thread-safe)
-import threading
-
-_system_validator = None
-_system_validator_lock = threading.Lock()
-
-
-def get_system_validator() -> SystemValidator:
-    """Get the global system validator instance (thread-safe)"""
-    global _system_validator
-    if _system_validator is None:
-        with _system_validator_lock:
-            # Double-check after acquiring lock
-            if _system_validator is None:
-                _system_validator = SystemValidator()
-    return _system_validator
+get_system_validator = lazy_singleton(SystemValidator)

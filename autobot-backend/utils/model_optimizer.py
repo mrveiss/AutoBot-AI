@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
@@ -484,17 +484,4 @@ class ModelOptimizer:
         ]
 
 
-# Global optimizer instance (thread-safe)
-_model_optimizer: Optional[ModelOptimizer] = None
-_model_optimizer_lock = threading.Lock()
-
-
-def get_model_optimizer() -> ModelOptimizer:
-    """Get the global model optimizer instance (thread-safe)."""
-    global _model_optimizer
-    if _model_optimizer is None:
-        with _model_optimizer_lock:
-            # Double-check after acquiring lock
-            if _model_optimizer is None:
-                _model_optimizer = ModelOptimizer()
-    return _model_optimizer
+get_model_optimizer = lazy_singleton(ModelOptimizer)
