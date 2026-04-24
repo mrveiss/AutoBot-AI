@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
@@ -83,12 +84,14 @@ class FeatureMetrics:
     bounce_rate: float = 0.0
 
 
-class UserBehaviorAnalytics:
+class UserBehaviorAnalytics(AsyncRedisClientMixin):
     """
     Service for tracking and analyzing user behavior patterns.
 
     Uses Redis for real-time event storage and aggregation.
     """
+
+    _redis_database = RedisDatabase.ANALYTICS
 
     # Redis key prefixes
     EVENTS_KEY = "user_behavior:events"
@@ -98,15 +101,9 @@ class UserBehaviorAnalytics:
     USER_JOURNEY_KEY = "user_behavior:journey"
     HEATMAP_KEY = "user_behavior:heatmap"
 
-    def __init__(self):
-        """Initialize analytics service with lazy Redis client."""
-        self._redis = None
-
     async def get_redis(self):
-        """Get Redis client for analytics database"""
-        if self._redis is None:
-            self._redis = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
-        return self._redis
+        """Get Redis client for analytics database."""
+        return await self._get_redis()
 
     def _build_event_operations(self, redis, event: UserEvent) -> list:
         """Helper for track_event. Ref: #1088.
