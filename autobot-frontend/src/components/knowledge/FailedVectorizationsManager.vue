@@ -46,7 +46,7 @@
     <!-- Empty State -->
     <EmptyState
       v-else-if="failedJobs.length === 0"
-      icon="fas fa-check-circle"
+      icon="check-circle"
       :message="$t('knowledge.failedVectorizations.noFailedJobs')"
       variant="success"
     />

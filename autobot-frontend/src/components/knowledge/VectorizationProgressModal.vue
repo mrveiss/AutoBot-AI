@@ -50,7 +50,7 @@
         <div class="document-list">
           <EmptyState
             v-if="documentList.length === 0"
-            icon="fas fa-inbox"
+            icon="inbox"
             :message="$t('knowledge.vectorization.noDocuments')"
           />
 

@@ -137,7 +137,7 @@
         <div v-else class="tree-container">
           <EmptyState
             v-if="filteredTree.length === 0"
-            icon="fas fa-folder-open"
+            icon="folder-open"
             :message="$t('knowledge.browser.noItemsFound')"
           />
           <TreeNodeComponent

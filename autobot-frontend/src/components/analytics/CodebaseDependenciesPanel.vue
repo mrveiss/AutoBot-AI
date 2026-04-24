@@ -201,7 +201,7 @@ const emit = defineEmits<{
 
     <EmptyState
       v-else
-      icon="fas fa-project-diagram"
+      icon="project-diagram"
       :message="$t('analytics.codebase.dependencies.noData')"
     >
       <template #actions>
@@ -255,7 +255,7 @@ const emit = defineEmits<{
     <!-- Empty state -->
     <EmptyState
       v-else-if="!importTreeLoading"
-      icon="fas fa-sitemap"
+      icon="sitemap"
       :message="$t('analytics.codebase.importTree.noData')"
       variant="info"
     >
@@ -312,7 +312,7 @@ const emit = defineEmits<{
     <!-- Empty state -->
     <EmptyState
       v-else-if="!callGraphLoading"
-      icon="fas fa-project-diagram"
+      icon="project-diagram"
       :message="$t('analytics.codebase.callGraph.noData')"
       variant="info"
     >

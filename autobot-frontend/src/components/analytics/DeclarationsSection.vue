@@ -82,7 +82,7 @@
     </div>
     <EmptyState
       v-else-if="!loading"
-      icon="fas fa-code"
+      icon="code"
       :message="$t('analytics.declarations.emptyMessage')"
     />
   </div>

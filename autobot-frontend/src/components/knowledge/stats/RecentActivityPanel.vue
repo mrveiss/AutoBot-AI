@@ -13,7 +13,7 @@
       </div>
       <EmptyState
         v-if="activities.length === 0"
-        icon="fas fa-clock"
+        icon="clock"
         :message="$t('knowledge.stats.recentActivity.noActivity')"
       />
     </div>

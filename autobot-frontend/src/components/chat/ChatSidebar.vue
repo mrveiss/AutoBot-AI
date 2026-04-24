@@ -145,7 +145,7 @@
           <!-- Empty state -->
           <EmptyState
             v-if="store.sessions.length === 0"
-            icon="fas fa-comments"
+            icon="comments"
             :message="$t('chat.sidebar.noSessions')"
           />
         </div>

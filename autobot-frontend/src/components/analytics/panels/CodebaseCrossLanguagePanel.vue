@@ -312,7 +312,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-language"
+      icon="language"
       :message="$t('analytics.codebase.crossLanguage.noData')"
     />
   </div>

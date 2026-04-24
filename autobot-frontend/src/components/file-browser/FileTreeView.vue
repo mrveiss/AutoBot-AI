@@ -42,7 +42,7 @@
 
       <EmptyState
         v-if="directoryTree.length === 0"
-        icon="fas fa-folder-open"
+        icon="folder-open"
         :message="$t('fileBrowser.treeView.noStructure')"
       />
     </div>

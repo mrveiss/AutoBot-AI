@@ -546,7 +546,7 @@
 
     <EmptyState
       v-if="!rootPath && !securityScore && !performanceScore && !redisHealth"
-      icon="fas fa-shield-alt"
+      icon="shield-alt"
       :message="$t('analytics.codebase.intelligence.noScoresData')"
     />
   </div>

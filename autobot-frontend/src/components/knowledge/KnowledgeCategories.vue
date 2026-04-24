@@ -99,7 +99,7 @@
 
       <EmptyState
         v-else-if="categoryDocuments.length === 0"
-        icon="fas fa-file-alt"
+        icon="file-alt"
         :message="$t('knowledge.categories.noDocuments')"
       />
 
