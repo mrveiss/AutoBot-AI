@@ -1876,3 +1876,312 @@ class MetricsDashboardResponse(BaseModel):
     dashboard: Dict[str, Any]
 
 
+
+# ---------------------------------------------------------------------------
+# logs.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class LogSourcesResponse(BaseModel):
+    """Response for GET /logs/sources."""
+
+    file_logs: List[Any]
+    container_logs: List[Any]
+    total_sources: int
+
+
+class LogRecentResponse(BaseModel):
+    """Response for GET /logs/recent."""
+
+    entries: List[Any]
+    count: int
+    limit: int
+    source: str
+    error: Optional[str] = None
+
+
+class LogReadResponse(BaseModel):
+    """Response for GET /logs/read/{filename}."""
+
+    filename: str
+    lines: List[str]
+    total_lines: int
+    offset: int
+    count: int
+
+
+class LogContainerResponse(BaseModel):
+    """Response for GET /logs/container/{service}."""
+
+    service: str
+    container: str
+    lines: List[Any]
+    count: int
+    source_type: str
+
+
+class LogUnifiedResponse(BaseModel):
+    """Response for GET /logs/unified."""
+
+    logs: List[Any]
+    total_count: int
+    sources_included: List[str]
+
+
+class LogSearchResponse(BaseModel):
+    """Response for GET /logs/search."""
+
+    query: str
+    results: List[Any]
+    count: int
+    truncated: bool
+
+
+# ---------------------------------------------------------------------------
+# git_mcp.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class GitMCPOperationResponse(BaseModel):
+    """Shared response for all POST /git/mcp/* operation endpoints.
+
+    All git MCP operation endpoints return the same stable shape.
+    Extra fields (repository-specific) are allowed through.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+    repository: str
+    output: str
+    timestamp: str
+    errors: Optional[str] = None
+
+
+class GitMCPInfoResponse(BaseModel):
+    """Response for GET /git/mcp/info."""
+
+    success: bool
+    repositories: List[Any]
+    repository_count: int
+    timestamp: str
+
+
+class GitMCPServiceStatusResponse(BaseModel):
+    """Response for GET /git/mcp/service_status."""
+
+    status: str
+    service: str
+    rate_limit: Dict[str, Any]
+    configuration: Dict[str, Any]
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# analytics_llm_patterns.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class LLMPatternsHealthResponse(BaseModel):
+    """Response for GET /llm-patterns/health."""
+
+    status: str
+    service: str
+    deprecated: bool
+    use_instead: str
+    features: List[str]
+    supported_categories: List[str]
+    optimization_types: List[str]
+
+
+class LLMPatternsAnalyzeResponse(BaseModel):
+    """Response for POST /llm-patterns/analyze."""
+
+    prompt_hash: str
+    category: str
+    estimated_tokens: int
+    estimated_cost: float
+    issues: List[Any]
+    recommendations: List[str]
+    cache_potential: bool
+
+
+class LLMPatternsRecordResponse(BaseModel):
+    """Response for POST /llm-patterns/record."""
+
+    recorded: bool
+    prompt_hash: str
+    category: str
+    cost: float
+    cache_count: int
+
+
+class LLMPatternsStatsResponse(BaseModel):
+    """Response for GET /llm-patterns/stats.
+
+    Shape includes totals and by_date/by_model/by_category which are dynamic;
+    extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    period_days: int
+    total_requests: int
+    total_cost: float
+    successful_requests: int
+
+
+class LLMPatternsCacheOpportunitiesResponse(BaseModel):
+    """Response for GET /llm-patterns/cache-opportunities."""
+
+    opportunities: List[Any]
+    count: int
+    min_occurrences: int
+
+
+class LLMPatternsRecommendationsResponse(BaseModel):
+    """Response for GET /llm-patterns/recommendations."""
+
+    recommendations: List[Any]
+
+
+class LLMPatternsModelComparisonResponse(BaseModel):
+    """Response for GET /llm-patterns/model-comparison."""
+
+    models: List[Any]
+    period_days: int
+
+
+class LLMPatternsCategoryDistributionResponse(BaseModel):
+    """Response for GET /llm-patterns/category-distribution."""
+
+    categories: List[Any]
+    total_count: int
+    total_cost: float
+
+
+class LLMPatternsCostBreakdownResponse(BaseModel):
+    """Response for GET /llm-patterns/cost-breakdown."""
+
+    period_days: int
+    total_cost: float
+    total_requests: int
+    avg_cost_per_request: float
+    by_model: List[Any]
+    by_category: List[Any]
+    daily_trend: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# voice.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class VoiceListenResponse(BaseModel):
+    """Response for POST /voice/listen (success path)."""
+
+    message: str
+    text: str
+
+
+class VoiceSpeakResponse(BaseModel):
+    """Response for POST /voice/speak (success path)."""
+
+    message: str
+
+
+class VoiceDeleteResponse(BaseModel):
+    """Response for DELETE /voice/voices/{voice_id} (success path)."""
+
+    deleted: str
+
+
+class VoiceTranscribeResponse(BaseModel):
+    """Response for POST /voice/transcribe."""
+
+    text: str
+    language: str
+    confidence: float
+
+
+# ---------------------------------------------------------------------------
+# skills_governance.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class SkillsGapResponse(BaseModel):
+    """Response for POST /skills-governance/gaps.
+
+    Both success and failure paths share this shape.
+    """
+
+    success: bool
+    errors: Optional[List[str]] = None
+    draft: Optional[Any] = None
+    draft_id: Optional[str] = None
+    name: Optional[str] = None
+    tools_found: Optional[List[str]] = None
+
+
+class SkillsDraftListItem(BaseModel):
+    """Single draft entry in the list response."""
+
+    id: str
+    name: str
+    version: Optional[Any] = None
+    gap_reason: Optional[str] = None
+    created_at: Optional[Any] = None
+    trust_level: Optional[Any] = None
+
+
+class SkillsDraftTestResponse(BaseModel):
+    """Response for POST /skills-governance/drafts/{skill_id}/test."""
+
+    valid: bool
+    errors: List[Any]
+    tools_found: List[str]
+
+
+class SkillsDraftPromoteResponse(BaseModel):
+    """Response for POST /skills-governance/drafts/{skill_id}/promote."""
+
+    promoted: bool
+    path: str
+    name: str
+
+
+class SkillsApprovalItem(BaseModel):
+    """Single approval entry in the list response."""
+
+    id: str
+    skill_id: str
+    requested_by: Optional[str] = None
+    requested_at: Optional[Any] = None
+    reason: Optional[str] = None
+    status: str
+
+
+class SkillsApprovalDecisionResponse(BaseModel):
+    """Response for POST /skills-governance/approvals/{approval_id}."""
+
+    approval_id: str
+    status: str
+
+
+class SkillsGovernanceConfigResponse(BaseModel):
+    """Response for GET /skills-governance/ (may return default dict or full config).
+
+    Extra fields allowed to cover the default-dict path.
+    """
+
+    model_config = {"extra": "allow"}
+
+    mode: Any
+
+
+class SkillsGovernanceUpdateResponse(BaseModel):
+    """Response for PUT /skills-governance/."""
+
+    mode: Any
+
+
