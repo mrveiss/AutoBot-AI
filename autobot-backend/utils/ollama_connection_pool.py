@@ -355,56 +355,76 @@ class OllamaConnectionPool:
 # Global connection pool instance (thread-safe)
 import threading
 
-_ollama_pool: Optional[OllamaConnectionPool] = None
-_ollama_pool_lock = threading.Lock()
+
+class _OllamaPoolManager:
+    """Owns the lock and instance reference for the global OllamaConnectionPool.
+
+    Encapsulates three lifecycle operations that all share the same lock:
+    get (lazy construction), configure (replace), and close (dispose + clear).
+    """
+
+    def __init__(self) -> None:
+        self._lock: threading.Lock = threading.Lock()
+        self._pool: Optional[OllamaConnectionPool] = None
+
+    def get(self) -> OllamaConnectionPool:
+        """Return the pool, constructing it lazily on first call (double-checked locking).
+
+        Issue #1154: reads max_connections from SSOT config
+        (AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS) on first initialization.
+        """
+        if self._pool is None:
+            with self._lock:
+                if self._pool is None:
+                    from autobot_shared.ssot_config import get_config
+
+                    max_conn = get_config().llm.ollama_pool_max_connections
+                    self._pool = OllamaConnectionPool(ConnectionPoolConfig(max_connections=max_conn))
+        return self._pool
+
+    def configure(self, config: ConnectionPoolConfig) -> None:
+        """Replace the pool with a new instance built from config (thread-safe)."""
+        with self._lock:
+            self._pool = OllamaConnectionPool(config)
+            logger.info("Ollama connection pool reconfigured")
+
+    async def close(self) -> None:
+        """Drain active connections then clear the pool reference (thread-safe)."""
+        with self._lock:
+            pool = self._pool
+            if pool is None:
+                return
+
+        # Wait for active connections to complete (check without holding lock)
+        while True:
+            async with pool._stats_lock:
+                active = pool.active_connections
+            if active == 0:
+                break
+            logger.info("Waiting for %s active connections to complete", active)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
+
+        with self._lock:
+            logger.info("Ollama connection pool cleaned up")
+            self._pool = None
+
+
+_manager = _OllamaPoolManager()
 
 
 def get_ollama_pool() -> OllamaConnectionPool:
-    """Get the global Ollama connection pool instance (thread-safe).
-
-    Issue #1154: reads max_connections from SSOT config
-    (AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS) on first initialization.
-    """
-    global _ollama_pool
-    if _ollama_pool is None:
-        with _ollama_pool_lock:
-            # Double-check after acquiring lock
-            if _ollama_pool is None:
-                from autobot_shared.ssot_config import get_config
-
-                max_conn = get_config().llm.ollama_pool_max_connections
-                _ollama_pool = OllamaConnectionPool(ConnectionPoolConfig(max_connections=max_conn))
-    return _ollama_pool
+    """Get the global Ollama connection pool instance (thread-safe)."""
+    return _manager.get()
 
 
-def configure_ollama_pool(config: ConnectionPoolConfig):
-    """Configure the global Ollama connection pool (thread-safe)"""
-    global _ollama_pool
-    with _ollama_pool_lock:
-        _ollama_pool = OllamaConnectionPool(config)
-        logger.info("Ollama connection pool reconfigured")
+def configure_ollama_pool(config: ConnectionPoolConfig) -> None:
+    """Configure the global Ollama connection pool (thread-safe)."""
+    _manager.configure(config)
 
 
-async def cleanup_ollama_pool():
-    """Cleanup the global Ollama connection pool (thread-safe)"""
-    global _ollama_pool
-    with _ollama_pool_lock:
-        pool = _ollama_pool
-        if pool is None:
-            return
-
-    # Wait for active connections to complete (check without holding lock)
-    while True:
-        async with pool._stats_lock:
-            active = pool.active_connections
-        if active == 0:
-            break
-        logger.info("Waiting for %s active connections to complete", active)
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-    with _ollama_pool_lock:
-        logger.info("Ollama connection pool cleaned up")
-        _ollama_pool = None
+async def cleanup_ollama_pool() -> None:
+    """Cleanup the global Ollama connection pool (thread-safe)."""
+    await _manager.close()
 
 
 # Convenience function for one-off requests
