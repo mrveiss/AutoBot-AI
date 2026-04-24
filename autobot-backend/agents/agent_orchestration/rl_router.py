@@ -23,6 +23,8 @@ import logging
 import time
 from typing import Dict, List, Tuple
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -76,7 +78,7 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
 _LENGTH_BUCKETS = [(10, "short"), (30, "medium"), (60, "long")]
 
 
-class RLRouter:
+class RLRouter(AsyncRedisClientMixin):
     """
     Tabular Q-learning router for agent task routing.
 
@@ -91,8 +93,10 @@ class RLRouter:
     routing result so the caller can pass it back to :meth:`record_outcome`.
     """
 
+    _redis_database = "main"
+
     def __init__(self) -> None:
-        self._redis = None
+        pass
 
     # ------------------------------------------------------------------
     # Public API
@@ -321,18 +325,6 @@ class RLRouter:
                 await self._q_update(state_key, entry["action"], entry["reward"])
             except Exception as exc:
                 logger.debug("RL replay-update entry failed: %s", exc)
-
-    # ------------------------------------------------------------------
-    # Redis helper
-    # ------------------------------------------------------------------
-
-    async def _get_redis(self):
-        """Lazily initialize async Redis client (database='main')."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     # ------------------------------------------------------------------
     # Admin helpers (testing / monitoring)
