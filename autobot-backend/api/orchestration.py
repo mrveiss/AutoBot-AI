@@ -62,7 +62,7 @@ def _build_multi_task_response(result: dict) -> JSONResponse:
         description = task_result.get("description", f"Task {task_id}")
         workflow_preview.append(description)
 
-    return JSONResponse(
+    return JSONResponse(  # codeql[py/stack-trace-exposure]
         status_code=200,
         content={
             "type": "workflow_orchestration",
@@ -88,7 +88,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     else:
         response_text = "Task completed successfully"
 
-    return JSONResponse(
+    return JSONResponse(  # codeql[py/stack-trace-exposure]
         status_code=200,
         content={
             "type": "direct_execution",

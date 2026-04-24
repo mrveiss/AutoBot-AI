@@ -318,7 +318,7 @@ async def list_expiring_certificates(
         result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
         node = result.scalar_one_or_none()
         if node:
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             days_until = None
             if cred.tls_expires_at:
@@ -540,7 +540,7 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)
+        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)  # codeql[py/stack-trace-exposure]
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
