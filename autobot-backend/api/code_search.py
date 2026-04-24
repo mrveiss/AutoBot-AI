@@ -160,7 +160,7 @@ class SearchResponse(BaseModel):
     operation="index_codebase",
     error_code_prefix="CODE_SEARCH",
 )
-@router.post("/index")
+@router.post("/index", response_model=None)
 async def index_codebase(request: IndexRequest):
     """
     Index a codebase for fast searching.
@@ -212,7 +212,7 @@ async def index_codebase(request: IndexRequest):
     operation="search_code",
     error_code_prefix="CODE_SEARCH",
 )
-@router.post("/search")
+@router.post("/search", response_model=None)
 async def search_code(request: SearchRequest):
     """
     Search through indexed code.
@@ -284,7 +284,7 @@ async def search_code(request: SearchRequest):
     operation="search_code_get",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/search")
+@router.get("/search", response_model=None)
 async def search_code_get(
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),
@@ -309,7 +309,7 @@ async def search_code_get(
     operation="get_search_status",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/status")
+@router.get("/status", response_model=None)
 async def get_search_status():
     """
     Get code search system status.
@@ -366,7 +366,7 @@ async def get_search_status():
     operation="clear_search_cache",
     error_code_prefix="CODE_SEARCH",
 )
-@router.delete("/cache")
+@router.delete("/cache", response_model=None)
 async def clear_search_cache():
     """
     Clear the search cache.
@@ -404,7 +404,7 @@ async def clear_search_cache():
     operation="get_search_examples",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/examples")
+@router.get("/examples", response_model=None)
 async def get_search_examples():
     """
     Get example search queries and usage patterns.
@@ -787,7 +787,7 @@ async def _analyze_all_pattern_types() -> dict:
     operation="analyze_declarations",
     error_code_prefix="CODE_SEARCH",
 )
-@router.post("/analytics/declarations")
+@router.post("/analytics/declarations", response_model=None)
 async def analyze_declarations(request: AnalyticsRequest):
     """
     Analyze codebase declarations for usage statistics and reusability potential.
@@ -820,7 +820,7 @@ async def analyze_declarations(request: AnalyticsRequest):
     operation="find_code_duplicates",
     error_code_prefix="CODE_SEARCH",
 )
-@router.post("/analytics/duplicates")
+@router.post("/analytics/duplicates", response_model=None)
 async def find_code_duplicates(request: AnalyticsRequest):
     """
     Find potential code duplicates and similar patterns for refactoring opportunities.
@@ -867,7 +867,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
     operation="get_codebase_statistics",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/analytics/stats")
+@router.get("/analytics/stats", response_model=None)
 async def get_codebase_statistics():
     """
     Get comprehensive codebase statistics from Redis index.
@@ -959,7 +959,7 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     operation="get_refactor_suggestions",
     error_code_prefix="CODE_SEARCH",
 )
-@router.post("/analytics/refactor-suggestions")
+@router.post("/analytics/refactor-suggestions", response_model=None)
 async def get_refactor_suggestions(request: AnalyticsRequest):
     """
     Generate intelligent refactoring suggestions based on codebase analysis.
