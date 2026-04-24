@@ -14,6 +14,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    LLMAvailableModelsResponse,
+    LLMBenchmarkResponse,
+    LLMInferenceMetricsResponse,
+    LLMInferenceSettingsResponse,
+    LLMModelPerformanceHistoryResponse,
+    LLMModelsComparisonResponse,
+    LLMOptimizationConfigResponse,
+    LLMOptimizationHealthResponse,
+    LLMOptimizationSuggestionsResponse,
+    LLMProviderOptimizationSummaryResponse,
+    LLMSelectModelResponse,
+    LLMSystemResourcesResponse,
+    LLMTrackPerformanceResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config.manager import get_config_manager
@@ -86,7 +101,7 @@ class InferenceOptimizationSettings(BaseModel):
     operation="get_optimization_health",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/health")
+@router.get("/health", response_model=LLMOptimizationHealthResponse)
 async def get_optimization_health(admin_check: bool = Depends(check_admin_permission)):
     """Get model optimization system health status
 
@@ -120,7 +135,7 @@ async def get_optimization_health(admin_check: bool = Depends(check_admin_permis
     operation="get_available_models",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/available")
+@router.get("/models/available", response_model=LLMAvailableModelsResponse)
 async def get_available_models(admin_check: bool = Depends(check_admin_permission)):
     """Get all available models with performance data
 
@@ -151,7 +166,7 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
     operation="select_optimal_model",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/select")
+@router.post("/models/select", response_model=LLMSelectModelResponse)
 async def select_optimal_model(
     request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -214,7 +229,7 @@ async def select_optimal_model(
     operation="track_model_performance",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/performance/track")
+@router.post("/models/performance/track", response_model=LLMTrackPerformanceResponse)
 async def track_model_performance(
     performance_data: ModelPerformanceData,
     admin_check: bool = Depends(check_admin_permission),
@@ -253,7 +268,7 @@ async def track_model_performance(
     operation="get_model_performance_history",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/performance/history/{model_name}")
+@router.get("/models/performance/history/{model_name}", response_model=LLMModelPerformanceHistoryResponse)
 async def get_model_performance_history(
     model_name: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -288,7 +303,7 @@ async def get_model_performance_history(
     operation="get_optimization_suggestions",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/optimization/suggestions")
+@router.get("/optimization/suggestions", response_model=LLMOptimizationSuggestionsResponse)
 async def get_optimization_suggestions(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -317,7 +332,7 @@ async def get_optimization_suggestions(
     operation="compare_models",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/models/comparison")
+@router.get("/models/comparison", response_model=LLMModelsComparisonResponse)
 async def compare_models(admin_check: bool = Depends(check_admin_permission)):
     """Compare all available models by performance metrics
 
@@ -374,7 +389,7 @@ async def compare_models(admin_check: bool = Depends(check_admin_permission)):
     operation="benchmark_model",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/models/benchmark/{model_name}")
+@router.post("/models/benchmark/{model_name}", response_model=LLMBenchmarkResponse)
 async def benchmark_model(
     model_name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -439,7 +454,7 @@ async def benchmark_model(
     operation="get_system_resources",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/system/resources")
+@router.get("/system/resources", response_model=LLMSystemResourcesResponse)
 async def get_system_resources(admin_check: bool = Depends(check_admin_permission)):
     """Get current system resources for model optimization
 
@@ -499,7 +514,7 @@ async def get_system_resources(admin_check: bool = Depends(check_admin_permissio
     operation="get_optimization_config",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/config")
+@router.get("/config", response_model=LLMOptimizationConfigResponse)
 async def get_optimization_config(admin_check: bool = Depends(check_admin_permission)):
     """Get current optimization configuration
 
@@ -609,7 +624,7 @@ def _get_local_settings(opt_config: dict) -> dict:
     operation="get_inference_optimization_settings",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/settings")
+@router.get("/inference/settings", response_model=LLMInferenceSettingsResponse)
 async def get_inference_optimization_settings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -654,7 +669,7 @@ async def get_inference_optimization_settings(
     operation="update_inference_optimization_settings",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.post("/inference/settings")
+@router.post("/inference/settings", response_model=LLMInferenceSettingsResponse)
 async def update_inference_optimization_settings(
     settings: InferenceOptimizationSettings,
     admin_check: bool = Depends(check_admin_permission),
@@ -726,7 +741,7 @@ async def update_inference_optimization_settings(
     operation="get_inference_metrics",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/metrics")
+@router.get("/inference/metrics", response_model=LLMInferenceMetricsResponse)
 async def get_inference_metrics(admin_check: bool = Depends(check_admin_permission)):
     """
     Get inference optimization metrics (Issue #717).
@@ -761,7 +776,7 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
     operation="get_provider_optimization_summary",
     error_code_prefix="LLM_OPTIMIZATION",
 )
-@router.get("/inference/provider/{provider_type}/optimizations")
+@router.get("/inference/provider/{provider_type}/optimizations", response_model=LLMProviderOptimizationSummaryResponse)
 async def get_provider_optimization_summary(
     provider_type: str, admin_check: bool = Depends(check_admin_permission)
 ):
