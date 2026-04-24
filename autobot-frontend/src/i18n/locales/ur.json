@@ -2118,7 +2118,15 @@
       "title": "Source Connectors",
       "loadingHistory": "Loading history...",
       "historyDeleted": "deleted",
-      "noConnectorsMessage": "Add a source connector to automatically ingest documents from file servers, web pages, or databases."
+      "noConnectorsMessage": "Add a source connector to automatically ingest documents from file servers, web pages, or databases.",
+      "tier": {
+        "ready": "Ready",
+        "readyTooltip": "Zero-config connector — works immediately, no credentials required.",
+        "freeKey": "Free key needed",
+        "freeKeyTooltip": "Needs a free API key or environment variable (for example a Notion integration token).",
+        "setupRequired": "Setup required",
+        "setupRequiredTooltip": "Needs credentials, OAuth, a cookie, or a private connection string."
+      }
     },
     "entityExtractor": {
       "entitiesCreated": "Entities Created",
