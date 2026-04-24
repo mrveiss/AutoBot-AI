@@ -69,6 +69,16 @@ updates:
       - "dependencies"
       - "frontend"
 
+  - package-ecosystem: "pip"
+    directory: "/config"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "Dev_new_gui"
