@@ -257,6 +257,125 @@ router = APIRouter(tags=["AutoBot Monitoring"])
 CRITICAL_SERVICE_STATUSES = {"critical", "offline"}
 
 
+class ServicesSummaryResponse(BaseModel):
+    """Response for GET /services/health."""
+
+    total_services: int
+    healthy_services: int
+    degraded_services: int
+    critical_services: int
+    overall_status: str
+    health_percentage: float
+    services: List[Dict[str, Any]]
+
+
+class MonitoringActionResponse(BaseModel):
+    """Response for monitoring start/stop endpoints."""
+
+    status: str
+    message: str
+    collection_interval: Optional[float] = None
+
+
+class CurrentMetricsResponse(BaseModel):
+    """Response for GET /metrics/current."""
+
+    timestamp: float
+    metrics: Dict[str, Any]
+    collection_successful: bool
+
+
+class ThresholdUpdateResponse(BaseModel):
+    """Response for POST /thresholds/update."""
+
+    status: str
+    threshold_key: str
+    new_value: float
+    comparison: str
+    old_value: Optional[float] = None
+
+
+class TestPerformanceResponse(BaseModel):
+    """Response for POST /test/performance."""
+
+    message: str
+    metrics_collected: bool
+    timestamp: float
+
+
+class ClaudeApiDetails(BaseModel):
+    """Claude API metrics from Prometheus."""
+
+    rate_limit_remaining: Optional[float] = None
+    requests_per_minute: Optional[float] = None
+    p95_latency_seconds: Optional[float] = None
+    failure_rate: Optional[float] = None
+
+
+class ClaudeApiStatusResponse(BaseModel):
+    """Response for GET /claude-api/status."""
+
+    success: bool
+    claude_api_status: ClaudeApiDetails
+    timestamp: str
+
+
+class GitHubApiDetails(BaseModel):
+    """GitHub API metrics from Prometheus."""
+
+    rate_limit_remaining: Optional[float] = None
+    total_operations: Optional[float] = None
+    p95_latency_seconds: Optional[float] = None
+
+
+class GitHubStatusResponse(BaseModel):
+    """Response for GET /github/status."""
+
+    success: bool
+    github_status: GitHubApiDetails
+    timestamp: str
+
+
+class AlertSources(BaseModel):
+    """Alert source counts."""
+
+    alertmanager: int
+    performance_monitor: int
+
+
+class AlertCheckResponse(BaseModel):
+    """Response for GET /alerts/check."""
+
+    timestamp: float
+    alerts: List[Dict[str, Any]]
+    total_count: int
+    critical_count: int
+    warning_count: int
+    high_count: int
+    sources: AlertSources
+
+
+class AlertManagerSeverityCounts(BaseModel):
+    """Severity breakdown for alertmanager response."""
+
+    critical: int
+    high: int
+    warning: int
+    info: int
+
+
+class AlertManagerResponse(BaseModel):
+    """Response for GET /alerts/alertmanager."""
+
+    timestamp: float
+    source: str
+    alertmanager_url: str
+    alerts: List[Dict[str, Any]]
+    total_count: int
+    by_severity: AlertManagerSeverityCounts
+    active_alerts: Dict[str, List[Dict[str, Any]]]
+
+
 class MonitoringStatus(BaseModel):
     """Monitoring system status"""
 
@@ -519,7 +638,7 @@ def _compute_overall_status(svc_list: list) -> dict:
     operation="get_services_health",
     error_code_prefix="MONITORING",
 )
-@router.get("/services/health")
+@router.get("/services/health", response_model=ServicesSummaryResponse)
 async def get_services_health():
     """Return service health in ServicesSummary format for frontend.
 
@@ -587,7 +706,7 @@ async def get_monitoring_status(
     operation="start_monitoring",
     error_code_prefix="MONITORING",
 )
-@router.post("/start")
+@router.post("/start", response_model=MonitoringActionResponse)
 async def start_monitoring_endpoint(
     admin_check: bool = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = None,
@@ -627,7 +746,7 @@ async def start_monitoring_endpoint(
     operation="stop_monitoring",
     error_code_prefix="MONITORING",
 )
-@router.post("/stop")
+@router.post("/stop", response_model=MonitoringActionResponse)
 async def stop_monitoring_endpoint(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -651,7 +770,7 @@ async def stop_monitoring_endpoint(
     operation="get_performance_dashboard",
     error_code_prefix="MONITORING",
 )
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=dict)
 async def get_dashboard_endpoint(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -674,7 +793,7 @@ async def get_dashboard_endpoint(
     operation="get_dashboard_overview",
     error_code_prefix="MONITORING",
 )
-@router.get("/dashboard/overview")
+@router.get("/dashboard/overview", response_model=dict)
 async def get_dashboard_overview(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -697,7 +816,7 @@ async def get_dashboard_overview(
     operation="get_current_metrics",
     error_code_prefix="MONITORING",
 )
-@router.get("/metrics/current")
+@router.get("/metrics/current", response_model=CurrentMetricsResponse)
 async def get_current_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -715,7 +834,7 @@ async def get_current_metrics(
     operation="query_metrics",
     error_code_prefix="MONITORING",
 )
-@router.post("/metrics/query")
+@router.post("/metrics/query", response_model=dict)
 async def query_metrics(
     admin_check: bool = Depends(check_admin_permission),
     query: MetricsQuery = None,
@@ -852,7 +971,7 @@ async def get_performance_alerts(
     operation="check_alerts",
     error_code_prefix="MONITORING",
 )
-@router.get("/alerts/check")
+@router.get("/alerts/check", response_model=AlertCheckResponse)
 async def check_alerts(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -892,7 +1011,7 @@ async def check_alerts(
     operation="get_alertmanager_alerts",
     error_code_prefix="MONITORING",
 )
-@router.get("/alerts/alertmanager")
+@router.get("/alerts/alertmanager", response_model=AlertManagerResponse)
 async def get_alertmanager_alerts(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -934,7 +1053,7 @@ async def get_alertmanager_alerts(
     operation="update_performance_threshold",
     error_code_prefix="MONITORING",
 )
-@router.post("/thresholds/update")
+@router.post("/thresholds/update", response_model=ThresholdUpdateResponse)
 async def update_performance_threshold(
     admin_check: bool = Depends(check_admin_permission),
     threshold: ThresholdUpdate = None,
@@ -1129,7 +1248,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
     operation="test_performance_monitoring",
     error_code_prefix="MONITORING",
 )
-@router.post("/test/performance")
+@router.post("/test/performance", response_model=TestPerformanceResponse)
 @monitor_performance("api_test")
 async def test_performance_monitoring(
     admin_check: bool = Depends(check_admin_permission),
@@ -1159,7 +1278,7 @@ async def test_performance_monitoring(
     operation="get_hardware_npu",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/npu")
+@router.get("/hardware/npu", response_model=dict)
 async def get_hardware_npu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1172,7 +1291,7 @@ async def get_hardware_npu_status(
     operation="get_hardware_gpu",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/gpu")
+@router.get("/hardware/gpu", response_model=dict)
 async def get_hardware_gpu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1185,7 +1304,7 @@ async def get_hardware_gpu_status(
     operation="get_hardware_system",
     error_code_prefix="MONITORING",
 )
-@router.get("/hardware/system")
+@router.get("/hardware/system", response_model=dict)
 async def get_hardware_system_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1201,7 +1320,7 @@ async def get_hardware_system_status(
     operation="get_claude_api_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/claude-api/status")
+@router.get("/claude-api/status", response_model=ClaudeApiStatusResponse)
 async def get_claude_api_status():
     """Get Claude API status via Prometheus metrics.
 
@@ -1240,7 +1359,7 @@ async def get_claude_api_status():
     operation="get_github_status",
     error_code_prefix="MONITORING",
 )
-@router.get("/github/status")
+@router.get("/github/status", response_model=GitHubStatusResponse)
 async def get_github_status():
     """Get GitHub API status via Prometheus metrics.
 

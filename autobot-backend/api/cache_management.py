@@ -10,7 +10,7 @@ Consolidates all cache-related endpoints (Issue #1286).
 import asyncio
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -107,6 +107,103 @@ class CacheWarmingRequest(BaseModel):
     force_refresh: bool = False
 
 
+class RedisDbInfo(BaseModel):
+    """Per-database Redis info."""
+
+    database: int
+    key_count: int
+    memory_usage: str
+    connected: bool
+    error: Optional[str] = None
+
+
+class RedisClearEntry(BaseModel):
+    """Result for a single cleared database."""
+
+    name: str
+    database: int
+    keys_cleared: int
+    error: Optional[str] = None
+
+
+class RedisStatsResponse(BaseModel):
+    """Response for GET /stats."""
+
+    status: str
+    stats: Dict[str, Any]
+
+
+class RedisClearResponse(BaseModel):
+    """Response for POST /redis/clear/{database}."""
+
+    status: str
+    message: str
+    cleared_databases: List[Dict[str, Any]]
+
+
+class CacheClearTypeResponse(BaseModel):
+    """Response for POST /clear/{cache_type}."""
+
+    status: str
+    message: str
+    cache_type: str
+
+
+class CacheConfigResponse(BaseModel):
+    """Response for GET/POST /config."""
+
+    status: str
+    message: Optional[str] = None
+    config: Dict[str, Any]
+    source: Optional[str] = None
+
+
+class CacheWarmupResponse(BaseModel):
+    """Response for POST /warmup."""
+
+    status: str
+    message: str
+    warmed_caches: List[Dict[str, Any]]
+
+
+class WarmCacheResponse(BaseModel):
+    """Response for POST /warm."""
+
+    success: bool
+    warmed_types: List[str]
+    failed_types: List[str]
+    total_warmed: int
+
+
+class InvalidateCacheResponse(BaseModel):
+    """Response for DELETE /invalidate/{data_type}."""
+
+    success: bool
+    data_type: str
+    key_pattern: str
+    user_id: Optional[str] = None
+    deleted_count: int
+
+
+class ClearAllResponse(BaseModel):
+    """Response for POST /clear-all."""
+
+    success: bool
+    message: str
+    total_deleted: int
+
+
+class CacheHealthResponse(BaseModel):
+    """Response for GET /health."""
+
+    status: str
+    redis_status: Optional[str] = None
+    total_keys: Optional[int] = None
+    memory_usage: Optional[str] = None
+    global_hit_rate: Optional[str] = None
+    error: Optional[str] = None
+
+
 def _process_data_type_stats_results(
     data_types: List[str], stats_results: list
 ) -> Dict[str, Dict]:
@@ -129,7 +226,7 @@ def _process_data_type_stats_results(
     operation="get_cache_stats",
     error_code_prefix="CACHE",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=RedisStatsResponse)
 async def get_cache_stats():
     """Get comprehensive cache statistics from all Redis databases."""
     stats = {
@@ -178,7 +275,7 @@ async def get_cache_stats():
     operation="clear_redis_cache",
     error_code_prefix="CACHE",
 )
-@router.post("/redis/clear/{database}")
+@router.post("/redis/clear/{database}", response_model=RedisClearResponse)
 async def clear_redis_cache(database: str):
     """Clear Redis cache for specific database or all databases."""
     cleared_databases = []
@@ -224,7 +321,7 @@ async def clear_redis_cache(database: str):
     operation="clear_cache_type",
     error_code_prefix="CACHE",
 )
-@router.post("/clear/{cache_type}")
+@router.post("/clear/{cache_type}", response_model=CacheClearTypeResponse)
 async def clear_cache_type(cache_type: str):
     """Clear specific backend cache type."""
     if cache_type == "llm":
@@ -253,7 +350,7 @@ async def clear_cache_type(cache_type: str):
     operation="save_cache_config",
     error_code_prefix="CACHE",
 )
-@router.post("/config")
+@router.post("/config", response_model=CacheConfigResponse)
 async def save_cache_config(config_data: Metadata):
     """Save cache configuration settings."""
     required_fields = [
@@ -287,7 +384,7 @@ async def save_cache_config(config_data: Metadata):
     operation="get_cache_config",
     error_code_prefix="CACHE",
 )
-@router.get("/config")
+@router.get("/config", response_model=CacheConfigResponse)
 async def get_cache_config():
     """Get current cache configuration."""
     try:
@@ -316,7 +413,7 @@ async def get_cache_config():
     operation="warmup_caches",
     error_code_prefix="CACHE",
 )
-@router.post("/warmup")
+@router.post("/warmup", response_model=CacheWarmupResponse)
 async def warmup_caches():
     """Warm up commonly used caches."""
     logger.info("Cache warmup requested")
@@ -385,7 +482,7 @@ async def get_advanced_cache_stats(
     operation="warm_cache",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.post("/warm")
+@router.post("/warm", response_model=WarmCacheResponse)
 async def warm_cache(
     request: CacheWarmingRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -429,7 +526,7 @@ async def warm_cache(
     operation="invalidate_cache",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.delete("/invalidate/{data_type}")
+@router.delete("/invalidate/{data_type}", response_model=InvalidateCacheResponse)
 async def invalidate_cache(
     data_type: str,
     key: str = Query("*", description="Key pattern to invalidate (* for all)"),
@@ -461,7 +558,7 @@ async def invalidate_cache(
     operation="clear_all_cache",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.post("/clear-all")
+@router.post("/clear-all", response_model=ClearAllResponse)
 async def clear_all_cache(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -607,7 +704,7 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
     operation="cache_health_check",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.get("/health")
+@router.get("/health", response_model=CacheHealthResponse)
 async def cache_health_check():
     """Check cache system health"""
     try:
@@ -638,7 +735,7 @@ async def cache_health_check():
     operation="semantic_cache_stats",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.get("/semantic-cache/stats")
+@router.get("/semantic-cache/stats", response_model=dict)
 async def semantic_cache_stats(
     _user: dict = Depends(get_current_user),
 ):
@@ -654,7 +751,7 @@ async def semantic_cache_stats(
     operation="semantic_cache_clear",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.delete("/semantic-cache/clear")
+@router.delete("/semantic-cache/clear", response_model=dict)
 async def semantic_cache_clear(
     _user: dict = Depends(check_admin_permission),
 ):
@@ -680,7 +777,7 @@ class SemanticCacheConfigUpdate(BaseModel):
     operation="semantic_cache_config",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.put("/semantic-cache/config")
+@router.put("/semantic-cache/config", response_model=dict)
 async def semantic_cache_update_config(
     update: SemanticCacheConfigUpdate,
     _user: dict = Depends(check_admin_permission),
@@ -707,7 +804,7 @@ async def semantic_cache_update_config(
     operation="context_sufficiency_stats",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.get("/context-sufficiency/stats")
+@router.get("/context-sufficiency/stats", response_model=dict)
 async def context_sufficiency_stats(
     _user: dict = Depends(get_current_user),
 ):
@@ -732,7 +829,7 @@ class SufficiencyConfigUpdate(BaseModel):
     operation="context_sufficiency_config",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.put("/context-sufficiency/config")
+@router.put("/context-sufficiency/config", response_model=dict)
 async def context_sufficiency_update_config(
     update: SufficiencyConfigUpdate,
     _user: dict = Depends(check_admin_permission),
@@ -755,7 +852,7 @@ async def context_sufficiency_update_config(
     operation="topic_cache_stats",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.get("/topic-cache/stats")
+@router.get("/topic-cache/stats", response_model=dict)
 async def topic_cache_stats(
     _user: dict = Depends(get_current_user),
 ):
@@ -780,7 +877,7 @@ class TopicCacheConfigUpdate(BaseModel):
     operation="topic_cache_config",
     error_code_prefix="CACHE_MANAGEMENT",
 )
-@router.put("/topic-cache/config")
+@router.put("/topic-cache/config", response_model=dict)
 async def topic_cache_update_config(
     update: TopicCacheConfigUpdate,
     _user: dict = Depends(check_admin_permission),
