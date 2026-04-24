@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from autobot_shared.redis_client import RedisDatabase
-from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
@@ -84,7 +84,7 @@ class FeatureMetrics:
     bounce_rate: float = 0.0
 
 
-class UserBehaviorAnalytics(AsyncRedisClientMixin):
+class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
     """
     Service for tracking and analyzing user behavior patterns.
 
