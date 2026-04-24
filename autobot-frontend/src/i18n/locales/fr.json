@@ -1439,7 +1439,13 @@
       "syncing": "Synchronisation...",
       "syncNow": "Synchroniser maintenant",
       "edit": "Modifier",
-      "share": "Share",
+      "share": {
+        "userIds": "User IDs",
+        "userIdsHint": "comma-separated",
+        "userIdsHelp": "Enter user IDs to grant access to this source.",
+        "currentlySharedWith": "Currently shared with",
+        "updateAccess": "Update Access"
+      },
       "deleteTitle": "Supprimer la source",
       "indexingRunning": "Indexation en cours",
       "removeFromQueue": "Retirer de la file d'attente",

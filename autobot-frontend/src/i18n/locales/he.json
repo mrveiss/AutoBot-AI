@@ -978,7 +978,13 @@
       "syncing": "Syncing...",
       "syncNow": "Sync Now",
       "edit": "Edit",
-      "share": "Share",
+      "share": {
+        "userIds": "User IDs",
+        "userIdsHint": "comma-separated",
+        "userIdsHelp": "Enter user IDs to grant access to this source.",
+        "currentlySharedWith": "Currently shared with",
+        "updateAccess": "Update Access"
+      },
       "deleteTitle": "Delete",
       "indexingRunning": "Indexing running",
       "removeFromQueue": "Remove from queue",
