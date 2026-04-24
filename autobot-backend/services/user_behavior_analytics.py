@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
@@ -105,7 +105,7 @@ class UserBehaviorAnalytics:
     async def get_redis(self):
         """Get Redis client for analytics database"""
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
+            self._redis = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis
 
     def _build_event_operations(self, redis, event: UserEvent) -> list:
