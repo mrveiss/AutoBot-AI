@@ -220,7 +220,7 @@ async def update_workflow_secret(
     if not updated:
         raise HTTPException(status_code=404, detail=f"Secret '{name}' not found")
 
-    # codeql-suppress py/clear-text-logging-sensitive-data: logs name/owner metadata, not secret value
+    # codeql[py/clear-text-logging-sensitive-data]
     logger.info("Workflow secret updated via API: name=%s owner=%s", name, owner_id)
     return WorkflowSecretMetadata(
         id="",
@@ -260,5 +260,5 @@ async def delete_workflow_secret(
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Secret '{name}' not found")
 
-    # codeql-suppress py/clear-text-logging-sensitive-data: logs name/owner metadata, not secret value
+    # codeql[py/clear-text-logging-sensitive-data]
     logger.info("Workflow secret deleted via API: name=%s owner=%s", name, owner_id)
