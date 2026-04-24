@@ -14,10 +14,12 @@ enabling the agent to see what users are viewing in real-time.
 
 import asyncio
 import logging
+from typing import Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -27,6 +29,15 @@ from type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+class VncProxyStatusResponse(BaseModel):
+    """Response for VNC proxy status check"""
+    vnc_type: str
+    endpoint: str
+    accessible: bool
+    status: Optional[int] = None
+    error: Optional[str] = None
 
 
 async def _send_client_data_to_vnc(data: dict, vnc_ws, vnc_type: str) -> bool:
@@ -145,7 +156,7 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
     operation="get_vnc_client",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/vnc.html")
+@router.get("/{vnc_type}/vnc.html", response_model=None)
 async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Serve noVNC client HTML for specified VNC type
@@ -189,7 +200,7 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     operation="proxy_vnc_assets",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/{path:path}")
+@router.get("/{vnc_type}/{path:path}", response_model=None)
 async def proxy_vnc_assets(
     vnc_type: str, path: str, current_user: dict = Depends(get_current_user)
 ):
@@ -289,7 +300,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     operation="get_vnc_status",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/status")
+@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
 async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Check if VNC server is accessible

@@ -28,7 +28,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
@@ -257,6 +257,115 @@ class HoverRequest(BaseModel):
     """Request model for hovering over elements"""
 
     selector: str = Field(..., description="CSS selector for element to hover")
+
+
+# Response models for Browser MCP endpoints
+class BrowserNavigateResponse(BaseModel):
+    """Response for navigate MCP action"""
+    success: bool
+    action: str
+    url: str
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserClickResponse(BaseModel):
+    """Response for click MCP action"""
+    success: bool
+    action: str
+    selector: str
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserFillResponse(BaseModel):
+    """Response for fill MCP action"""
+    success: bool
+    action: str
+    selector: str
+    value_length: int
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserScreenshotResponse(BaseModel):
+    """Response for screenshot MCP action"""
+    success: bool
+    action: str
+    selector: Optional[str] = None
+    full_page: Optional[bool] = None
+    base64_image: Optional[str] = None
+    mime_type: str
+    timestamp: str
+
+
+class BrowserEvaluateResponse(BaseModel):
+    """Response for evaluate MCP action"""
+    success: bool
+    action: str
+    script_preview: str
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserWaitForSelectorResponse(BaseModel):
+    """Response for wait_for_selector MCP action"""
+    success: bool
+    action: str
+    selector: str
+    state: Optional[str] = None
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserGetTextResponse(BaseModel):
+    """Response for get_text MCP action"""
+    success: bool
+    action: str
+    selector: str
+    text: Optional[str] = None
+    timestamp: str
+
+
+class BrowserGetAttributeResponse(BaseModel):
+    """Response for get_attribute MCP action"""
+    success: bool
+    action: str
+    selector: str
+    attribute: str
+    value: Optional[str] = None
+    timestamp: str
+
+
+class BrowserSelectResponse(BaseModel):
+    """Response for select MCP action"""
+    success: bool
+    action: str
+    selector: str
+    value: str
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserHoverResponse(BaseModel):
+    """Response for hover MCP action"""
+    success: bool
+    action: str
+    selector: str
+    result: Optional[Any] = None
+    timestamp: str
+
+
+class BrowserMcpStatusResponse(BaseModel):
+    """Response for Browser MCP status endpoint"""
+    success: bool
+    bridge: str
+    browser_vm: Dict[str, str]
+    security: Dict[str, Any]
+    rate_limit_status: Dict[str, Any]
+    tools_available: int
+    timestamp: str
+
 
 
 def _get_browser_navigation_tools() -> List[MCPTool]:
@@ -533,7 +642,7 @@ def _get_browser_extraction_tools() -> List[MCPTool]:
     operation="get_browser_mcp_tools",
     error_code_prefix="BROWSER_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_browser_mcp_tools() -> List[MCPTool]:
     """Get available MCP tools for browser automation operations"""
     # Issue #281: Use extracted helpers for tool definitions by category
@@ -595,7 +704,7 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
     operation="navigate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/navigate")
+@router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
 async def navigate_mcp(request: NavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
     if not await check_rate_limit():
@@ -632,7 +741,7 @@ async def navigate_mcp(request: NavigateRequest) -> Metadata:
     operation="click_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/click")
+@router.post("/mcp/click", response_model=BrowserClickResponse)
 async def click_mcp(request: ClickRequest) -> Metadata:
     """Click on element by selector"""
     if not await check_rate_limit():
@@ -659,7 +768,7 @@ async def click_mcp(request: ClickRequest) -> Metadata:
     operation="fill_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/fill")
+@router.post("/mcp/fill", response_model=BrowserFillResponse)
 async def fill_mcp(request: FillRequest) -> Metadata:
     """Fill form field with value"""
     if not await check_rate_limit():
@@ -691,7 +800,7 @@ async def fill_mcp(request: FillRequest) -> Metadata:
     operation="screenshot_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/screenshot")
+@router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
 async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
     if not await check_rate_limit():
@@ -722,7 +831,7 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     operation="evaluate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/evaluate")
+@router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
 async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
     if not await check_rate_limit():
@@ -752,7 +861,7 @@ async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     operation="wait_for_selector_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/wait_for_selector")
+@router.post("/mcp/wait_for_selector", response_model=BrowserWaitForSelectorResponse)
 async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     """Wait for element to reach specified state"""
     if not await check_rate_limit():
@@ -784,7 +893,7 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     operation="get_text_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/get_text")
+@router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
 async def get_text_mcp(request: GetTextRequest) -> Metadata:
     """Extract text content from element"""
     if not await check_rate_limit():
@@ -808,7 +917,7 @@ async def get_text_mcp(request: GetTextRequest) -> Metadata:
     operation="get_attribute_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/get_attribute")
+@router.post("/mcp/get_attribute", response_model=BrowserGetAttributeResponse)
 async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     """Get attribute value from element"""
     if not await check_rate_limit():
@@ -836,7 +945,7 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     operation="select_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/select")
+@router.post("/mcp/select", response_model=BrowserSelectResponse)
 async def select_mcp(request: SelectRequest) -> Metadata:
     """Select option from dropdown"""
     if not await check_rate_limit():
@@ -864,7 +973,7 @@ async def select_mcp(request: SelectRequest) -> Metadata:
     operation="hover_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/hover")
+@router.post("/mcp/hover", response_model=BrowserHoverResponse)
 async def hover_mcp(request: HoverRequest) -> Metadata:
     """Hover mouse over element"""
     if not await check_rate_limit():
@@ -888,7 +997,7 @@ async def hover_mcp(request: HoverRequest) -> Metadata:
     operation="get_browser_mcp_status",
     error_code_prefix="BROWSER_MCP",
 )
-@router.get("/mcp/status")
+@router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
 async def get_browser_mcp_status() -> Metadata:
     """Get Browser MCP bridge status and statistics"""
     # Check Browser VM connectivity
