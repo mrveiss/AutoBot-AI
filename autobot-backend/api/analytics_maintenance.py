@@ -15,7 +15,7 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -108,7 +108,7 @@ class CustomReportRequest(BaseModel):
     operation="get_maintenance_recommendations",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance")
+@router.get("/maintenance", response_model=None)
 async def get_maintenance_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -149,7 +149,7 @@ async def get_maintenance_recommendations(
     operation="get_maintenance_by_category",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance/category/{category}")
+@router.get("/maintenance/category/{category}", response_model=None)
 async def get_maintenance_by_category(
     category: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -178,7 +178,7 @@ async def get_maintenance_by_category(
     operation="get_maintenance_summary",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance/summary")
+@router.get("/maintenance/summary", response_model=None)
 async def get_maintenance_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -244,7 +244,7 @@ async def get_maintenance_summary(
     operation="get_resource_optimizations",
     error_code_prefix="OPT",
 )
-@router.get("/optimization")
+@router.get("/optimization", response_model=None)
 async def get_resource_optimizations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -286,7 +286,7 @@ async def get_resource_optimizations(
     operation="get_optimization_by_type",
     error_code_prefix="OPT",
 )
-@router.get("/optimization/type/{resource_type}")
+@router.get("/optimization/type/{resource_type}", response_model=None)
 async def get_optimization_by_type(
     resource_type: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -315,7 +315,7 @@ async def get_optimization_by_type(
     operation="get_quick_wins",
     error_code_prefix="OPT",
 )
-@router.get("/optimization/quick-wins")
+@router.get("/optimization/quick-wins", response_model=None)
 async def get_quick_wins(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -357,7 +357,7 @@ async def get_quick_wins(
     operation="get_unified_dashboard",
     error_code_prefix="DASH",
 )
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=None)
 async def get_unified_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -380,7 +380,7 @@ async def get_unified_dashboard(
     operation="get_health_status",
     error_code_prefix="HEALTH",
 )
-@router.get("/health")
+@router.get("/health", response_model=None)
 async def get_health_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -418,7 +418,7 @@ async def get_health_status(
     operation="generate_custom_report",
     error_code_prefix="REPORT",
 )
-@router.post("/report")
+@router.post("/report", response_model=None)
 async def generate_custom_report(
     request: CustomReportRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -454,7 +454,7 @@ async def generate_custom_report(
     operation="get_executive_summary",
     error_code_prefix="REPORT",
 )
-@router.get("/report/executive")
+@router.get("/report/executive", response_model=None)
 async def get_executive_summary(
     days: int = Query(default=30, ge=7, le=90, description="Days to summarize"),
     admin_check: bool = Depends(check_admin_permission),
@@ -491,7 +491,7 @@ async def get_executive_summary(
     operation="get_insights",
     error_code_prefix="INSIGHT",
 )
-@router.get("/insights")
+@router.get("/insights", response_model=None)
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -559,7 +559,7 @@ async def get_insights(
     operation="get_trends_analysis",
     error_code_prefix="TREND",
 )
-@router.get("/trends")
+@router.get("/trends", response_model=None)
 async def get_trends_analysis(
     days: int = Query(default=30, ge=7, le=90, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),

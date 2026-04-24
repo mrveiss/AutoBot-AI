@@ -913,7 +913,7 @@ async def _run_bug_analysis(
     }
 
 
-@router.get("/analyze")
+@router.get("/analyze", response_model=None)
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
@@ -1027,7 +1027,7 @@ async def _run_batched_bug_analysis(
         await _bg_manager.fail_task(task_id, str(e))
 
 
-@router.get("/cached")
+@router.get("/cached", response_model=None)
 async def get_cached_bug_prediction():
     """Return the latest completed bug prediction result (#1540)."""
     cached = await _bg_manager.get_latest_result()
@@ -1041,7 +1041,7 @@ async def get_cached_bug_prediction():
     return _no_data_response("No cached bug prediction available")
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=None)
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
@@ -1059,7 +1059,7 @@ async def start_bug_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/status/{task_id}")
+@router.get("/status/{task_id}", response_model=None)
 async def get_bug_prediction_status(
     task_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1071,7 +1071,7 @@ async def get_bug_prediction_status(
     return task
 
 
-@router.post("/tasks/clear-stuck")
+@router.post("/tasks/clear-stuck", response_model=None)
 async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1084,7 +1084,7 @@ async def clear_stuck_bug_tasks(
     }
 
 
-@router.get("/high-risk")
+@router.get("/high-risk", response_model=None)
 async def get_high_risk_files(
     admin_check: bool = Depends(check_admin_permission),
     threshold: float = Query(60, ge=0, le=100),
@@ -1152,7 +1152,7 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
-@router.get("/file/{file_path:path}")
+@router.get("/file/{file_path:path}", response_model=None)
 async def get_file_risk(
     file_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1249,7 +1249,7 @@ def _get_flat_heatmap_data(files: list) -> list:
     ]
 
 
-@router.get("/heatmap")
+@router.get("/heatmap", response_model=None)
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
     grouping: str = Query("directory", pattern="^(directory|module|flat)$"),
@@ -1298,7 +1298,7 @@ async def get_risk_heatmap(
         return _no_data_response("Heatmap generation failed")
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=None)
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -1411,7 +1411,7 @@ def _generate_summary_recommendations(
     return recommendations[:5]
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=None)
 async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
@@ -1471,7 +1471,7 @@ async def get_prediction_summary(
         return _no_data_response("Summary generation failed")
 
 
-@router.get("/factors")
+@router.get("/factors", response_model=None)
 async def get_risk_factors(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -1518,7 +1518,7 @@ def _get_factor_description(factor: RiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug")
+@router.post("/record-bug", response_model=None)
 async def record_bug(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,

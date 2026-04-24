@@ -1055,7 +1055,7 @@ async def get_engine() -> ContinuousLearningEngine:
 # =============================================================================
 
 
-@router.post("/start", summary="Start continuous learning")
+@router.post("/start", summary="Start continuous learning", response_model=None)
 async def start_learning(
     admin_check: bool = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = None,
@@ -1069,7 +1069,7 @@ async def start_learning(
     return await engine.start()
 
 
-@router.post("/stop", summary="Stop continuous learning")
+@router.post("/stop", summary="Stop continuous learning", response_model=None)
 async def stop_learning(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1082,7 +1082,7 @@ async def stop_learning(
     return await engine.stop()
 
 
-@router.get("/status", summary="Get learning status")
+@router.get("/status", summary="Get learning status", response_model=None)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1095,7 +1095,7 @@ async def get_status(
     return engine.get_status()
 
 
-@router.get("/metrics", summary="Get learning metrics")
+@router.get("/metrics", summary="Get learning metrics", response_model=LearningMetrics)
 async def get_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ) -> LearningMetrics:
@@ -1108,7 +1108,7 @@ async def get_metrics(
     return engine.get_metrics()
 
 
-@router.post("/feedback", summary="Submit pattern feedback")
+@router.post("/feedback", summary="Submit pattern feedback", response_model=None)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     pattern_id: str = None,
@@ -1124,7 +1124,7 @@ async def submit_feedback(
     return await engine.submit_feedback(pattern_id, is_correct, details)
 
 
-@router.post("/retrain", summary="Trigger model retraining")
+@router.post("/retrain", summary="Trigger model retraining", response_model=None)
 async def trigger_retrain(
     admin_check: bool = Depends(check_admin_permission),
     request: RetrainingRequest = None,
@@ -1138,7 +1138,7 @@ async def trigger_retrain(
     return await engine.trigger_retrain(request)
 
 
-@router.get("/insights", summary="Get generated insights")
+@router.get("/insights", summary="Get generated insights", response_model=None)
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
     active_only: bool = Query(True, description="Only active insights"),
@@ -1157,7 +1157,7 @@ async def get_insights(
     }
 
 
-@router.post("/insights/generate", summary="Generate insights now")
+@router.post("/insights/generate", summary="Generate insights now", response_model=None)
 async def generate_insights_now(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1174,7 +1174,7 @@ async def generate_insights_now(
     }
 
 
-@router.get("/monitoring", summary="Get monitoring status")
+@router.get("/monitoring", summary="Get monitoring status", response_model=MonitoringStatus)
 async def get_monitoring_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> MonitoringStatus:
@@ -1187,7 +1187,7 @@ async def get_monitoring_status(
     return engine.monitor.get_status()
 
 
-@router.put("/config", summary="Update learning config")
+@router.put("/config", summary="Update learning config", response_model=None)
 async def update_config(
     admin_check: bool = Depends(check_admin_permission),
     config: LearningConfig = None,
@@ -1202,7 +1202,7 @@ async def update_config(
     return {"updated": True, "config": config.model_dump()}
 
 
-@router.get("/config", summary="Get learning config")
+@router.get("/config", summary="Get learning config", response_model=LearningConfig)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> LearningConfig:
@@ -1215,7 +1215,7 @@ async def get_config(
     return engine.config
 
 
-@router.get("/health", summary="Health check")
+@router.get("/health", summary="Health check", response_model=None)
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
