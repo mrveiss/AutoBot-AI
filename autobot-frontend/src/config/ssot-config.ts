@@ -108,6 +108,7 @@ export interface TimeoutConfig {
 
 /**
  * VNC configuration for desktop streaming.
+ * DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
  */
 export interface VNCConfig {
   desktop: {
@@ -389,6 +390,7 @@ function buildConfig(): AutoBotConfig {
     websocket: getEnvNumber('VITE_WEBSOCKET_TIMEOUT', 30000),
   };
 
+  // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
   // VNC configuration
   const vnc: VNCConfig = {
     desktop: {
@@ -468,6 +470,7 @@ function buildConfig(): AutoBotConfig {
       return `${httpProtocol}://${vm.browser}:${port.browser}`;
     },
 
+    // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
     get vncUrl(): string {
       return `${httpProtocol}://${vm.main}:${port.vnc}/vnc.html`;
     },

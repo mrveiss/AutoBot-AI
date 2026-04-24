@@ -56,6 +56,7 @@ export interface ChatSession {
   // Issue #608: Session-scoped secrets
   sessionSecrets?: SessionSecret[]
   // Desktop automation context
+  // DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {
     id?: string
     vncUrl?: string
@@ -538,6 +539,7 @@ export const useChatStore = defineStore('chat', () => {
     return desktopSessionId
   }
 
+  // DORMANT: getDesktopUrl generates VNC URLs; VNC path replaced by screenshot panel (#1130). Preserved for #5136.
   function getDesktopUrl(sessionId: string): string {
     let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
