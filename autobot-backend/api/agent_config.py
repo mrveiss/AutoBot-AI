@@ -21,6 +21,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_common import (
+    AgentConfigEnableDisableResponse,
+    AgentConfigHealthResponse,
+    AgentConfigOverviewResponse,
+    AgentConfigUpdateModelResponse,
+)
+
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -577,7 +584,7 @@ async def _resolve_agent_effective_config(
     operation="list_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents")
+@router.get("/agents", response_model=None)
 async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     Get list of all available agents with their configurations
@@ -697,7 +704,7 @@ async def _resolve_agent_entry(
     operation="get_all_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/all")
+@router.get("/agents/all", response_model=None)
 async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all AutoBot agents for the Agent Registry dashboard.
@@ -743,7 +750,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     operation="list_specialized_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/specialized")
+@router.get("/agents/specialized", response_model=None)
 async def list_specialized_agents(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -776,7 +783,7 @@ async def list_specialized_agents(
     operation="get_specialized_agent",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/specialized/{agent_id}")
+@router.get("/agents/specialized/{agent_id}", response_model=None)
 async def get_specialized_agent(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -806,7 +813,7 @@ async def get_specialized_agent(
     operation="get_agents_usage",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/usage")
+@router.get("/agents/usage", response_model=None)
 async def get_agents_usage(
     agent_id: Optional[str] = Query(
         None, description="Filter to a specific agent (all agents if omitted)"
@@ -923,7 +930,7 @@ async def get_agents_usage(
     operation="get_agent_config",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/{agent_id}")
+@router.get("/agents/{agent_id}", response_model=None)
 async def get_agent_config(
     agent_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1050,7 +1057,7 @@ async def _apply_agent_model_update(
     operation="update_agent_model",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.post("/agents/{agent_id}/model")
+@router.post("/agents/{agent_id}/model", response_model=AgentConfigUpdateModelResponse)
 async def update_agent_model(
     agent_id: str,
     update: AgentModelUpdate,
@@ -1093,7 +1100,7 @@ async def update_agent_model(
     operation="enable_agent",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.post("/agents/{agent_id}/enable")
+@router.post("/agents/{agent_id}/enable", response_model=AgentConfigEnableDisableResponse)
 async def enable_agent(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1144,7 +1151,7 @@ async def enable_agent(
     operation="disable_agent",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.post("/agents/{agent_id}/disable")
+@router.post("/agents/{agent_id}/disable", response_model=AgentConfigEnableDisableResponse)
 async def disable_agent(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1232,7 +1239,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     operation="check_agent_health",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/{agent_id}/health")
+@router.get("/agents/{agent_id}/health", response_model=AgentConfigHealthResponse)
 async def check_agent_health(
     agent_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1278,7 +1285,7 @@ async def check_agent_health(
     operation="get_agents_overview",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/status/overview")
+@router.get("/status/overview", response_model=AgentConfigOverviewResponse)
 async def get_agents_overview(admin_check: bool = Depends(check_admin_permission)):
     """
     Get overview of all agents' status for dashboard

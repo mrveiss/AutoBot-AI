@@ -16,6 +16,20 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    MemoryActiveTasksResponse,
+    MemoryCleanupResponse,
+    MemoryDocumentReferencesResponse,
+    MemoryEmbeddingCacheStatsResponse,
+    MemoryMarkdownReferenceResponse,
+    MemoryMarkdownScanResponse,
+    MemoryMarkdownSearchResponse,
+    MemoryStatisticsResponse,
+    MemoryTaskCreateResponse,
+    MemoryTaskHistoryResponse,
+    MemoryTaskUpdateResponse,
+)
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
@@ -123,7 +137,7 @@ class MarkdownReferenceRequest(BaseModel):
     operation="get_memory_statistics",
     error_code_prefix="MEMORY",
 )
-@router.get("/statistics")
+@router.get("/statistics", response_model=MemoryStatisticsResponse)
 async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     """Get comprehensive memory and task execution statistics.
 
@@ -158,7 +172,7 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     operation="get_task_history",
     error_code_prefix="MEMORY",
 )
-@router.get("/tasks/history")
+@router.get("/tasks/history", response_model=MemoryTaskHistoryResponse)
 async def get_task_history(
     agent_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -202,7 +216,7 @@ async def get_task_history(
     operation="create_task",
     error_code_prefix="MEMORY",
 )
-@router.post("/tasks")
+@router.post("/tasks", response_model=MemoryTaskCreateResponse)
 async def create_task(request: TaskCreateRequest):
     """Create a new task record.
 
@@ -258,7 +272,7 @@ async def create_task(request: TaskCreateRequest):
     operation="update_task",
     error_code_prefix="MEMORY",
 )
-@router.put("/tasks/{task_id}")
+@router.put("/tasks/{task_id}", response_model=MemoryTaskUpdateResponse)
 async def update_task(task_id: str, request: TaskUpdateRequest):
     """Update task status and information.
 
@@ -309,7 +323,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
     operation="add_markdown_reference",
     error_code_prefix="MEMORY",
 )
-@router.post("/tasks/{task_id}/markdown-reference")
+@router.post("/tasks/{task_id}/markdown-reference", response_model=MemoryMarkdownReferenceResponse)
 async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest):
     """Add markdown file reference to a task.
 
@@ -355,7 +369,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
     operation="scan_markdown_system",
     error_code_prefix="MEMORY",
 )
-@router.get("/markdown/scan")
+@router.get("/markdown/scan", response_model=MemoryMarkdownScanResponse)
 async def scan_markdown_system():
     """Initialize and scan markdown reference system.
 
@@ -379,7 +393,7 @@ async def scan_markdown_system():
     operation="search_markdown",
     error_code_prefix="MEMORY",
 )
-@router.get("/markdown/search")
+@router.get("/markdown/search", response_model=MemoryMarkdownSearchResponse)
 async def search_markdown(
     query: str = Query(..., min_length=2),
     document_type: Optional[str] = Query(None),
@@ -413,7 +427,7 @@ async def search_markdown(
     operation="get_document_references",
     error_code_prefix="MEMORY",
 )
-@router.get("/markdown/{file_path:path}/references")
+@router.get("/markdown/{file_path:path}/references", response_model=MemoryDocumentReferencesResponse)
 async def get_document_references(file_path: str):
     """Get all references for a specific markdown document.
 
@@ -441,7 +455,7 @@ async def get_document_references(file_path: str):
     operation="get_embedding_cache_stats",
     error_code_prefix="MEMORY",
 )
-@router.get("/embeddings/cache-stats")
+@router.get("/embeddings/cache-stats", response_model=MemoryEmbeddingCacheStatsResponse)
 async def get_embedding_cache_stats():
     """Get embedding cache statistics.
 
@@ -470,7 +484,7 @@ async def get_embedding_cache_stats():
     operation="cleanup_old_data",
     error_code_prefix="MEMORY",
 )
-@router.delete("/cleanup")
+@router.delete("/cleanup", response_model=MemoryCleanupResponse)
 async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     """Clean up old task records and cached data.
 
@@ -497,7 +511,7 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     operation="get_active_tasks",
     error_code_prefix="MEMORY",
 )
-@router.get("/active-tasks")
+@router.get("/active-tasks", response_model=MemoryActiveTasksResponse)
 async def get_active_tasks():
     """Get currently active tasks"""
     try:
