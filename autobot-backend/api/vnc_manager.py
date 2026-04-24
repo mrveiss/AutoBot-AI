@@ -160,7 +160,7 @@ def start_vnc_server() -> Dict[str, str]:
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
     vnc_passwd = Path.home() / ".vnc" / "passwd"
     if not vnc_passwd.exists():
-        logger.error(
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "VNC passwd file not found at %s; run vncpasswd before starting VNC server",
             vnc_passwd,
         )
