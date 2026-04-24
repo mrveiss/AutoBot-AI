@@ -21,6 +21,11 @@ import logging
 
 from fastapi import APIRouter
 
+from api.schemas_common import (
+    CommandValidationResponse,
+    PackageManagersResponse,
+    ToolCheckResponse,
+)
 from api.terminal_models import ToolInstallRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -38,7 +43,7 @@ router = APIRouter(tags=["terminal-tools"])
     operation="install_tool",
     error_code_prefix="TERMINAL",
 )
-@router.post("/install-tool")
+@router.post("/install-tool", response_model=None)
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
     # Import system command agent for tool installation
@@ -63,7 +68,7 @@ async def install_tool(request: ToolInstallRequest):
     operation="check_tool_installed",
     error_code_prefix="TERMINAL",
 )
-@router.post("/check-tool")
+@router.post("/check-tool", response_model=ToolCheckResponse)
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
     from agents.system_command_agent import SystemCommandAgent
@@ -78,7 +83,7 @@ async def check_tool_installed(tool_name: str):
     operation="validate_command",
     error_code_prefix="TERMINAL",
 )
-@router.post("/validate-command")
+@router.post("/validate-command", response_model=CommandValidationResponse)
 async def validate_command(command: str):
     """Validate command safety"""
     from agents.system_command_agent import SystemCommandAgent
@@ -93,7 +98,7 @@ async def validate_command(command: str):
     operation="get_package_managers",
     error_code_prefix="TERMINAL",
 )
-@router.get("/package-managers")
+@router.get("/package-managers", response_model=PackageManagersResponse)
 async def get_package_managers():
     """Get available package managers"""
     from agents.system_command_agent import SystemCommandAgent
