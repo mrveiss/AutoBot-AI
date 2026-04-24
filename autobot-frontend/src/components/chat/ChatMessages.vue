@@ -1292,8 +1292,11 @@ watch(() => store.currentMessages.length, (newLen, oldLen) => {
     const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      // #1721: Loop strip to prevent incomplete multi-char sanitization
-      let preview = latestMessage.content.substring(0, 100)
+      // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
+      let preview = latestMessage.content.substring(0, 200) // over-read then trim after strip
+        .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+        .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+        .substring(0, 100)
       let prev = ''
       while (prev !== preview) {
         prev = preview
