@@ -24,7 +24,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.http_client import get_http_client
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -166,8 +166,7 @@ class ModelOptimizer:
                 # Double-check after acquiring lock
                 if self._redis_client is None:
                     try:
-                        self._redis_client = await get_redis_client(
-                            async_client=True,
+                        self._redis_client = await get_async_redis_client(
                             database="analytics",
                         )
 

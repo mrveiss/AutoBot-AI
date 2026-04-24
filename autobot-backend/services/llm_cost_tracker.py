@@ -22,7 +22,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
@@ -195,7 +196,7 @@ class BudgetAlert:
     enabled: bool = True
 
 
-class LLMCostTracker:
+class LLMCostTracker(AsyncRedisClientMixin):
     """
     Tracks LLM API usage costs across all providers.
 
@@ -206,6 +207,8 @@ class LLMCostTracker:
     - Budget alerting
     - Cost trend analysis
     """
+
+    _redis_database = RedisDatabase.ANALYTICS
 
     REDIS_KEY_PREFIX = "llm_cost:"
     USAGE_LIST_KEY = f"{REDIS_KEY_PREFIX}usage"
@@ -218,16 +221,13 @@ class LLMCostTracker:
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
     def __init__(self):
-        """Initialize cost tracker with lazy Redis client and empty alerts."""
-        self._redis_client = None
+        """Initialize cost tracker with empty alerts."""
         self._budget_alerts: List[BudgetAlert] = []
         self._current_period_costs: Dict[str, float] = {}
 
     async def get_redis(self):
         """Get async Redis client"""
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
-        return self._redis_client
+        return await self._get_redis()
 
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.

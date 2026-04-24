@@ -24,7 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,10 @@ class StratifiedComparison:
         }
 
 
-class ConfounderControlAnalyzer:
+class ConfounderControlAnalyzer(AsyncRedisClientMixin):
     """Analyzes agent performance with confounder control via stratification."""
+
+    _redis_database = RedisDatabase.ANALYTICS
 
     REDIS_KEY_PREFIX = "agent_analytics:"
     AGENT_HISTORY_KEY = f"{REDIS_KEY_PREFIX}history"
@@ -112,15 +115,9 @@ class ConfounderControlAnalyzer:
         "task_priority": {"low": 1, "medium": 2, "high": 3},
     }
 
-    def __init__(self):
-        """Initialize analyzer with lazy Redis client."""
-        self._redis_client = None
-
     async def get_redis(self):
         """Get async Redis client"""
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
-        return self._redis_client
+        return await self._get_redis()
 
     async def compare_agents_stratified(
         self,
