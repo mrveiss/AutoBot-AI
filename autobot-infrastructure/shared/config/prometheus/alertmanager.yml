@@ -68,6 +68,15 @@ route:
       repeat_interval: 30m
       continue: true
 
+    # Knowledge Base degradation alerts (Issue #5408) — routed to redis-alerts
+    # because the root cause is always a Redis or infra problem.
+    - match:
+        component: knowledge_base
+      receiver: 'redis-alerts'
+      group_wait: 10s
+      repeat_interval: 30m
+      continue: true
+
     # NPU alerts (Issue #69)
     - match:
         component: npu
