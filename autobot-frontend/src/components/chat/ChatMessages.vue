@@ -1292,17 +1292,11 @@ watch(() => store.currentMessages.length, (newLen, oldLen) => {
     const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
-      let preview = latestMessage.content.substring(0, 200) // over-read then trim after strip
-        .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
-        .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+      // Use DOMPurify-backed sanitizeChatHtml to strip scripts/event-handlers, then
+      // remove any remaining HTML tags to obtain plain text for the aria-live region.
+      const preview = sanitizeChatHtml(latestMessage.content.substring(0, 200))
+        .replace(/<[^>]*>/g, '')  // strip remaining HTML tags → plain text
         .substring(0, 100)
-      let prev = ''
-      while (prev !== preview) {
-        prev = preview
-        preview = preview.replace(/<[^>]*?>/g, '')
-      }
-      preview = preview.replace(/</g, '&lt;')
       screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
 
       setTimeout(() => {
