@@ -150,7 +150,7 @@ async def _fan_out_stream(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/chat/compare")
+@router.post("/chat/compare", response_model=None)
 async def compare_models(
     body: CompareRequest,
     request: Request,
