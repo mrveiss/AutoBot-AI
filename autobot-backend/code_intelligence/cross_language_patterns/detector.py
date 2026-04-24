@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,
@@ -84,7 +84,7 @@ EMBEDDING_BATCH_CONCURRENCY = 10  # Max concurrent embedding requests
 EMBEDDING_BATCH_SIZE = 50  # Process embeddings in batches of this size
 
 
-class CrossLanguagePatternDetector:
+class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
     """
     Detects patterns across multiple programming languages.
 
@@ -94,6 +94,8 @@ class CrossLanguagePatternDetector:
     - DTO/type inconsistencies
     - Validation rule duplication
     """
+
+    _redis_database = "analytics"
 
     def __init__(
         self,
@@ -123,13 +125,11 @@ class CrossLanguagePatternDetector:
         # Lazy-loaded resources
         self._chromadb_client = None
         self._chromadb_collection = None
-        self._redis_client = None
         self._llm_interface = None
         self._embedding_cache = None
 
         # Thread-safe initialization locks
         self._cache_lock = asyncio.Lock()
-        self._redis_lock = asyncio.Lock()
         self._chromadb_lock = asyncio.Lock()
 
         # Statistics
@@ -168,21 +168,6 @@ class CrossLanguagePatternDetector:
                         logger.error("Failed to initialize ChromaDB: %s", e)
                         self._chromadb_collection = None
         return self._chromadb_collection
-
-    async def _get_redis_client(self):
-        """Get Redis client for caching."""
-        if self._redis_client is None and self.use_cache:
-            async with self._redis_lock:
-                if self._redis_client is None:
-                    try:
-                        self._redis_client = await get_async_redis_client(
-                            database="analytics"
-                        )
-                        logger.info("Redis client initialized for analytics")
-                    except Exception as e:
-                        logger.warning("Redis not available for caching: %s", e)
-                        self._redis_client = None
-        return self._redis_client
 
     async def _get_embedding_cache(self):
         """Get embedding cache with thread-safe lazy initialization."""
@@ -1131,7 +1116,9 @@ class CrossLanguagePatternDetector:
 
     async def _cache_results(self, analysis: CrossLanguageAnalysis) -> None:
         """Cache analysis results in Redis."""
-        redis = await self._get_redis_client()
+        if not self.use_cache:
+            return
+        redis = await self._get_redis()
         if not redis:
             return
 
