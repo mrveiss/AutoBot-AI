@@ -98,7 +98,7 @@
     </table>
     <EmptyState
       v-else
-      icon="fas fa-folder-open"
+      icon="folder-open"
       :message="$t('fileBrowser.fileList.noFiles')"
     />
   </div>

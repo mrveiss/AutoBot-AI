@@ -108,7 +108,7 @@
 
     <EmptyState
       v-else-if="!loading"
-      icon="fas fa-chart-bar"
+      icon="chart-bar"
       :message="$t('analytics.bi.agentCosts.noData')"
     />
 

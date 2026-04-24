@@ -11,7 +11,7 @@
 
     <EmptyState
       v-if="showEmptyState"
-      icon="fas fa-comments"
+      icon="comments"
       :title="$t('chat.interface.startConversation')"
       :message="$t('chat.emptyState')"
     />

@@ -179,7 +179,7 @@
     <!-- Empty State -->
     <EmptyState
       v-else
-      icon="fas fa-inbox"
+      icon="inbox"
       :message="$t('knowledge.changeFeed.noRecentChanges')"
     >
       <template #actions>

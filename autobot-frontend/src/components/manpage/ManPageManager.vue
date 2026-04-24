@@ -287,7 +287,7 @@
 
         <EmptyState
           v-if="searchResults.length === 0"
-          icon="fas fa-info-circle"
+          icon="info-circle"
           :message="$t('manpage.manager.noResults')"
         />
 

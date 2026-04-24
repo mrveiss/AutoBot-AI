@@ -232,7 +232,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-plug"
+      icon="plug"
       :message="$t('analytics.codebase.apiCoverage.noData')"
     />
   </div>

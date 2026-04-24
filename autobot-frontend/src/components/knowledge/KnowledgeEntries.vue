@@ -150,7 +150,7 @@
 
     <EmptyState
       v-else-if="filteredDocuments.length === 0"
-      icon="fas fa-file-alt"
+      icon="file-alt"
       :title="$t('knowledge.entries.noEntriesFound')"
       :message="searchQuery || filterCategory || filterType ? $t('knowledge.entries.adjustFilters') : $t('knowledge.entries.addFirstEntry')"
     />

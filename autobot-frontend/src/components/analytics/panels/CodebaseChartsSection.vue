@@ -163,7 +163,7 @@
           />
           <div v-else class="chart-empty-slot">
             <EmptyState
-              icon="fas fa-chart-pie"
+              icon="chart-pie"
               :message="
                 selectedCategory === 'all'
                   ? 'No problem type data'
@@ -211,7 +211,7 @@
 
       <EmptyState
         v-else
-        icon="fas fa-chart-area"
+        icon="chart-area"
         :message="$t('analytics.codebase.problems.noChartData')"
       >
         <template #actions>

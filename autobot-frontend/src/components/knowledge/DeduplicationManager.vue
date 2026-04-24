@@ -106,7 +106,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-check-circle"
+          icon="check-circle"
           :message="$t('knowledge.deduplication.noDuplicatesFound')"
           variant="success"
         />
@@ -169,7 +169,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-check-circle"
+          icon="check-circle"
           :message="$t('knowledge.deduplication.noOrphansFound')"
           variant="success"
         />

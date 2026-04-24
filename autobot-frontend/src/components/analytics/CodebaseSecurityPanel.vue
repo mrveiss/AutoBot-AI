@@ -72,7 +72,7 @@
 
     <EmptyState
       v-else-if="!props.analysisLoading"
-      icon="fas fa-brain"
+      icon="brain"
       :message="$t('analytics.codebase.intelligence.noData')"
       variant="info"
     >

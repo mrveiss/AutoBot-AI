@@ -111,7 +111,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-clone"
+      icon="clone"
       :message="$t('analytics.codebase.duplicates.noConfigData')"
     />
   </div>

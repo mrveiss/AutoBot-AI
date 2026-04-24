@@ -332,7 +332,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-users-cog"
+      icon="users-cog"
       :message="$t('analytics.codebase.ownership.noData')"
     />
   </div>
