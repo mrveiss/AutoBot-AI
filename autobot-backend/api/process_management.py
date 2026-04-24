@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 
@@ -222,4 +223,4 @@ def _read_log_file(log_path: str) -> str:
             return fh.read()
     except OSError as exc:
         logger.warning("Could not read log file %s: %s", log_path, exc)
-        return "Log file unavailable"
+        return safe_http_detail(exc, "Log file unavailable")

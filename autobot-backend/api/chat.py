@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 
@@ -1104,7 +1105,7 @@ async def _stream_chat_workflow_messages(
 
     except Exception as e:
         logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": "stream_error", "request_id": request_id}
+        evt = {"type": "error", "content": safe_http_detail(e, "stream_error"), "request_id": request_id}
         yield f"data: {json.dumps(evt)}\n\n"
 
 
