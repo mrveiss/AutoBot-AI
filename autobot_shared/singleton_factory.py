@@ -8,9 +8,34 @@ Issue #5423: extracted from the repeated double-checked locking pattern in
 """
 
 from threading import Lock
-from typing import Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+def lazy_optional_singleton(factory: Callable[[], Optional[T]]) -> Callable[[], Optional[T]]:
+    """Return a factory that creates and caches a thread-safe optional singleton.
+
+    Like ``lazy_singleton`` but supports ``None`` as a valid cached value.
+    Uses a sentinel ``_UNSET`` object to distinguish "not yet initialised"
+    from "initialised to None" (e.g. when construction fails gracefully).
+
+    Issue #5576: used for ``get_secure_sandbox()`` which returns None on
+    Docker initialisation failure.
+    """
+    _lock = Lock()
+    _UNSET: Any = object()
+    _instance: Any = _UNSET
+
+    def _get() -> Optional[T]:
+        nonlocal _instance
+        if _instance is _UNSET:
+            with _lock:
+                if _instance is _UNSET:
+                    _instance = factory()
+        return _instance  # type: ignore[return-value]
+
+    return _get
 
 
 def lazy_singleton(factory: Callable[..., T]) -> Callable[..., T]:
