@@ -32,7 +32,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { escapeHtml } from '@/utils/sanitize'
+import { escapeHtml, sanitizeHtml } from '@/utils/sanitize'
 
 interface OutputLine {
   content: string
@@ -76,18 +76,12 @@ watch(() => props.outputLines.length, (newLength) => {
     lastAnnouncedLength = newLength
     const latestLine = props.outputLines[newLength - 1]
     if (latestLine) {
-      // Strip HTML and ANSI codes for announcement
-      // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
-      let cleanContent = latestLine.content
-        .replace(/\x1b\[[0-9;]*m/g, '')  // Remove ANSI codes
-        .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
-        .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
-      let prevContent = ''
-      while (prevContent !== cleanContent) {
-        prevContent = cleanContent
-        cleanContent = cleanContent.replace(/<[^>]*>/g, '')
-      }
-      cleanContent = cleanContent.substring(0, 150)  // Limit to 150 chars
+      // Strip ANSI codes first (not HTML — must happen before DOMPurify), then use
+      // DOMPurify-backed sanitizeHtml to remove scripts/event-handlers, then strip
+      // remaining tags to get plain text for the aria-live announcement.
+      const cleanContent = sanitizeHtml(latestLine.content.replace(/\x1b\[[0-9;]*m/g, ''))
+        .replace(/<[^>]*>/g, '')  // strip remaining HTML tags → plain text
+        .substring(0, 150)  // Limit to 150 chars
 
       const lineType = latestLine.type ? ` (${latestLine.type})` : ''
       screenReaderStatus.value = `New terminal output${lineType}: ${cleanContent}`
