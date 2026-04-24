@@ -453,6 +453,65 @@ class CompletionResponse(BaseModel):
     cached: bool = False
 
 
+class IDERulesResponse(BaseModel):
+    """Response for GET /rules."""
+
+    rules: List[Dict[str, Any]]
+    total: int
+    enabled: int
+
+
+class IDEConfigUpdateResponse(BaseModel):
+    """Response for PUT /config."""
+
+    updated: bool
+
+
+class IDECategoryItem(BaseModel):
+    """A single category entry."""
+
+    id: str
+    name: str
+
+
+class IDECategoriesResponse(BaseModel):
+    """Response for GET /categories."""
+
+    categories: List[IDECategoryItem]
+
+
+class IDESeverityItem(BaseModel):
+    """A single severity entry."""
+
+    id: str
+    name: str
+    lsp_code: int
+
+
+class IDESeveritiesResponse(BaseModel):
+    """Response for GET /severities."""
+
+    severities: List[IDESeverityItem]
+
+
+class IDEBatchAnalyzeResponse(BaseModel):
+    """Response for POST /batch-analyze."""
+
+    results: List[Any]
+    files_analyzed: int
+    total_issues: int
+    errors: int
+
+
+class IDEHealthResponse(BaseModel):
+    """Response for GET /health."""
+
+    status: str
+    rules_loaded: int
+    disabled_rules: int
+    cache_size: int
+
+
 # =============================================================================
 # IDE Integration Engine
 # =============================================================================
@@ -1141,7 +1200,7 @@ async def get_engine() -> IDEIntegrationEngine:
 # =============================================================================
 
 
-@router.post("/analyze", summary="Analyze code for patterns")
+@router.post("/analyze", summary="Analyze code for patterns", response_model=AnalysisResponse)
 async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     """
     Analyze code and return LSP-compatible diagnostics.
@@ -1152,21 +1211,21 @@ async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     return await engine.analyze(request)
 
 
-@router.post("/quickfix", summary="Get quick fix suggestions")
+@router.post("/quickfix", summary="Get quick fix suggestions", response_model=QuickFixResponse)
 async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     """Get available quick fixes for a diagnostic."""
     engine = await get_engine()
     return await engine.get_quick_fixes(request)
 
 
-@router.post("/hover", summary="Get hover information")
+@router.post("/hover", summary="Get hover information", response_model=HoverResponse)
 async def get_hover_info(request: HoverRequest) -> HoverResponse:
     """Get hover information for a position."""
     engine = await get_engine()
     return await engine.get_hover(request)
 
 
-@router.get("/rules", summary="Get available rules")
+@router.get("/rules", summary="Get available rules", response_model=IDERulesResponse)
 async def get_rules() -> Dict[str, Any]:
     """Get list of all available analysis rules."""
     engine = await get_engine()
@@ -1178,7 +1237,7 @@ async def get_rules() -> Dict[str, Any]:
     }
 
 
-@router.put("/config", summary="Update configuration")
+@router.put("/config", summary="Update configuration", response_model=IDEConfigUpdateResponse)
 async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     """Update IDE integration configuration."""
     engine = await get_engine()
@@ -1186,7 +1245,7 @@ async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     return {"updated": True}
 
 
-@router.get("/categories", summary="Get pattern categories")
+@router.get("/categories", summary="Get pattern categories", response_model=IDECategoriesResponse)
 async def get_categories() -> Dict[str, Any]:
     """Get available pattern categories."""
     return {
@@ -1197,7 +1256,7 @@ async def get_categories() -> Dict[str, Any]:
     }
 
 
-@router.get("/severities", summary="Get severity levels")
+@router.get("/severities", summary="Get severity levels", response_model=IDESeveritiesResponse)
 async def get_severities() -> Dict[str, Any]:
     """Get available severity levels."""
     return {
@@ -1208,7 +1267,7 @@ async def get_severities() -> Dict[str, Any]:
     }
 
 
-@router.post("/batch-analyze", summary="Analyze multiple files")
+@router.post("/batch-analyze", summary="Analyze multiple files", response_model=IDEBatchAnalyzeResponse)
 async def batch_analyze(
     requests: List[AnalysisRequest],
 ) -> Dict[str, Any]:
@@ -1232,7 +1291,7 @@ async def batch_analyze(
     }
 
 
-@router.post("/completion", summary="Get code completions")
+@router.post("/completion", summary="Get code completions", response_model=CompletionResponse)
 async def get_completions(request: CompletionRequest) -> CompletionResponse:
     """
     Get intelligent code completions.
@@ -1246,7 +1305,7 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
     return await engine.complete(request)
 
 
-@router.get("/health", summary="Health check")
+@router.get("/health", summary="Health check", response_model=IDEHealthResponse)
 async def health_check() -> Dict[str, Any]:
     """Check health of the IDE integration service."""
     engine = await get_engine()
