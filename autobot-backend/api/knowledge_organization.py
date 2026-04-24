@@ -13,6 +13,11 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeOrganizationCleanupResponse,
+    KnowledgeOrganizationPolicyResponse,
+    KnowledgeOrganizationStatsResponse,
+)
 from auth_middleware import get_current_user
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
@@ -75,7 +80,7 @@ class UpdateOrganizationPolicyRequest(BaseModel):
 # =============================================================================
 
 
-@router.get("/policy")
+@router.get("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 async def get_organization_policy(
     request: Request, current_user: Dict = Depends(get_current_user)
 ):
@@ -119,7 +124,7 @@ async def get_organization_policy(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/policy")
+@router.put("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 async def update_organization_policy(
     policy_request: UpdateOrganizationPolicyRequest,
     request: Request,
@@ -244,7 +249,7 @@ def _get_organization_team_count(current_user: Dict) -> int:
     )
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=KnowledgeOrganizationStatsResponse)
 async def get_organization_knowledge_stats(
     request: Request, current_user: Dict = Depends(get_current_user)
 ):
@@ -343,7 +348,7 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
     return deleted_count
 
 
-@router.delete("/cleanup")
+@router.delete("/cleanup", response_model=KnowledgeOrganizationCleanupResponse)
 async def cleanup_organization_knowledge(
     request: Request,
     current_user: Dict = Depends(get_current_user),

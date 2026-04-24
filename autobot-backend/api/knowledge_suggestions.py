@@ -29,6 +29,13 @@ from api.knowledge_models import (
     SuggestCategoriesRequest,
     SuggestTagsRequest,
 )
+from api.schemas_common import (
+    KnowledgeAutoApplySuggestionsResponse,
+    KnowledgeSuggestionsAllResponse,
+    KnowledgeSuggestionsCategoriesResponse,
+    KnowledgeSuggestionsContextResponse,
+    KnowledgeSuggestionsTagsResponse,
+)
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -36,7 +43,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge-suggestions"])
 
 
-@router.post("/suggestions/tags")
+@router.post("/suggestions/tags", response_model=KnowledgeSuggestionsTagsResponse)
 async def suggest_tags(request: SuggestTagsRequest):
     """
     Suggest tags for content based on similar documents.
@@ -101,7 +108,7 @@ async def suggest_tags(request: SuggestTagsRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/suggestions/categories")
+@router.post("/suggestions/categories", response_model=KnowledgeSuggestionsCategoriesResponse)
 async def suggest_categories(request: SuggestCategoriesRequest):
     """
     Suggest categories for content based on similar documents.
@@ -188,7 +195,7 @@ async def _call_kb_suggest_all(request: "SuggestAllRequest") -> dict:
     return result
 
 
-@router.post("/suggestions/all")
+@router.post("/suggestions/all", response_model=KnowledgeSuggestionsAllResponse)
 async def suggest_all(request: SuggestAllRequest):
     """Suggest both tags and categories in a single call.
 
@@ -206,7 +213,7 @@ async def suggest_all(request: SuggestAllRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/suggestions/context")
+@router.post("/suggestions/context", response_model=KnowledgeSuggestionsContextResponse)
 async def suggest_by_context(request: ContextSuggestionsRequest):
     """
     Suggest KB documents relevant to the current conversation context (Issue #3284).
@@ -324,7 +331,7 @@ def _log_auto_apply_result(fact_id: str, result: dict) -> None:
     )
 
 
-@router.post("/facts/{fact_id}/auto-apply")
+@router.post("/facts/{fact_id}/auto-apply", response_model=KnowledgeAutoApplySuggestionsResponse)
 async def auto_apply_suggestions(fact_id: str, request: AutoApplySuggestionsRequest):
     """
     Automatically apply high-confidence suggestions to a fact.

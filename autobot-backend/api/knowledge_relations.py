@@ -19,6 +19,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.schemas_common import (
+    KnowledgeRelationResultResponse,
+    KnowledgeRelationTypesResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
@@ -95,7 +99,7 @@ class HybridSearchRequest(BaseModel):
 # ============================================================================
 
 
-@router.post("/create")
+@router.post("/create", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_fact_relation",
@@ -142,7 +146,7 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
     return result
 
 
-@router.delete("/delete")
+@router.delete("/delete", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_fact_relation",
@@ -174,7 +178,7 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     return result
 
 
-@router.get("/fact/{fact_id}")
+@router.get("/fact/{fact_id}", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_relations",
@@ -223,7 +227,7 @@ async def get_fact_relations(
     return result
 
 
-@router.post("/traverse")
+@router.post("/traverse", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="traverse_relations",
@@ -257,7 +261,7 @@ async def traverse_relations(req: Request, body: TraverseRequest):
     return result
 
 
-@router.post("/hybrid-search")
+@router.post("/hybrid-search", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hybrid_search",
@@ -295,7 +299,7 @@ async def hybrid_search(req: Request, body: HybridSearchRequest):
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_relation_stats",
@@ -323,7 +327,7 @@ async def get_relation_stats(req: Request):
     return result
 
 
-@router.get("/types")
+@router.get("/types", response_model=KnowledgeRelationTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_relation_types",
