@@ -9,11 +9,16 @@ Issue #1946: Layer-by-layer inference mode for batch/offline processing.
 
 import os
 import tempfile
+import types
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
+
+# Detect conftest MagicMock torch stub; skip tensor-operation tests when absent (#5728)
+_TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
+requires_torch = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
 
 from llm_interface_pkg.optimization.layer_inference import (
     LayerInferenceConfig,
@@ -197,6 +202,7 @@ class TestGetLayerNames:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestLoadEvictCycle:
     """Tests for LayerInferenceEngine.load_layer() and evict_layer()."""
 
@@ -282,6 +288,7 @@ class TestLoadEvictCycle:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestForwardPass:
     """Tests for LayerInferenceEngine.forward_pass()."""
 
@@ -343,6 +350,7 @@ class TestForwardPass:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestGenerate:
     """Tests for LayerInferenceEngine.generate() with mocked dependencies."""
 
@@ -448,6 +456,7 @@ class TestGenerate:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestStatsTracking:
     """Tests that LayerInferenceStats is populated correctly."""
 
@@ -487,6 +496,7 @@ class TestStatsTracking:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestModuleHelpers:
     """Tests for module-level private helpers."""
 

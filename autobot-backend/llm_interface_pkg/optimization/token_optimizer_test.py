@@ -4,6 +4,7 @@
 """Tests for TokenOptimizer — Issue #2098."""
 
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 from .token_optimizer import (
@@ -256,14 +257,15 @@ class TestL1ToL2Fallback:
     @patch("llm_interface_pkg.optimization.token_optimizer.get_redis_client")
     def test_l2_hit_promotes_to_l1(self, mock_get_redis):
         """When L1 misses but L2 hits, entry should be promoted to L1."""
+        now = time.time()
         entry = CompactionEntry(
             fingerprint="fp_test",
             original_length=500,
             compacted_text="compact",
             compacted_length=7,
             hit_count=0,
-            created_at=1000.0,
-            last_accessed=1000.0,
+            created_at=now,
+            last_accessed=now,
         )
         serialized = json.dumps(
             {

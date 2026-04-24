@@ -247,8 +247,8 @@ class TestEvictLayerToMetaQuantized:
         layer = MagicMock(name="Layer")
         set_fn = self._run_quantized_eviction(layer, param_names=("weight", "bias"))
         assert set_fn.call_count == 2
-        calls = [c[0] for c in set_fn.call_args_list]  # positional args
-        devices = [c[2] for c in calls]
+        # device is passed as keyword arg: set_fn(layer, name, device="meta")
+        devices = [c.kwargs.get("device") for c in set_fn.call_args_list]
         assert all(d == "meta" for d in devices), "All tensors must target 'meta'"
 
     def test_calls_set_module_tensor_for_buffers(self):

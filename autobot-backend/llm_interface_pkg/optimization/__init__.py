@@ -88,6 +88,17 @@ from .token_optimizer import (
     get_token_optimizer,
 )
 
+# Expose submodules as package attributes so @patch("...optimization.<submodule>.X")
+# resolves correctly under pytest --import-mode=importlib (#5728)
+from . import (  # noqa: E402
+    attention_backend,
+    flash_attention,
+    hf_quantizer,
+    meta_eviction,
+    model_inspector,
+    token_optimizer,
+)
+
 __all__ = [
     # Router
     "OptimizationRouter",
