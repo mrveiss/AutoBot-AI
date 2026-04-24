@@ -1803,3 +1803,76 @@ class CodeReviewPatternPreferencesResponse(BaseModel):
     patterns: Dict[str, Any]
 
 
+# ---------------------------------------------------------------------------
+# metrics.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class MetricsWorkflowResponse(BaseModel):
+    """Response for GET /workflow/{workflow_id}."""
+
+    success: bool
+    workflow_id: str
+    metrics: Optional[Any] = None
+
+
+class MetricsPerformanceSummaryResponse(BaseModel):
+    """Response for GET /performance/summary."""
+
+    success: bool
+    performance_summary: Optional[Any] = None
+
+
+class MetricsSystemCurrentResponse(BaseModel):
+    """Response for GET /system/current."""
+
+    success: bool
+    system_metrics: Optional[Any] = None
+
+
+class MetricsSystemHistoryResponse(BaseModel):
+    """Response for GET /system/history."""
+
+    success: bool
+    cpu_history: List[Any]
+    memory_history: List[Any]
+    time_range: Dict[str, str]
+
+
+class MetricsSystemSummaryResponse(BaseModel):
+    """Response for GET /system/summary."""
+
+    success: bool
+    resource_summary: Optional[Any] = None
+
+
+class MetricsExportResponse(BaseModel):
+    """Response for GET /export/workflow and GET /export/system."""
+
+    success: bool
+    format: str
+    data: Optional[Any] = None
+
+
+class MetricsMonitoringStartResponse(BaseModel):
+    """Response for POST /system/monitoring/start."""
+
+    success: bool
+    message: str
+    collection_interval: Optional[Any] = None
+
+
+class MetricsMonitoringStopResponse(BaseModel):
+    """Response for POST /system/monitoring/stop."""
+
+    success: bool
+    message: str
+
+
+class MetricsDashboardResponse(BaseModel):
+    """Response for GET /dashboard."""
+
+    success: bool
+    dashboard: Dict[str, Any]
+
+

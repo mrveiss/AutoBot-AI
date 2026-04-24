@@ -103,7 +103,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     )
 
 
-@router.post("/workflow/execute")
+@router.post("/workflow/execute", response_model=None)
 async def execute_workflow(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -153,7 +153,7 @@ async def execute_workflow(
     operation="create_workflow_plan",
     error_code_prefix="ORCHESTRATION",
 )
-@router.post("/workflow/plan")
+@router.post("/workflow/plan", response_model=None)
 async def create_workflow_plan(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -218,7 +218,7 @@ async def create_workflow_plan(
     operation="get_agent_performance",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/agents/performance")
+@router.get("/agents/performance", response_model=None)
 async def get_agent_performance(
     current_user: dict = Depends(get_current_user),
 ):
@@ -251,7 +251,7 @@ async def get_agent_performance(
     operation="recommend_agents",
     error_code_prefix="ORCHESTRATION",
 )
-@router.post("/agents/recommend")
+@router.post("/agents/recommend", response_model=None)
 async def recommend_agents(
     request: AgentRecommendationRequest,
     current_user: dict = Depends(get_current_user),
@@ -307,7 +307,7 @@ async def recommend_agents(
     operation="get_active_workflows",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/workflow/active")
+@router.get("/workflow/active", response_model=None)
 async def get_active_workflows(
     current_user: dict = Depends(get_current_user),
 ):
@@ -358,7 +358,7 @@ async def get_active_workflows(
     operation="get_execution_strategies",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/strategies")
+@router.get("/strategies", response_model=None)
 async def get_execution_strategies(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -405,7 +405,7 @@ async def get_execution_strategies(
     operation="get_agent_capabilities",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/capabilities")
+@router.get("/capabilities", response_model=None)
 async def get_agent_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -461,7 +461,7 @@ async def get_agent_capabilities(
     operation="get_orchestration_status",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/status")
+@router.get("/status", response_model=None)
 async def get_orchestration_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -516,7 +516,7 @@ async def get_orchestration_status(
     operation="get_orchestration_examples",
     error_code_prefix="ORCHESTRATION",
 )
-@router.get("/examples")
+@router.get("/examples", response_model=None)
 async def get_orchestration_examples(
     admin_check: bool = Depends(check_admin_permission),
 ):
