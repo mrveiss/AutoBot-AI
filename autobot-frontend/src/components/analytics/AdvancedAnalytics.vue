@@ -89,7 +89,7 @@
             </tr>
           </tbody>
         </table>
-        <EmptyState v-else icon="fas fa-chart-bar" :message="$t('analytics.advanced.noCostData')" />
+        <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noCostData')" />
       </BasePanel>
     </div>
 
@@ -156,7 +156,7 @@
             </tr>
           </tbody>
         </table>
-        <EmptyState v-else icon="fas fa-robot" :message="$t('analytics.advanced.noAgentData')" />
+        <EmptyState v-else icon="robot" :message="$t('analytics.advanced.noAgentData')" />
       </BasePanel>
 
       <!-- Recommendations -->
@@ -261,7 +261,7 @@
             </tr>
           </tbody>
         </table>
-        <EmptyState v-else icon="fas fa-chart-bar" :message="$t('analytics.advanced.noFeatureData')" />
+        <EmptyState v-else icon="chart-bar" :message="$t('analytics.advanced.noFeatureData')" />
       </BasePanel>
 
       <!-- Usage Heatmap -->

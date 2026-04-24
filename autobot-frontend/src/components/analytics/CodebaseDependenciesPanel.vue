@@ -146,7 +146,7 @@ const emit = defineEmits<{
           class="chart-item"
         />
         <div v-else class="chart-empty-slot">
-          <EmptyState icon="fas fa-cube" message="No external dependencies found" />
+          <EmptyState icon="cube" message="No external dependencies found" />
         </div>
         <ModuleImportsChart
           v-if="dependencyData.modules && dependencyData.modules.length > 0"
@@ -158,7 +158,7 @@ const emit = defineEmits<{
           class="chart-item"
         />
         <div v-else class="chart-empty-slot">
-          <EmptyState icon="fas fa-file-import" message="No module data available" />
+          <EmptyState icon="file-import" message="No module data available" />
         </div>
       </div>
 
