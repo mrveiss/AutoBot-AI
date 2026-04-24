@@ -14,6 +14,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -717,8 +718,8 @@ async def get_review_history(
             entry = json.loads(raw)
             if since:
                 try:
-                    entry_dt = datetime.fromisoformat(entry.get("analyzed_at", ""))
-                    since_dt = datetime.fromisoformat(since)
+                    entry_dt = parse_utc_iso(entry.get("analyzed_at", ""))
+                    since_dt = parse_utc_iso(since)
                     # Normalise both to UTC-aware for comparison
                     if entry_dt.tzinfo is None:
                         entry_dt = entry_dt.replace(tzinfo=timezone.utc)

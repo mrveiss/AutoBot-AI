@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import check_admin_permission
+from autobot_shared.time_utils import now_utc
 from skills.db import get_skills_engine
 from skills.generator import SkillGenerator
 from skills.models import (
@@ -25,6 +26,7 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -219,7 +221,7 @@ async def promote_draft(
                 status_code=500, detail="Internal server error"
             ) from exc
         skill.state = SkillState.BUILTIN
-        skill.promoted_at = datetime.now(timezone.utc)
+        skill.promoted_at = now_utc()
         await session.commit()
 
     logger.info("Promoted skill %s to builtin: %s", skill.name, promoted_path)
@@ -260,7 +262,7 @@ async def decide_approval(
         approval = await _get_approval(session, approval_id)
         approval.status = _STATUS_APPROVED if body.approved else _STATUS_REJECTED
         approval.notes = body.notes
-        approval.reviewed_at = datetime.now(timezone.utc)
+        approval.reviewed_at = now_utc()
         await session.commit()
 
     logger.info("Approval %s set to: %s", approval_id, approval.status)
@@ -300,7 +302,7 @@ async def update_governance(
             session.add(config)
         else:
             config.mode = body.mode
-            config.updated_at = datetime.now(timezone.utc)
+            config.updated_at = now_utc()
         await session.commit()
 
     logger.info("Governance mode updated to: %s", body.mode)

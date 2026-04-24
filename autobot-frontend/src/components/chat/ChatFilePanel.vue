@@ -125,7 +125,7 @@
       <!-- Empty State -->
       <EmptyState
         v-if="!hasFiles && !loading"
-        icon="fas fa-folder-open"
+        icon="folder-open"
         :message="$t('chat.filePanel.noFiles')"
         compact
       />

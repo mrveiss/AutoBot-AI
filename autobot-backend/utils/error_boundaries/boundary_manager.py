@@ -13,6 +13,8 @@ import json
 import logging
 import threading
 import time
+
+from autobot_shared.singleton_factory import lazy_singleton
 import traceback
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
@@ -459,22 +461,4 @@ class ErrorBoundaryManager:
             raise
 
 
-# Global error boundary manager instance (thread-safe)
-_error_boundary_manager: Optional[ErrorBoundaryManager] = None
-_error_boundary_manager_lock = threading.Lock()
-
-
-def get_error_boundary_manager() -> ErrorBoundaryManager:
-    """
-    Get global error boundary manager instance (thread-safe).
-
-    Returns:
-        Singleton ErrorBoundaryManager instance
-    """
-    global _error_boundary_manager
-    if _error_boundary_manager is None:
-        with _error_boundary_manager_lock:
-            # Double-check after acquiring lock
-            if _error_boundary_manager is None:
-                _error_boundary_manager = ErrorBoundaryManager()
-    return _error_boundary_manager
+get_error_boundary_manager = lazy_singleton(ErrorBoundaryManager)

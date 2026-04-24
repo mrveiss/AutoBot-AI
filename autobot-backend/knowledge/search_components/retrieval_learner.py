@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from constants.ttl_constants import TTL_30_DAYS
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -617,25 +618,7 @@ class RetrievalLearner:
         return pruned
 
 
-# ---------------------------------------------------------------------------
-# Module-level singleton (thread-safe, mirrors QueryClassifier pattern)
-# ---------------------------------------------------------------------------
-
-_retrieval_learner: Optional["RetrievalLearner"] = None
-_retrieval_learner_lock = threading.Lock()
-
-
-def get_retrieval_learner() -> RetrievalLearner:
-    """Return the shared RetrievalLearner singleton (thread-safe).
-
-    Issue #2095: Mirrors get_query_classifier() double-check locking pattern.
-    """
-    global _retrieval_learner
-    if _retrieval_learner is None:
-        with _retrieval_learner_lock:
-            if _retrieval_learner is None:
-                _retrieval_learner = RetrievalLearner()
-    return _retrieval_learner
+get_retrieval_learner = lazy_singleton(RetrievalLearner)
 
 
 # ---------------------------------------------------------------------------

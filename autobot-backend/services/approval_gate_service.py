@@ -12,6 +12,7 @@ notifications for pending approvals.
 import logging
 import uuid
 from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -317,7 +318,7 @@ class ApprovalGateService:
 
         approval.status = new_status.value
         approval.decided_by_user = decided_by
-        approval.decided_at = datetime.now(timezone.utc)
+        approval.decided_at = now_utc()
 
         if comment:
             c = ApprovalComment(

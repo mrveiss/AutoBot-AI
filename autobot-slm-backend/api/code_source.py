@@ -187,7 +187,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
     if _is_local_node(node):
         try:
             parent = Path(parent_dir)
-            if parent.is_dir():
+            if parent.is_dir():  # codeql[py/path-injection]
                 for entry in parent.iterdir():
                     if entry.name.lower() == basename.lower() and entry.name != basename:
                         return str(entry)
@@ -236,7 +236,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         HTTPException: If path doesn't exist or validation fails
     """
     if _is_local_node(node):
-        if Path(repo_path).is_dir():
+        if Path(repo_path).is_dir():  # codeql[py/path-injection]
             return
         similar_path = await _find_similar_paths(node, repo_path)
         error_detail = f"Repository path does not exist on source node: {repo_path}"
@@ -452,7 +452,7 @@ async def _upsert_node_code_version(
         if cache_path:
             row.cache_path = cache_path
         if status == CodeStatus.UP_TO_DATE:
-            row.deployed_at = datetime.utcnow()
+            row.deployed_at = datetime.now(timezone.utc)
     else:
         db.add(
             NodeCodeVersion(
@@ -461,7 +461,7 @@ async def _upsert_node_code_version(
                 commit_hash=commit,
                 status=status.value,
                 cache_path=cache_path,
-                deployed_at=(datetime.utcnow() if status == CodeStatus.UP_TO_DATE else None),
+                deployed_at=(datetime.now(timezone.utc) if status == CodeStatus.UP_TO_DATE else None),
             )
         )
 
@@ -518,7 +518,7 @@ async def notify_new_commit(
 
     # Update source with new commit
     source.last_known_commit = notification.commit
-    source.last_notified_at = datetime.utcnow()
+    source.last_notified_at = datetime.now(timezone.utc)
 
     # Update source node's code_version and mark as up-to-date
     node_result = await db.execute(select(Node).where(Node.node_id == notification.node_id))

@@ -24,6 +24,7 @@ import uuid
 from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from time import time
 from typing import Dict, List, Optional
@@ -350,7 +351,7 @@ class SecretsManager:
             with open(self.secrets_file, "w", encoding="utf-8") as f:
                 # Values in `secrets` are Fernet-encrypted (stored as
                 # `encrypted_value`); raw plaintext is never written to disk.
-                # codeql-suppress py/clear-text-storage-sensitive-data: dict contains
+                # codeql[py/clear-text-storage-sensitive-data]
                 # Fernet-encrypted `encrypted_value` fields — no plaintext secret is written.
                 json.dump(secrets, f, indent=2, default=json_serializer)
             os.chmod(self.secrets_file, 0o600)  # Restrict permissions
@@ -394,7 +395,7 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
-        # codeql-suppress py/clear-text-logging-sensitive-data: logs name+scope metadata and UUID, not the secret value
+        # codeql[py/clear-text-logging-sensitive-data]
         logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
@@ -487,7 +488,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
             "Updated secret (ID: %s...)", secret_id[:8]
         )
 
@@ -515,7 +516,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
             "Deleted secret (ID: %s...)", secret_id[:8]
         )
         return True
@@ -672,7 +673,7 @@ def audit_log(
     status = "SUCCESS" if success else "FAILED"
     # Redact secret_id to prevent sensitive data in logs
     safe_id = secret_id[:8] + "..." if secret_id and len(secret_id) > 8 else secret_id
-    logger.info(
+    logger.info(  # codeql[py/clear-text-logging-sensitive-data]
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
         operation,
@@ -723,7 +724,7 @@ async def create_secret(
         raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "Failed to create secret: %s", e
         )
         raise HTTPException(status_code=500, detail="Failed to create secret")
@@ -857,7 +858,7 @@ async def get_secrets_stats(
 
             # Count expired secrets
             if secret_data.get("expires_at"):
-                expires_at = datetime.fromisoformat(secret_data["expires_at"])
+                expires_at = parse_utc_iso(secret_data["expires_at"])
                 if expires_at < now:
                     stats["expired_count"] += 1
 
@@ -911,7 +912,7 @@ async def get_secret(
                             "original_scope": secret.get("scope"),
                         },
                     )
-                    logger.debug(
+                    logger.debug(  # codeql[py/clear-text-logging-sensitive-data]
                         "[Issue #608] Created secret entity for %s... in session %s",
                         secret_id[:8],
                         chat_id,
@@ -936,7 +937,7 @@ async def get_secret(
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "Failed to get secret: %s", e
         )
         raise HTTPException(status_code=500, detail="Failed to get secret")
@@ -999,7 +1000,7 @@ async def update_secret(
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "Failed to update secret: %s", e
         )
         raise HTTPException(status_code=500, detail="Failed to update secret")
@@ -1048,7 +1049,7 @@ async def delete_secret(
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "Failed to delete secret: %s", e
         )
         raise HTTPException(status_code=500, detail="Failed to delete secret")

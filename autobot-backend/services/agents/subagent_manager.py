@@ -17,6 +17,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from autobot_shared.time_utils import now_utc
 
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
@@ -64,7 +65,7 @@ class SubagentManager:
         status_data = {
             "task_id": task_id,
             "status": status.value,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": now_utc().isoformat(),
         }
         if metadata:
             status_data["metadata"] = metadata

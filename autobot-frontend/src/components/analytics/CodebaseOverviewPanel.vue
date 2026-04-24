@@ -34,7 +34,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-database"
+          icon="database"
           :message="$t('analytics.codebase.overview.noMetrics')"
         >
           <template #actions>
@@ -75,7 +75,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-wifi"
+          icon="wifi"
           :message="$t('analytics.codebase.communication.noData')"
         />
       </BasePanel>
@@ -112,7 +112,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-star"
+          icon="star"
           :message="$t('analytics.codebase.quality.noMetrics')"
         />
       </BasePanel>
@@ -149,7 +149,7 @@
         </div>
         <EmptyState
           v-else
-          icon="fas fa-rocket"
+          icon="rocket"
           :message="$t('analytics.codebase.performance.noData')"
         />
       </BasePanel>

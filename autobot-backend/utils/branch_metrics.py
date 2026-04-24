@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class BranchMetricsCollector:
         divergence = await self.get_branch_divergence(branch)
         last_activity = await self.get_branch_last_activity(branch)
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         days_since_activity = 0
         if last_activity:
             if last_activity.tzinfo is None:

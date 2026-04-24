@@ -17,6 +17,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('useIndexingJob')
 
@@ -78,7 +79,6 @@ export interface UseIndexingJobDeps {
 export function useIndexingJob(deps: UseIndexingJobDeps) {
   const currentJobId = ref<string | null>(null)
   const currentJobStatus = ref<string | null>(null)
-  const jobPollingInterval = ref<ReturnType<typeof setInterval> | null>(null)
   const jobPhases = ref<JobPhasesData | null>(null)
   const jobBatches = ref<JobBatchesData | null>(null)
   const jobStats = ref<JobStatsData | null>(null)
@@ -144,20 +144,13 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
 
   // --- Polling ---
 
-  const startJobPolling = () => {
-    if (jobPollingInterval.value) {
-      clearInterval(jobPollingInterval.value)
-    }
-    jobPollingInterval.value = setInterval(async () => {
-      await pollJobStatus()
-    }, 2000)
-  }
+  const { start: _startJobPoller, stop: stopJobPolling } = usePollingJob<void>(
+    async () => { await pollJobStatus() },
+    { intervalMs: 2000 }
+  )
 
-  const stopJobPolling = () => {
-    if (jobPollingInterval.value) {
-      clearInterval(jobPollingInterval.value)
-      jobPollingInterval.value = null
-    }
+  const startJobPolling = () => {
+    _startJobPoller('')
   }
 
   // --- Internal helpers ---

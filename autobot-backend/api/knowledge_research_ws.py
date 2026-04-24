@@ -99,7 +99,7 @@ async def _run_research(
         logger.error("Research WS error for query %r: %s", query, exc)
         await _send_event(
             websocket,
-            {"event": "research:error", "message": str(exc)},
+            {"event": "research:error", "message": "research_failed"},
         )
 
 

@@ -86,7 +86,7 @@ class PropertyGraphMixin:
             try:
                 await self.graph.add_node(entity["id"], node_props)
             except Exception as exc:
-                logger.warning("PropertyGraph sync skipped for entity %s: %s", entity.get("id"), exc)
+                logger.warning("PropertyGraph sync skipped for entity %s: %s", entity.get("id"), type(exc).__name__)
         return entity
 
     # ------------------------------------------------------------------
@@ -140,6 +140,6 @@ class PropertyGraphMixin:
                     "PropertyGraph sync skipped for relation %s->%s: %s",
                     from_entity,
                     to_entity,
-                    exc,
+                    type(exc).__name__,
                 )
         return relation

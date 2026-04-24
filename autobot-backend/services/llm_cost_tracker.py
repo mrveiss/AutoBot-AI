@@ -22,8 +22,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
@@ -226,9 +226,7 @@ class LLMCostTracker:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     # Pattern-based pricing fallbacks for unknown models (#1961).
@@ -606,7 +604,7 @@ class LLMCostTracker:
             redis = await self.get_redis()
 
             # Prepare keys
-            today = datetime.utcnow().strftime("%Y-%m-%d")
+            today = now_utc().strftime("%Y-%m-%d")
             daily_key = f"{self.DAILY_TOTALS_KEY}:{today}"
             model_key = f"{self.MODEL_TOTALS_KEY}:{record.model}"
 
@@ -760,7 +758,7 @@ class LLMCostTracker:
             Summary dict with totals and breakdowns
         """
         if end_date is None:
-            end_date = datetime.utcnow()
+            end_date = now_utc()
         if start_date is None:
             start_date = end_date - timedelta(days=30)
 
@@ -830,7 +828,7 @@ class LLMCostTracker:
         Returns:
             Trend data including daily costs and growth rates
         """
-        end_date = datetime.utcnow()
+        end_date = now_utc()
         start_date = end_date - timedelta(days=days)
 
         summary = await self.get_cost_summary(start_date, end_date)

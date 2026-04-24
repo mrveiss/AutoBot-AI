@@ -15,7 +15,7 @@ import logging
 import socket
 from typing import Any, Dict, Optional
 
-import aiohttp
+from utils.http_retry import aiohttp_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -128,60 +128,64 @@ async def fetch_bootstrap_config(
 
         backend_url = f"http://{backend_host}:{backend_port}/api/npu/workers/bootstrap"
 
-        # Reuse single session for all retries (efficiency improvement)
-        session_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession(timeout=session_timeout) as session:
-            for attempt in range(retries):
-                try:
-                    async with session.post(
-                        backend_url, json=bootstrap_request
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            if data.get("success"):
-                                _bootstrap_config = data.get("config", {})
-                                _worker_id = data.get("worker_id")
-                                logger.info(
-                                    "Bootstrap config received from %s - worker_id: %s",
-                                    backend_url,
-                                    _worker_id,
-                                )
-                                return _bootstrap_config
-                            else:
-                                logger.warning(
-                                    "Bootstrap failed: %s", data.get("message")
-                                )
-                        else:
-                            text = await response.text()
-                            logger.warning(
-                                "Bootstrap request failed: status=%d, response=%s",
-                                response.status,
-                                text[:200],
-                            )
+        data = await aiohttp_with_backoff(
+            backend_url,
+            method="POST",
+            json_body=bootstrap_request,
+            max_attempts=retries,
+            initial_delay=1.0,
+            timeout_s=float(timeout),
+            logger=logger,
+        )
 
-                except aiohttp.ClientConnectorError:
-                    logger.warning(
-                        "Cannot connect to backend at %s (attempt %d/%d)",
-                        backend_url,
-                        attempt + 1,
-                        retries,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "Bootstrap request timeout to %s (attempt %d/%d)",
-                        backend_url,
-                        attempt + 1,
-                        retries,
-                    )
-                except Exception as e:
-                    logger.error("Bootstrap error: %s", e)
+        if data is None:
+            logger.error("Failed to fetch bootstrap config after %d attempts", retries)
+            return None
 
-                # Wait before retry (exponential backoff)
-                if attempt < retries - 1:
-                    await asyncio.sleep(2**attempt)
+        if data.get("success"):
+            _bootstrap_config = data.get("config", {})
+            _worker_id = data.get("worker_id")
+            logger.info(
+                "Bootstrap config received from %s - worker_id: %s",
+                backend_url,
+                _worker_id,
+            )
+            return _bootstrap_config
 
-        logger.error("Failed to fetch bootstrap config after %d attempts", retries)
+        logger.warning("Bootstrap failed: %s", data.get("message"))
         return None
+
+
+# =============================================================================
+# Fallback defaults for bootstrap config sections
+# =============================================================================
+DEFAULT_REDIS_CONFIG: Dict[str, Any] = {}
+DEFAULT_BACKEND_CONFIG: Dict[str, Any] = {}
+DEFAULT_MODELS_CONFIG: Dict[str, Any] = {
+    "autoload_defaults": True,
+    "default_embedding": "nomic-embed-text",
+    "default_llm": "llama3.2:1b-instruct-q4_K_M",
+}
+
+
+def get_bootstrap_config_section(
+    section: str, default: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Return the named section from the cached bootstrap config, or default.
+
+    Args:
+        section: Top-level key to look up in the cached bootstrap config.
+        default: Fallback returned when bootstrap is unavailable or missing
+            the section. An empty dict is used if ``default`` is ``None``.
+
+    Returns:
+        The section dict from bootstrap config, or the provided default.
+    """
+    if _bootstrap_config and section in _bootstrap_config:
+        return _bootstrap_config[section]
+    if default is None:
+        return {}
+    return default
 
 
 def get_cached_config() -> Optional[Dict[str, Any]]:
@@ -195,51 +199,22 @@ def get_worker_id() -> Optional[str]:
 
 
 def get_redis_config() -> Dict[str, Any]:
-    """
-    Get Redis configuration from bootstrap or fallback.
-
-    Returns:
-        Redis configuration dictionary
-    """
-    if _bootstrap_config and "redis" in _bootstrap_config:
-        return _bootstrap_config["redis"]
-
-    # Fallback - standalone mode (no Redis)
-    logger.warning("No bootstrap config available, Redis will not be configured")
-    return {}
+    """Get Redis configuration from bootstrap or fallback."""
+    if not _bootstrap_config or "redis" not in _bootstrap_config:
+        logger.warning("No bootstrap config available, Redis will not be configured")
+    return get_bootstrap_config_section("redis", DEFAULT_REDIS_CONFIG)
 
 
 def get_backend_config() -> Dict[str, Any]:
-    """
-    Get backend configuration from bootstrap or fallback.
+    """Get backend configuration from bootstrap or fallback.
 
     Note: No hardcoded IPs - backend config must come from YAML or bootstrap.
-
-    Returns:
-        Backend configuration dictionary (may be empty if not bootstrapped)
     """
-    if _bootstrap_config and "backend" in _bootstrap_config:
-        return _bootstrap_config["backend"]
-
-    # No hardcoded fallbacks - return empty dict for standalone mode
-    # Backend host/port must be in npu_worker.yaml config file
-    logger.warning("No bootstrap config available, using config from YAML file")
-    return {}
+    if not _bootstrap_config or "backend" not in _bootstrap_config:
+        logger.warning("No bootstrap config available, using config from YAML file")
+    return get_bootstrap_config_section("backend", DEFAULT_BACKEND_CONFIG)
 
 
 def get_models_config() -> Dict[str, Any]:
-    """
-    Get models configuration from bootstrap or fallback.
-
-    Returns:
-        Models configuration dictionary
-    """
-    if _bootstrap_config and "models" in _bootstrap_config:
-        return _bootstrap_config["models"]
-
-    # Fallback defaults
-    return {
-        "autoload_defaults": True,
-        "default_embedding": "nomic-embed-text",
-        "default_llm": "llama3.2:1b-instruct-q4_K_M",
-    }
+    """Get models configuration from bootstrap or fallback."""
+    return get_bootstrap_config_section("models", DEFAULT_MODELS_CONFIG)

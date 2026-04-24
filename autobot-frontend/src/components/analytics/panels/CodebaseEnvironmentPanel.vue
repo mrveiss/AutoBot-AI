@@ -205,7 +205,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-leaf"
+      icon="leaf"
       :message="$t('analytics.codebase.environment.noData')"
     />
   </div>

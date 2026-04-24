@@ -17,6 +17,7 @@ import threading
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.network_constants import NetworkConstants
 from utils.service_registry import get_service_url
 
@@ -322,20 +323,7 @@ class TerminalInputHandler:
             self.default_responses.update(defaults)
 
 
-# Global instance (thread-safe)
-_terminal_input_handler = None
-_terminal_input_handler_lock = threading.Lock()
-
-
-def get_terminal_input_handler() -> TerminalInputHandler:
-    """Get or create global terminal input handler (thread-safe)."""
-    global _terminal_input_handler
-    if _terminal_input_handler is None:
-        with _terminal_input_handler_lock:
-            # Double-check after acquiring lock
-            if _terminal_input_handler is None:
-                _terminal_input_handler = TerminalInputHandler()
-    return _terminal_input_handler
+get_terminal_input_handler = lazy_singleton(TerminalInputHandler)
 
 
 def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> str:

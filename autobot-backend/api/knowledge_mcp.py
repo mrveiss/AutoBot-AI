@@ -13,13 +13,26 @@ graph (chat_workflow/graph.py).
 
 import asyncio
 import logging
-import threading
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-
 from auth_middleware import get_current_user
+from knowledge.schemas.mcp import (
+    DocumentAddRequest,
+    KnowledgeSearchRequest,
+    KnowledgeStatsRequest,
+    McpAddDocumentResponse,
+    McpHealthResponse,
+    McpKnowledgeStatsResponse,
+    McpQaChainResponse,
+    McpRedisVectorOpsResponse,
+    McpSchemaResponse,
+    McpSearchResponse,
+    McpSummarizeTopicResponse,
+    McpToolsResponse,
+    McpVectorSimilarityResponse,
+)
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from constants.model_constants import ModelConstants
@@ -31,25 +44,7 @@ from utils.service_registry import get_service_url
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
-# Initialize components with thread-safe locks (Issue #395)
-knowledge_base = None
-_knowledge_base_lock = threading.Lock()
-
-
-def get_knowledge_base():
-    """Get or create knowledge base instance with Redis vector store.
-
-    Issue #395: Added thread-safe lazy initialization with double-check locking.
-    Issue #3374: Replaced direct global_config_manager import with get_config()
-    DI provider so tests can override config via dependency_overrides.
-    """
-    global knowledge_base
-    if knowledge_base is None:
-        with _knowledge_base_lock:
-            # Double-check after acquiring lock to prevent race condition
-            if knowledge_base is None:
-                knowledge_base = KnowledgeBase(config_manager=get_config())
-    return knowledge_base
+get_knowledge_base = lazy_singleton(lambda: KnowledgeBase(config_manager=get_config()))
 
 
 def get_vectors_redis_client():
@@ -84,46 +79,16 @@ def _get_chat_ollama():
         return None
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class KnowledgeSearchRequest(BaseModel):
-    """Request model for knowledge base search"""
-
-    query: str = Field(..., description="Search query")
-    top_k: int = Field(5, description="Number of results to return")
-    filters: Optional[Metadata] = Field(None, description="Optional filters")
-
-
-class DocumentAddRequest(BaseModel):
-    """Request model for adding documents"""
-
-    content: str = Field(..., description="Document content")
-    metadata: Optional[Metadata] = Field(None, description="Document metadata")
-    source: Optional[str] = Field(None, description="Document source")
-
-
-class KnowledgeStatsRequest(BaseModel):
-    """Request model for knowledge base statistics"""
-
-    include_details: bool = Field(False, description="Include detailed statistics")
-
-
-def _create_search_tool() -> MCPTool:
+def _create_search_tool() -> McpToolsResponse:
     """
     Create MCP tool for knowledge base search.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for search_knowledge_base operation
+        McpToolsResponse definition for search_knowledge_base operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="search_knowledge_base",
         description="Search the AutoBot knowledge base using LlamaIndex and Redis vector store",
         input_schema={
@@ -146,16 +111,16 @@ def _create_search_tool() -> MCPTool:
     )
 
 
-def _create_add_document_tool() -> MCPTool:
+def _create_add_document_tool() -> McpToolsResponse:
     """
     Create MCP tool for adding documents to knowledge base.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for add_to_knowledge_base operation
+        McpToolsResponse definition for add_to_knowledge_base operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="add_to_knowledge_base",
         description=(
             "Add new information to the AutoBot knowledge base (stored in Redis"
@@ -183,16 +148,16 @@ def _create_add_document_tool() -> MCPTool:
     )
 
 
-def _create_vector_search_tool() -> MCPTool:
+def _create_vector_search_tool() -> McpToolsResponse:
     """
     Create MCP tool for vector similarity search.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for vector_similarity_search operation
+        McpToolsResponse definition for vector_similarity_search operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="vector_similarity_search",
         description="Perform vector similarity search in Redis using embeddings",
         input_schema={
@@ -218,16 +183,16 @@ def _create_vector_search_tool() -> MCPTool:
     )
 
 
-def _create_qa_chain_tool() -> MCPTool:
+def _create_qa_chain_tool() -> McpToolsResponse:
     """
     Create MCP tool for LangChain QA chain.
 
     Issue #665: Extracted from _get_knowledge_search_tools to reduce function length.
 
     Returns:
-        MCPTool definition for langchain_qa_chain operation
+        McpToolsResponse definition for langchain_qa_chain operation
     """
-    return MCPTool(
+    return McpToolsResponse(
         name="langchain_qa_chain",
         description="Use LangChain QA chain for comprehensive answers from knowledge base",
         input_schema={
@@ -248,7 +213,7 @@ def _create_qa_chain_tool() -> MCPTool:
     )
 
 
-def _get_knowledge_search_tools() -> List[MCPTool]:
+def _get_knowledge_search_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base search and retrieval operations.
 
@@ -257,7 +222,7 @@ def _get_knowledge_search_tools() -> List[MCPTool]:
     Issue #665: Further refactored to reduce from 102 lines to below 20 lines.
 
     Returns:
-        List of MCPTool definitions for search/retrieval operations
+        List of McpToolsResponse definitions for search/retrieval operations
     """
     return [
         _create_search_tool(),
@@ -267,7 +232,7 @@ def _get_knowledge_search_tools() -> List[MCPTool]:
     ]
 
 
-def _get_knowledge_management_tools() -> List[MCPTool]:
+def _get_knowledge_management_tools() -> List[McpToolsResponse]:
     """
     Get MCP tools for knowledge base management and admin operations.
 
@@ -275,10 +240,10 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
     and improve maintainability of tool definitions by category.
 
     Returns:
-        List of MCPTool definitions for management/admin operations
+        List of McpToolsResponse definitions for management/admin operations
     """
     return [
-        MCPTool(
+        McpToolsResponse(
             name="get_knowledge_stats",
             description="Get statistics about the AutoBot knowledge base and Redis vector store",
             input_schema={
@@ -292,7 +257,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
                 },
             },
         ),
-        MCPTool(
+        McpToolsResponse(
             name="summarize_knowledge_topic",
             description="Get a summary of knowledge on a specific topic using LangChain",
             input_schema={
@@ -308,7 +273,7 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
                 "required": ["topic"],
             },
         ),
-        MCPTool(
+        McpToolsResponse(
             name="redis_vector_operations",
             description="Direct Redis vector store operations (advanced)",
             input_schema={
@@ -336,10 +301,10 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
     operation="get_mcp_tools",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=List[McpToolsResponse])
 async def get_mcp_tools(
     current_user: dict = Depends(get_current_user),
-) -> List[MCPTool]:
+) -> List[McpToolsResponse]:
     """Get available MCP tools for knowledge base operations.
 
     Issue #744: Requires authenticated user.
@@ -356,7 +321,7 @@ async def get_mcp_tools(
     operation="mcp_search_knowledge_base",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/search_knowledge_base")
+@router.post("/mcp/search_knowledge_base", response_model=McpSearchResponse)
 async def mcp_search_knowledge_base(
     request: KnowledgeSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -402,7 +367,7 @@ async def mcp_search_knowledge_base(
     operation="mcp_add_to_knowledge_base",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/add_to_knowledge_base")
+@router.post("/mcp/add_to_knowledge_base", response_model=McpAddDocumentResponse)
 async def mcp_add_to_knowledge_base(
     request: DocumentAddRequest,
     current_user: dict = Depends(get_current_user),
@@ -437,7 +402,7 @@ async def mcp_add_to_knowledge_base(
     operation="mcp_get_knowledge_stats",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/get_knowledge_stats")
+@router.post("/mcp/get_knowledge_stats", response_model=McpKnowledgeStatsResponse)
 async def mcp_get_knowledge_stats(
     request: KnowledgeStatsRequest,
     current_user: dict = Depends(get_current_user),
@@ -480,7 +445,7 @@ async def mcp_get_knowledge_stats(
     operation="mcp_summarize_knowledge_topic",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/summarize_knowledge_topic")
+@router.post("/mcp/summarize_knowledge_topic", response_model=McpSummarizeTopicResponse)
 async def mcp_summarize_knowledge_topic(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -544,7 +509,7 @@ async def mcp_summarize_knowledge_topic(
     operation="mcp_vector_similarity_search",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/vector_similarity_search")
+@router.post("/mcp/vector_similarity_search", response_model=McpVectorSimilarityResponse)
 async def mcp_vector_similarity_search(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -593,7 +558,7 @@ async def mcp_vector_similarity_search(
     operation="mcp_langchain_qa_chain",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/langchain_qa_chain")
+@router.post("/mcp/langchain_qa_chain", response_model=McpQaChainResponse)
 async def mcp_langchain_qa_chain(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -719,7 +684,7 @@ _VECTOR_OPERATIONS = {
     operation="mcp_redis_vector_operations",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.post("/mcp/redis_vector_operations")
+@router.post("/mcp/redis_vector_operations", response_model=McpRedisVectorOpsResponse)
 async def mcp_redis_vector_operations(
     request: Metadata,
     current_user: dict = Depends(get_current_user),
@@ -752,7 +717,7 @@ async def mcp_redis_vector_operations(
     operation="get_mcp_schema",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/schema")
+@router.get("/mcp/schema", response_model=McpSchemaResponse)
 async def get_mcp_schema(
     current_user: dict = Depends(get_current_user),
 ):
@@ -781,7 +746,7 @@ async def get_mcp_schema(
     operation="mcp_health",
     error_code_prefix="KNOWLEDGE_MCP",
 )
-@router.get("/mcp/health")
+@router.get("/mcp/health", response_model=McpHealthResponse)
 async def mcp_health():
     """Check if MCP bridge is healthy"""
     try:

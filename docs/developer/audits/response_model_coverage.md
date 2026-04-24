@@ -1,8 +1,16 @@
 # Response Model Coverage Audit (#5317)
 
-Date: 2026-04-20
+Date: 2026-04-20 (updated 2026-04-22 — PR first batch landed)
 
 Branch: `Dev_new_gui` at time of audit
+
+## Implementation progress
+
+| PR / commit | Endpoints converted | Module(s) |
+|---|---:|---|
+| First batch (#5317) | 7 | `api/workflow.py` — all 7 HIGH-risk endpoints |
+
+After the first batch: **238** endpoints with `response_model=` (13.4%), **1540** missing.
 
 ## Summary
 

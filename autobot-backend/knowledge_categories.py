@@ -11,7 +11,7 @@ Defines the 3 main categories for AutoBot's knowledge base:
 """
 
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, TypedDict
 
 # Issue #380: Module-level tuples for source category detection
 _AUTOBOT_DOC_KEYWORDS = ("autobot", "docs/", "documentation")
@@ -33,14 +33,22 @@ class KnowledgeCategory(str, Enum):
     USER_KNOWLEDGE = "user-knowledge"
 
 
+class CategoryMeta(TypedDict):
+    name: str
+    description: str
+    icon: str
+    color: str
+    examples: List[str]
+
+
 # Category metadata for display and organization
-CATEGORY_METADATA: Dict[str, Dict[str, str]] = {
+CATEGORY_METADATA: Dict[str, CategoryMeta] = {
     KnowledgeCategory.AUTOBOT_DOCUMENTATION: {
         "name": "AutoBot Documentation",
         "description": "AutoBot's initial knowledge - documentation and guides",
         "icon": "fas fa-book",
         "color": "#3b82f6",  # Blue
-        "examples": "API docs, architecture guides, setup instructions",
+        "examples": ["API docs", "architecture guides", "setup instructions"],
     },
     KnowledgeCategory.SYSTEM_KNOWLEDGE: {
         "name": "System Knowledge",
@@ -49,14 +57,19 @@ CATEGORY_METADATA: Dict[str, Dict[str, str]] = {
         ),
         "icon": "fas fa-server",
         "color": "#10b981",  # Green
-        "examples": "Man pages, system commands, configuration files, hardware info",
+        "examples": [
+            "Man pages",
+            "system commands",
+            "configuration files",
+            "hardware info",
+        ],
     },
     KnowledgeCategory.USER_KNOWLEDGE: {
         "name": "User Knowledge",
         "description": "What AutoBot is used for - user-provided domain knowledge",
         "icon": "fas fa-user-circle",
         "color": "#f59e0b",  # Amber
-        "examples": "Programming books, law references, domain-specific guides",
+        "examples": ["Programming books", "law references", "domain-specific guides"],
     },
 }
 

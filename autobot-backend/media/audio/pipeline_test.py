@@ -101,17 +101,12 @@ class TestAudioPipelineResults:
 class TestAudioPipelineWhisper:
     """Tests for Whisper transcription path."""
 
-    def test_returns_unavailable_when_transformers_missing(self):
-        import asyncio
-
+    @pytest.mark.asyncio
+    async def test_returns_unavailable_when_transformers_missing(self):
         pipe = AudioPipeline()
-
-        async def _run():
-            media_input = _make_input(b"fake audio")
-            return await pipe._process_audio(media_input)
-
+        media_input = _make_input(b"fake audio")
         with patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", False):
-            result = asyncio.run(_run())
+            result = await pipe._process_audio(media_input)
         assert result["processing_status"] == "unavailable"
 
     def test_run_whisper_writes_temp_file_and_cleans_up(self):

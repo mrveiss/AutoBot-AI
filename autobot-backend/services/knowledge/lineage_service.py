@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -48,11 +49,11 @@ class SynthesisRun:
         """
         ran_at_raw = entry.get("ran_at", "")
         try:
-            ts = datetime.fromisoformat(ran_at_raw)
+            ts = parse_utc_iso(ran_at_raw)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):
-            ts = datetime.now(timezone.utc)
+            ts = now_utc()
 
         synthesis_ids: List[str] = entry.get("synthesis_ids") or []
         output_id = synthesis_ids[0] if synthesis_ids else entry.get("run_id", "")

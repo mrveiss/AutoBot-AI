@@ -48,7 +48,7 @@
       </div>
       <EmptyState
         v-else
-        icon="fas fa-chart-bar"
+        icon="chart-bar"
         :message="$t('analytics.codebase.stats.noData')"
       />
     </div>
@@ -163,7 +163,7 @@
           />
           <div v-else class="chart-empty-slot">
             <EmptyState
-              icon="fas fa-chart-pie"
+              icon="chart-pie"
               :message="
                 selectedCategory === 'all'
                   ? 'No problem type data'
@@ -179,7 +179,7 @@
             class="chart-item"
           />
           <div v-else class="chart-empty-slot">
-            <EmptyState icon="fas fa-signal" message="No severity data" />
+            <EmptyState icon="signal" message="No severity data" />
           </div>
         </div>
 
@@ -193,7 +193,7 @@
             class="chart-item"
           />
           <div v-else class="chart-empty-slot">
-            <EmptyState icon="fas fa-exclamation-circle" message="No race condition data" />
+            <EmptyState icon="exclamation-circle" message="No race condition data" />
           </div>
           <TopFilesChart
             v-if="chartData.top_files && chartData.top_files.length > 0"
@@ -204,14 +204,14 @@
             class="chart-item"
           />
           <div v-else class="chart-empty-slot">
-            <EmptyState icon="fas fa-file-code" message="No file data" />
+            <EmptyState icon="file-code" message="No file data" />
           </div>
         </div>
       </div>
 
       <EmptyState
         v-else
-        icon="fas fa-chart-area"
+        icon="chart-area"
         :message="$t('analytics.codebase.problems.noChartData')"
       >
         <template #actions>

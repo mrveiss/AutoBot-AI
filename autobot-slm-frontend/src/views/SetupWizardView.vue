@@ -357,9 +357,30 @@
         </p>
 
         <!-- Phase & status bar -->
-        <div v-if="provisioning" class="provision-status-bar">
+        <div v-if="provisioning || provisionComplete" class="provision-status-bar">
           <span class="provision-stage">{{ provisionStage }}</span>
-          <span class="provision-elapsed">{{ provisionElapsed }}s</span>
+          <span class="provision-elapsed">{{ formatElapsed(provisionElapsed) }}</span>
+        </div>
+
+        <!-- Phase progress chips -->
+        <div v-if="provisioning || provisionComplete" class="provision-phases">
+          <span
+            v-for="phase in knownPhases"
+            :key="phase.id"
+            class="provision-phase"
+            :class="{
+              'phase-done': completedPhases.has(phase.id),
+              'phase-active': currentPhase === phase.id
+            }"
+          >
+            {{ completedPhases.has(phase.id) ? '✓' : currentPhase === phase.id ? '→' : '·' }}
+            {{ phase.label }}
+          </span>
+        </div>
+
+        <!-- Current task (heartbeat in-place — does not flood the log) -->
+        <div v-if="currentTask" class="provision-current-task">
+          <span class="task-spinner">⟳</span>{{ currentTask }}
         </div>
 
         <!-- Streaming log panel -->
@@ -697,15 +718,29 @@ const provisioning = ref(false)
 const provisionComplete = ref(false)
 
 interface ProvisionLogEntry {
-  type: 'info' | 'task' | 'success' | 'error' | 'warning'
+  type: 'info' | 'task' | 'success' | 'error' | 'warning' | 'phase'
   message: string
 }
 
 const provisionLogs = ref<ProvisionLogEntry[]>([])
 const provisionStage = ref('')
 const provisionElapsed = ref(0)
+const currentTask = ref('')
+const currentPhase = ref('')
+const completedPhases = ref<Set<string>>(new Set())
 const logContainerRef = ref<HTMLElement | null>(null)
 let provisionWs: WebSocket | null = null
+
+const knownPhases = [
+  { id: '0', label: 'Shared Deps' },
+  { id: '1', label: 'Common' },
+  { id: '2', label: 'SLM Agent' },
+  { id: '3', label: 'Data Layer' },
+  { id: '4a', label: 'Backend' },
+  { id: '4b', label: 'Frontend' },
+  { id: '5', label: 'Verify' },
+  { id: '6', label: 'AI Stack' },
+]
 
 // ── Health check ──────────────────────────────────────────────────────────
 
@@ -935,16 +970,35 @@ function connectProvisionWs() {
       const msg = JSON.parse(event.data)
 
       if (msg.type === 'log') {
-        provisionLogs.value.push({
-          type: msg.log_type || 'info',
-          message: msg.message,
-        })
-        scrollProvisionLog()
+        if (msg.log_type === 'heartbeat') {
+          // Update in-place — never flood the log with repeated heartbeat lines
+          currentTask.value = msg.message
+        } else if (msg.log_type === 'phase') {
+          // Track phase progress
+          const m = msg.message.match(/Provision Phase\s+(\S+):/)
+          if (m) {
+            if (currentPhase.value) completedPhases.value.add(currentPhase.value)
+            currentPhase.value = m[1]
+          }
+          currentTask.value = ''
+          provisionLogs.value.push({ type: 'phase', message: msg.message })
+          scrollProvisionLog()
+        } else {
+          // A new real task arrived — clear the heartbeat indicator
+          if (msg.log_type === 'task') currentTask.value = ''
+          provisionLogs.value.push({
+            type: msg.log_type || 'info',
+            message: msg.message,
+          })
+          scrollProvisionLog()
+        }
       } else if (msg.type === 'status') {
         provisionStage.value = formatStage(msg.stage || '')
         provisionElapsed.value = Math.round(msg.elapsed_seconds || 0)
 
         if (msg.status === 'completed') {
+          if (currentPhase.value) completedPhases.value.add(currentPhase.value)
+          currentTask.value = ''
           provisionComplete.value = true
           provisioning.value = false
           disconnectProvisionWs()
@@ -1034,6 +1088,13 @@ function stopProvisionPolling() {
   }
 }
 
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.floor(seconds / 60), s = seconds % 60
+  if (m < 60) return `${m}m ${s}s`
+  return `${Math.floor(m / 60)}h ${m % 60}m ${s}s`
+}
+
 function formatStage(stage: string): string {
   const stageLabels: Record<string, string> = {
     starting: 'Starting...',
@@ -1068,6 +1129,9 @@ async function provisionFleet() {
   provisionLogs.value = []
   provisionStage.value = 'Starting...'
   provisionElapsed.value = 0
+  currentTask.value = ''
+  currentPhase.value = ''
+  completedPhases.value = new Set()
 
   provisionLogs.value.push({ type: 'info', message: 'Starting fleet provisioning...' })
 
@@ -1633,7 +1697,7 @@ input.full-width {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 1rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   background: rgba(96, 165, 250, 0.1);
   border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 6px;
@@ -1647,6 +1711,64 @@ input.full-width {
 
 .provision-elapsed {
   color: var(--text-secondary, #999);
+}
+
+.provision-phases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.provision-phase {
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #666);
+}
+
+.phase-active {
+  border-color: rgba(96, 165, 250, 0.5);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.phase-done {
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.provision-current-task {
+  padding: 0.35rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: rgba(96, 165, 250, 0.06);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: #93c5fd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-spinner {
+  display: inline-block;
+  margin-right: 0.4rem;
+  animation: spin 1.5s linear infinite;
+}
+
+.log-phase {
+  color: #a78bfa;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Health summary */

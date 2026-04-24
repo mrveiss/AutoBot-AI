@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
@@ -46,21 +47,14 @@ class LearnedStrategy:
     timestamp: str = field(default_factory=utc_timestamp)
 
 
-class TaskPatternLearner:
+class TaskPatternLearner(AsyncRedisClientMixin):
     """Analyzes task outcome history to extract optimal strategies per task type."""
+
+    _redis_database = "main"
 
     def __init__(self, llm_interface=None):
         """Initialize with optional LLM interface."""
         self._llm = llm_interface
-        self._redis = None
-
-    async def _get_redis(self):
-        """Lazily initialize Redis client."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     async def _get_llm(self):
         """Lazily initialize LLM interface."""

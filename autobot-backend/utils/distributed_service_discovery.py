@@ -450,26 +450,18 @@ class DistributedServiceDiscovery(AsyncInitializable):
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Back off on errors
 
 
-# Global instance for easy access (thread-safe)
-_service_discovery = None
-_service_discovery_lock = asyncio.Lock()
+from autobot_shared.singleton_factory import async_lazy_singleton
 
 
-async def get_service_discovery() -> DistributedServiceDiscovery:
-    """Get global service discovery instance (thread-safe, lazy-initialized via AsyncInitializable).
+async def _init_service_discovery() -> DistributedServiceDiscovery:
+    # Issue #3947: initialize() call deferred here; __init__ is I/O-free.
+    instance = DistributedServiceDiscovery()
+    await instance.initialize()
+    instance.start_background_health_monitoring()
+    return instance
 
-    Issue #3947: initialize() call deferred here; __init__ is now I/O-free.
-    """
-    global _service_discovery
-    if not _service_discovery:
-        async with _service_discovery_lock:
-            # Double-check after acquiring lock
-            if not _service_discovery:
-                instance = DistributedServiceDiscovery()
-                await instance.initialize()
-                instance.start_background_health_monitoring()
-                _service_discovery = instance
-    return _service_discovery
+
+get_service_discovery = async_lazy_singleton(_init_service_discovery)
 
 
 async def get_service_url(service_name: str) -> str:

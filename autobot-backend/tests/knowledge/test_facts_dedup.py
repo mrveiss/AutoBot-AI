@@ -14,6 +14,8 @@ sys.modules patching so the test suite can run without the full backend stack.
 import sys
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
+from tests.helpers.fake_kb import FactsFakeKB
+from knowledge.facts import FactsMixin
 
 import pytest
 
@@ -50,43 +52,9 @@ _svc_npu.get_npu_client = MagicMock()
 sys.modules.setdefault("services.npu_client", _svc_npu)
 
 import knowledge.facts as facts_module  # noqa: E402 — must follow sys.modules patches
-from knowledge.facts import FactsMixin  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Minimal concrete class that satisfies FactsMixin without a real KB stack
-# ---------------------------------------------------------------------------
 
 _THRESHOLD = 0.92
 
-
-class _FakeKB(FactsMixin):
-    """Minimal KB stub exposing only what FactsMixin needs for these tests."""
-
-    initialized = True
-    embedding_model_name = "test-embed"
-
-    def __init__(self, vector_store=None):
-        self.vector_store = vector_store
-        self.redis_client = MagicMock()
-        self._aioredis_client = AsyncMock()
-
-    def redis(self):
-        """Shim for the KB.redis() public accessor (#5225: attribute renamed
-        from the pre-existing public ``aioredis_client`` to private
-        ``_aioredis_client``)."""
-        return self._aioredis_client
-
-    def ensure_initialized(self):
-        pass
-
-    async def _increment_stat(self, *_):
-        pass
-
-    def _schedule_bm25_refresh(self):
-        pass
-
-    async def _track_session_fact_relationship(self, *_):
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +91,7 @@ class TestFindDuplicate:
         chroma_collection.query = MagicMock(return_value=_chroma_result(distance=0.10, fact_id="dup-42"))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
 
         with (
             patch.object(
@@ -146,7 +114,7 @@ class TestFindDuplicate:
         chroma_collection.query = MagicMock(return_value=_chroma_result(distance=0.30, fact_id="not-dup"))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
 
         with (
             patch.object(
@@ -163,7 +131,7 @@ class TestFindDuplicate:
     @pytest.mark.asyncio
     async def test_no_vector_store_returns_none(self):
         """If vector_store is None the guard is skipped and returns None."""
-        kb = _FakeKB(vector_store=None)
+        kb = FactsFakeKB(vector_store=None)
         result = await kb._find_duplicate("some content", threshold=_THRESHOLD)
         assert result is None
 
@@ -174,7 +142,7 @@ class TestFindDuplicate:
         chroma_collection.query = MagicMock(side_effect=RuntimeError("chroma down"))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
 
         with (
             patch.object(
@@ -195,7 +163,7 @@ class TestFindDuplicate:
         chroma_collection.query = MagicMock(return_value=_empty_chroma_result())
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
 
         with (
             patch.object(
@@ -228,7 +196,7 @@ class TestStoreFact:
         chroma_collection.query = MagicMock(return_value=_chroma_result(distance=chroma_distance, fact_id=fact_id))
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
         kb.redis_client.get = MagicMock(return_value=None)
         kb.redis_client.exists = MagicMock(return_value=False)
         kb.redis_client.hset = MagicMock()
@@ -322,7 +290,7 @@ class TestStoreFact:
         chroma_collection.query = MagicMock(return_value=_empty_chroma_result())
         vector_store = MagicMock()
         vector_store._collection = chroma_collection
-        kb = _FakeKB(vector_store=vector_store)
+        kb = FactsFakeKB(vector_store=vector_store)
         kb.redis_client.get = MagicMock(return_value=None)
         kb.redis_client.hset = MagicMock()
         kb.redis_client.set = MagicMock()

@@ -32,6 +32,7 @@ from services.rag_config import RAGConfig, get_rag_config
 from services.session_adaptive_reranker import get_session_adaptive_reranker
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
+from events.event_types import RAG_RETRIEVAL
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_service")
@@ -504,7 +505,7 @@ class RAGService:
     ) -> None:
         """Publish a rag_retrieval live event after each search. Issue #1516.
 
-        Fires publish_live_event("global", "rag_retrieval", ...) so that
+        Fires publish_live_event("global", RAG_RETRIEVAL, ...) so that
         Neural Mesh RAG (#1994) consumers can observe retrieval patterns in
         real time via the /ws/live WebSocket endpoint.
 
@@ -522,7 +523,7 @@ class RAGService:
             "timestamp": time.time(),
         }
         try:
-            await publish_live_event("global", "rag_retrieval", payload)
+            await publish_live_event("global", RAG_RETRIEVAL, payload)
         except Exception as exc:
             logger.debug("Live event publish failed (non-fatal): %s", exc)
 
@@ -861,7 +862,7 @@ class RAGService:
         Results from all collections are merged.  Per-collection errors are
         logged and swallowed so the main context path is never interrupted.
         """
-        from utils.chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
         # Collect all synthesis collection names: default + schema-defined targets.
         collection_names: List[str] = ["kb_synthesis"]
@@ -876,7 +877,7 @@ class RAGService:
 
         all_docs: List[str] = []
         try:
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
         except Exception as exc:
             logger.debug("KB synthesis ChromaDB client unavailable (non-fatal): %s", exc)
             return ""
@@ -906,9 +907,9 @@ class RAGService:
         interrupted.
         """
         try:
-            from utils.chromadb_client import get_async_chromadb_client
+            from knowledge.backends import get_async_default_client
 
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
             collection = await client.get_or_create_collection(name="autobot_lessons")
             results = await collection.query(query_texts=[query], n_results=2)
             if not (results and results.get("ids") and results["ids"][0]):

@@ -28,10 +28,47 @@ import type { Ref } from 'vue'
  * explicit non-negative tabindex. Kept as a module-level constant so all
  * consumers agree on what "focusable" means — change in one place if
  * `details` / `summary` / contenteditable ever need including.
+ *
+ * Note: this selector is CSS-only. Use `isTabbable()` to additionally
+ * filter out elements that browsers actually skip during Tab navigation
+ * (aria-hidden subtrees, [inert] containers, display:none / visibility:
+ * hidden ancestors).
  */
 export const FOCUSABLE_SELECTOR =
   'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), ' +
   'textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * True if `el` is genuinely tabbable in the current DOM — matches the
+ * FOCUSABLE_SELECTOR shape AND respects the runtime visibility / inertness
+ * filters that the CSS selector alone can't express.
+ *
+ * Mirrors the practical "tabbability" detection used by industry libraries
+ * (`focus-trap`, `@headlessui/vue`, `@radix-ui/react-focus-scope`):
+ *   - Skip descendants of `[aria-hidden="true"]` subtrees
+ *   - Skip descendants of `[inert]` containers
+ *   - Skip elements with a `display:none` ancestor (walk via
+ *     `getComputedStyle` rather than `offsetParent` so jsdom-based unit
+ *     tests behave the same as real browsers; jsdom's offsetParent is
+ *     unreliable because it doesn't compute layout)
+ *
+ * Filed as #5373.
+ */
+export function isTabbable(el: HTMLElement): boolean {
+  if (el.closest('[aria-hidden="true"]')) return false
+  if (el.closest('[inert]')) return false
+
+  // Walk the ancestor chain for display:none. getComputedStyle returns the
+  // resolved display value (browsers report defaults like "block"/"inline";
+  // jsdom returns "" for unstyled but reports inline `style.display=none`).
+  // Either way, a hit on "none" is reliable across both environments.
+  let current: HTMLElement | null = el
+  while (current) {
+    if (getComputedStyle(current).display === 'none') return false
+    current = current.parentElement
+  }
+  return true
+}
 
 export interface UseFocusTrapReturn {
   /**
@@ -55,9 +92,12 @@ export function useFocusTrap(
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Tab' || !containerRef.value) return
 
-    const focusables = containerRef.value.querySelectorAll<HTMLElement>(
-      FOCUSABLE_SELECTOR
-    )
+    // CSS-match → tabbability filter. The filter excludes aria-hidden /
+    // inert / display:none descendants that the browser would skip
+    // during Tab navigation but querySelectorAll returns by structure.
+    const focusables = Array.from(
+      containerRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    ).filter(isTabbable)
     if (focusables.length === 0) return
 
     const first = focusables[0]

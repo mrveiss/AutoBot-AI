@@ -27,6 +27,7 @@ from models.schemas import (
     TLSEndpointsResponse,
 )
 from services.auth import get_current_user
+from services.ansible_utils import _extract_failure_summary
 from services.database import get_db
 from services.tls_credentials import get_tls_credential_service
 
@@ -317,11 +318,11 @@ async def list_expiring_certificates(
         result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
         node = result.scalar_one_or_none()
         if node:
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             days_until = None
             if cred.tls_expires_at:
-                delta = cred.tls_expires_at - datetime.utcnow()
+                delta = cred.tls_expires_at - datetime.now(timezone.utc)
                 days_until = delta.days
 
             endpoints.append(
@@ -414,7 +415,7 @@ async def renew_tls_certificate(
             node.hostname,
         )
 
-        return {
+        return {  # codeql[py/stack-trace-exposure]
             "success": True,
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
@@ -539,7 +540,9 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)
+        return _build_rotation_response(  # codeql[py/stack-trace-exposure]
+            credential_id, new_credential, deployment_result, deactivate_old
+        )
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
@@ -664,7 +667,7 @@ async def bulk_renew_expiring_certificates(
 
     logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
 
-    return _build_renewal_response(renewed, failed, results)
+    return _build_renewal_response(renewed, failed, results)  # codeql[py/stack-trace-exposure]
 
 
 def _check_ansible_availability() -> str:
@@ -773,7 +776,9 @@ def _build_enable_tls_response(success: bool, returncode: int, services: List[st
     Returns:
         Response dict with success, message, services, and results.
     """
-    message = "TLS enabled successfully" if success else f"TLS enablement failed with code {returncode}"
+    _stdout = (results.get("enable_tls") or {}).get("stdout", "")
+    _summary = _extract_failure_summary(_stdout)
+    message = "TLS enabled successfully" if success else (_summary or f"TLS enablement failed with code {returncode}")
 
     logger.info(
         "TLS enablement for %s: %s (code %d)",

@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # LLM Interface for real code generation
@@ -478,6 +479,10 @@ class CodeValidator:
         if paren_count != 0:
             errors.append(f"Unbalanced parentheses: {paren_count:+d}")
 
+        # Polynomial-ReDoS guard: cap input before running regex patterns (#5695)
+        if len(code) > 500_000:
+            raise ValueError("Code input exceeds maximum analysis size (500 000 chars)")
+
         # Count constructs (patterns hardened against ReDoS, #1721)
         function_pattern = r"\bfunction\s+(\w+)"
         arrow_pattern = r"(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>"
@@ -513,8 +518,9 @@ class CodeValidator:
         elif language == CodeLanguage.VUE:
             # Extract script section and validate (#1721, #1733: ReDoS fix -
             # replaced nested quantifier with [\s\S]*? for linear-time matching)
+            # \s* before > allows whitespace in closing tag (#5695, bad-tag-filter)
             script_match = re.search(
-                r"<script[^>]*>([\s\S]*?)</script>",
+                r"<script[^>]*>([\s\S]*?)</script\s*>",
                 code,
                 re.IGNORECASE,
             )
@@ -939,21 +945,7 @@ class CodeGenerationEngine:
 # Create singleton instance
 # =============================================================================
 
-import threading
-
-_engine: Optional[CodeGenerationEngine] = None
-_engine_lock = threading.Lock()
-
-
-def get_code_generation_engine() -> CodeGenerationEngine:
-    """Get or create code generation engine singleton (thread-safe)"""
-    global _engine
-    if _engine is None:
-        with _engine_lock:
-            # Double-check after acquiring lock
-            if _engine is None:
-                _engine = CodeGenerationEngine()
-    return _engine
+get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 
 
 # =============================================================================

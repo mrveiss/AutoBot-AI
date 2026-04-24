@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
 
           <EmptyState
             v-if="filteredPrompts.length === 0"
-            icon="fas fa-search"
+            icon="search"
             :message="searchQuery ? $t('knowledge.promptEditor.noSearchResults') : $t('knowledge.promptEditor.noPrompts')"
           />
         </div>
@@ -480,7 +480,7 @@ onBeforeUnmount(() => {
 
         <EmptyState
           v-else-if="promptHistory.length === 0"
-          icon="fas fa-history"
+          icon="history"
           :message="$t('knowledge.promptEditor.noHistory')"
         />
 

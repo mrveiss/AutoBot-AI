@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS, TTL_30_DAYS
 from orchestration.causal_error_analyzer import CausalErrorAnalysis
 
@@ -87,7 +88,7 @@ class RecoveryPlan:
     # Metadata
     confidence: float = 0.0  # Overall confidence in this plan
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -457,7 +458,7 @@ class CausalErrorRecovery:
                 resolution_data = {
                     "action": action_taken.value,
                     "outcome": outcome or "success",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": now_utc().isoformat(),
                 }
                 redis.hset(
                     f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_RESOLUTIONS_SUFFIX}",

@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class PersonalityProfile:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _load_json(path: Path) -> dict:

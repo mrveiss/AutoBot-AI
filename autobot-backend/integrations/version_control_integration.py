@@ -6,6 +6,7 @@
 
 import logging
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List
 
 import aiohttp
@@ -52,19 +53,19 @@ class GitLabIntegration(BaseIntegration):
                         return IntegrationHealth(
                             status=IntegrationStatus.HEALTHY,
                             message=f"Connected as {user_data.get('username')}",
-                            last_checked=datetime.utcnow(),
+                            last_checked=now_utc(),
                         )
                     return IntegrationHealth(
                         status=IntegrationStatus.UNHEALTHY,
                         message=f"API returned status {response.status}",
-                        last_checked=datetime.utcnow(),
+                        last_checked=now_utc(),
                     )
         except Exception as e:
             logger.error("GitLab connection test failed: %s", str(e))
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
                 message="Connection failed",
-                last_checked=datetime.utcnow(),
+                last_checked=now_utc(),
             )
 
     def get_available_actions(self) -> List[IntegrationAction]:
@@ -306,19 +307,19 @@ class BitbucketIntegration(BaseIntegration):
                         return IntegrationHealth(
                             status=IntegrationStatus.HEALTHY,
                             message=(f"Connected as {user_data.get('username')}"),
-                            last_checked=datetime.utcnow(),
+                            last_checked=now_utc(),
                         )
                     return IntegrationHealth(
                         status=IntegrationStatus.UNHEALTHY,
                         message=f"API returned status {response.status}",
-                        last_checked=datetime.utcnow(),
+                        last_checked=now_utc(),
                     )
         except Exception as e:
             logger.error("Bitbucket connection test failed: %s", str(e))
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
                 message="Connection failed",
-                last_checked=datetime.utcnow(),
+                last_checked=now_utc(),
             )
 
     def get_available_actions(self) -> List[IntegrationAction]:

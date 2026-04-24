@@ -316,20 +316,14 @@ class ConversationRateLimiter:
 
 # Global instance for easy access (thread-safe)
 import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_global_rate_limiter: Optional[ConversationRateLimiter] = None
-_global_rate_limiter_lock = threading.Lock()
+_global_rate_limiter = lazy_singleton(ConversationRateLimiter)
 
 
 def get_rate_limiter() -> ConversationRateLimiter:
     """Get the global rate limiter instance (thread-safe)"""
-    global _global_rate_limiter
-    if _global_rate_limiter is None:
-        with _global_rate_limiter_lock:
-            # Double-check after acquiring lock
-            if _global_rate_limiter is None:
-                _global_rate_limiter = ConversationRateLimiter()
-    return _global_rate_limiter
+    return _global_rate_limiter()
 
 
 def check_request_allowed(payload: Any = None) -> bool:

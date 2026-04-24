@@ -40,7 +40,7 @@ class BackupService:
         backup = result.scalar_one_or_none()
         if backup:
             backup.status = BackupStatus.IN_PROGRESS.value
-            backup.started_at = datetime.utcnow()
+            backup.started_at = datetime.now(timezone.utc)
             await db.commit()
         return backup
 
@@ -292,10 +292,10 @@ class BackupService:
         max_wait: int = 120,
     ) -> bool:
         """Wait for BGSAVE to complete by monitoring LASTSAVE."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         initial_lastsave = None
 
-        while (datetime.utcnow() - start_time).seconds < max_wait:
+        while (datetime.now(timezone.utc) - start_time).seconds < max_wait:
             cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli LASTSAVE")
             success, output = await self._run_command(cmd, timeout=10)
 
@@ -318,7 +318,7 @@ class BackupService:
         """Mark backup as failed and return error."""
         backup.status = BackupStatus.FAILED.value
         backup.error = error[:500]
-        backup.completed_at = datetime.utcnow()
+        backup.completed_at = datetime.now(timezone.utc)
         await db.commit()
         logger.error("Backup %s failed: %s", backup.backup_id, error)
         return False, error
@@ -464,7 +464,7 @@ class BackupService:
 
         Returns (success, backup_path, error_output).
         """
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_filename = f"{backup_id}_{timestamp}.rdb"
         backup_path = BACKUP_STORAGE_DIR / backup_filename
 
@@ -531,7 +531,7 @@ class BackupService:
                 "local_checksum": local_checksum,
             }
 
-        backup.completed_at = datetime.utcnow()
+        backup.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
         logger.info(

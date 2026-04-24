@@ -9,6 +9,7 @@ from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase
+from autobot_shared.time_utils import now_utc
 
 
 class SkillsBase(DeclarativeBase):
@@ -58,8 +59,8 @@ class SkillPackage(SkillsBase):
     mcp_pid = Column(Integer, nullable=True)
     gap_reason = Column(Text, nullable=True)
     requested_by = Column(String, default="autobot-self")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    promoted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: now_utc())
+    promoted_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class SkillRepo(SkillsBase):
@@ -72,7 +73,7 @@ class SkillRepo(SkillsBase):
     repo_type = Column(String, nullable=False)
     auto_sync = Column(Boolean, default=False)
     sync_interval = Column(Integer, default=60)
-    last_synced = Column(DateTime, nullable=True)
+    last_synced = Column(DateTime(timezone=True), nullable=True)
     skill_count = Column(Integer, default=0)
     status = Column(String, default="active")
     error_message = Column(Text, nullable=True)
@@ -85,11 +86,11 @@ class SkillApproval(SkillsBase):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     skill_id = Column(String, nullable=False, index=True)
     requested_by = Column(String, nullable=False)
-    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    requested_at = Column(DateTime(timezone=True), default=lambda: now_utc())
     reason = Column(Text, nullable=False)
     status = Column(String, default="pending")
     reviewed_by = Column(String, nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     restrictions = Column(JSON, default=dict)
 
@@ -111,8 +112,8 @@ class GovernanceConfig(SkillsBase):
     self_generation_enabled = Column(Boolean, default=True)
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: now_utc(),
+        onupdate=lambda: now_utc(),
     )
     updated_by = Column(String, nullable=True)
 

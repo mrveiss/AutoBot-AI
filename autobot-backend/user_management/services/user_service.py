@@ -23,6 +23,7 @@ from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +383,7 @@ class UserService(BaseService):
 
     async def _finalize_user_update(self, user: User, user_id: uuid.UUID, changes: dict) -> None:
         """Finalize user update with timestamp and audit logging. Issue #620."""
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         if changes:
@@ -469,7 +470,7 @@ class UserService(BaseService):
                 raise InvalidCredentialsError("Current password is incorrect")
 
         user.password_hash = self.hash_password(new_password)
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         # Invalidate all sessions except current one
@@ -506,7 +507,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = False
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -537,7 +538,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = True
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -571,7 +572,7 @@ class UserService(BaseService):
         if hard_delete:
             await self.session.delete(user)
         else:
-            user.deleted_at = datetime.now(timezone.utc)
+            user.deleted_at = now_utc()
             user.is_active = False
 
         await self.session.flush()
@@ -654,7 +655,7 @@ class UserService(BaseService):
             return None
 
         # Update last login
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(

@@ -26,8 +26,7 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
-from utils.chromadb_client import get_chromadb_client as create_chromadb_client
-from utils.chromadb_client import wrap_collection_async
+from knowledge.backends import BaseCollection, get_default_client
 from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
@@ -104,7 +103,7 @@ class KnowledgeBaseCore:
         self._aioredis_client: Optional[aioredis.Redis] = None
         self.vector_store: Optional[ChromaVectorStore] = None
         self.vector_index: Optional[VectorStoreIndex] = None
-        self._async_chroma_collection = None
+        self._async_chroma_collection: Optional["BaseCollection"] = None
         self.llama_index_configured = False
         self.embedding_model_name: Optional[str] = None
         self.embedding_dimensions: Optional[int] = None
@@ -373,21 +372,24 @@ class KnowledgeBaseCore:
             self.hnsw_m,
         )
 
-        chroma_collection = await asyncio.to_thread(
+        abc_collection = await asyncio.to_thread(
             chroma_client.get_or_create_collection,
             name=self.chromadb_collection,
             metadata=hnsw_metadata,
         )
 
-        self._async_chroma_collection = wrap_collection_async(chroma_collection)
-        self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+        self._async_chroma_collection = abc_collection
+        # LlamaIndex ChromaVectorStore requires the raw chromadb collection.
+        # ChromaDBCollection._raw holds the underlying chromadb object.
+        raw_collection = getattr(abc_collection, "_raw", abc_collection)
+        self.vector_store = ChromaVectorStore(chroma_collection=raw_collection)
 
         logger.info(
             "ChromaDB vector store initialized: collection='%s'",
             self.chromadb_collection,
         )
 
-        collection_count = await asyncio.to_thread(chroma_collection.count)
+        collection_count = await asyncio.to_thread(abc_collection.count)
         logger.info("ChromaDB collection contains %d vectors", collection_count)
 
     async def _init_vector_store(self):
@@ -396,7 +398,7 @@ class KnowledgeBaseCore:
             chroma_path = Path(self.chromadb_path)
             logger.info("Initializing ChromaDB at path: %s", chroma_path)
 
-            chroma_client = create_chromadb_client(
+            chroma_client = get_default_client(
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 

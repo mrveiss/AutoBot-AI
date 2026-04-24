@@ -14,12 +14,12 @@ Provides significant performance improvements:
 import asyncio
 import json
 import logging
-import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import xxhash
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 
@@ -430,48 +430,13 @@ class LLMResponseCache:
         return {"l1_cleared": l1_count, "l2_cleared": l2_count}
 
 
-# Global cache instance with thread-safe initialization (Issue #662)
-_llm_response_cache: Optional[LLMResponseCache] = None
-_cache_init_lock = asyncio.Lock()
-_cache_sync_lock = threading.Lock()  # Issue #662: Thread-safe sync initialization
-
-
-def get_llm_cache() -> LLMResponseCache:
-    """
-    Get or create the global LLM response cache instance (thread-safe).
-
-    Issue #662: Now uses double-checked locking for thread safety.
-    For async contexts needing guaranteed single initialization, use get_llm_cache_async().
-
-    Returns:
-        LLMResponseCache singleton instance
-    """
-    global _llm_response_cache
-    if _llm_response_cache is None:
-        with _cache_sync_lock:
-            # Double-check after acquiring lock
-            if _llm_response_cache is None:
-                _llm_response_cache = LLMResponseCache()
-    return _llm_response_cache
+# Global cache instance — both sync and async callers share the same singleton (#5657)
+get_llm_cache = lazy_singleton(LLMResponseCache)
 
 
 async def get_llm_cache_async() -> LLMResponseCache:
-    """
-    Get or create the global LLM response cache instance (async-safe).
-
-    Issue #551 Code Review: Thread-safe singleton with async lock
-    to prevent race conditions during initialization in async contexts.
-
-    Returns:
-        LLMResponseCache singleton instance
-    """
-    global _llm_response_cache
-    if _llm_response_cache is None:
-        async with _cache_init_lock:
-            # Double-check pattern for thread safety
-            if _llm_response_cache is None:
-                _llm_response_cache = LLMResponseCache()
-    return _llm_response_cache
+    """Async accessor for the LLM response cache — delegates to get_llm_cache()."""
+    return get_llm_cache()
 
 
 __all__ = [

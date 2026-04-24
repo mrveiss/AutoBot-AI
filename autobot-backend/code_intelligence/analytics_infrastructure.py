@@ -186,11 +186,9 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._chromadb_collection is None:
                     try:
-                        from utils.async_chromadb_client import (
-                            get_async_chromadb_client,
-                        )
+                        from knowledge.backends import get_async_default_client
 
-                        self._chromadb_client = await get_async_chromadb_client()
+                        self._chromadb_client = await get_async_default_client()
                         self._chromadb_collection = await self._chromadb_client.get_or_create_collection(
                             name=self._collection_name,
                             metadata={

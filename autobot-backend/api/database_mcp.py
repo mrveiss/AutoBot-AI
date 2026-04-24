@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc
 from type_defs.common import JSONObject, Metadata
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ BLOCKED_SQL_PATTERNS = [
 
 # Rate limiting
 MAX_QUERIES_PER_MINUTE = 60
-query_counter = {"count": 0, "reset_time": datetime.now(timezone.utc)}
+query_counter = {"count": 0, "reset_time": now_utc()}
 _rate_limit_lock = asyncio.Lock()
 
 # Query limits
@@ -192,7 +193,7 @@ async def check_rate_limit() -> bool:
     """
 
     async with _rate_limit_lock:
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         elapsed = (now - query_counter["reset_time"]).total_seconds()
 
         # Reset counter every minute (in-place modification for thread safety)
@@ -778,7 +779,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
             "row_count": len(results),
             "columns": columns,
             "results": results,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
         }
 
     except sqlite3.Error as e:
@@ -844,7 +845,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
             "database": request.database,
             "statement": request.statement,
             "rows_affected": rows_affected,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
         }
 
     except sqlite3.Error as e:
@@ -897,7 +898,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
             "database": request.database,
             "table_count": len(table_info),
             "tables": table_info,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
         }
 
     except sqlite3.Error as e:
@@ -951,7 +952,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
             "database": request.database,
             "table_count": len(schemas),
             "schemas": schemas,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
         }
 
     except ValueError as e:
@@ -1004,7 +1005,7 @@ async def database_list_databases_mcp() -> Metadata:
         "success": True,
         "database_count": len(databases),
         "databases": databases,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -1055,7 +1056,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
             "success": True,
             "database": request.database,
             "statistics": stats,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now_utc().isoformat(),
         }
 
     except sqlite3.Error as e:
@@ -1086,7 +1087,7 @@ async def get_database_mcp_status() -> Metadata:
             0,
             60
             - (
-                datetime.now(timezone.utc) - query_counter["reset_time"]
+                now_utc() - query_counter["reset_time"]
             ).total_seconds(),
         )
 
@@ -1115,5 +1116,5 @@ async def get_database_mcp_status() -> Metadata:
             "max_query_length": MAX_QUERY_LENGTH,
         },
         "database_availability": db_status,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }

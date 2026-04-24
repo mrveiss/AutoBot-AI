@@ -11,7 +11,7 @@
 
     <EmptyState
       v-if="showEmptyState"
-      icon="fas fa-comments"
+      icon="comments"
       :title="$t('chat.interface.startConversation')"
       :message="$t('chat.emptyState')"
     />
@@ -1292,14 +1292,11 @@ watch(() => store.currentMessages.length, (newLen, oldLen) => {
     const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      // #1721: Loop strip to prevent incomplete multi-char sanitization
-      let preview = latestMessage.content.substring(0, 100)
-      let prev = ''
-      while (prev !== preview) {
-        prev = preview
-        preview = preview.replace(/<[^>]*?>/g, '')
-      }
-      preview = preview.replace(/</g, '&lt;')
+      // Use DOMPurify-backed sanitizeChatHtml to strip scripts/event-handlers, then
+      // remove any remaining HTML tags to obtain plain text for the aria-live region.
+      const preview = sanitizeChatHtml(latestMessage.content.substring(0, 200))
+        .replace(/<[^>]*>/g, '')  // strip remaining HTML tags → plain text
+        .substring(0, 100)
       screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
 
       setTimeout(() => {

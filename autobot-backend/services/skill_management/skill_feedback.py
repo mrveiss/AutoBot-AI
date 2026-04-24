@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics, REDIS_SKILL_METRICS_PREFIX
 
@@ -57,7 +58,7 @@ class SkillFeedbackAnalyzer:
             return
 
         try:
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             feedback_entry = {
                 "timestamp": now.isoformat(),
                 "skill_id": skill_id,
@@ -101,7 +102,7 @@ class SkillFeedbackAnalyzer:
             failure_patterns: List[str] = []
 
             # Collect feedback from past N days
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             for i in range(days):
                 date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 key = f"skill_feedback:{skill_id}:{date}"

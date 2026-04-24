@@ -30,7 +30,8 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -269,23 +270,16 @@ class DateRangeParams(BaseModel):
 # =============================================================================
 
 
-class LLMPatternAnalyzer:
+class LLMPatternAnalyzer(AsyncRedisClientMixin):
     """Engine for analyzing LLM usage patterns and identifying optimizations"""
+
+    _redis_database = RedisDatabase.MAIN
 
     def __init__(self):
         """Initialize LLM pattern analyzer with Redis storage keys."""
-        self._redis = None
         self._usage_key = "autobot:llm_patterns:usage"
         self._cache_key = "autobot:llm_patterns:cache"
         self._stats_key = "autobot:llm_patterns:stats"
-
-    async def _get_redis(self):
-        """Get Redis client lazily"""
-        if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.MAIN
-            )
-        return self._redis
 
     def _hash_prompt(self, prompt: str) -> str:
         """Create a hash of the prompt for caching detection"""

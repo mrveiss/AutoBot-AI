@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
@@ -42,10 +43,10 @@ class FailurePattern:
     resolution_success_rate: float = 0.0  # 0.0-1.0
     confidence: float = 0.8  # How confident in this pattern's recovery strategy
     first_seen: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
     last_seen: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -131,7 +132,7 @@ class FailurePatternDetector:
                 pattern = FailurePattern.from_dict(pattern_dict)
 
                 # Update last_seen timestamp
-                pattern.last_seen = datetime.now(timezone.utc).isoformat()
+                pattern.last_seen = now_utc().isoformat()
                 self._store_pattern(pattern_hash, pattern)
 
                 logger.debug(
@@ -189,7 +190,7 @@ class FailurePatternDetector:
                 pattern.error_types.append(error_type)
 
             pattern.occurrence_count += 1
-            pattern.last_seen = datetime.now(timezone.utc).isoformat()
+            pattern.last_seen = now_utc().isoformat()
 
             # Update resolution stats if action succeeded
             if successful_action:
@@ -241,8 +242,8 @@ class FailurePatternDetector:
             error_types=[],
             occurrence_count=0,
             confidence=0.7,
-            first_seen=datetime.now(timezone.utc).isoformat(),
-            last_seen=datetime.now(timezone.utc).isoformat(),
+            first_seen=now_utc().isoformat(),
+            last_seen=now_utc().isoformat(),
         )
 
     def _store_pattern(self, pattern_hash: str, pattern: FailurePattern) -> None:

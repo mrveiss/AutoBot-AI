@@ -7,9 +7,10 @@
  * Issue #578 - Audit Logging Dashboard GUI Integration
  */
 
-import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
+import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import type {
   AuditEntry,
   AuditQueryParams,
@@ -204,7 +205,6 @@ export function useAuditState() {
   const pageSize = ref(100)
 
   // Polling state
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
   const isPolling = ref(false)
   const pollingIntervalMs = ref(30000)
 
@@ -461,34 +461,36 @@ export function useAuditState() {
     selectedEntry.value = entry
   }
 
+  let _stopAuditPoller: (() => void) | null = null
+
   /**
    * Start polling for updates
    */
   function startPolling(intervalMs = 30000) {
-    if (pollingInterval) {
-      stopPolling()
-    }
+    if (_stopAuditPoller) _stopAuditPoller()
 
     pollingIntervalMs.value = intervalMs
     isPolling.value = true
-
-    pollingInterval = setInterval(async () => {
-      logger.debug('Polling for audit log updates...')
-      await loadLogs()
-      await loadStatistics()
-    }, intervalMs)
-
     logger.debug(`Started polling every ${intervalMs}ms`)
+
+    const poller = usePollingJob<void>(
+      async () => {
+        logger.debug('Polling for audit log updates...')
+        await loadLogs()
+        await loadStatistics()
+      },
+      { intervalMs }
+    )
+    _stopAuditPoller = poller.stop
+    poller.start('')
   }
 
   /**
    * Stop polling
    */
   function stopPolling() {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-    }
+    if (_stopAuditPoller) _stopAuditPoller()
+    _stopAuditPoller = null
     isPolling.value = false
     logger.debug('Stopped polling')
   }
@@ -577,12 +579,7 @@ export function useAuditState() {
     URL.revokeObjectURL(url)
   }
 
-  // Cleanup when effect scope disposes (component unmount or scope.stop())
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
-    })
-  }
+  // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
     // State

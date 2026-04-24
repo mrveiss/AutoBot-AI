@@ -465,7 +465,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] =
     Returns:
         The AsyncChromaCollection, or None on failure.
     """
-    from utils.chromadb_client import get_async_chromadb_client
+    from knowledge.backends import get_async_default_client
 
     chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
     collection_name = "autobot_code"
@@ -474,7 +474,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] =
     }
 
     try:
-        async_client = await get_async_chromadb_client(
+        async_client = await get_async_default_client(
             db_path=chroma_path,
             allow_reset=False,
             anonymized_telemetry=False,

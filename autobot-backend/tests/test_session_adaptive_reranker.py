@@ -14,7 +14,6 @@ Verifies:
 - Learning-rate clamping keeps weights within [0.1, 0.9].
 """
 
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -117,7 +116,7 @@ class TestSessionAdaptiveRerankerBasics(unittest.TestCase):
         self.assertIsNot(r1, r2)
 
 
-class TestRAGServiceSessionAdaptation(unittest.TestCase):
+class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
     """RAGService session adaptive reranking integration."""
 
     def _make_search_result(
@@ -170,7 +169,7 @@ class TestRAGServiceSessionAdaptation(unittest.TestCase):
         sem, kw = service._session_reranker.get_weights("sess-y")
         self.assertAlmostEqual(sem, config.hybrid_weight_semantic)
 
-    def test_advanced_search_applies_adapted_weights(self):
+    async def test_advanced_search_applies_adapted_weights(self):
         """advanced_search() uses adapted weights from session reranker when feature enabled."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics
         from services.rag_config import RAGConfig
@@ -214,9 +213,7 @@ class TestRAGServiceSessionAdaptation(unittest.TestCase):
                 new=AsyncMock(side_effect=lambda coro, timeout: coro),
             ),
         ):
-            asyncio.run(
-                service.advanced_search("test query", session_id="sess-z")
-            )
+            await service.advanced_search("test query", session_id="sess-z")
 
         # The applied weight should have been the adapted one (higher than default).
         if applied_sem_values:

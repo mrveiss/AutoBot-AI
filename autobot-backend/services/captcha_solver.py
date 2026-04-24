@@ -36,10 +36,10 @@ from __future__ import annotations
 import io
 import logging
 import re
-import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
+from autobot_shared.singleton_factory import lazy_singleton
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -597,17 +597,4 @@ class CaptchaSolver:
             return None
 
 
-# Global solver instance (thread-safe)
-_captcha_solver: Optional[CaptchaSolver] = None
-_captcha_solver_lock = threading.Lock()
-
-
-def get_captcha_solver() -> CaptchaSolver:
-    """Get or create the global CaptchaSolver instance (thread-safe)."""
-    global _captcha_solver
-    if _captcha_solver is None:
-        with _captcha_solver_lock:
-            # Double-check after acquiring lock
-            if _captcha_solver is None:
-                _captcha_solver = CaptchaSolver()
-    return _captcha_solver
+get_captcha_solver = lazy_singleton(CaptchaSolver)

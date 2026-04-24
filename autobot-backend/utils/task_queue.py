@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import parse_utc_iso
 
 try:
@@ -834,32 +835,15 @@ class TaskQueue:
         return cleaned_count
 
 
-# Global task queue instance (thread-safe)
-import threading
-
-_task_queue: Optional[TaskQueue] = None
-_task_queue_lock = threading.Lock()
-
-
-def get_task_queue() -> TaskQueue:
-    """Get the global task queue instance (thread-safe)."""
-    global _task_queue
-
-    if _task_queue is None:
-        with _task_queue_lock:
-            # Double-check after acquiring lock
-            if _task_queue is None:
-                _task_queue = TaskQueue()
-
-    return _task_queue
+get_task_queue = lazy_singleton(TaskQueue)
 
 
 def initialize_task_queue(**kwargs) -> TaskQueue:
-    """Initialize the global task queue."""
-    global _task_queue
+    """Initialize and return a fresh TaskQueue instance.
 
-    _task_queue = TaskQueue(**kwargs)
-    return _task_queue
+    Escape hatch: bypasses lazy_singleton cache for tests/forced reinit.
+    """
+    return TaskQueue(**kwargs)
 
 
 # Convenience decorators

@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
@@ -413,13 +413,16 @@ function updateData() {
 }
 
 // Lifecycle
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
+  async () => { await fetchData(); return null },
+  { intervalMs: props.refreshInterval || 0, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 onMounted(() => {
   fetchData()
 
   if (props.refreshInterval > 0) {
-    refreshTimer = setInterval(fetchData, props.refreshInterval)
+    _startRefresh('')
   }
 })
 
@@ -429,12 +432,8 @@ watch(() => props.machine, () => {
 })
 
 // Cleanup
-import { onUnmounted } from 'vue'
-import { getCssVar } from '@/composables/useCssVars'
 onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-  }
+  _stopRefresh()
 })
 
 // Expose methods

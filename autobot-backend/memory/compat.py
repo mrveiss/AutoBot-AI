@@ -8,9 +8,10 @@ Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 import asyncio
 import hashlib
 import logging
-import threading
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+from autobot_shared.singleton_factory import lazy_singleton
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
 from .manager import UnifiedMemoryManager
@@ -141,7 +142,9 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         """
         result = self._run_sync(
             self.update_task_status(
-                task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now(tz=timezone.utc)
+                task_id,
+                TaskStatus.IN_PROGRESS,
+                started_at=datetime.now(tz=timezone.utc),
             )
         )
         if result:
@@ -391,33 +394,8 @@ class LongTermMemoryManager:
 # GLOBAL INSTANCES (for drop-in replacement)
 # ============================================================================
 
-# Lazy initialization - only create when first accessed
-_enhanced_memory_instance = None
-_long_term_memory_instance = None
-_enhanced_memory_lock = threading.Lock()
-_long_term_memory_lock = threading.Lock()
-
-
-def get_enhanced_memory_manager() -> EnhancedMemoryManager:
-    """Get global EnhancedMemoryManager instance (singleton, thread-safe)"""
-    global _enhanced_memory_instance
-    if _enhanced_memory_instance is None:
-        with _enhanced_memory_lock:
-            # Double-check after acquiring lock
-            if _enhanced_memory_instance is None:
-                _enhanced_memory_instance = EnhancedMemoryManager()
-    return _enhanced_memory_instance
-
-
-def get_long_term_memory_manager() -> LongTermMemoryManager:
-    """Get global LongTermMemoryManager instance (singleton, thread-safe)"""
-    global _long_term_memory_instance
-    if _long_term_memory_instance is None:
-        with _long_term_memory_lock:
-            # Double-check after acquiring lock
-            if _long_term_memory_instance is None:
-                _long_term_memory_instance = LongTermMemoryManager()
-    return _long_term_memory_instance
+get_enhanced_memory_manager = lazy_singleton(EnhancedMemoryManager)
+get_long_term_memory_manager = lazy_singleton(LongTermMemoryManager)
 
 
 __all__ = [

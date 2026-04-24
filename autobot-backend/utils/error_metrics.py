@@ -15,11 +15,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.error_boundaries import ErrorCategory
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
 # Thread-safe imports
-import threading
 
 
 @dataclass
@@ -385,8 +385,7 @@ class ErrorMetricsCollector:
 
 
 # Global metrics collector instance (thread-safe)
-_metrics_collector: Optional[ErrorMetricsCollector] = None
-_metrics_collector_lock = threading.Lock()
+_metrics_collector = lazy_singleton(ErrorMetricsCollector)
 
 
 def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
@@ -399,7 +398,6 @@ def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
     Returns:
         ErrorMetricsCollector instance
     """
-    global _metrics_collector
 
     if _metrics_collector is None:
         with _metrics_collector_lock:

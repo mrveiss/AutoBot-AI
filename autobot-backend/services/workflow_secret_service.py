@@ -13,7 +13,7 @@ Issue #2153 — Secret management for workflow credentials.
 
 import logging
 import re
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 from typing import Dict, FrozenSet, List, Optional
 
 from services.secrets_service import SecretsService, get_secrets_service
@@ -195,7 +195,7 @@ class WorkflowSecretService:
             updated_by=owner_id,
         )
         if updated:
-            # codeql-suppress py/clear-text-logging-sensitive-data: logs name/owner metadata, not secret value
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.info("Workflow secret updated: name=%s owner=%s", name, owner_id)
         return updated
 
@@ -224,7 +224,7 @@ class WorkflowSecretService:
             deleted_by=owner_id,
         )
         if deleted:
-            # codeql-suppress py/clear-text-logging-sensitive-data: logs name/owner metadata, not secret value
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.info("Workflow secret deleted: name=%s owner=%s", name, owner_id)
         return deleted
 
@@ -334,18 +334,4 @@ class WorkflowSecretService:
 # Thread-safe singleton
 # ---------------------------------------------------------------------------
 
-_service_instance: Optional[WorkflowSecretService] = None
-_service_lock = threading.Lock()
-
-
-def get_workflow_secret_service() -> WorkflowSecretService:
-    """Return (or lazily create) the WorkflowSecretService singleton.
-
-    Issue #2153.
-    """
-    global _service_instance
-    if _service_instance is None:
-        with _service_lock:
-            if _service_instance is None:
-                _service_instance = WorkflowSecretService()
-    return _service_instance
+get_workflow_secret_service = lazy_singleton(WorkflowSecretService)

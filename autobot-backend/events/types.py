@@ -25,7 +25,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
 
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class AgentEvent:
             event_id=data["event_id"],
             event_type=EventType[data["event_type"]],
             timestamp=(
-                datetime.fromisoformat(data["timestamp"])
+                parse_utc_iso(data["timestamp"])
                 if isinstance(data["timestamp"], str)
                 else data["timestamp"]
             ),

@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from type_defs.common import JSONObject, Metadata
 
@@ -68,7 +69,7 @@ ALLOWED_URL_PATTERNS = [
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
-request_counter = {"count": 0, "reset_time": datetime.now(timezone.utc)}
+request_counter = {"count": 0, "reset_time": now_utc()}
 _rate_limit_lock = asyncio.Lock()
 
 # Blocked JavaScript patterns (security) - enhanced to prevent bypass vectors
@@ -153,7 +154,7 @@ async def check_rate_limit() -> bool:
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
     async with _rate_limit_lock:
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         elapsed = (now - request_counter["reset_time"]).total_seconds()
 
         # Reset counter every minute (in-place modification for thread safety)

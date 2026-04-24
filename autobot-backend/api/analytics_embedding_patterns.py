@@ -30,7 +30,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 router = APIRouter()
@@ -200,26 +201,16 @@ class EmbeddingStatsResponse(BaseModel):
 # =============================================================================
 
 
-class EmbeddingPatternAnalyzer:
+class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
     """Engine for analyzing embedding usage patterns and optimization"""
+
+    _redis_database = RedisDatabase.ANALYTICS
 
     def __init__(self):
         """Initialize embedding pattern analyzer with Redis storage keys."""
-        self._redis = None
         self._usage_key = "autobot:embedding_patterns:usage"
         self._stats_key = "autobot:embedding_patterns:stats"
         self._model_stats_key = "autobot:embedding_patterns:model_stats"
-        self._lock = asyncio.Lock()
-
-    async def _get_redis(self):
-        """Get Redis client lazily"""
-        if self._redis is None:
-            async with self._lock:
-                if self._redis is None:
-                    self._redis = get_redis_client(
-                        async_client=True, database=RedisDatabase.ANALYTICS
-                    )
-        return self._redis
 
     def _calculate_cost(self, model: str, token_count: int) -> float:
         """Calculate cost for embedding operation"""

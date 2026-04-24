@@ -100,10 +100,10 @@
         <div v-if="analysis.dto_mismatches?.length > 0" class="accordion-group">
           <div
             class="accordion-header critical"
-            @click="expanded.dtoMismatches = !expanded.dtoMismatches"
+            @click="toggle('dtoMismatches')"
           >
             <div class="header-info">
-              <i :class="expanded.dtoMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('dtoMismatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.dtoTypeMismatches') }}
               </span>
@@ -116,7 +116,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.dtoMismatches" class="accordion-items">
+            <div v-if="isExpanded('dtoMismatches')" class="accordion-items">
               <div
                 v-for="(m, index) in analysis.dto_mismatches.slice(0, 20)"
                 :key="'dto-' + index"
@@ -144,10 +144,10 @@
         <div v-if="analysis.api_contract_mismatches?.length > 0" class="accordion-group">
           <div
             class="accordion-header warning"
-            @click="expanded.apiMismatches = !expanded.apiMismatches"
+            @click="toggle('apiMismatches')"
           >
             <div class="header-info">
-              <i :class="expanded.apiMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('apiMismatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.apiContractIssues') }}
               </span>
@@ -160,7 +160,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.apiMismatches" class="accordion-items">
+            <div v-if="isExpanded('apiMismatches')" class="accordion-items">
               <div
                 v-for="(m, index) in analysis.api_contract_mismatches.slice(0, 20)"
                 :key="'api-' + index"
@@ -198,10 +198,10 @@
         <div v-if="analysis.validation_duplications?.length > 0" class="accordion-group">
           <div
             class="accordion-header info"
-            @click="expanded.validationDups = !expanded.validationDups"
+            @click="toggle('validationDups')"
           >
             <div class="header-info">
-              <i :class="expanded.validationDups ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <i :class="isExpanded('validationDups') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.validationDuplications') }}
               </span>
@@ -214,7 +214,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.validationDups" class="accordion-items">
+            <div v-if="isExpanded('validationDups')" class="accordion-items">
               <div
                 v-for="(v, index) in analysis.validation_duplications.slice(0, 15)"
                 :key="'val-' + index"
@@ -251,11 +251,11 @@
         <div v-if="analysis.pattern_matches?.length > 0" class="accordion-group">
           <div
             class="accordion-header success"
-            @click="expanded.semanticMatches = !expanded.semanticMatches"
+            @click="toggle('semanticMatches')"
           >
             <div class="header-info">
               <i
-                :class="expanded.semanticMatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"
+                :class="isExpanded('semanticMatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"
               ></i>
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.semanticPatternMatches') }}
@@ -269,7 +269,7 @@
             </div>
           </div>
           <transition name="accordion">
-            <div v-if="expanded.semanticMatches" class="accordion-items">
+            <div v-if="isExpanded('semanticMatches')" class="accordion-items">
               <div
                 v-for="(m, index) in analysis.pattern_matches.slice(0, 15)"
                 :key="'match-' + index"
@@ -312,15 +312,15 @@
 
     <EmptyState
       v-else
-      icon="fas fa-language"
+      icon="language"
       :message="$t('analytics.codebase.crossLanguage.noData')"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useExpansion } from '@/composables/useExpansion'
 
 interface PatternLocation {
   file_path: string
@@ -394,12 +394,8 @@ const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
 
-const expanded = reactive({
-  dtoMismatches: false,
-  apiMismatches: false,
-  validationDups: false,
-  semanticMatches: false,
-})
+type Section = 'dtoMismatches' | 'apiMismatches' | 'validationDups' | 'semanticMatches'
+const { isExpanded, toggle } = useExpansion<Section>()
 
 function formatTimestamp(timestamp: string | undefined): string {
   if (!timestamp) return 'Unknown'

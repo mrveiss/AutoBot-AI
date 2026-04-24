@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_24_HOURS
 
@@ -117,7 +117,7 @@ def _state_key(workflow_id: str) -> str:
 # ------------------------------------------------------------------
 
 
-class WorkflowStateMachine:
+class WorkflowStateMachine(AsyncRedisClientMixin):
     """Manages workflow state lifecycle with Redis persistence.
 
     Every transition is:
@@ -126,13 +126,7 @@ class WorkflowStateMachine:
        ``workflow_step`` message for audit trail (#1379).
     """
 
-    def __init__(self) -> None:
-        self._redis: Any = None
-
-    async def _get_redis(self) -> Any:
-        if self._redis is None:
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
+    _redis_database = "main"
 
     # -- Create --------------------------------------------------------
 

@@ -82,9 +82,15 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVncConnection } from '@/composables/useVncConnection'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 const { loading, error, settings, metrics, loadSettings, updateSettings, loadMetrics, setQualityPreset } = useVncConnection()
+
+const { start: startMetricsPolling } = usePollingJob<void>(
+  async () => { await loadMetrics() },
+  { intervalMs: 10000, maxAttempts: Infinity }
+)
 
 const presets = computed(() => [
   { value: 'low' as const, label: t('desktop.connectionSettings.presetLow'), desc: t('desktop.connectionSettings.presetLowDesc') },
@@ -116,10 +122,7 @@ async function saveSettings() {
 
 onMounted(async () => {
   await loadSettings()
-  await loadMetrics()
-
-  // Auto-refresh metrics every 10 seconds
-  setInterval(loadMetrics, 10000)
+  startMetricsPolling('')  // fires loadMetrics immediately + every 10s; auto-cleans via onScopeDispose
 })
 </script>
 

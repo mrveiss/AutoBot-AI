@@ -69,7 +69,7 @@
     <!-- Empty state when no cached results exist (#1458) -->
     <div v-if="!analyzing && !scanRunner.running.value && !hasAnyResults" class="empty-state-container">
       <EmptyState
-        icon="fas fa-database"
+        icon="database"
         :title="$t('analytics.codebase.empty.title')"
         :message="$t('analytics.codebase.empty.description')"
       >

@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 
 logger = get_llm_logger("temporal_knowledge_manager")
@@ -513,21 +514,4 @@ class TemporalKnowledgeManager:
         }
 
 
-# Global instance for system integration (thread-safe)
-import threading
-
-_temporal_manager_instance = None
-_temporal_manager_lock = threading.Lock()
-
-
-def get_temporal_manager() -> TemporalKnowledgeManager:
-    """Get the global temporal knowledge manager instance (thread-safe)."""
-    global _temporal_manager_instance
-
-    if _temporal_manager_instance is None:
-        with _temporal_manager_lock:
-            # Double-check after acquiring lock
-            if _temporal_manager_instance is None:
-                _temporal_manager_instance = TemporalKnowledgeManager()
-
-    return _temporal_manager_instance
+get_temporal_manager = lazy_singleton(TemporalKnowledgeManager)

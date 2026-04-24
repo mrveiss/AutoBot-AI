@@ -17,6 +17,8 @@ import sqlite3
 from datetime import datetime
 from typing import List, Optional, Tuple
 
+from autobot_shared.time_utils import parse_utc_iso
+
 from .models import StateSnapshot
 from .types import TrackingMetric
 
@@ -257,7 +259,7 @@ def load_snapshots_from_db(db_path: str, limit: int = 100) -> List[StateSnapshot
 
         for row in cursor.fetchall():
             snapshot = StateSnapshot(
-                timestamp=datetime.fromisoformat(row[0]),
+                timestamp=parse_utc_iso(row[0]),
                 phase_states=json.loads(row[1]),
                 active_capabilities=set(json.loads(row[2])),
                 system_metrics={
@@ -285,6 +287,6 @@ def load_milestones_from_db(db_path: str, milestones: dict) -> None:
 
             milestones[name].achieved = bool(row[3])
             if row[4]:
-                milestones[name].achieved_at = datetime.fromisoformat(row[4])
+                milestones[name].achieved_at = parse_utc_iso(row[4])
             if row[5]:
                 milestones[name].evidence = json.loads(row[5])

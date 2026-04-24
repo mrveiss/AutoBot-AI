@@ -259,7 +259,7 @@
           <!-- Getting started -->
           <EmptyState
             v-else
-            icon="fas fa-rocket"
+            icon="rocket"
             :message="$t('desktop.popoutBrowser.getStarted')"
             compact
           />
@@ -269,7 +269,7 @@
       <!-- Manual Browser View (No Session) -->
       <div v-if="!sessionId || sessionId === 'manual-browser'" class="flex items-center justify-center h-full bg-autobot-bg-tertiary">
         <EmptyState
-          icon="fas fa-globe"
+          icon="globe"
           :title="$t('desktop.popoutBrowser.manualBrowserMode')"
           :message="$t('desktop.popoutBrowser.manualBrowserDesc')"
         >

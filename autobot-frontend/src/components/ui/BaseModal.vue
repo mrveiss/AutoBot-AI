@@ -228,8 +228,8 @@ const onAfterEnter = () => focusFirst()
 }
 
 .close-btn {
-  width: 2.5rem;
-  height: 2.5rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border: none;
   background: var(--bg-secondary);
   border-radius: var(--radius-md);

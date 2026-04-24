@@ -7,10 +7,11 @@
  * Issue #900 - Browser Automation Dashboard
  */
 
-import { ref, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
+import { ref, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const logger = createLogger('useBrowserAutomation')
 
@@ -78,8 +79,6 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   const screenshots = ref<ScreenshotResult[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
 
   // ===== API Methods =====
 
@@ -285,22 +284,12 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   // ===== Polling Methods =====
 
-  function startPolling(): void {
-    if (pollingInterval) return
-    logger.debug(`Starting polling with interval: ${pollInterval}ms`)
-    pollingInterval = setInterval(() => {
-      fetchWorkerStatus()
-      fetchSessions()
-    }, pollInterval)
-  }
-
-  function stopPolling(): void {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-      logger.debug('Polling stopped')
-    }
-  }
+  const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
+    async () => {
+      await Promise.all([fetchWorkerStatus(), fetchSessions()])
+    },
+    { intervalMs: pollInterval }
+  )
 
   // ===== Lifecycle =====
 
@@ -310,14 +299,9 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
         Promise.all([fetchWorkerStatus(), fetchSessions()])
       }
       if (pollInterval > 0) {
-        startPolling()
+        logger.debug(`Starting polling with interval: ${pollInterval}ms`)
+        startPolling('')
       }
-    })
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      stopPolling()
     })
   }
 
@@ -343,7 +327,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     executeScript,
     runAutomationScript,
     deleteSession,
-    startPolling,
+    startPolling: () => startPolling(''),
     stopPolling,
   }
 }

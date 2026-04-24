@@ -20,7 +20,7 @@ Usage:
 import importlib
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple
 
 import psycopg2
@@ -60,6 +60,8 @@ MIGRATIONS = [
     "add_ansible_name_unique_constraint",
     # Issue #1980: add failure_reason column to fleet_sync_jobs
     "add_failure_reason_to_fleet_sync_jobs",
+    # Issue #5385: convert all TIMESTAMP columns to TIMESTAMPTZ (UTC-aware)
+    "migrate_timestamps_to_timestamptz",
 ]
 
 
@@ -118,14 +120,32 @@ def get_connection(db_url: str = None) -> psycopg2.extensions.connection:
 
 
 def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
-    """Create migrations tracking table if it doesn't exist (#786)."""
+    """Create migrations tracking table if it doesn't exist (#786, #5515)."""
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS migrations_applied (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE,
-                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+        # Upgrade existing deployments that have the old TIMESTAMP column (#5515)
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'migrations_applied'
+                      AND column_name = 'applied_at'
+                      AND data_type = 'timestamp without time zone'
+                ) THEN
+                    ALTER TABLE migrations_applied
+                        ALTER COLUMN applied_at TYPE TIMESTAMPTZ
+                        USING applied_at AT TIME ZONE 'UTC';
+                END IF;
+            END
+            $$;
         """)
     conn.commit()
 
@@ -142,7 +162,7 @@ def mark_migration_applied(conn: psycopg2.extensions.connection, name: str) -> N
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO migrations_applied (name, applied_at) VALUES (%s, %s)",
-            (name, datetime.utcnow()),
+            (name, datetime.now(timezone.utc)),
         )
     conn.commit()
 

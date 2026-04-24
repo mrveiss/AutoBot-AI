@@ -15,6 +15,7 @@ import pytest
 
 from .distributed_management import DistributedAgentManager
 from .types import CircuitState, DistributedAgentInfo
+from autobot_shared.time_utils import now_utc
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,7 +48,7 @@ def _make_agent_info() -> DistributedAgentInfo:
     return DistributedAgentInfo(
         agent=agent_stub,
         health=health_stub,
-        last_health_check=datetime.now(timezone.utc),
+        last_health_check=now_utc(),
         active_tasks=set(),
     )
 
@@ -70,7 +71,7 @@ def _assign_task(
     """Add a task to an agent and backdating its assignment timestamp."""
     mgr.add_active_task(agent_id, task_id)
     if assigned_seconds_ago:
-        mgr._task_assigned_at[task_id] = datetime.now(timezone.utc) - timedelta(
+        mgr._task_assigned_at[task_id] = now_utc() - timedelta(
             seconds=assigned_seconds_ago
         )
 
@@ -83,26 +84,26 @@ def _assign_task(
 class TestIsTaskStale:
     def test_unknown_task_is_not_stale(self):
         mgr = _make_manager()
-        assert mgr._is_task_stale("nonexistent", datetime.now(timezone.utc)) is False
+        assert mgr._is_task_stale("nonexistent", now_utc()) is False
 
     def test_task_within_grace_period_is_not_stale(self):
         mgr = _make_manager(stale_task_timeout_seconds=300, grace_period_seconds=300)
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=10)
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is False
+        assert mgr._is_task_stale("t1", now_utc()) is False
 
     def test_task_beyond_timeout_but_within_grace_is_not_stale(self):
         # grace_period_seconds > age → still protected even if age > timeout
         mgr = _make_manager(stale_task_timeout_seconds=5, grace_period_seconds=600)
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=100)
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is False
+        assert mgr._is_task_stale("t1", now_utc()) is False
 
     def test_task_beyond_timeout_and_grace_is_stale(self):
         mgr = _make_manager(stale_task_timeout_seconds=60, grace_period_seconds=30)
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=90)
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is True
+        assert mgr._is_task_stale("t1", now_utc()) is True
 
     def test_task_with_recent_progress_is_not_stale(self):
         mgr = _make_manager(
@@ -113,7 +114,7 @@ class TestIsTaskStale:
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=90)
         mgr.report_task_progress("t1")  # progress just now
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is False
+        assert mgr._is_task_stale("t1", now_utc()) is False
 
     def test_task_with_old_progress_is_stale(self):
         mgr = _make_manager(
@@ -124,10 +125,10 @@ class TestIsTaskStale:
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)
         # Backdate last progress to 60 s ago (older than progress_ttl_seconds=30)
-        mgr._task_last_progress["t1"] = datetime.now(timezone.utc) - timedelta(
+        mgr._task_last_progress["t1"] = now_utc() - timedelta(
             seconds=60
         )
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is True
+        assert mgr._is_task_stale("t1", now_utc()) is True
 
     def test_max_reassignments_exceeded_prevents_stealing(self):
         mgr = _make_manager(
@@ -136,7 +137,7 @@ class TestIsTaskStale:
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=300)
         mgr._task_reassignment_count["t1"] = 2  # already at limit
-        assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is False
+        assert mgr._is_task_stale("t1", now_utc()) is False
 
 
 # ---------------------------------------------------------------------------
@@ -147,20 +148,20 @@ class TestIsTaskStale:
 class TestCollectStaleTasks:
     def test_returns_empty_when_no_agents(self):
         mgr = _make_manager()
-        assert mgr._collect_stale_tasks(datetime.now(timezone.utc)) == []
+        assert mgr._collect_stale_tasks(now_utc()) == []
 
     def test_returns_stale_pair(self):
         mgr = _make_manager(stale_task_timeout_seconds=60, grace_period_seconds=30)
         _register_agent(mgr, "agent-1")
         _assign_task(mgr, "agent-1", "task-A", assigned_seconds_ago=120)
-        pairs = mgr._collect_stale_tasks(datetime.now(timezone.utc))
+        pairs = mgr._collect_stale_tasks(now_utc())
         assert ("agent-1", "task-A") in pairs
 
     def test_skips_fresh_tasks(self):
         mgr = _make_manager(stale_task_timeout_seconds=300, grace_period_seconds=300)
         _register_agent(mgr, "agent-1")
         _assign_task(mgr, "agent-1", "task-B", assigned_seconds_ago=5)
-        assert mgr._collect_stale_tasks(datetime.now(timezone.utc)) == []
+        assert mgr._collect_stale_tasks(now_utc()) == []
 
     def test_multiple_agents_multiple_tasks(self):
         mgr = _make_manager(stale_task_timeout_seconds=60, grace_period_seconds=30)
@@ -169,7 +170,7 @@ class TestCollectStaleTasks:
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)  # stale
         _assign_task(mgr, "a1", "t2", assigned_seconds_ago=5)  # fresh
         _assign_task(mgr, "a2", "t3", assigned_seconds_ago=200)  # stale
-        pairs = mgr._collect_stale_tasks(datetime.now(timezone.utc))
+        pairs = mgr._collect_stale_tasks(now_utc())
         assert ("a1", "t1") in pairs
         assert ("a2", "t3") in pairs
         assert all(p[1] != "t2" for p in pairs)
@@ -204,7 +205,7 @@ class TestReassignTask:
         assert mgr._task_reassignment_count["t1"] == 1
         # Simulate re-assignment by manually adding task back + calling again
         mgr.distributed_agents["a1"].active_tasks.add("t1")
-        mgr._task_assigned_at["t1"] = datetime.now(timezone.utc) - timedelta(
+        mgr._task_assigned_at["t1"] = now_utc() - timedelta(
             seconds=400
         )
         await mgr._reassign_task("a1", "t1")
@@ -307,9 +308,9 @@ class TestTaskTrackingIntegration:
     def test_add_active_task_records_assigned_at(self):
         mgr = _make_manager()
         _register_agent(mgr, "a1")
-        before = datetime.now(timezone.utc)
+        before = now_utc()
         mgr.add_active_task("a1", "t1")
-        after = datetime.now(timezone.utc)
+        after = now_utc()
         assert "t1" in mgr._task_assigned_at
         assert before <= mgr._task_assigned_at["t1"] <= after
 
@@ -328,9 +329,9 @@ class TestTaskTrackingIntegration:
         mgr = _make_manager()
         _register_agent(mgr, "a1")
         mgr.add_active_task("a1", "t1")
-        before = datetime.now(timezone.utc)
+        before = now_utc()
         mgr.report_task_progress("t1")
-        after = datetime.now(timezone.utc)
+        after = now_utc()
         assert before <= mgr._task_last_progress["t1"] <= after
 
 
@@ -441,7 +442,7 @@ class TestCircuitBreakerHealthTransitions:
         info = mgr.distributed_agents["a1"]
         info.circuit_state = CircuitState.HALF_OPEN
         info.circuit_failure_count = 3
-        original_opened_at = datetime.now(timezone.utc) - timedelta(seconds=600)
+        original_opened_at = now_utc() - timedelta(seconds=600)
         info.circuit_opened_at = original_opened_at
         mgr._process_health_result("a1", _make_health_stub("degraded"), None)
         assert info.circuit_state == CircuitState.OPEN
@@ -467,7 +468,7 @@ class TestCircuitBreakerRouting:
         _register_agent(mgr, "a1")
         info = mgr.distributed_agents["a1"]
         info.circuit_state = CircuitState.OPEN
-        info.circuit_opened_at = datetime.now(timezone.utc)
+        info.circuit_opened_at = now_utc()
         assert mgr.get_healthy_agents() == []
 
     def test_open_agent_promoted_to_half_open_after_backoff(self):
@@ -475,7 +476,7 @@ class TestCircuitBreakerRouting:
         _register_agent(mgr, "a1")
         info = mgr.distributed_agents["a1"]
         info.circuit_state = CircuitState.OPEN
-        info.circuit_opened_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+        info.circuit_opened_at = now_utc() - timedelta(seconds=120)
         agents = mgr.get_healthy_agents()
         assert info.circuit_state == CircuitState.HALF_OPEN
         assert len(agents) == 1
@@ -527,7 +528,7 @@ class TestCircuitBreakerStatistics:
     def test_open_circuit_exposes_opened_at(self):
         mgr = _make_cb_manager()
         _register_agent(mgr, "a1")
-        opened_at = datetime.now(timezone.utc)
+        opened_at = now_utc()
         info = mgr.distributed_agents["a1"]
         info.circuit_state = CircuitState.OPEN
         info.circuit_opened_at = opened_at

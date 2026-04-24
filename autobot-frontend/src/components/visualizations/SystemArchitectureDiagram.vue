@@ -515,6 +515,7 @@ import apiClient from '@/utils/ApiClient'
 import { getConfig, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 
@@ -1201,13 +1202,16 @@ function resetView() {
 // Lifecycle
 // ============================================================================
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
+  async () => { await refreshArchitecture(); return null },
+  { intervalMs: props.refreshInterval || 0, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 onMounted(() => {
   refreshArchitecture()
 
   if (props.autoRefresh && props.refreshInterval > 0) {
-    refreshTimer = setInterval(refreshArchitecture, props.refreshInterval)
+    _startRefresh('')
   }
 })
 

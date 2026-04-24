@@ -33,6 +33,14 @@ __all__ = [
     "get_enabled_features",
     "require_feature",
     "FeatureDisabledError",
+    # Singleton factory — issue #5423
+    "lazy_singleton",
+    # HTTP safety helpers — issue #5680
+    "safe_http_detail",
+    "user_facing_detail",
+    # Async Redis mixin — issue #5671
+    "AsyncRedisClientMixin",
+    "AsyncRedisClientLockedMixin",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -53,6 +61,14 @@ _LAZY_IMPORTS = {
     "get_enabled_features": (".feature_flags", "get_enabled_features"),
     "require_feature": (".feature_flags", "require_feature"),
     "FeatureDisabledError": (".feature_flags", "FeatureDisabledError"),
+    # Singleton factory — issue #5423
+    "lazy_singleton": (".singleton_factory", "lazy_singleton"),
+    # HTTP safety helpers — issue #5680
+    "safe_http_detail": (".error_utils", "safe_http_detail"),
+    "user_facing_detail": (".error_utils", "user_facing_detail"),
+    # Async Redis mixin — issue #5671
+    "AsyncRedisClientMixin": (".redis_mixin", "AsyncRedisClientMixin"),
+    "AsyncRedisClientLockedMixin": (".redis_mixin", "AsyncRedisClientLockedMixin"),
 }
 
 

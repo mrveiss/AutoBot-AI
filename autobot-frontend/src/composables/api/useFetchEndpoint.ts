@@ -34,7 +34,7 @@ const logger = createLogger('useFetchEndpoint')
 
 export type FetchEndpointMethod = 'GET' | 'POST' | 'DELETE'
 
-export interface UseFetchEndpointOptions<TRaw, TOut> {
+export interface UseFetchEndpointOptions<TRaw, TOut, Ctx = undefined> {
   /** API path appended to the resolved backend URL, e.g. '/api/analytics/codebase/stats'. */
   path: string
   /** HTTP method. Defaults to 'GET'. */
@@ -59,15 +59,23 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
    * Return `null` to indicate "no data" (leaves `data` as null without error).
    */
   pickData: (raw: TRaw) => TOut | null
-  /** Optional side-effect fired after `data` is assigned on success. */
-  onSuccess?: (data: TOut, raw: TRaw) => void
+  /**
+   * Optional side-effect fired after `data` is assigned on success.
+   *
+   * Issue #5457: receives the per-request `context` passed to `load()`.
+   * Lets callers thread request-scope state (filename hints, user-action
+   * tags, etc.) into the success handler without module-scope `let`
+   * workarounds — see the #5455 exportReport race this addresses.
+   */
+  onSuccess?: (data: TOut, raw: TRaw, context: Ctx) => void
   /** Optional side-effect fired when `pickData` returns null (no-data path). */
-  onNoData?: () => void
+  onNoData?: (context: Ctx) => void
   /**
    * Optional side-effect fired when fetch fails or throws. Receives the
-   * resolved error message (same value that lands in `error.value`).
+   * resolved error message (same value that lands in `error.value`) plus
+   * the per-request `context` (#5457).
    */
-  onError?: (message: string, err: unknown) => void
+  onError?: (message: string, err: unknown, context: Ctx) => void
   /**
    * Hook fired with the raw Response **before** the default `!ok` throw.
    * Return a string to override the default `${label} returned ${status}`
@@ -84,6 +92,7 @@ export interface UseFetchEndpointOptions<TRaw, TOut> {
    */
   onResponse?: (
     response: Response,
+    context: Ctx,
   ) => string | undefined | Promise<string | undefined>
   /**
    * Custom response parser. Defaults to `(r) => r.json()`. Override to
@@ -127,11 +136,20 @@ export interface UseFetchEndpointDeps {
   withSourceId?: (url: string) => string
 }
 
-export interface UseFetchEndpointReturn<TOut> {
+export interface UseFetchEndpointReturn<TOut, Ctx = undefined> {
   data: Ref<TOut | null>
   loading: Ref<boolean>
   error: Ref<string>
-  load: (queryExtras?: Record<string, string>) => Promise<void>
+  /**
+   * Trigger the fetch.
+   *
+   * @param queryExtras - Optional extra query-string params appended to the URL.
+   * @param context - Optional per-request context threaded into the
+   *   lifecycle callbacks (`onSuccess`/`onError`/`onNoData`/`onResponse`).
+   *   Introduced in #5457 to eliminate module-scope `let` workarounds for
+   *   request-specific state like filename hints.
+   */
+  load: (queryExtras?: Record<string, string>, context?: Ctx) => Promise<void>
   /**
    * Clear `data`, `loading`, and `error` back to their initial state.
    * Parity with the deleted `useAnalyticsFetch` (#5208/#5235).
@@ -157,10 +175,10 @@ function appendQueryExtras(
   return `${url}${sep}${qs}`
 }
 
-export function useFetchEndpoint<TRaw, TOut>(
-  opts: UseFetchEndpointOptions<TRaw, TOut>,
+export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
+  opts: UseFetchEndpointOptions<TRaw, TOut, Ctx>,
   deps?: UseFetchEndpointDeps,
-): UseFetchEndpointReturn<TOut> {
+): UseFetchEndpointReturn<TOut, Ctx> {
   const data = ref<TOut | null>(null) as Ref<TOut | null>
   const loading = ref(false)
   const error = ref('')
@@ -181,7 +199,14 @@ export function useFetchEndpoint<TRaw, TOut>(
 
   const load = async (
     queryExtras?: Record<string, string>,
+    context?: Ctx,
   ): Promise<void> => {
+    // #5457: context is captured into the closure at load-time, so
+    // concurrent load() calls each see their own context in callbacks —
+    // no module-scope `let` workaround needed. The `as Ctx` cast is safe
+    // because when `Ctx = undefined` (the default) the optional parameter
+    // fills the slot correctly.
+    const ctx = context as Ctx
     loading.value = true
     error.value = ''
     try {
@@ -205,7 +230,7 @@ export function useFetchEndpoint<TRaw, TOut>(
       const response = await fetchWithAuth(url, init)
       if (!response.ok) {
         const overrideMsg = opts.onResponse
-          ? await opts.onResponse(response)
+          ? await opts.onResponse(response, ctx)
           : undefined
         throw new Error(
           overrideMsg ?? `${label} returned ${response.status}`,
@@ -217,15 +242,15 @@ export function useFetchEndpoint<TRaw, TOut>(
       const picked = opts.pickData(raw)
       if (picked === null) {
         data.value = null
-        opts.onNoData?.()
+        opts.onNoData?.(ctx)
         return
       }
       data.value = picked
-      opts.onSuccess?.(picked, raw)
+      opts.onSuccess?.(picked, raw, ctx)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to load ${label}:`, err)
-      opts.onError?.(message, err)
+      opts.onError?.(message, err, ctx)
       // #5389: when a fallback value is configured, return it as the
       // effective result instead of exposing the error. Callers opting
       // into this explicitly accept "success with stale/default data"

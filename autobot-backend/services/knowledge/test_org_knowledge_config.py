@@ -16,23 +16,7 @@ from services.knowledge.org_knowledge_config import (
     OrgKnowledgeConfig,
     OrgKnowledgeConfigService,
 )
-
-
-class _FakeRedis:
-    """Minimal async Redis stub backed by an in-process dict."""
-
-    def __init__(self) -> None:
-        self._store: dict[str, str] = {}
-
-    async def get(self, key: str):
-        return self._store.get(key)
-
-    async def set(self, key: str, value: str) -> bool:
-        self._store[key] = value
-        return True
-
-    async def delete(self, key: str) -> int:
-        return 1 if self._store.pop(key, None) is not None else 0
+from tests.helpers.fake_redis import AsyncSimpleFakeRedis
 
 
 def _ssot_stub():
@@ -51,7 +35,7 @@ def _ssot_stub():
 @pytest.mark.asyncio
 async def test_set_then_get_returns_persisted_config():
     """A config set via ``set()`` round-trips via ``get()``."""
-    svc = OrgKnowledgeConfigService(redis_client=_FakeRedis())
+    svc = OrgKnowledgeConfigService(redis_client=AsyncSimpleFakeRedis())
     cfg = OrgKnowledgeConfig(
         llm_provider="openai",
         llm_model="gpt-4o-mini",
@@ -70,7 +54,7 @@ async def test_set_then_get_returns_persisted_config():
 @pytest.mark.asyncio
 async def test_get_effective_returns_ssot_defaults_when_unset():
     """With no persisted config, ``get_effective()`` returns SSOT defaults."""
-    svc = OrgKnowledgeConfigService(redis_client=_FakeRedis())
+    svc = OrgKnowledgeConfigService(redis_client=AsyncSimpleFakeRedis())
     with patch(
         "autobot_shared.ssot_config.get_config",
         return_value=_ssot_stub(),
@@ -85,7 +69,7 @@ async def test_get_effective_returns_ssot_defaults_when_unset():
 @pytest.mark.asyncio
 async def test_get_effective_merges_partial_org_config_over_ssot():
     """Partial org config fills in SSOT defaults for unset fields only."""
-    redis = _FakeRedis()
+    redis = AsyncSimpleFakeRedis()
     svc = OrgKnowledgeConfigService(redis_client=redis)
     await svc.set(
         "org-partial",
@@ -105,7 +89,7 @@ async def test_get_effective_merges_partial_org_config_over_ssot():
 @pytest.mark.asyncio
 async def test_default_org_sentinel_used_when_org_id_none():
     """Calls with org_id=None use the __default__ sentinel key."""
-    redis = _FakeRedis()
+    redis = AsyncSimpleFakeRedis()
     svc = OrgKnowledgeConfigService(redis_client=redis)
     await svc.set(None, OrgKnowledgeConfig(llm_model="default-llm"))
     # Key must exist under the sentinel.
@@ -118,7 +102,7 @@ async def test_default_org_sentinel_used_when_org_id_none():
 @pytest.mark.asyncio
 async def test_delete_removes_persisted_config():
     """``delete()`` clears the key and subsequent ``get()`` returns None."""
-    redis = _FakeRedis()
+    redis = AsyncSimpleFakeRedis()
     svc = OrgKnowledgeConfigService(redis_client=redis)
     await svc.set("org-gone", OrgKnowledgeConfig(llm_model="m"))
     assert await svc.delete("org-gone") is True
@@ -128,7 +112,7 @@ async def test_delete_removes_persisted_config():
 @pytest.mark.asyncio
 async def test_corrupt_payload_returns_none_and_logs():
     """Non-JSON persisted payloads are ignored rather than raising."""
-    redis = _FakeRedis()
+    redis = AsyncSimpleFakeRedis()
     redis._store["org_llm_config:broken"] = "not-json"
     svc = OrgKnowledgeConfigService(redis_client=redis)
     assert await svc.get("broken") is None
@@ -137,7 +121,7 @@ async def test_corrupt_payload_returns_none_and_logs():
 @pytest.mark.asyncio
 async def test_set_persists_json_payload_shape():
     """Persisted blob is valid JSON with the known key set."""
-    redis = _FakeRedis()
+    redis = AsyncSimpleFakeRedis()
     svc = OrgKnowledgeConfigService(redis_client=redis)
     await svc.set(
         "org-1",

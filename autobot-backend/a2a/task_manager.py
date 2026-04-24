@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import Task, TaskArtifact, TaskState, TaskStatus
@@ -50,7 +51,7 @@ _KEY_EVENTS = "a2a:events:{}"  # pub/sub channel for SSE streaming (#4554)
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return now_utc().isoformat()
 
 
 # ---------------------------------------------------------------------------

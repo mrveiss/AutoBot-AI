@@ -11,6 +11,7 @@ Supports multiple SSO providers:
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -237,4 +238,4 @@ class UserSSOLink(Base):
 
     def record_login(self) -> None:
         """Record a login via this SSO link."""
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = now_utc()

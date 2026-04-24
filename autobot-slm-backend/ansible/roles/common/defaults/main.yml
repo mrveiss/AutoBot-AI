@@ -30,8 +30,8 @@ firewall_service_ports:
   ai_stack: 8080
   npu_worker: 8081
 
-  # Browser automation
-  browser: 3000
+  # Browser automation (port 9001 is canonical; 3000 was legacy/Grafana conflict, #5608)
+  browser: 9001
   playwright: 3001
 
   # VNC/Desktop streaming

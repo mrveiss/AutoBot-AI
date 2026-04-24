@@ -28,7 +28,7 @@
 
       <EmptyState
         v-if="results.length === 0"
-        icon="fas fa-info-circle"
+        icon="info-circle"
         :message="$t('manpage.searchPanel.noResults')"
       />
 

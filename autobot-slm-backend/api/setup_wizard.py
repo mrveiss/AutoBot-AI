@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from api.websocket import ws_manager
 from services.ansible_secrets import fetch_deploy_secrets
+from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
 from services.playbook_executor import get_playbook_executor
@@ -658,9 +659,10 @@ def _handle_provision_result(result: dict) -> None:
     else:
         rc = result.get("returncode", -1)
         _provision_state["status"] = "failed"
-        _provision_state["error"] = f"Ansible exited with code {rc}"
-        _write_provision_log(f"FAILED: Ansible exited with code {rc}")
-        logger.error("Fleet provisioning failed (rc=%s)", rc)
+        summary = _extract_failure_summary(raw_output)
+        _provision_state["error"] = summary or f"Ansible exited with code {rc}"
+        _write_provision_log(f"FAILED: {_provision_state['error']}")
+        logger.error("Fleet provisioning failed (rc=%s): %s", rc, _provision_state["error"])
 
 
 async def _create_wizard_deployments(
@@ -702,7 +704,7 @@ async def _create_wizard_deployments(
                         node_id=node.node_id,
                         roles=roles,
                         status=DeploymentStatus.IN_PROGRESS.value,
-                        started_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
                         triggered_by="setup-wizard",
                         extra_data={"source": "setup_wizard"},
                     )
@@ -746,7 +748,7 @@ async def _complete_wizard_deployments(
                     continue
                 node_succeeded = success and (reachable_nodes is None or node_id in reachable_nodes)
                 dep.status = DeploymentStatus.COMPLETED.value if node_succeeded else DeploymentStatus.FAILED.value
-                dep.completed_at = datetime.utcnow()
+                dep.completed_at = datetime.now(timezone.utc)
                 dep.playbook_output = output
                 if not node_succeeded:
                     dep.error = error or "Provisioning failed or node unreachable"
@@ -850,7 +852,11 @@ async def _run_provisioning_task(
                 _write_provision_log(msg)
                 # Broadcast via WebSocket (#2754)
                 log_type = "task"
-                if stage.endswith("_complete") or stage == "complete":
+                if stage == "heartbeat":
+                    log_type = "heartbeat"
+                elif stage == "phase":
+                    log_type = "phase"
+                elif stage.endswith("_complete") or stage == "complete":
                     log_type = "success"
                 elif "error" in msg.lower() or "failed" in msg.lower():
                     log_type = "error"
@@ -875,7 +881,7 @@ async def _run_provisioning_task(
             node_to_deployment,
             success=bool(result.get("success")),
             output=result.get("output", ""),
-            error=(None if result.get("success") else f"Ansible exited with code {result.get('returncode', -1)}"),
+            error=(None if result.get("success") else _provision_state.get("error")),
             reachable_nodes=None,
         )
 
@@ -888,9 +894,9 @@ async def _run_provisioning_task(
             await ws_manager.send_provision_status("completed", "complete", elapsed)
             await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
         else:
-            rc = result.get("returncode", -1)
-            await ws_manager.send_provision_status("failed", "", elapsed, error=f"Ansible exited with code {rc}")
-            await ws_manager.send_provision_log("error", f"Provisioning failed (exit code {rc})")
+            human_error = _provision_state.get("error", "Provisioning failed")
+            await ws_manager.send_provision_status("failed", "", elapsed, error=human_error)
+            await ws_manager.send_provision_log("error", f"Provisioning failed — {human_error}")
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)

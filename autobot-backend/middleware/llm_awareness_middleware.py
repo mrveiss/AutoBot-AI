@@ -243,21 +243,14 @@ Active capabilities ({context['current_capabilities']['count']}):"""
 
 
 # Global injector instance (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_awareness_injector = None
-_awareness_injector_lock = threading.Lock()
+_awareness_injector = lazy_singleton(LLMAwarenessInjector)
 
 
 def get_awareness_injector() -> LLMAwarenessInjector:
     """Get global awareness injector instance (thread-safe)."""
-    global _awareness_injector
-    if _awareness_injector is None:
-        with _awareness_injector_lock:
-            # Double-check after acquiring lock
-            if _awareness_injector is None:
-                _awareness_injector = LLMAwarenessInjector()
-    return _awareness_injector
+    return _awareness_injector()
 
 
 # Utility functions for easy integration

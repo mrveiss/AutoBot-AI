@@ -174,11 +174,12 @@
  * Issue #1458
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 
@@ -217,11 +218,27 @@ const showAddModal = ref(false)
 const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 
-// Polling state for syncing cards (#3092)
-const _pollTimer = ref<ReturnType<typeof setInterval> | null>(null)
-const _pollDeadline = ref<number>(0)
+// Polling for syncing cards (#3092): 4s interval, 5min timeout (75 attempts)
 const POLL_INTERVAL_MS = 4000
-const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+const POLL_MAX_ATTEMPTS = 75 // 5 minutes / 4s
+
+const _sourcePoller = usePollingJob<void>(
+  async (_taskId) => {
+    await _loadSourcesEndpoint()
+    if (sourcesEndpointError.value) {
+      logger.warn('Poll request failed:', sourcesEndpointError.value)
+    }
+  },
+  {
+    intervalMs: POLL_INTERVAL_MS,
+    maxAttempts: POLL_MAX_ATTEMPTS,
+    isComplete: () => !_hasSyncingSource(),
+    onDone: async () => {
+      await loadSummaries()
+      logger.info('All sources resolved — polling complete')
+    },
+  }
+)
 
 // ---- Endpoint composables (#5153 B) --------------------------------------
 
@@ -358,42 +375,9 @@ function _hasSyncingSource(): boolean {
   return sources.value.some((s) => s.status === 'syncing')
 }
 
-function _stopPolling(): void {
-  if (_pollTimer.value !== null) {
-    clearInterval(_pollTimer.value)
-    _pollTimer.value = null
-    logger.info('Status polling stopped')
-  }
-}
-
-async function _pollTick(): Promise<void> {
-  if (Date.now() > _pollDeadline.value) {
-    logger.warn('Status polling timed out after 5 minutes — stopping')
-    _stopPolling()
-    return
-  }
-  // #5276: reuses the shared `useSourcesListEndpoint` loader so the
-  // poll shares one fetch path and error handling. sources.value is
-  // updated via the endpoint's onSuccess hook; we only react to the
-  // syncing state afterwards. Errors are already logged inside the
-  // composable — no extra try/catch.
-  await _loadSourcesEndpoint()
-  if (sourcesEndpointError.value) {
-    logger.warn('Poll request failed:', sourcesEndpointError.value)
-    return
-  }
-  if (!_hasSyncingSource()) {
-    _stopPolling()
-    await loadSummaries()
-    logger.info('All sources resolved — polling complete')
-  }
-}
-
 function _startPolling(): void {
-  _stopPolling()
-  _pollDeadline.value = Date.now() + POLL_TIMEOUT_MS
-  _pollTimer.value = setInterval(_pollTick, POLL_INTERVAL_MS)
   logger.info('Status polling started (interval %dms, timeout 5min)', POLL_INTERVAL_MS)
+  _sourcePoller.start('')
 }
 
 // ---- Modal Handlers -------------------------------------------------------
@@ -415,10 +399,6 @@ onMounted(() => {
       _startPolling()
     }
   })
-})
-
-onUnmounted(() => {
-  _stopPolling()
 })
 </script>
 

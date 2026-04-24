@@ -12,10 +12,10 @@ legacy agent routing and distributed agent communication protocols.
 """
 
 import logging
-import threading
 import uuid
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -401,17 +401,4 @@ class DistributedAgentCoordinator:
             }
 
 
-# Singleton instance (thread-safe)
-_agent_orchestrator_instance = None
-_agent_orchestrator_lock = threading.Lock()
-
-
-def get_distributed_agent_coordinator() -> DistributedAgentCoordinator:
-    """Get the singleton Agent Orchestrator instance (thread-safe)."""
-    global _agent_orchestrator_instance
-    if _agent_orchestrator_instance is None:
-        with _agent_orchestrator_lock:
-            # Double-check after acquiring lock
-            if _agent_orchestrator_instance is None:
-                _agent_orchestrator_instance = DistributedAgentCoordinator()
-    return _agent_orchestrator_instance
+get_distributed_agent_coordinator = lazy_singleton(DistributedAgentCoordinator)

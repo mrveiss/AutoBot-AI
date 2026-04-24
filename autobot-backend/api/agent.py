@@ -1263,7 +1263,7 @@ async def coordinate_multi_agent_task(
             )
 
         # Execute coordinated task
-        coordination_start = datetime.utcnow()
+        coordination_start = time.monotonic()
 
         # Use AI Stack's multi-agent orchestration
         coordination_result = await ai_client.multi_agent_query(
@@ -1272,8 +1272,7 @@ async def coordinate_multi_agent_task(
             coordination_mode=payload.coordination_strategy,
         )
 
-        coordination_end = datetime.utcnow()
-        coordination_time = (coordination_end - coordination_start).total_seconds()
+        coordination_time = time.monotonic() - coordination_start
 
         return create_success_response(
             {
@@ -1286,7 +1285,7 @@ async def coordinate_multi_agent_task(
                     len(payload.dependencies) if payload.dependencies else 0
                 ),
                 "result": coordination_result,
-                "timestamp": coordination_end.isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 

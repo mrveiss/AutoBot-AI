@@ -7,6 +7,7 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
+from autobot_shared.time_utils import parse_utc_iso
 import json
 import logging
 import os
@@ -102,7 +103,7 @@ class AuthenticationMiddleware:
             return secret
 
         # 3. Generate and store a secure random secret
-        logger.warning(  # codeql-suppress py/clear-text-logging-sensitive-data: logs status only, no secret value
+        logger.warning(  # codeql[py/clear-text-logging-sensitive-data]
             "No secure JWT secret found. Generating secure random secret."
         )
         secure_secret = secrets.token_urlsafe(64)  # 512-bit secret
@@ -111,12 +112,12 @@ class AuthenticationMiddleware:
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs status only, no secret value
+            logger.info(  # codeql[py/clear-text-logging-sensitive-data]
                 "Generated and stored secure JWT secret"
             )
             return secure_secret
         except Exception as e:
-            # codeql-suppress py/clear-text-logging-sensitive-data: exception message, no secret value
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret
@@ -361,7 +362,7 @@ class AuthenticationMiddleware:
         # Check session timeout for in-memory sessions
         last_activity = session.get("last_activity")
         if isinstance(last_activity, str):
-            last_activity = datetime.datetime.fromisoformat(last_activity)
+            last_activity = parse_utc_iso(last_activity)
             if last_activity.tzinfo is None:
                 last_activity = last_activity.replace(tzinfo=datetime.timezone.utc)
 

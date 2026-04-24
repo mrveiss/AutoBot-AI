@@ -686,21 +686,14 @@ You should be aware of your current capabilities and limitations based on the sy
 
 
 # Global instance (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_llm_self_awareness = None
-_llm_self_awareness_lock = threading.Lock()
+_llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 
 
 def get_llm_self_awareness() -> LLMSelfAwareness:
     """Get singleton instance of LLM self-awareness module (thread-safe)."""
-    global _llm_self_awareness
-    if _llm_self_awareness is None:
-        with _llm_self_awareness_lock:
-            # Double-check after acquiring lock
-            if _llm_self_awareness is None:
-                _llm_self_awareness = LLMSelfAwareness()
-    return _llm_self_awareness
+    return _llm_self_awareness()
 
 
 # Example usage

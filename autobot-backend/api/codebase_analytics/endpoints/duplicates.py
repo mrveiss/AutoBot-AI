@@ -23,6 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import AnalyticsConfig
 from utils.background_task_manager import BackgroundTaskManager
 from utils.chromadb_client import get_all_paginated
@@ -223,21 +224,18 @@ def _build_timeout_response() -> dict:
     }
 
 
-def _build_detection_error_response(error_msg: str) -> dict:
+def _build_detection_error_response() -> dict:
     """
     Build error response for duplicate detection failure.
 
     Issue #620: Extracted from get_duplicate_code to reduce function length.
-
-    Args:
-        error_msg: Error message to include
 
     Returns:
         JSONResponse-compatible dict for error scenario
     """
     return {
         "status": "error",
-        "message": f"Duplicate detection failed: {error_msg}",
+        "message": "Duplicate detection failed",
         "duplicates": [],
         "total_count": 0,
     }
@@ -349,7 +347,9 @@ async def _handle_detection_failure(
     if fallback:
         return JSONResponse(fallback)
 
-    return JSONResponse(_build_detection_error_response(str(error)))
+    resp = _build_detection_error_response()
+    resp["message"] = safe_http_detail(error, resp["message"])
+    return JSONResponse(resp)
 
 
 @router.get("/duplicates")

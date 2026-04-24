@@ -12,9 +12,9 @@ image data for analysis.
 """
 
 import logging
-import threading
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -179,15 +179,4 @@ class ImageAnalysisAgent(StandardizedAgent):
         return str(response)
 
 
-_image_analysis_agent_instance = None
-_image_analysis_agent_lock = threading.Lock()
-
-
-def get_image_analysis_agent() -> ImageAnalysisAgent:
-    """Get the singleton Image Analysis Agent instance (thread-safe)."""
-    global _image_analysis_agent_instance
-    if _image_analysis_agent_instance is None:
-        with _image_analysis_agent_lock:
-            if _image_analysis_agent_instance is None:
-                _image_analysis_agent_instance = ImageAnalysisAgent()
-    return _image_analysis_agent_instance
+get_image_analysis_agent = lazy_singleton(ImageAnalysisAgent)

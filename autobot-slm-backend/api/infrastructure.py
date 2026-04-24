@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
 from services.auth import get_current_user
+from services.ansible_utils import _extract_failure_summary
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
@@ -646,7 +647,8 @@ async def _run_playbook(
             execution.output.append("[SUCCESS] Playbook completed successfully")
         else:
             execution.status = PlaybookStatus.FAILED
-            execution.error = f"Playbook failed with exit code {process.returncode}"
+            _summary = _extract_failure_summary("\n".join(execution.output))
+            execution.error = _summary or f"Playbook failed with exit code {process.returncode}"
             execution.output.append(f"[FAILED] Exit code: {process.returncode}")
 
     except Exception as e:

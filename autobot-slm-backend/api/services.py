@@ -391,7 +391,7 @@ async def scan_node_services(
             logger.warning("No service facts returned for %s", node.hostname)
             return _build_scan_failure_response(node_id, "No service data returned from Ansible")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         discovered, created, updated = await _parse_ansible_service_facts(services_data, db, node_id, now)
 
         await db.commit()
@@ -505,7 +505,7 @@ async def start_service(
             service.status = ServiceStatus.RUNNING.value
             service.active_state = "active"
             service.sub_state = "running"
-            service.last_checked = datetime.utcnow()
+            service.last_checked = datetime.now(timezone.utc)
             await db.commit()
 
         # Broadcast status change via WebSocket
@@ -564,7 +564,7 @@ async def stop_service(
             service.status = ServiceStatus.STOPPED.value
             service.active_state = "inactive"
             service.sub_state = "dead"
-            service.last_checked = datetime.utcnow()
+            service.last_checked = datetime.now(timezone.utc)
             await db.commit()
 
         # Broadcast status change via WebSocket
@@ -635,7 +635,7 @@ async def _update_service_after_restart(db: AsyncSession, node_id: str, service_
         service.status = ServiceStatus.RUNNING.value
         service.active_state = "active"
         service.sub_state = "running"
-        service.last_checked = datetime.utcnow()
+        service.last_checked = datetime.now(timezone.utc)
         await db.commit()
 
 
@@ -898,7 +898,7 @@ async def _restart_single_service(
         svc.status = ServiceStatus.RUNNING.value
         svc.active_state = "active"
         svc.sub_state = "running"
-        svc.last_checked = datetime.utcnow()
+        svc.last_checked = datetime.now(timezone.utc)
 
         await ws_manager.send_service_status(
             node_id=node_id,
@@ -1248,7 +1248,7 @@ async def start_fleet_service(
             svc.status = ServiceStatus.RUNNING.value
             svc.active_state = "active"
             svc.sub_state = "running"
-            svc.last_checked = datetime.utcnow()
+            svc.last_checked = datetime.now(timezone.utc)
             # Broadcast status change for this node
             await ws_manager.send_service_status(
                 node_id=svc.node_id,
@@ -1306,7 +1306,7 @@ async def stop_fleet_service(
             svc.status = ServiceStatus.STOPPED.value
             svc.active_state = "inactive"
             svc.sub_state = "dead"
-            svc.last_checked = datetime.utcnow()
+            svc.last_checked = datetime.now(timezone.utc)
             # Broadcast status change for this node
             await ws_manager.send_service_status(
                 node_id=svc.node_id,
@@ -1364,7 +1364,7 @@ async def restart_fleet_service(
             svc.status = ServiceStatus.RUNNING.value
             svc.active_state = "active"
             svc.sub_state = "running"
-            svc.last_checked = datetime.utcnow()
+            svc.last_checked = datetime.now(timezone.utc)
             # Broadcast status change for this node
             await ws_manager.send_service_status(
                 node_id=svc.node_id,

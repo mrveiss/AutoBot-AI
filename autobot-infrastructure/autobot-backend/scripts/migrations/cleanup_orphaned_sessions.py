@@ -19,7 +19,6 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backe
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -158,8 +158,8 @@ class OrphanedSessionCleaner:
                 return None
 
             # Parse ISO format timestamp
-            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-            age = datetime.utcnow() - timestamp.replace(tzinfo=None)
+            timestamp = parse_utc_iso(timestamp_str)
+            age = now_utc() - timestamp
             return age.days
         except Exception as e:
             logger.debug(f"Could not determine session age: {e}")

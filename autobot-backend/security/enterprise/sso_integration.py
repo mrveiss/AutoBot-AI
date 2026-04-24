@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
 from autobot_shared.http_client import get_http_client
 from constants.path_constants import PATH
@@ -252,10 +252,10 @@ class SSOIntegrationFramework:
                     provider_data = json.load(f)
 
                 # Convert datetime strings
-                provider_data["created_at"] = datetime.fromisoformat(
+                provider_data["created_at"] = parse_utc_iso(
                     provider_data["created_at"]
                 )
-                provider_data["updated_at"] = datetime.fromisoformat(
+                provider_data["updated_at"] = parse_utc_iso(
                     provider_data["updated_at"]
                 )
                 provider_data["protocol"] = SSOProtocol(provider_data["protocol"])
@@ -388,8 +388,8 @@ class SSOIntegrationFramework:
             enabled=auto_enable,
             config=config,
             metadata=metadata or {},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=now_utc(),
+            updated_at=now_utc(),
         )
 
         self.providers[provider_id] = provider
@@ -413,7 +413,7 @@ class SSOIntegrationFramework:
             if hasattr(provider, key):
                 setattr(provider, key, value)
 
-        provider.updated_at = datetime.utcnow()
+        provider.updated_at = now_utc()
 
         self._save_provider(provider)
         self._update_provider_statistics()
@@ -462,7 +462,7 @@ class SSOIntegrationFramework:
         try:
             # Generate SAML AuthnRequest
             request_id = str(uuid4())
-            timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            timestamp = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
 
             saml_config = self.config.get("saml", {})
 
@@ -490,7 +490,7 @@ class SSOIntegrationFramework:
                     "state": state,
                     "redirect_uri": redirect_uri,
                     "provider_id": provider.provider_id,
-                    "created_at": datetime.utcnow(),
+                    "created_at": now_utc(),
                 }
 
             saml_request = urllib.parse.quote(encoded_request)
@@ -520,7 +520,7 @@ class SSOIntegrationFramework:
             self.oauth_states[auth_state] = {
                 "redirect_uri": redirect_uri,
                 "provider_id": provider.provider_id,
-                "created_at": datetime.utcnow(),
+                "created_at": now_utc(),
             }
 
             oauth_config = self.config.get("oauth2", {})
@@ -749,9 +749,9 @@ class SSOIntegrationFramework:
                 user_id=mapped_user["user_id"],
                 provider_id=provider.provider_id,
                 attributes=mapped_user,
-                created_at=datetime.utcnow(),
-                expires_at=datetime.utcnow() + timedelta(hours=session_timeout),
-                last_activity=datetime.utcnow(),
+                created_at=now_utc(),
+                expires_at=now_utc() + timedelta(hours=session_timeout),
+                last_activity=now_utc(),
                 status=AuthenticationStatus.SUCCESS,
             )
 
@@ -844,9 +844,9 @@ class SSOIntegrationFramework:
         """Get SSO session by ID"""
         session = self.active_sessions.get(session_id)
 
-        if session and session.expires_at > datetime.utcnow():
+        if session and session.expires_at > now_utc():
             # Update last activity
-            session.last_activity = datetime.utcnow()
+            session.last_activity = now_utc()
             return session
         elif session:
             # Session expired
@@ -952,7 +952,7 @@ class SSOIntegrationFramework:
                     [
                         s
                         for s in self.active_sessions.values()
-                        if s.expires_at - datetime.utcnow() < timedelta(hours=1)
+                        if s.expires_at - now_utc() < timedelta(hours=1)
                     ]
                 ),
             },
@@ -964,7 +964,7 @@ class SSOIntegrationFramework:
             return 0.0
 
         total_age = sum(
-            (datetime.utcnow() - session.created_at).total_seconds() / 60
+            (now_utc() - session.created_at).total_seconds() / 60
             for session in self.active_sessions.values()
         )
 
@@ -975,7 +975,7 @@ class SSOIntegrationFramework:
         expired_sessions = []
 
         for session_id, session in self.active_sessions.items():
-            if session.expires_at <= datetime.utcnow():
+            if session.expires_at <= now_utc():
                 expired_sessions.append(session_id)
 
         for session_id in expired_sessions:
@@ -989,10 +989,10 @@ class SSOIntegrationFramework:
         """Refresh SSO session timeout"""
         session = self.active_sessions.get(session_id)
 
-        if session and session.expires_at > datetime.utcnow():
+        if session and session.expires_at > now_utc():
             session_timeout = self.config.get("default_session_timeout_hours", 8)
-            session.expires_at = datetime.utcnow() + timedelta(hours=session_timeout)
-            session.last_activity = datetime.utcnow()
+            session.expires_at = now_utc() + timedelta(hours=session_timeout)
+            session.last_activity = now_utc()
 
             logger.debug("Refreshed SSO session %s", session_id)
             return True

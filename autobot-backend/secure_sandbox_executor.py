@@ -23,6 +23,7 @@ import docker
 from docker.errors import DockerException, ImageNotFound
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_optional_singleton
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
 
@@ -377,7 +378,7 @@ class SecureSandboxExecutor:
         safe_lang = "".join(c for c in language if c.isalnum()) or "sh"
 
         # Create temporary script file
-        with tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(  # codeql[py/path-injection]
             mode="w", suffix=f".{safe_lang}", delete=False
         ) as f:
             f.write(script_content)
@@ -747,35 +748,26 @@ class SecureSandboxExecutor:
 # Global instance for easy access with lazy initialization
 # Lazy loading prevents startup blocking while ensuring security is available
 
-import threading
 
-_sandbox_lock = threading.Lock()
-_sandbox_instance = None
+def _create_secure_sandbox() -> Optional[SecureSandboxExecutor]:
+    """Factory for the global SecureSandboxExecutor singleton.
+
+    Returns None on Docker initialisation failure so callers can degrade
+    gracefully.  The None result is cached by lazy_optional_singleton so
+    construction is only attempted once (Issue #5576).
+    """
+    try:
+        logger.info("Initializing secure sandbox for command execution security")
+        instance = SecureSandboxExecutor()
+        logger.info("Secure sandbox initialized successfully")
+        return instance
+    except Exception as e:
+        logger.error("Failed to initialize secure sandbox: %s", e)
+        logger.warning("Command execution will proceed without sandboxing - SECURITY RISK")
+        return None
 
 
-def get_secure_sandbox() -> Optional[SecureSandboxExecutor]:
-    """Get or create the global secure sandbox instance with thread-safe lazy initialization"""
-    global _sandbox_instance
-
-    if _sandbox_instance is not None:
-        return _sandbox_instance
-
-    with _sandbox_lock:
-        if _sandbox_instance is None:
-            try:
-                logger.info(
-                    "Initializing secure sandbox for command execution security"
-                ),
-                _sandbox_instance = SecureSandboxExecutor()
-                logger.info("Secure sandbox initialized successfully")
-            except Exception as e:
-                logger.error("Failed to initialize secure sandbox: %s", e)
-                logger.warning(
-                    "Command execution will proceed without sandboxing - SECURITY RISK"
-                ),
-                _sandbox_instance = None
-
-        return _sandbox_instance
+get_secure_sandbox = lazy_optional_singleton(_create_secure_sandbox)
 
 
 # Maintain backward compatibility

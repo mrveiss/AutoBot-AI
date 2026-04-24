@@ -61,7 +61,7 @@ backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
 # Browser Worker connection (Playwright VM — leave empty for single-host deploys)
 backend_browser_host: ""    # Set to browser VM IP in fleet deployments; empty = disabled
-backend_browser_port: 3000
+backend_browser_port: 9001  # Port 9001 is canonical; 3000 was Grafana's port (#5608)
 
 # AI Stack connection (co-located: use 127.0.0.1; WSL2: may need 10.255.255.254)
 backend_ai_stack_host: "127.0.0.1"
@@ -83,9 +83,9 @@ service_auth_rate_limit_window: 300
 service_auth_rate_limit_max_failures: 10
 
 # Post-deploy smoke test (#3687): retry-based health check polls /api/health
-# until it returns 200. Retries every 5 seconds (300s = 60 retries max).
-# Handles variable startup times across different hardware profiles without
-# blocking provisioning if service takes longer than expected.
+# until it returns 200. Retries every 5 seconds (600s = 120 retries max).
+# 10-minute window required: torch/sentence-transformers/chromadb imports
+# take 5-6 minutes on first start; 60-retry (5 min) window was too tight.
 backend_health_check_port: 8001
-backend_health_check_retries: 60       # Max retry attempts (60 × 5s = 300s total)
+backend_health_check_retries: 120      # Max retry attempts (120 × 5s = 600s total)
 backend_health_check_delay: 5          # Seconds between retries

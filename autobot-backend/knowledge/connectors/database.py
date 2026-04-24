@@ -12,6 +12,7 @@ import hashlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from knowledge.connectors.base import AbstractConnector
@@ -122,7 +123,7 @@ class DatabaseConnector(AbstractConnector):
                     ChangeInfo(
                         source_id=source_id,
                         change_type=change_type,
-                        timestamp=ts or datetime.utcnow(),
+                        timestamp=ts or now_utc(),
                         details={"id_column": self._id_column, "id_value": id_val},
                     )
                 )
@@ -171,7 +172,7 @@ class DatabaseConnector(AbstractConnector):
         row_dict = _row_to_dict(row)
         id_val = row_dict.get(self._id_column)
         source_id = _row_to_source_id(self.config.connector_id, id_val)
-        ts = _extract_timestamp(row_dict, self._timestamp_column) or datetime.utcnow()
+        ts = _extract_timestamp(row_dict, self._timestamp_column) or now_utc()
 
         return SourceInfo(
             source_id=source_id,
@@ -234,7 +235,7 @@ def _extract_timestamp(
         return val
     if isinstance(val, str):
         try:
-            return datetime.fromisoformat(val)
+            return parse_utc_iso(val)
         except ValueError:
             pass
     return None

@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS
 
 from .archive import Archive
@@ -141,7 +142,7 @@ class OptimizationSession:
 BenchmarkFn = Callable[[str], Coroutine[Any, Any, str]]
 
 
-class PromptOptimizer:
+class PromptOptimizer(AsyncRedisClientMixin):
     """Generic prompt optimizer with pluggable scorers.
 
     Drives a mutation -> benchmark -> score -> keep/discard loop.
@@ -151,6 +152,8 @@ class PromptOptimizer:
     (PromptOptTarget, BenchmarkFn) pair so ``start_optimization`` can look
     them up without hard-coding names in the route layer.
     """
+
+    _redis_database = "main"
 
     _MUTATION_SYSTEM_PROMPT = (
         "You are a prompt engineering expert. Generate {n} distinct variations "
@@ -172,7 +175,6 @@ class PromptOptimizer:
         self._config = config or AutoResearchConfig()
         self._cancel_event = asyncio.Event()
         self._current_session: Optional[OptimizationSession] = None
-        self._redis = None
         # Registry: agent_id -> (PromptOptTarget, BenchmarkFn)
         self._targets: Dict[str, tuple] = {}
 
@@ -489,13 +491,6 @@ class PromptOptimizer:
     @property
     def current_session(self) -> Optional[OptimizationSession]:
         return self._current_session
-
-    async def _get_redis(self):
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     async def _save_session(self, session: OptimizationSession) -> None:
         """Persist session to Redis."""

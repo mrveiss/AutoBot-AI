@@ -104,7 +104,7 @@
     </div>
     <EmptyState
       v-else
-      icon="fas fa-sparkles"
+      icon="sparkles"
       :message="$t('analytics.codeSmells.emptyMessage')"
       variant="info"
     />

@@ -264,21 +264,14 @@ class BackgroundLLMSync:
 
 
 # Global instance (thread-safe)
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 
-_background_sync: Optional[BackgroundLLMSync] = None
-_background_sync_lock = threading.Lock()
+_background_sync = lazy_singleton(BackgroundLLMSync)
 
 
 def get_background_llm_sync() -> BackgroundLLMSync:
     """Get the global background LLM sync instance (thread-safe)."""
-    global _background_sync
-    if _background_sync is None:
-        with _background_sync_lock:
-            # Double-check after acquiring lock
-            if _background_sync is None:
-                _background_sync = BackgroundLLMSync()
-    return _background_sync
+    return _background_sync()
 
 
 async def background_llm_sync():

@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class SkillMetrics:
             logger.warning("Redis unavailable, skipping metrics logging")
             return
 
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         date_key = now.strftime("%Y-%m-%d")
         day_prefix = f"{REDIS_SKILL_METRICS_PREFIX}{skill_id}:{date_key}"
 
@@ -140,7 +141,7 @@ class SkillMetrics:
 
         try:
             # Iterate over past N days
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             for i in range(days):
                 date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 day_prefix = f"{REDIS_SKILL_METRICS_PREFIX}{skill_id}:{date}"
@@ -255,7 +256,7 @@ class SkillMetrics:
 
         try:
             # Check if skill has any invocations in past 30 days
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             recent_invocations = 0
 
             for i in range(30):

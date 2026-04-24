@@ -14,6 +14,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from autobot_shared.time_utils import now_utc
+
 
 class TimeProvider:
     """Utility class for time-related operations to reduce Feature Envy."""
@@ -35,25 +37,23 @@ class TimeProvider:
 
     @staticmethod
     def is_business_hours() -> bool:
-        """Check if current time is within business hours (9 AM - 5 PM, local server time)."""
-        current_hour = datetime.now().hour
-        return 9 <= current_hour <= 17
+        """Check if current time is within business hours (9 AM - 5 PM UTC)."""
+        return 9 <= now_utc().hour <= 17
 
     @staticmethod
     def is_weekend() -> bool:
-        """Check if current day is weekend (local server time)."""
-        return datetime.now().weekday() >= 5
+        """Check if current day is weekend (UTC)."""
+        return now_utc().weekday() >= 5
 
     @staticmethod
     def get_temporal_context_data() -> Dict[str, Any]:
         """Get comprehensive temporal context data."""
-        current_time_utc = datetime.now(tz=timezone.utc)
-        current_time_local = datetime.now()
+        current_time_utc = now_utc()
         return {
             "timestamp": time.time(),
             "datetime": current_time_utc.isoformat(),
-            "hour": current_time_local.hour,
-            "day_of_week": current_time_local.weekday(),
-            "is_business_hours": 9 <= current_time_local.hour <= 17,
-            "is_weekend": current_time_local.weekday() >= 5,
+            "hour": current_time_utc.hour,
+            "day_of_week": current_time_utc.weekday(),
+            "is_business_hours": 9 <= current_time_utc.hour <= 17,
+            "is_weekend": current_time_utc.weekday() >= 5,
         }

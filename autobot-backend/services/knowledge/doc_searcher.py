@@ -9,9 +9,9 @@ Contains DocumentationSearcher for AutoBot documentation search integration.
 """
 
 import re
-import threading
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
@@ -254,17 +254,4 @@ class DocumentationSearcher:
         return "\n".join(lines)
 
 
-# Global documentation searcher instance (thread-safe)
-_doc_searcher: Optional[DocumentationSearcher] = None
-_doc_searcher_lock = threading.Lock()
-
-
-def get_documentation_searcher() -> DocumentationSearcher:
-    """Get or create the global documentation searcher instance (thread-safe)."""
-    global _doc_searcher
-    if _doc_searcher is None:
-        with _doc_searcher_lock:
-            # Double-check after acquiring lock
-            if _doc_searcher is None:
-                _doc_searcher = DocumentationSearcher()
-    return _doc_searcher
+get_documentation_searcher = lazy_singleton(DocumentationSearcher)

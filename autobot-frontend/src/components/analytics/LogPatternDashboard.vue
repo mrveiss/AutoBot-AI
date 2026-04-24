@@ -231,6 +231,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 
@@ -308,7 +309,10 @@ const patternFilters = computed(() => [
   { label: t('analytics.logPatterns.filterHighFreq'), value: 'high_freq' }
 ])
 
-let realtimeInterval: ReturnType<typeof setInterval> | null = null
+const { start: _startRealtime, stop: _stopRealtime } = usePollingJob(
+  async () => { await fetchRealtimeData(); return null },
+  { intervalMs: 30000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 
 // Computed
@@ -413,15 +417,11 @@ const getTrendPoints = (trend: LogTrend): string => {
 onMounted(() => {
   fetchRealtimeData()
   runAnalysis()
-
-  // Refresh realtime data every 30 seconds
-  realtimeInterval = setInterval(fetchRealtimeData, 30000)
+  _startRealtime('')
 })
 
 onUnmounted(() => {
-  if (realtimeInterval) {
-    clearInterval(realtimeInterval)
-  }
+  _stopRealtime()
 })
 </script>
 

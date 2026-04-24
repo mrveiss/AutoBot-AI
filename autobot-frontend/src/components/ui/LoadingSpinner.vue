@@ -1,5 +1,6 @@
 <template>
-  <div class="loading-spinner" :class="sizeClass" :style="customStyle">
+  <div class="loading-spinner" :class="sizeClass" :style="customStyle" role="status">
+    <span class="sr-only">{{ label || t('ui.loadingSpinner.loading') }}</span>
     <div v-if="variant === 'dots'" class="loading-dots">
       <div class="dot"></div>
       <div class="dot"></div>
@@ -34,7 +35,7 @@
       </svg>
     </div>
 
-    <div v-if="label" class="loading-label" :class="labelClass">
+    <div v-if="label" class="loading-label" :class="labelClass" aria-hidden="true">
       {{ label }}
     </div>
   </div>
@@ -42,6 +43,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   variant?: 'circle' | 'dots' | 'pulse' | 'bars'
@@ -221,7 +225,19 @@ const customStyle = computed(() => ({
   }
 }
 
-/* Issue #704: Migrated to CSS design tokens */
+/* Visually hidden but readable by screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Label */
 .loading-label {
   font-size: var(--text-sm);

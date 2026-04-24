@@ -25,10 +25,10 @@ import json
 import logging
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission
@@ -37,6 +37,19 @@ from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
+from knowledge.schemas.connectors import (
+    ConnectorCreateResponse,
+    ConnectorDetailResponse,
+    ConnectorHistoryResponse,
+    ConnectorsHealthResponse,
+    ConnectorsListResponse,
+    ConnectorSyncResponse,
+    ConnectorTestResponse,
+    ConnectorTypesResponse,
+    ConnectorUpdateResponse,
+    CreateConnectorRequest,
+    UpdateConnectorRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,38 +58,7 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-# ---------------------------------------------------------------------------
-# Pydantic request / response models
-# ---------------------------------------------------------------------------
-
 _SUPPORTED_TYPES = ["file_server", "web_crawler", "database"]
-
-
-class CreateConnectorRequest(BaseModel):
-    """Request body for POST /connectors."""
-
-    connector_type: str = Field(
-        ..., description="One of: file_server, web_crawler, database"
-    )
-    name: str = Field(..., min_length=1, max_length=128)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    enabled: bool = True
-    verification_mode: str = "collaborative"
-    schedule_cron: Optional[str] = None
-    include_patterns: List[str] = Field(default_factory=list)
-    exclude_patterns: List[str] = Field(default_factory=list)
-
-
-class UpdateConnectorRequest(BaseModel):
-    """Request body for PUT /connectors/{id}."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=128)
-    config: Optional[Dict[str, Any]] = None
-    enabled: Optional[bool] = None
-    verification_mode: Optional[str] = None
-    schedule_cron: Optional[str] = None
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: Optional[List[str]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +137,7 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        return parse_utc_iso(value)
     except (ValueError, TypeError):
         return None
 
@@ -234,7 +216,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         sync_result = None
 
     if sync_result is not None:
-        cfg.last_sync_at = sync_result.completed_at or datetime.utcnow()
+        cfg.last_sync_at = sync_result.completed_at or now_utc()
         await _save_connector(cfg)
 
         history_entry = {
@@ -259,7 +241,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/knowledge_base/connector_types")
+@router.get("/knowledge_base/connector_types", response_model=ConnectorTypesResponse)
 async def list_connector_types():
     """Return all registered connector types with readiness tier (Issue #4421).
 
@@ -279,7 +261,7 @@ async def list_connector_types():
     return {"connector_types": types, "total": len(types)}
 
 
-@router.get("/knowledge_base/connectors")
+@router.get("/knowledge_base/connectors", response_model=ConnectorsListResponse)
 async def list_connectors():
     """Return all connectors with their current status."""
     try:
@@ -297,7 +279,7 @@ async def list_connectors():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge_base/connectors", status_code=201)
+@router.post("/knowledge_base/connectors", status_code=201, response_model=ConnectorCreateResponse)
 async def create_connector(request: CreateConnectorRequest):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
@@ -338,7 +320,7 @@ async def create_connector(request: CreateConnectorRequest):
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
 
 
-@router.get("/knowledge_base/connectors/health")
+@router.get("/knowledge_base/connectors/health", response_model=ConnectorsHealthResponse)
 async def connectors_health():
     """Aggregate test_connection() across all live connectors (Issue #4420).
 
@@ -386,7 +368,7 @@ async def _hydrate_all_instances() -> None:
             logger.warning("Skipping corrupted connector %s: %s", cid, exc)
 
 
-@router.get("/knowledge_base/connectors/{connector_id}")
+@router.get("/knowledge_base/connectors/{connector_id}", response_model=ConnectorDetailResponse)
 async def get_connector(connector_id: str):
     """Return config and status for a single connector."""
     cfg = await _load_connector(connector_id)
@@ -396,7 +378,7 @@ async def get_connector(connector_id: str):
     return {"config": _cfg_to_dict(cfg), "status": status}
 
 
-@router.put("/knowledge_base/connectors/{connector_id}")
+@router.put("/knowledge_base/connectors/{connector_id}", response_model=ConnectorUpdateResponse)
 async def update_connector(connector_id: str, request: UpdateConnectorRequest):
     """Update mutable fields of an existing connector."""
     cfg = await _load_connector(connector_id)
@@ -429,7 +411,7 @@ async def delete_connector(connector_id: str):
     logger.info("Deleted connector %s", connector_id)
 
 
-@router.post("/knowledge_base/connectors/{connector_id}/test")
+@router.post("/knowledge_base/connectors/{connector_id}/test", response_model=ConnectorTestResponse)
 async def test_connector_connection(connector_id: str):
     """Run a connection test against the connector's target."""
     cfg = await _load_connector(connector_id)
@@ -444,7 +426,7 @@ async def test_connector_connection(connector_id: str):
     return {"connector_id": connector_id, "healthy": healthy}
 
 
-@router.post("/knowledge_base/connectors/{connector_id}/sync")
+@router.post("/knowledge_base/connectors/{connector_id}/sync", response_model=ConnectorSyncResponse)
 async def trigger_sync(
     connector_id: str,
     background_tasks: BackgroundTasks,
@@ -465,7 +447,7 @@ async def trigger_sync(
     }
 
 
-@router.get("/knowledge_base/connectors/{connector_id}/history")
+@router.get("/knowledge_base/connectors/{connector_id}/history", response_model=ConnectorHistoryResponse)
 async def get_sync_history(connector_id: str, limit: int = 20):
     """Return recent sync results for a connector."""
     cfg = await _load_connector(connector_id)
@@ -526,7 +508,7 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
         return {
             "connector_id": cfg.connector_id,
             "is_healthy": False,
-            "error": "Status check failed",
+            "last_error": "Status check failed",
         }
 
 

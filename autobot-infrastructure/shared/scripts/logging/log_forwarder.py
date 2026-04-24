@@ -46,7 +46,11 @@ from typing import Any, Dict, List, Optional
 import requests
 
 # Add project root to path
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 
 try:
     import docker
@@ -135,7 +139,7 @@ class LogEntry:
                     },
                     "values": [
                         [
-                            str(int(datetime.fromisoformat(self.timestamp.replace("Z", "+00:00")).timestamp() * 1e9)),
+                            str(int(parse_utc_iso(self.timestamp).timestamp() * 1e9)),
                             self.message,
                         ]
                     ],
@@ -451,7 +455,7 @@ class LokiDestination(LogDestination):
             # Create stream key from labels
             stream_key = (entry.source, entry.level)
             # Convert timestamp to nanoseconds
-            ts_ns = str(int(datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00")).timestamp() * 1e9))
+            ts_ns = str(int(parse_utc_iso(entry.timestamp).timestamp() * 1e9))
             streams_dict[stream_key].append([ts_ns, entry.message])
 
         # Build Loki payload with all streams

@@ -146,7 +146,7 @@ const emit = defineEmits<{
           class="chart-item"
         />
         <div v-else class="chart-empty-slot">
-          <EmptyState icon="fas fa-cube" message="No external dependencies found" />
+          <EmptyState icon="cube" message="No external dependencies found" />
         </div>
         <ModuleImportsChart
           v-if="dependencyData.modules && dependencyData.modules.length > 0"
@@ -158,7 +158,7 @@ const emit = defineEmits<{
           class="chart-item"
         />
         <div v-else class="chart-empty-slot">
-          <EmptyState icon="fas fa-file-import" message="No module data available" />
+          <EmptyState icon="file-import" message="No module data available" />
         </div>
       </div>
 
@@ -201,7 +201,7 @@ const emit = defineEmits<{
 
     <EmptyState
       v-else
-      icon="fas fa-project-diagram"
+      icon="project-diagram"
       :message="$t('analytics.codebase.dependencies.noData')"
     >
       <template #actions>
@@ -255,7 +255,7 @@ const emit = defineEmits<{
     <!-- Empty state -->
     <EmptyState
       v-else-if="!importTreeLoading"
-      icon="fas fa-sitemap"
+      icon="sitemap"
       :message="$t('analytics.codebase.importTree.noData')"
       variant="info"
     >
@@ -312,7 +312,7 @@ const emit = defineEmits<{
     <!-- Empty state -->
     <EmptyState
       v-else-if="!callGraphLoading"
-      icon="fas fa-project-diagram"
+      icon="project-diagram"
       :message="$t('analytics.codebase.callGraph.noData')"
       variant="info"
     >

@@ -16,6 +16,7 @@ import logging
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 if TYPE_CHECKING:
@@ -557,7 +558,7 @@ class SuggestionsMixin:
             return 0.5  # Unknown age: neutral score
 
         try:
-            ts = datetime.fromisoformat(timestamp_str)
+            ts = parse_utc_iso(timestamp_str)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
             age_days = max(0.0, (datetime.now(tz=timezone.utc) - ts).total_seconds() / 86400.0)

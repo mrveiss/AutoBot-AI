@@ -1,8 +1,25 @@
 <template>
   <div class="main-categories-wrapper">
-    <!-- Issue #5201: broken-KB alert takes precedence over the empty-state hint -->
+    <!-- Issue #5590: fetch-layer error (5xx / network) — generic message, no Redis blame -->
     <div
-      v-if="!kbConnected"
+      v-if="kbFetchError"
+      class="kb-status-panel kb-status-panel--error"
+      role="alert"
+    >
+      <i class="fas fa-exclamation-triangle kb-status-panel__icon"></i>
+      <div class="kb-status-panel__body">
+        <h3 class="kb-status-panel__title">
+          {{ $t('knowledge.categoriesFetchError.title') }}
+        </h3>
+        <p class="kb-status-panel__text">
+          {{ $t('knowledge.categoriesFetchError.description') }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Issue #5201: broken-KB alert — only when backend explicitly reports Redis down -->
+    <div
+      v-else-if="!kbConnected"
       class="kb-status-panel kb-status-panel--error"
       role="alert"
     >
@@ -122,6 +139,9 @@ interface Props {
   // Issue #5201: reflects backend Redis/KB reachability. Defaults to true
   // to preserve behavior with older backends that don't send the flag.
   kbConnected?: boolean
+  // Issue #5590: true when the fetch itself failed (5xx / network error),
+  // distinct from kbConnected=false which the backend sets for Redis outages.
+  kbFetchError?: boolean
 }
 
 interface Emits {
@@ -132,6 +152,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   kbConnected: true,
+  kbFetchError: false,
 })
 defineEmits<Emits>()
 

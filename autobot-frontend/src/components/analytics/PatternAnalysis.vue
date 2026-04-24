@@ -73,12 +73,12 @@
 
       <!-- Duplicate Patterns Section -->
       <div v-if="duplicatePatterns.length > 0" class="accordion-group">
-        <div class="accordion-header" @click="expandedSections.duplicates = !expandedSections.duplicates">
-          <i :class="expandedSections.duplicates ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+        <div class="accordion-header" @click="toggleSection('duplicates')">
+          <i :class="isSectionExpanded('duplicates') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
           <span class="header-title"><i class="fas fa-clone"></i> {{ $t('analytics.patterns.duplicateCode') }}</span>
           <span class="header-count">({{ duplicatePatterns.length }})</span>
         </div>
-        <div v-show="expandedSections.duplicates" class="accordion-content">
+        <div v-show="isSectionExpanded('duplicates')" class="accordion-content">
           <div v-for="(dup, index) in duplicatePatterns.slice(0, 20)" :key="'dup-' + index"
                class="pattern-item" :class="'severity-' + dup.severity">
             <div class="pattern-header">
@@ -116,12 +116,12 @@
 
       <!-- Regex Opportunities Section -->
       <div v-if="regexOpportunities.length > 0" class="accordion-group">
-        <div class="accordion-header" @click="expandedSections.regex = !expandedSections.regex">
-          <i :class="expandedSections.regex ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+        <div class="accordion-header" @click="toggleSection('regex')">
+          <i :class="isSectionExpanded('regex') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
           <span class="header-title"><i class="fas fa-asterisk"></i> {{ $t('analytics.patterns.regexOpportunities') }}</span>
           <span class="header-count">({{ regexOpportunities.length }})</span>
         </div>
-        <div v-show="expandedSections.regex" class="accordion-content">
+        <div v-show="isSectionExpanded('regex')" class="accordion-content">
           <div v-for="(opp, index) in regexOpportunities.slice(0, 15)" :key="'regex-' + index"
                class="pattern-item" :class="'severity-' + opp.severity">
             <div class="pattern-header">
@@ -150,12 +150,12 @@
 
       <!-- Complexity Hotspots Section -->
       <div v-if="complexityHotspots.length > 0" class="accordion-group">
-        <div class="accordion-header" @click="expandedSections.complexity = !expandedSections.complexity">
-          <i :class="expandedSections.complexity ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+        <div class="accordion-header" @click="toggleSection('complexity')">
+          <i :class="isSectionExpanded('complexity') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
           <span class="header-title"><i class="fas fa-brain"></i> {{ $t('analytics.patterns.complexityHotspots') }}</span>
           <span class="header-count">({{ complexityHotspots.length }})</span>
         </div>
-        <div v-show="expandedSections.complexity" class="accordion-content">
+        <div v-show="isSectionExpanded('complexity')" class="accordion-content">
           <table class="complexity-table">
             <thead>
               <tr>
@@ -193,12 +193,12 @@
 
       <!-- Refactoring Suggestions Section -->
       <div v-if="refactoringSuggestions.length > 0" class="accordion-group">
-        <div class="accordion-header" @click="expandedSections.refactoring = !expandedSections.refactoring">
-          <i :class="expandedSections.refactoring ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+        <div class="accordion-header" @click="toggleSection('refactoring')">
+          <i :class="isSectionExpanded('refactoring') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
           <span class="header-title"><i class="fas fa-magic"></i> {{ $t('analytics.patterns.refactoringSuggestions') }}</span>
           <span class="header-count">({{ refactoringSuggestions.length }})</span>
         </div>
-        <div v-show="expandedSections.refactoring" class="accordion-content">
+        <div v-show="isSectionExpanded('refactoring')" class="accordion-content">
           <div v-for="(suggestion, index) in refactoringSuggestions.slice(0, 15)" :key="'ref-' + index"
                class="refactoring-item" :class="'severity-' + suggestion.severity">
             <div class="refactoring-header">
@@ -288,7 +288,8 @@ const {
   complexityHotspots,
   refactoringSuggestions,
   storageStats,
-  expandedSections,
+  isSectionExpanded,
+  toggleSection,
   totalPatterns,
   severityCounts,
   hasResults,
@@ -388,28 +389,28 @@ watch(error, (newError) => {
 })
 
 // Lazy loading watchers - load section data when expanded
-watch(() => expandedSections.duplicates, async (expanded) => {
+watch(() => isSectionExpanded('duplicates'), async (expanded) => {
   if (expanded && !sectionsLoaded.duplicates && duplicatePatterns.value.length === 0) {
     sectionsLoaded.duplicates = true
     await getDuplicates(props.rootPath)
   }
 })
 
-watch(() => expandedSections.regex, async (expanded) => {
+watch(() => isSectionExpanded('regex'), async (expanded) => {
   if (expanded && !sectionsLoaded.regex && regexOpportunities.value.length === 0) {
     sectionsLoaded.regex = true
     await getRegexOpportunities(props.rootPath)
   }
 })
 
-watch(() => expandedSections.complexity, async (expanded) => {
+watch(() => isSectionExpanded('complexity'), async (expanded) => {
   if (expanded && !sectionsLoaded.complexity && complexityHotspots.value.length === 0) {
     sectionsLoaded.complexity = true
     await getComplexityHotspots(props.rootPath)
   }
 })
 
-watch(() => expandedSections.refactoring, async (expanded) => {
+watch(() => isSectionExpanded('refactoring'), async (expanded) => {
   if (expanded && !sectionsLoaded.refactoring && refactoringSuggestions.value.length === 0) {
     sectionsLoaded.refactoring = true
     await getRefactoringSuggestions(props.rootPath)

@@ -1365,25 +1365,6 @@ class ConversationFileManager:
             await connection.close()
 
 
-# Global instance (singleton pattern, thread-safe)
-_conversation_file_manager_instance: Optional[ConversationFileManager] = None
-_conversation_file_manager_lock = asyncio.Lock()
+from autobot_shared.singleton_factory import async_lazy_singleton
 
-
-async def get_conversation_file_manager() -> ConversationFileManager:
-    """
-    Get global ConversationFileManager instance (thread-safe).
-
-    Returns:
-        ConversationFileManager: Global manager instance
-    """
-    global _conversation_file_manager_instance
-
-    if _conversation_file_manager_instance is None:
-        async with _conversation_file_manager_lock:
-            # Double-check after acquiring lock
-            if _conversation_file_manager_instance is None:
-                _conversation_file_manager_instance = ConversationFileManager()
-                logger.info("Created global ConversationFileManager instance")
-
-    return _conversation_file_manager_instance
+get_conversation_file_manager = async_lazy_singleton(ConversationFileManager)

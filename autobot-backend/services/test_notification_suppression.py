@@ -2,6 +2,7 @@
 
 import unittest
 from datetime import datetime, timedelta, timezone
+from autobot_shared.time_utils import now_utc
 
 from notification_suppression import (
     NotificationFilter,
@@ -86,7 +87,7 @@ class TestNotificationSuppressionManager(unittest.TestCase):
     def test_classify_old_ci_notification(self):
         """Test classifying an old CI notification."""
         # Create timestamp 10 days ago
-        old_time = datetime.now(timezone.utc) - timedelta(days=10)
+        old_time = now_utc() - timedelta(days=10)
         updated_at = old_time.isoformat().replace("+00:00", "Z")
 
         should_suppress, reason = self.manager.classify_notification(
@@ -97,7 +98,7 @@ class TestNotificationSuppressionManager(unittest.TestCase):
 
     def test_classify_author_notification(self):
         """Test classifying an author notification."""
-        old_time = datetime.now(timezone.utc) - timedelta(days=100)
+        old_time = now_utc() - timedelta(days=100)
         updated_at = old_time.isoformat().replace("+00:00", "Z")
 
         should_suppress, reason = self.manager.classify_notification(
@@ -108,7 +109,7 @@ class TestNotificationSuppressionManager(unittest.TestCase):
 
     def test_classify_unknown_reason(self):
         """Test classifying unknown reason."""
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = now_utc().isoformat().replace("+00:00", "Z")
         should_suppress, reason = self.manager.classify_notification(
             "unknown_reason", now
         )
@@ -118,7 +119,7 @@ class TestNotificationSuppressionManager(unittest.TestCase):
     def test_get_summary(self):
         """Test getting suppression summary."""
         # Simulate some classifications
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = now_utc().isoformat().replace("+00:00", "Z")
         self.manager.classify_notification("ci_activity", now)
         self.manager.classify_notification("author", now)
 

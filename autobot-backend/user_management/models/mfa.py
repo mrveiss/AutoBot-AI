@@ -9,6 +9,7 @@ Supports TOTP-based 2FA with backup codes.
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -109,9 +110,9 @@ class UserMFA(Base):
 
     def record_verification(self) -> None:
         """Record a successful MFA verification."""
-        self.last_verified_at = datetime.utcnow()
+        self.last_verified_at = now_utc()
 
     def use_backup_code(self) -> None:
         """Record usage of a backup code."""
         self.backup_codes_remaining = max(0, self.backup_codes_remaining - 1)
-        self.last_verified_at = datetime.utcnow()
+        self.last_verified_at = now_utc()

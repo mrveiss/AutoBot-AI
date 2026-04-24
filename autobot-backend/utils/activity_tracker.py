@@ -14,6 +14,7 @@ import logging
 import re
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,7 +122,7 @@ async def track_terminal_activity(
         output=output,
         secrets_used=secrets_used,
         metadata=metadata or {},
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
     )
 
     db.add(activity)
@@ -174,7 +175,7 @@ async def track_file_activity(
         file_type=file_type,
         size_bytes=size_bytes,
         metadata=metadata or {},
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
     )
 
     db.add(activity)
@@ -226,7 +227,7 @@ async def track_browser_activity(
         input_value=input_value,
         secrets_used=secrets_used or [],
         metadata=metadata or {},
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
     )
 
     db.add(activity)
@@ -282,7 +283,7 @@ async def track_desktop_activity(
         input_text=input_text,
         screenshot_path=screenshot_path,
         metadata=metadata or {},
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
     )
 
     db.add(activity)
@@ -330,12 +331,12 @@ async def _track_secret_usage(
         access_granted=access_granted,
         denial_reason=denial_reason,
         metadata=metadata or {},
-        timestamp=datetime.utcnow(),
+        timestamp=now_utc(),
     )
 
     db.add(usage)
     await db.commit()
 
-    logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs activity type only, no secret value
+    logger.info(  # codeql[py/clear-text-logging-sensitive-data]
         "Tracked secret usage: activity=%s", activity_type
     )

@@ -228,7 +228,7 @@ async def get_skill_metrics(
         return data
     except Exception as e:
         logger.error("Failed to get metrics for %s: %s", name, e)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
 @router.post("/{name}/feedback", summary="Submit skill feedback")
@@ -254,7 +254,7 @@ async def submit_skill_feedback(
         }
     except Exception as e:
         logger.error("Failed to log feedback: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to log feedback: {e}")
+        raise HTTPException(status_code=500, detail="Failed to log feedback")
 
 
 @router.get("/{name}/suggestions", summary="Get skill refinement suggestions")
@@ -270,5 +270,5 @@ async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
         logger.error("Failed to get suggestions for %s: %s", name, e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve suggestions: {e}",
+            detail="Failed to retrieve suggestions",
         )

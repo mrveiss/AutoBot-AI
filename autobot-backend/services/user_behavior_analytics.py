@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
 
@@ -104,7 +105,7 @@ class UserBehaviorAnalytics:
     async def get_redis(self):
         """Get Redis client for analytics database"""
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database=RedisDatabase.ANALYTICS)
+            self._redis = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis
 
     def _build_event_operations(self, redis, event: UserEvent) -> list:
@@ -286,7 +287,7 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            end_date = datetime.utcnow()
+            end_date = now_utc()
             start_date = end_date - timedelta(days=days)
 
             daily_data = {}
@@ -393,7 +394,7 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            end_date = datetime.utcnow()
+            end_date = now_utc()
             start_date = end_date - timedelta(days=days)
 
             # Initialize heatmap structure
@@ -514,19 +515,4 @@ class UserBehaviorAnalytics:
             return []
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_behavior_analytics: Optional[UserBehaviorAnalytics] = None
-_behavior_analytics_lock = threading.Lock()
-
-
-def get_behavior_analytics() -> UserBehaviorAnalytics:
-    """Get the singleton UserBehaviorAnalytics instance (thread-safe)."""
-    global _behavior_analytics
-    if _behavior_analytics is None:
-        with _behavior_analytics_lock:
-            # Double-check after acquiring lock
-            if _behavior_analytics is None:
-                _behavior_analytics = UserBehaviorAnalytics()
-    return _behavior_analytics
+get_behavior_analytics = lazy_singleton(UserBehaviorAnalytics)

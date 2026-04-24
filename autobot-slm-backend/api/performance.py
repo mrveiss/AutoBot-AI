@@ -309,7 +309,7 @@ def _alert_rule_to_model(rule: AlertRule) -> AlertRuleModel:
 
 async def _calculate_slo_compliance(db: AsyncSession, slo: SLODefinition) -> Optional[float]:
     """Calculate SLO compliance percentage. Helper for performance.py (Issue #752)."""
-    cutoff = datetime.utcnow() - timedelta(days=slo.window_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=slo.window_days)
     query = select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
     if slo.node_id:
         query = query.where(PerformanceTrace.source_node_id == slo.node_id)
@@ -401,7 +401,7 @@ async def get_performance_overview(
     hours: int = Query(24, ge=1, le=168),
 ) -> PerformanceOverviewResponse:
     """Get performance overview with aggregated metrics."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff))
     traces = result.scalars().all()
 
@@ -410,7 +410,7 @@ async def get_performance_overview(
 
     durations = [t.duration_ms for t in traces]
     errors = sum(1 for t in traces if t.status == "error")
-    time_span_minutes = (datetime.utcnow() - cutoff).total_seconds() / 60
+    time_span_minutes = (datetime.now(timezone.utc) - cutoff).total_seconds() / 60
 
     active_slos = await _fetch_active_slos_count(db)
     top_slow_traces = await _fetch_top_slow_traces(db, cutoff, 10)
@@ -439,7 +439,7 @@ async def get_traces(
     per_page: int = Query(50, ge=1, le=200),
 ) -> TracesListResponse:
     """Get paginated list of traces with optional filters."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     query = select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff)
 
     if status_filter:
@@ -659,7 +659,7 @@ async def get_node_metrics(
     hours: int = Query(24, ge=1, le=168),
 ) -> NodeMetricsResponse:
     """Get performance metrics for a specific node."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     result = await db.execute(
         select(PerformanceTrace).where(
             PerformanceTrace.source_node_id == node_id,
@@ -684,7 +684,7 @@ async def get_node_metrics(
 
     durations = [t.duration_ms for t in traces]
     errors = sum(1 for t in traces if t.status == "error")
-    time_span_minutes = (datetime.utcnow() - cutoff).total_seconds() / 60
+    time_span_minutes = (datetime.now(timezone.utc) - cutoff).total_seconds() / 60
     hostname = await _get_node_hostname(db, node_id)
 
     return NodeMetricsResponse(
@@ -705,7 +705,7 @@ async def get_prometheus_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Export metrics in Prometheus text format."""
-    cutoff = datetime.utcnow() - timedelta(hours=1)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
     traces_result = await db.execute(select(PerformanceTrace).where(PerformanceTrace.created_at >= cutoff))
     traces = traces_result.scalars().all()
 

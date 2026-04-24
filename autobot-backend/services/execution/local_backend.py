@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, Optional, Tuple
 
 from services.execution.base_backend import (
@@ -65,7 +66,7 @@ class LocalBackend(ExecutionBackend):
             # Prepare command based on language
             cmd = self._prepare_command(task, env)
 
-            result.started_at = datetime.utcnow()
+            result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
             # Execute with timeout
@@ -115,7 +116,7 @@ class LocalBackend(ExecutionBackend):
                 logger.exception(f"Error executing task {task.task_id}: {e}")
 
         finally:
-            result.completed_at = datetime.utcnow()
+            result.completed_at = now_utc()
             if result.started_at:
                 result.execution_time_ms = (
                     result.completed_at - result.started_at

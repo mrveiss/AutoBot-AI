@@ -16,6 +16,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -61,7 +62,7 @@ class CollectionsMixin:
         metadata: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Build collection data dict for storage (Issue #398: extracted)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         collection_data = {
             "id": collection_id,
             "name": name,
@@ -207,7 +208,7 @@ class CollectionsMixin:
         metadata: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Build updates dict for collection (Issue #398: extracted)."""
-        updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        updates = {"updated_at": now_utc().isoformat()}
         if name is not None:
             updates["name"] = name.strip()
         if description is not None:
@@ -671,7 +672,7 @@ class CollectionsMixin:
                 },
                 "facts": facts,
                 "total_count": len(facts),
-                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "exported_at": now_utc().isoformat(),
             }
 
         except Exception as e:

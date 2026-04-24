@@ -25,6 +25,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const logger = createLogger('SSHTerminal')
@@ -253,22 +254,12 @@ const handleResize = () => {
 }
 
 // Heartbeat
-let heartbeatInterval: number | null = null
-
-const startHeartbeat = () => {
-  heartbeatInterval = window.setInterval(() => {
-    if (wsIsConnected.value) {
-      sendToServer({ type: 'ping' })
-    }
-  }, 30000)
-}
-
-const stopHeartbeat = () => {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval)
-    heartbeatInterval = null
-  }
-}
+const { start: startHeartbeat, stop: stopHeartbeat } = usePollingJob(
+  async (_: string) => {
+    if (wsIsConnected.value) sendToServer({ type: 'ping' })
+  },
+  { intervalMs: 30000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
 
 // Watch for host changes
 watch(() => props.hostId, (newHostId, oldHostId) => {

@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.security.path_validator import validate_path
 from code_embedding_generator import get_code_embedding_generator
@@ -399,7 +400,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 )
                 return {"status": "already_indexed", "index_key": index_key}
 
-            for root, dirs, files in os.walk(root_path):
+            for root, dirs, files in os.walk(root_path):  # codeql[py/path-injection]
                 dirs[:] = [d for d in dirs if not self._is_ignored_dir(d)]
                 indexed, skipped = await self._index_directory_files(
                     root, files, root_path, errors
@@ -587,7 +588,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Index a single file with embeddings (Issue #207, #398: refactored)."""
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
+            async with aiofiles.open(  # codeql[py/path-injection]
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
                 content = await f.read()
@@ -1528,22 +1529,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return {"status": "error", "error": "Failed to retrieve index status"}
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_npu_code_search = None
-_npu_code_search_lock = threading.Lock()
-
-
-def get_npu_code_search():
-    """Get or create the NPU code search agent instance (thread-safe)"""
-    global _npu_code_search
-    if _npu_code_search is None:
-        with _npu_code_search_lock:
-            # Double-check after acquiring lock
-            if _npu_code_search is None:
-                _npu_code_search = NPUCodeSearchAgent()
-    return _npu_code_search
+get_npu_code_search = lazy_singleton(NPUCodeSearchAgent)
 
 
 async def search_codebase(

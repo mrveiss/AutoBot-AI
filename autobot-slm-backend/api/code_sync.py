@@ -92,7 +92,7 @@ class FleetSyncJob:
     restart: bool
     nodes: Dict[str, NodeSyncState] = field(default_factory=dict)
     status: str = "pending"  # pending, running, completed, failed
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
 
@@ -122,7 +122,7 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
 
         for job in stale_jobs:
             job.status = "failed"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.failure_reason = "reconciled: server restarted while job was running"
             logger.warning(
                 "Reconciled stale fleet sync job %s " "(was 'running', marked 'failed')",
@@ -407,7 +407,7 @@ async def get_file_drift(
     try:
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Failed to determine component path") from exc
     deployed_dir = get_default_deployed_dir(component)
 
     logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
@@ -1014,7 +1014,7 @@ async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) 
         tasks = []
         for node_state in batch:
             node_state.status = "syncing"
-            node_state.started_at = datetime.utcnow()
+            node_state.started_at = datetime.now(timezone.utc)
             await _update_node_state_db(
                 job.job_id,
                 node_state.node_id,
@@ -1038,7 +1038,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
     the self-sync restart kills this process (#1707).
     """
     slm_self_node.status = "syncing"
-    slm_self_node.started_at = datetime.utcnow()
+    slm_self_node.started_at = datetime.now(timezone.utc)
     await _update_node_state_db(
         job.job_id,
         slm_self_node.node_id,
@@ -1060,14 +1060,14 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
             job.job_id,
             slm_self_node.node_id,
             status="success",
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc),
         )
-        await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.utcnow())
+        await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.now(timezone.utc))
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
         await _sync_slm_from_code_source(slm_self_node.node_id)
         slm_self_node.status = "success"
-        slm_self_node.completed_at = datetime.utcnow()
+        slm_self_node.completed_at = datetime.now(timezone.utc)
     else:
         await _sync_single_node(executor, slm_self_node, restart=False, job_id=job.job_id)
 
@@ -1116,7 +1116,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
         job.status = "failed"
         failure_reason = str(e)
 
-    job.completed_at = datetime.utcnow()
+    job.completed_at = datetime.now(timezone.utc)
     await _update_job_status_db(
         job.job_id,
         status=job.status,
@@ -1169,12 +1169,12 @@ async def _sync_single_node(
             node_state.status = "failed"
             node_state.message = f"Playbook failed: {result['output'][:500]}"
 
-        node_state.completed_at = datetime.utcnow()
+        node_state.completed_at = datetime.now(timezone.utc)
 
     except Exception as e:
         node_state.status = "failed"
         node_state.message = "Operation failed"
-        node_state.completed_at = datetime.utcnow()
+        node_state.completed_at = datetime.now(timezone.utc)
         logger.error("Node sync failed for %s: %s", node_state.node_id, e)
 
     # Persist node state to DB (#1707)
@@ -1558,7 +1558,7 @@ def _calculate_next_run(expression: str, base: datetime = None) -> datetime:
     """Calculate next run time from cron expression."""
     from croniter import croniter
 
-    base = base or datetime.utcnow()
+    base = base or datetime.now(timezone.utc)
     cron = croniter(expression, base)
     return cron.get_next(datetime)
 
@@ -1811,7 +1811,7 @@ async def run_schedule(
         _running_tasks[job.job_id] = task
 
     # Update schedule last_run
-    schedule.last_run = datetime.utcnow()
+    schedule.last_run = datetime.now(timezone.utc)
     schedule.next_run = _calculate_next_run(schedule.cron_expression)
     await db.commit()
 
@@ -1989,7 +1989,7 @@ async def sync_role(
         len(node_roles),
     )
 
-    return {
+    return {  # codeql[py/stack-trace-exposure]
         "success": success_count > 0,
         "message": f"Synced {success_count}/{len(node_roles)} nodes",
         "role_name": role_name,

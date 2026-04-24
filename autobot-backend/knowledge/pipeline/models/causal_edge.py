@@ -12,6 +12,7 @@ from typing import List, Literal, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from autobot_shared.time_utils import now_utc
 
 EffectType = Literal[
     "CAUSES",
@@ -27,7 +28,7 @@ EffectType = Literal[
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return datetime.now(timezone.utc)
+    return now_utc()
 
 
 class CausalEdge(BaseModel):

@@ -17,6 +17,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
+from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +160,7 @@ class BaseToolParser(ABC):
         return ParsedToolOutput(
             tool=self.TOOL_NAME,
             scan_type=scan_type,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=now_utc().isoformat(),
             command=command,
         )
 
@@ -860,22 +862,7 @@ class ToolParserRegistry:
         return None
 
 
-# Singleton registry (thread-safe)
-import threading
-
-_parser_registry: Optional[ToolParserRegistry] = None
-_parser_registry_lock = threading.Lock()
-
-
-def get_parser_registry() -> ToolParserRegistry:
-    """Get or create the parser registry singleton (thread-safe)."""
-    global _parser_registry
-    if _parser_registry is None:
-        with _parser_registry_lock:
-            # Double-check after acquiring lock
-            if _parser_registry is None:
-                _parser_registry = ToolParserRegistry()
-    return _parser_registry
+get_parser_registry = lazy_singleton(ToolParserRegistry)
 
 
 def parse_tool_output(

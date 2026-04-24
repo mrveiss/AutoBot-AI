@@ -179,12 +179,13 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
-import { ref, watch, onUnmounted, toRef } from 'vue'
+import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -235,8 +236,39 @@ const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const queueLength = ref(0)
 const runningTask = ref<RunningTask | null>(null)
-let syncingRefreshInterval: ReturnType<typeof setInterval> | null = null
-let queuePollInterval: ReturnType<typeof setInterval> | null = null
+
+// Queue status polling (visible while panel is open, 5s interval)
+const queuePoller = usePollingJob<{ queue_length: number; running: RunningTask | null }>(
+  async (_taskId) => {
+    const backendUrl = await getBackendUrl()
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/queue`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return response.json()
+  },
+  {
+    intervalMs: 5000,
+    onDone: (data) => {
+      queueLength.value = data.queue_length ?? 0
+      runningTask.value = data.running ?? null
+    },
+  }
+)
+
+// Syncing-source refresh polling (3s interval, stops when no sources are syncing)
+const syncingPoller = usePollingJob<CodeSource[]>(
+  async (_taskId) => {
+    const backendUrl = await getBackendUrl()
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    return data.sources ?? []
+  },
+  {
+    intervalMs: 3000,
+    isComplete: (srcs) => !srcs.some((s) => s.status === 'syncing'),
+    onDone: (srcs) => { sources.value = srcs },
+  }
+)
 
 // ---- API helpers ----------------------------------------------------------
 
@@ -280,26 +312,26 @@ async function loadQueueStatus() {
   }
 }
 
+// Queue poller data watcher — keep refs in sync while polling is active
+watch(queuePoller.data, (data: { queue_length: number; running: RunningTask | null } | null) => {
+  if (data) {
+    queueLength.value = data.queue_length ?? 0
+    runningTask.value = data.running ?? null
+  }
+})
+
 // ---- Auto-refresh for syncing sources -------------------------------------
 
 function startSyncingRefreshIfNeeded() {
-  const hasSyncing = sources.value.some(s => s.status === 'syncing')
-  if (hasSyncing && !syncingRefreshInterval) {
-    syncingRefreshInterval = setInterval(async () => {
-      await loadSources()
-      if (!sources.value.some(s => s.status === 'syncing')) {
-        stopSyncingRefresh()
-      }
-    }, 3000)
+  if (sources.value.some((s: CodeSource) => s.status === 'syncing') && !syncingPoller.isPolling.value) {
+    syncingPoller.start('')
   }
 }
 
-function stopSyncingRefresh() {
-  if (syncingRefreshInterval) {
-    clearInterval(syncingRefreshInterval)
-    syncingRefreshInterval = null
-  }
-}
+// Syncing poller data watcher — keep sources in sync while polling is active
+watch(syncingPoller.data, (srcs: CodeSource[] | null) => {
+  if (srcs) sources.value = srcs
+})
 
 // ---- Source Actions -------------------------------------------------------
 
@@ -404,20 +436,12 @@ watch(() => props.visible, (visible) => {
   if (visible) {
     loadSources()
     loadQueueStatus()
-    queuePollInterval = setInterval(loadQueueStatus, 5000)
+    queuePoller.start('')
   } else {
-    if (queuePollInterval) {
-      clearInterval(queuePollInterval)
-      queuePollInterval = null
-    }
-    stopSyncingRefresh()
+    queuePoller.stop()
+    syncingPoller.stop()
   }
 }, { immediate: true })
-
-onUnmounted(() => {
-  if (queuePollInterval) clearInterval(queuePollInterval)
-  stopSyncingRefresh()
-})
 
 // Expose for parent to call after saving
 defineExpose({ loadSources })

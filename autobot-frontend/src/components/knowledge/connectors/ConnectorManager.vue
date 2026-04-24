@@ -229,7 +229,7 @@ onMounted(() => {
     <!-- Empty State -->
     <EmptyState
       v-else-if="store.connectors.length === 0"
-      icon="fas fa-plug"
+      icon="plug"
       :title="$t('knowledge.connectors.noConnectorsTitle')"
       :message="$t('knowledge.connectors.noConnectorsMessage')"
     >

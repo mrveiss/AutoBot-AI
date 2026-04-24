@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.models import Organization, Team, User
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +248,7 @@ class OrganizationService(BaseService):
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
         org.is_active = False
-        org.updated_at = datetime.now(timezone.utc)
+        org.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -281,7 +282,7 @@ class OrganizationService(BaseService):
         if hard_delete:
             await self.session.delete(org)
         else:
-            org.deleted_at = datetime.now(timezone.utc)
+            org.deleted_at = now_utc()
             org.is_active = False
 
         await self.session.flush()
@@ -507,7 +508,7 @@ class OrganizationService(BaseService):
             changes["max_users"] = {"old": org.max_users, "new": max_users}
             org.max_users = max_users
 
-        org.updated_at = datetime.now(timezone.utc)
+        org.updated_at = now_utc()
         return changes
 
     def _generate_slug(self, name: str) -> str:

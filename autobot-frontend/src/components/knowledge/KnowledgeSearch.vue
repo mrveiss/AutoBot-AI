@@ -211,7 +211,7 @@
       <!-- No Results -->
       <EmptyState
         v-if="!hasSearchResults && !isSearching"
-        icon="fas fa-search"
+        icon="search"
         :message="$t('knowledge.search.noResults')"
       >
         <p class="no-results-hint">

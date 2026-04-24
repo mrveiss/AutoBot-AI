@@ -35,6 +35,7 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Deque, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -317,10 +318,10 @@ class AutonomousLoopRunner:
                 data = json.loads(raw)
                 staged_at_str = data.pop("staged_at", None)
                 if staged_at_str:
-                    staged_at = datetime.fromisoformat(staged_at_str)
+                    staged_at = parse_utc_iso(staged_at_str)
                     if staged_at.tzinfo is None:
                         staged_at = staged_at.replace(tzinfo=timezone.utc)
-                    if (datetime.now(timezone.utc) - staged_at).days > 7:
+                    if (now_utc() - staged_at).days > 7:
                         logger.info("restore_state: discarding stale pending_approval (>7 days old)")
                         await redis.delete(_PENDING_APPROVAL_REDIS_KEY)
                         return
@@ -343,7 +344,7 @@ class AutonomousLoopRunner:
             redis = await get_async_redis_client(database="knowledge")
             if redis is None:
                 return
-            params_with_ts = {**params, "staged_at": datetime.now(timezone.utc).isoformat()}
+            params_with_ts = {**params, "staged_at": now_utc().isoformat()}
             await redis.set(_PENDING_APPROVAL_REDIS_KEY, json.dumps(params_with_ts), ex=7 * 24 * 3600)
         except Exception:
             logger.debug("AutonomousLoop: could not persist pending_approval to Redis (non-fatal)")
@@ -368,7 +369,7 @@ class AutonomousLoopRunner:
         Phases: LEARN → HYPOTHESIZE → EXPERIMENT → ANALYZE → PROMOTE
         """
         run_id = str(uuid.uuid4())[:12]
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = now_utc().isoformat()
         logger.info("AutonomousLoop: starting run %s (dry_run=%s)", run_id, self.dry_run)
 
         self._running = True
@@ -397,7 +398,7 @@ class AutonomousLoopRunner:
             if not variants:
                 logger.warning("AutonomousLoop: no variants generated for run %s", run_id)
                 record.error = "no_variants"
-                record.finished_at = datetime.now(timezone.utc).isoformat()
+                record.finished_at = now_utc().isoformat()
                 self._history.append(record)
                 return record
 
@@ -434,7 +435,7 @@ class AutonomousLoopRunner:
         finally:
             self._running = False
 
-        record.finished_at = datetime.now(timezone.utc).isoformat()
+        record.finished_at = now_utc().isoformat()
         self._history.append(record)
         logger.info(
             "AutonomousLoop: run %s done — baseline=%.4f best=%.4f promoted=%s",

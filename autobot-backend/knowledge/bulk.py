@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
+
 if TYPE_CHECKING:
     import aioredis
     import redis
@@ -32,21 +34,23 @@ def _parse_date_bound(
     date_str: Optional[str], is_end_date: bool = False
 ) -> Optional[datetime]:
     """
-    Parse a date string to datetime.
+    Parse a date string to tz-aware UTC datetime.
 
     Issue #398: Extracted from _apply_date_filter.
+    Issue #5475: Returns aware UTC paired with `_parse_fact_timestamp` so
+    the comparisons in `_filter_facts_by_date_range` stay aware-vs-aware.
 
     Args:
         date_str: Date string in YYYY-MM-DD format
         is_end_date: If True, set time to end of day
 
     Returns:
-        Parsed datetime or None if invalid
+        Parsed tz-aware datetime (UTC) or None if invalid
     """
     if not date_str:
         return None
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         if is_end_date:
             dt = dt.replace(hour=23, minute=59, second=59)
         return dt
@@ -71,10 +75,10 @@ def _parse_fact_timestamp(timestamp_str: Any) -> Optional[datetime]:
         return None
     try:
         if "T" in timestamp_str:
-            return datetime.fromisoformat(
-                timestamp_str.replace("Z", "+00:00").split("+")[0]
-            )
-        return datetime.strptime(timestamp_str, "%Y-%m-%d")
+            return parse_utc_iso(timestamp_str)
+        return datetime.strptime(timestamp_str, "%Y-%m-%d").replace(
+            tzinfo=timezone.utc
+        )
     except (ValueError, TypeError):
         return None
 

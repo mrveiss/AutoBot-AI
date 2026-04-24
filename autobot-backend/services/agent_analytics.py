@@ -23,8 +23,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
@@ -211,9 +212,7 @@ class AgentAnalytics:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     async def track_task_start(
@@ -299,8 +298,8 @@ class AgentAnalytics:
             record = AgentTaskRecord.from_dict(json.loads(task_str))
 
             # Update completion info
-            completed_at = datetime.utcnow()
-            started_at = datetime.fromisoformat(record.started_at)
+            completed_at = now_utc()
+            started_at = parse_utc_iso(record.started_at)
             duration_ms = (completed_at - started_at).total_seconds() * 1000
 
             record.status = status.value
@@ -638,7 +637,7 @@ class AgentAnalytics:
                 tasks = await self.get_recent_tasks(limit=5000)
             cutoff = now_utc() - timedelta(days=days)
             filtered_tasks = [
-                t for t in tasks if datetime.fromisoformat(t["started_at"]) > cutoff
+                t for t in tasks if parse_utc_iso(t["started_at"]) > cutoff
             ]
             daily_stats = self._group_tasks_by_day(filtered_tasks)
             self._compute_daily_averages(daily_stats)
@@ -653,22 +652,7 @@ class AgentAnalytics:
             return {"error": "Failed to retrieve performance trends"}
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_agent_analytics: Optional[AgentAnalytics] = None
-_agent_analytics_lock = threading.Lock()
-
-
-def get_agent_analytics() -> AgentAnalytics:
-    """Get the singleton agent analytics instance (thread-safe)."""
-    global _agent_analytics
-    if _agent_analytics is None:
-        with _agent_analytics_lock:
-            # Double-check after acquiring lock
-            if _agent_analytics is None:
-                _agent_analytics = AgentAnalytics()
-    return _agent_analytics
+get_agent_analytics = lazy_singleton(AgentAnalytics)
 
 
 @asynccontextmanager

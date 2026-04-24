@@ -18,7 +18,6 @@ Tests cover:
 - NodeRetryConfig delay calculations
 """
 
-import asyncio
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -203,22 +202,23 @@ class TestGraphRunnerLinear:
         builder.add_edge("b", END)
         return builder.compile()
 
-    def test_executes_all_nodes(self, simple_graph):
+    @pytest.mark.asyncio
+    async def test_executes_all_nodes(self, simple_graph):
         runner = GraphRunner(simple_graph, graph_id="test", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["a_done"] is True
         assert state["b_done"] is True
 
-    def test_state_accumulates(self, simple_graph):
+    @pytest.mark.asyncio
+    async def test_state_accumulates(self, simple_graph):
         runner = GraphRunner(simple_graph, graph_id="test", enable_checkpoints=False)
-        state = asyncio.run(
-            runner.run({"initial": 42})
-        )
+        state = await runner.run({"initial": 42})
         assert state["initial"] == 42
         assert state["a_done"] is True
         assert state["b_done"] is True
 
-    def test_configurable_forwarded(self):
+    @pytest.mark.asyncio
+    async def test_configurable_forwarded(self):
         received_config = {}
 
         async def node_a(state: dict, **kw: Any) -> dict:
@@ -237,7 +237,7 @@ class TestGraphRunnerLinear:
             enable_checkpoints=False,
             configurable={"manager": "mock_manager"},
         )
-        asyncio.run(runner.run({}))
+        await runner.run({})
         assert received_config["manager"] == "mock_manager"
 
 
@@ -271,19 +271,22 @@ class TestGraphRunnerConditional:
         builder.add_edge("false_branch", END)
         return builder.compile()
 
-    def test_routes_to_true_branch(self):
+    @pytest.mark.asyncio
+    async def test_routes_to_true_branch(self):
         graph = self._build_graph("true_branch")
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["branch"] == "true"
 
-    def test_routes_to_false_branch(self):
+    @pytest.mark.asyncio
+    async def test_routes_to_false_branch(self):
         graph = self._build_graph("false_branch")
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["branch"] == "false"
 
-    def test_async_router(self):
+    @pytest.mark.asyncio
+    async def test_async_router(self):
         builder: AutoBotGraph = AutoBotGraph()
 
         async def node_a(state: dict, **kw: Any) -> dict:
@@ -303,10 +306,11 @@ class TestGraphRunnerConditional:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["from_async"] is True
 
-    def test_router_returns_end(self):
+    @pytest.mark.asyncio
+    async def test_router_returns_end(self):
         builder: AutoBotGraph = AutoBotGraph()
 
         async def node_a(state: dict, **kw: Any) -> dict:
@@ -318,7 +322,7 @@ class TestGraphRunnerConditional:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["a"] == 1  # graph terminated cleanly at END
 
 
@@ -328,7 +332,8 @@ class TestGraphRunnerConditional:
 
 
 class TestGraphRunnerRetry:
-    def test_retry_on_transient_error(self):
+    @pytest.mark.asyncio
+    async def test_retry_on_transient_error(self):
         calls: List[int] = []
 
         async def flaky_node(state: dict, **kw: Any) -> dict:
@@ -348,11 +353,12 @@ class TestGraphRunnerRetry:
         graph = builder.compile()
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
-        state = asyncio.run(runner.run({}))
+        state = await runner.run({})
         assert state["result"] == "ok"
         assert len(calls) == 3
 
-    def test_exhausted_retries_propagate(self):
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_propagate(self):
         async def always_fails(state: dict, **kw: Any) -> dict:
             raise RuntimeError("always fails")
 
@@ -368,9 +374,10 @@ class TestGraphRunnerRetry:
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
         with pytest.raises(RuntimeError, match="always fails"):
-            asyncio.run(runner.run({}))
+            await runner.run({})
 
-    def test_non_retryable_exception_not_retried(self):
+    @pytest.mark.asyncio
+    async def test_non_retryable_exception_not_retried(self):
         calls: List[int] = []
 
         async def specific_error(state: dict, **kw: Any) -> dict:
@@ -393,7 +400,7 @@ class TestGraphRunnerRetry:
 
         runner = GraphRunner(graph, graph_id="t", enable_checkpoints=False)
         with pytest.raises(ValueError):
-            asyncio.run(runner.run({}))
+            await runner.run({})
         assert len(calls) == 1  # No retry attempted
 
 
@@ -403,7 +410,8 @@ class TestGraphRunnerRetry:
 
 
 class TestStepEventEmitter:
-    def test_sink_receives_events(self):
+    @pytest.mark.asyncio
+    async def test_sink_receives_events(self):
         received: List[GraphStepEvent] = []
 
         async def sink(event: GraphStepEvent) -> None:
@@ -417,11 +425,12 @@ class TestStepEventEmitter:
             node_name="test",
             graph_id="g1",
         )
-        asyncio.run(emitter.emit(event))
+        await emitter.emit(event)
         assert len(received) == 1
         assert received[0].node_name == "test"
 
-    def test_failing_sink_suppressed(self):
+    @pytest.mark.asyncio
+    async def test_failing_sink_suppressed(self):
         async def bad_sink(event: GraphStepEvent) -> None:
             raise RuntimeError("sink failure")
 
@@ -434,9 +443,10 @@ class TestStepEventEmitter:
             graph_id="g",
         )
         # Must not raise.
-        asyncio.run(emitter.emit(event))
+        await emitter.emit(event)
 
-    def test_multiple_sinks(self):
+    @pytest.mark.asyncio
+    async def test_multiple_sinks(self):
         counter: List[int] = []
 
         async def sink_a(e: GraphStepEvent) -> None:
@@ -452,10 +462,11 @@ class TestStepEventEmitter:
         event = GraphStepEvent(
             event_type=StepEventType.NODE_START, node_name="n", graph_id="g"
         )
-        asyncio.run(emitter.emit(event))
+        await emitter.emit(event)
         assert sorted(counter) == [1, 2]
 
-    def test_events_emitted_during_execution(self):
+    @pytest.mark.asyncio
+    async def test_events_emitted_during_execution(self):
         emitted: List[StepEventType] = []
 
         async def sink(event: GraphStepEvent) -> None:
@@ -476,7 +487,7 @@ class TestStepEventEmitter:
         runner = GraphRunner(
             graph, graph_id="t", emitter=emitter, enable_checkpoints=False
         )
-        asyncio.run(runner.run({}))
+        await runner.run({})
 
         assert StepEventType.NODE_START in emitted
         assert StepEventType.NODE_END in emitted
@@ -533,23 +544,23 @@ class TestDAGGraphExecutor:
 
         return step_executor, executed
 
-    def test_linear_execution(self):
+    @pytest.mark.asyncio
+    async def test_linear_execution(self):
         from orchestration.dag_graph_adapter import DAGGraphExecutor
 
         dag = self._build_linear_dag(3)
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.run(
-            executor.execute(dag, "wf-linear")
-        )
+        ctx = await executor.execute(dag, "wf-linear")
 
         assert ctx.status == "completed"
         assert ctx.error is None
         # All nodes ran.
         assert "s0" in executed or "s0" in ctx.step_results
 
-    def test_empty_dag_returns_failed(self):
+    @pytest.mark.asyncio
+    async def test_empty_dag_returns_failed(self):
         from orchestration.dag_executor import WorkflowDAG
         from orchestration.dag_graph_adapter import DAGGraphExecutor
 
@@ -557,14 +568,13 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.run(
-            executor.execute(dag, "wf-empty")
-        )
+        ctx = await executor.execute(dag, "wf-empty")
 
         assert ctx.status == "failed"
         assert ctx.error is not None
 
-    def test_cycle_detection(self):
+    @pytest.mark.asyncio
+    async def test_cycle_detection(self):
         from orchestration.dag_executor import WorkflowDAG
         from orchestration.dag_graph_adapter import DAGGraphExecutor
 
@@ -580,30 +590,28 @@ class TestDAGGraphExecutor:
         step_executor, _ = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.run(
-            executor.execute(dag, "wf-cycle")
-        )
+        ctx = await executor.execute(dag, "wf-cycle")
 
         assert ctx.status == "failed"
         assert "Cycle detected" in (ctx.error or "")
 
-    def test_condition_true_branch(self):
+    @pytest.mark.asyncio
+    async def test_condition_true_branch(self):
         from orchestration.dag_graph_adapter import DAGGraphExecutor
 
         dag = self._build_condition_dag(True)
         step_executor, executed = self._make_step_executor()
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.run(
-            executor.execute(dag, "wf-cond-true")
-        )
+        ctx = await executor.execute(dag, "wf-cond-true")
 
         assert ctx.status == "completed"
         # true_branch should be in step_results; false_branch should be skipped.
         assert "true_branch" in ctx.skipped_nodes or "true_branch" in ctx.step_results
         assert "false_branch" in ctx.skipped_nodes or "false_branch" not in ctx.step_results
 
-    def test_step_results_populated(self):
+    @pytest.mark.asyncio
+    async def test_step_results_populated(self):
         from orchestration.dag_graph_adapter import DAGGraphExecutor
 
         dag = self._build_linear_dag(2)
@@ -615,9 +623,7 @@ class TestDAGGraphExecutor:
         )
 
         executor = DAGGraphExecutor(step_executor_callback=step_executor, enable_checkpoints=False)
-        ctx = asyncio.run(
-            executor.execute(dag, "wf-results")
-        )
+        ctx = await executor.execute(dag, "wf-results")
 
         assert ctx.status == "completed"
         assert ctx.step_results.get("s0", {}).get("output") == "hello"

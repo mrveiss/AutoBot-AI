@@ -18,6 +18,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from models.process_run import AgentSession
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class AgentSessionService:
         Overwrites any existing session for the same (agent_id, task_id) pair.
         Returns the UUID of the saved row.
         """
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         expires_at = now + timedelta(seconds=ttl_seconds)
         session_id = await self._upsert_session(
             agent_id, task_id, state, ttl_seconds, expires_at
@@ -65,7 +66,7 @@ class AgentSessionService:
             row = await _fetch_session(session, agent_id, task_id)
         if row is None:
             return None
-        if row.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        if row.expires_at.replace(tzinfo=timezone.utc) < now_utc():
             logger.debug("Session expired for agent=%s task=%s", agent_id, task_id)
             return None
         return row.session_state
@@ -76,7 +77,7 @@ class AgentSessionService:
 
         Returns the number of rows deleted.
         """
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         async with self._session_factory() as session:
             result = await session.execute(
                 delete(AgentSession).where(AgentSession.expires_at < now)

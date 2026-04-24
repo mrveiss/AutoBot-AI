@@ -203,6 +203,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
+import { usePollingJob } from '@/composables/usePollingJob';
 import {
   visionMultimodalApiClient,
   type ScreenAnalysisResponse,
@@ -240,8 +241,6 @@ const confidenceThreshold = ref(50);
 // Auto-refresh
 const autoRefresh = ref(false);
 const refreshInterval = ref(10000);
-let refreshTimer: ReturnType<typeof setInterval> | null = null;
-
 // Computed
 const filteredElements = computed(() => {
   if (!analysisResult.value) return [];
@@ -341,38 +340,30 @@ const getElementIcon = (elementType: string): string => {
 };
 
 // Auto-refresh watcher
+const { start: _startAutoRefresh, stop: _stopAutoRefresh } = usePollingJob(
+  async () => {
+    if (!analyzing.value) {
+      await captureAndAnalyze();
+    }
+    return null;
+  },
+  { intervalMs: refreshInterval, maxAttempts: Number.MAX_SAFE_INTEGER }
+);
+
 watch(autoRefresh, (enabled) => {
   if (enabled) {
-    startAutoRefresh();
+    _startAutoRefresh('');
   } else {
-    stopAutoRefresh();
+    _stopAutoRefresh();
   }
 });
 
 watch(refreshInterval, () => {
   if (autoRefresh.value) {
-    stopAutoRefresh();
-    startAutoRefresh();
+    _stopAutoRefresh();
+    _startAutoRefresh('');
   }
 });
-
-const startAutoRefresh = () => {
-  if (refreshTimer) return;
-  refreshTimer = setInterval(() => {
-    if (!analyzing.value) {
-      captureAndAnalyze();
-    }
-  }, refreshInterval.value);
-  logger.debug('Auto-refresh started:', refreshInterval.value);
-};
-
-const stopAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-    logger.debug('Auto-refresh stopped');
-  }
-};
 
 // Lifecycle
 onMounted(() => {
@@ -380,7 +371,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  stopAutoRefresh();
+  _stopAutoRefresh();
 });
 </script>
 

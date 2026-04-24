@@ -140,7 +140,7 @@
           </div>
           <EmptyState
             v-else
-            icon="fas fa-check-circle"
+            icon="check-circle"
             :message="$t('analytics.bi.noMaintenance')"
           />
         </div>
@@ -203,7 +203,7 @@
           </div>
           <EmptyState
             v-else
-            icon="fas fa-check-circle"
+            icon="check-circle"
             :message="$t('analytics.bi.noOptimization')"
           />
         </div>
@@ -243,7 +243,7 @@
           </div>
           <EmptyState
             v-else
-            icon="fas fa-sparkles"
+            icon="sparkles"
             :message="$t('analytics.bi.noInsights')"
           />
         </div>

@@ -46,9 +46,9 @@ class ExperimentStore:
     async def _get_chromadb(self):
         """Lazy-init ChromaDB collection."""
         if self._chromadb_collection is None:
-            from utils.chromadb_client import get_async_chromadb_client
+            from knowledge.backends import get_async_default_client
 
-            client = await get_async_chromadb_client()
+            client = await get_async_default_client()
             self._chromadb_collection = await client.get_or_create_collection(
                 name=self.config.chromadb_collection,
                 metadata={"description": "AutoResearch experiment findings"},

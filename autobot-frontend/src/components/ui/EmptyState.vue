@@ -1,6 +1,6 @@
 <template>
   <div class="empty-state" :class="{ 'compact': compact }">
-    <i :class="iconClass" class="empty-icon"></i>
+    <Icon :name="icon" class="empty-icon" />
     <h4 v-if="title" class="empty-title">{{ title }}</h4>
     <p v-if="message" class="empty-message">{{ message }}</p>
     <slot name="actions"></slot>
@@ -8,31 +8,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-
-/**
- * Reusable Empty State Component
- *
- * Displays consistent empty states across the application.
- * Eliminates duplicate empty state implementations in 11+ components.
- *
- * Usage:
- * ```vue
- * <EmptyState
- *   icon="fas fa-inbox"
- *   title="No documents found"
- *   message="Start by adding your first document"
- * >
- *   <template #actions>
- *     <button @click="addDocument">Add Document</button>
- *   </template>
- * </EmptyState>
- * ```
- */
+import Icon, { type IconName } from './Icon.vue'
 
 interface Props {
-  /** Icon class (Font Awesome) */
-  icon?: string
+  /** Icon name from Icon.vue registry */
+  icon?: IconName
   /** Title text */
   title?: string
   /** Message text */
@@ -41,12 +21,10 @@ interface Props {
   compact?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  icon: 'fas fa-inbox',
+withDefaults(defineProps<Props>(), {
+  icon: 'inbox',
   compact: false
 })
-
-const iconClass = computed(() => props.icon)
 </script>
 
 <style scoped>
@@ -62,14 +40,16 @@ const iconClass = computed(() => props.icon)
 }
 
 .empty-icon {
-  font-size: var(--text-5xl);
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   color: var(--text-tertiary);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
 
 .empty-state.compact .empty-icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl);
+  height: var(--text-3xl);
   margin-bottom: var(--spacing-3);
 }
 

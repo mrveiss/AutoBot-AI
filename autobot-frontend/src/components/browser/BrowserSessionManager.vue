@@ -69,7 +69,7 @@
     <div class="sessions-list">
       <div v-if="sessions.length === 0" class="empty-state">
         <EmptyState
-          icon="fas fa-window-restore"
+          icon="window-restore"
           :title="$t('browser.sessionManager.noSessionsTitle')"
           :message="$t('browser.sessionManager.noSessionsMessage')"
         >

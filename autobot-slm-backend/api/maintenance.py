@@ -115,7 +115,7 @@ async def get_active_windows(
     node_id: Optional[str] = Query(None),
 ) -> MaintenanceWindowListResponse:
     """Get currently active maintenance windows."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     query = select(MaintenanceWindow).where(
         and_(
@@ -185,7 +185,7 @@ async def create_maintenance_window(
             )
 
     # Determine initial status
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window_data.start_time <= now <= window_data.end_time:
         initial_status = "active"
     elif window_data.start_time > now:
@@ -329,7 +329,7 @@ async def activate_maintenance_window(
         )
 
     window.status = "active"
-    window.start_time = datetime.utcnow()
+    window.start_time = datetime.now(timezone.utc)
 
     if window.node_id:
         await _set_node_maintenance_status(db, window.node_id, True, window.window_id)
@@ -364,7 +364,7 @@ async def complete_maintenance_window(
         )
 
     window.status = "completed"
-    window.end_time = datetime.utcnow()
+    window.end_time = datetime.now(timezone.utc)
 
     if window.node_id:
         await _set_node_maintenance_status(db, window.node_id, False, window.window_id)
@@ -436,7 +436,7 @@ async def _set_node_maintenance_status(
 
 async def is_node_in_maintenance(db: AsyncSession, node_id: str) -> bool:
     """Check if a node is currently in a maintenance window."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     result = await db.execute(
         select(MaintenanceWindow)
@@ -459,7 +459,7 @@ async def is_node_in_maintenance(db: AsyncSession, node_id: str) -> bool:
 
 async def should_suppress_remediation(db: AsyncSession, node_id: str) -> bool:
     """Check if remediation should be suppressed for a node."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     result = await db.execute(
         select(MaintenanceWindow)

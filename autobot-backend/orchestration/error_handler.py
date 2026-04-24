@@ -31,6 +31,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS
 from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
 
@@ -145,7 +146,7 @@ class StepCheckpoint:
     status: str
     output: Dict[str, Any]
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: now_utc().isoformat()
     )
 
     def to_dict(self) -> Dict[str, Any]:

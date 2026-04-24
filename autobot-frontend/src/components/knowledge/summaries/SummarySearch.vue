@@ -67,7 +67,7 @@
         v-for="summary in summaries"
         :key="summary.id"
         class="result-card"
-        :class="{ expanded: expandedId === summary.id }"
+        :class="{ expanded: isExpanded(summary.id) }"
       >
         <div
           class="result-header"
@@ -84,7 +84,7 @@
           <i
             :class="[
               'fas',
-              expandedId === summary.id
+              isExpanded(summary.id)
                 ? 'fa-chevron-up'
                 : 'fa-chevron-down',
             ]"
@@ -94,7 +94,7 @@
 
         <!-- Preview -->
         <p class="result-preview">
-          {{ expandedId === summary.id
+          {{ isExpanded(summary.id)
             ? summary.content
             : truncate(summary.content, 200)
           }}
@@ -116,7 +116,7 @@
 
         <!-- Expanded Actions -->
         <div
-          v-if="expandedId === summary.id"
+          v-if="isExpanded(summary.id)"
           class="result-actions"
         >
           <button
@@ -147,6 +147,7 @@
 
 import { ref } from 'vue'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
+import { useExpansion } from '@/composables/useExpansion'
 
 defineEmits<{
   (e: 'drill-down', summaryId: string): void
@@ -161,7 +162,7 @@ const {
 
 const searchQuery = ref('')
 const levelFilter = ref('')
-const expandedId = ref<string | null>(null)
+const { isExpanded, expand, collapseAll } = useExpansion<string>()
 const hasSearched = ref(false)
 
 function truncate(text: string, maxLen: number): string {
@@ -170,13 +171,15 @@ function truncate(text: string, maxLen: number): string {
 }
 
 function toggleExpand(id: string): void {
-  expandedId.value = expandedId.value === id ? null : id
+  const wasExpanded = isExpanded(id)
+  collapseAll()
+  if (!wasExpanded) expand(id)
 }
 
 async function handleSearch(): Promise<void> {
   if (!searchQuery.value.trim()) return
   hasSearched.value = true
-  expandedId.value = null
+  collapseAll()
   await searchSummaries({
     query: searchQuery.value,
     level: (levelFilter.value as 'chunk' | 'section' | 'document' | '') || undefined,

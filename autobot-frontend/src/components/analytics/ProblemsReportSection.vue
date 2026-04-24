@@ -101,7 +101,7 @@
     </div>
     <EmptyState
       v-else
-      icon="fas fa-check-circle"
+      icon="check-circle"
       :message="$t('analytics.problems.emptyMessage')"
       variant="success"
     />

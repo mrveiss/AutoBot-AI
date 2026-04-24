@@ -137,9 +137,9 @@ class TopicRetrievalCache(AsyncInitializable):
 
     async def _get_or_create_collection(self):
         """Open or create the ChromaDB collection."""
-        from utils.async_chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        client = await get_async_chromadb_client()
+        client = await get_async_default_client()
         if client is None:
             logger.warning("ChromaDB async client unavailable")
             return None
@@ -329,7 +329,7 @@ class TopicRetrievalCache(AsyncInitializable):
             results = await self._collection.get(limit=excess, include=["metadatas"])
             if results and results.get("ids"):
                 ids_to_delete = results["ids"]
-                client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+                client = await get_async_redis_client(database=_REDIS_DATABASE)
                 if client:
                     for meta in results.get("metadatas", []):
                         rkey = meta.get("redis_key", "")

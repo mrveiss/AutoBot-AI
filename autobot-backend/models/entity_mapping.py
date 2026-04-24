@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from autobot_shared.time_utils import parse_utc_iso
+
 
 class EntityType(Enum):
     """Classification of entity types."""
@@ -217,8 +219,8 @@ class EntityMapping:
             child_entities=set(data.get("child_entities", [])),
             sources=set(data.get("sources", [])),
             contexts=data.get("contexts", []),
-            creation_timestamp=datetime.fromisoformat(data["creation_timestamp"]),
-            last_updated=datetime.fromisoformat(data["last_updated"]),
+            creation_timestamp=parse_utc_iso(data["creation_timestamp"]),
+            last_updated=parse_utc_iso(data["last_updated"]),
             created_by=data.get("created_by", "system"),
             mention_count=data.get("mention_count", 0),
             fact_count=data.get("fact_count", 0),

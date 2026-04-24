@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 if TYPE_CHECKING:
     import aioredis
     import redis
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class CategoriesMixin:
         Returns:
             Category data dictionary ready for Redis storage
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = now_utc().isoformat()
         return {
             "id": category_id,
             "name": name,
@@ -294,7 +295,7 @@ class CategoriesMixin:
                 }
 
             updates: Dict[str, Any] = {
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": now_utc().isoformat()
             }
 
             if name and name != current["name"]:

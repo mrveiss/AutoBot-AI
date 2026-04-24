@@ -8,7 +8,9 @@
  * Author: mrveiss
  */
 
-import { ref, reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
+import { usePollingJob } from '@/composables/usePollingJob'
+import { useExpansion } from '@/composables/useExpansion'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig, getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -176,12 +178,8 @@ export function usePatternAnalysis() {
   const storageStats = ref<PatternStorageStats | null>(null)
 
   // UI state
-  const expandedSections = reactive({
-    duplicates: false,
-    regex: false,
-    complexity: false,
-    refactoring: false
-  })
+  type Section = 'duplicates' | 'regex' | 'complexity' | 'refactoring'
+  const { isExpanded: isSectionExpanded, toggle: toggleSection } = useExpansion<Section>()
 
   // Computed properties
   const totalPatterns = computed(() => {
@@ -350,10 +348,10 @@ export function usePatternAnalysis() {
   }
 
   /**
-   * Poll for background task status using setInterval for resilience.
+   * Poll for background task status using usePollingJob for resilience.
    * Returns a Promise that resolves when the task completes or fails.
    * Transient fetch errors are retried — a single network glitch
-   * does not kill the polling loop.
+   * does not kill the polling loop (up to MAX_CONSECUTIVE_ERRORS).
    */
   const pollTaskStatus = (
     taskId: string,
@@ -361,126 +359,117 @@ export function usePatternAnalysis() {
     const POLL_INTERVAL_MS = 2000
     const MAX_CONSECUTIVE_ERRORS = 5
 
+    // Track consecutive errors inside the fetcher closure (resets on success)
     let consecutiveErrors = 0
-    let intervalId: ReturnType<typeof setInterval> | null = null
+    let resolved = false
 
     return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
-      const stopPolling = () => {
-        if (intervalId !== null) {
-          clearInterval(intervalId)
-          intervalId = null
-        }
+      const settle = (result: 'completed' | 'failed' | 'orphaned' | 'error') => {
+        if (!resolved) { resolved = true; resolve(result) }
       }
 
-      const poll = async () => {
-        try {
-          const backendUrl = await getBackendUrl()
-          const response = await fetchWithAuth(
-            `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`
-          )
+      // The fetcher returns a sentinel object that isComplete can inspect
+      type PollResult = { done: boolean; outcome: 'completed' | 'failed' | 'orphaned' | 'error' | 'running' }
 
-          if (!response.ok) {
-            throw new Error(`Status check failed: ${response.statusText}`)
-          }
+      const poller = usePollingJob<PollResult>(
+        async () => {
+          try {
+            const backendUrl = await getBackendUrl()
+            const response = await fetchWithAuth(
+              `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`
+            )
+            if (!response.ok) {
+              throw new Error(`Status check failed: ${response.statusText}`)
+            }
+            const data: AnalysisTaskStatus = await response.json()
+            consecutiveErrors = 0 // Reset on successful fetch
+            taskStatus.value = data
 
-          const data = await response.json()
-          taskStatus.value = data
-          consecutiveErrors = 0 // Reset on success
-
-          // Apply partial results while analysis is running
-          if (data.partial_results && data.status === 'running') {
-            const pr = data.partial_results
-            if (pr.regex?.length) {
-              regexOpportunities.value = pr.regex
-            }
-            if (pr.complexity?.length) {
-              complexityHotspots.value = pr.complexity
-            }
-            if (pr.modularization?.length || pr.other_patterns?.length) {
-              refactoringSuggestions.value = [
-                ...(pr.modularization || []),
-                ...(pr.other_patterns || []),
-              ]
-            }
-            // Build incremental summary so UI can show results
-            const partialTotal =
-              (pr.regex?.length || 0) +
-              (pr.complexity?.length || 0) +
-              (pr.modularization?.length || 0) +
-              (pr.other_patterns?.length || 0)
-            if (partialTotal > 0) {
-              analysisReport.value = {
-                analysis_summary: {
-                  scan_path: '',
-                  timestamp: new Date().toISOString(),
-                  files_analyzed: pr.files_processed || 0,
-                  lines_analyzed: 0,
-                  duration_seconds: 0,
-                  total_patterns_found: partialTotal,
-                  potential_loc_reduction: 0,
-                  complexity_score: 'N/A',
-                },
-                pattern_counts: {},
-                severity_distribution: {},
-                duplicate_patterns: [],
-                regex_opportunities: pr.regex || [],
-                complexity_hotspots: pr.complexity || [],
-                modularization_suggestions: pr.modularization || [],
-                other_patterns: pr.other_patterns || [],
+            // Apply partial results while analysis is running
+            if (data.partial_results && data.status === 'running') {
+              const pr = data.partial_results
+              if (pr.regex?.length) regexOpportunities.value = pr.regex
+              if (pr.complexity?.length) complexityHotspots.value = pr.complexity
+              if (pr.modularization?.length || pr.other_patterns?.length) {
+                refactoringSuggestions.value = [
+                  ...(pr.modularization || []),
+                  ...(pr.other_patterns || []),
+                ]
+              }
+              const partialTotal =
+                (pr.regex?.length || 0) +
+                (pr.complexity?.length || 0) +
+                (pr.modularization?.length || 0) +
+                (pr.other_patterns?.length || 0)
+              if (partialTotal > 0) {
+                analysisReport.value = {
+                  analysis_summary: {
+                    scan_path: '',
+                    timestamp: new Date().toISOString(),
+                    files_analyzed: pr.files_processed || 0,
+                    lines_analyzed: 0,
+                    duration_seconds: 0,
+                    total_patterns_found: partialTotal,
+                    potential_loc_reduction: 0,
+                    complexity_score: 'N/A',
+                  },
+                  pattern_counts: {},
+                  severity_distribution: {},
+                  duplicate_patterns: [],
+                  regex_opportunities: pr.regex || [],
+                  complexity_hotspots: pr.complexity || [],
+                  modularization_suggestions: pr.modularization || [],
+                  other_patterns: pr.other_patterns || [],
+                }
               }
             }
-          }
 
-          if (data.status === 'completed' && data.result) {
-            analysisReport.value = data.result
-            duplicatePatterns.value = data.result.duplicate_patterns || []
-            regexOpportunities.value = data.result.regex_opportunities || []
-            complexityHotspots.value = data.result.complexity_hotspots || []
-            analyzing.value = false
-            stopPolling()
-            resolve('completed')
-            return
-          }
-
-          if (data.status === 'failed') {
-            const isOrphaned = data.reason === 'orphaned'
-              || data.error?.includes('orphaned')
-            if (isOrphaned) {
-              wasInterrupted.value = true
-              error.value = 'Previous analysis was interrupted by a server restart.'
+            if (data.status === 'completed' && data.result) {
+              analysisReport.value = data.result
+              duplicatePatterns.value = data.result.duplicate_patterns || []
+              regexOpportunities.value = data.result.regex_opportunities || []
+              complexityHotspots.value = data.result.complexity_hotspots || []
               analyzing.value = false
-              stopPolling()
-              resolve('orphaned')
-            } else {
-              error.value = data.error || 'Analysis failed'
-              analyzing.value = false
-              stopPolling()
-              resolve('failed')
+              return { done: true, outcome: 'completed' }
             }
-            return
-          }
 
-          // Still running — interval continues automatically
-        } catch (e: unknown) {
-          consecutiveErrors++
-          const msg = extractErrorMessage(e, 'Unknown poll error')
-          logger.warn(
-            `Task status poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`
-          )
+            if (data.status === 'failed') {
+              const isOrphaned = data.reason === 'orphaned' || data.error?.includes('orphaned')
+              if (isOrphaned) {
+                wasInterrupted.value = true
+                error.value = 'Previous analysis was interrupted by a server restart.'
+              } else {
+                error.value = data.error || 'Analysis failed'
+              }
+              analyzing.value = false
+              return { done: true, outcome: isOrphaned ? 'orphaned' : 'failed' }
+            }
 
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            error.value = `Lost connection to backend after ${MAX_CONSECUTIVE_ERRORS} retries`
-            analyzing.value = false
-            stopPolling()
-            resolve('error')
+            return { done: false, outcome: 'running' }
+          } catch (e: unknown) {
+            consecutiveErrors++
+            const msg = extractErrorMessage(e, 'Unknown poll error')
+            logger.warn(
+              `Task status poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`
+            )
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              error.value = `Lost connection to backend after ${MAX_CONSECUTIVE_ERRORS} retries`
+              analyzing.value = false
+              return { done: true, outcome: 'error' }
+            }
+            // Transient error — keep polling
+            return { done: false, outcome: 'running' }
           }
-          // Otherwise interval continues — transient error, keep trying
+        },
+        {
+          intervalMs: POLL_INTERVAL_MS,
+          maxAttempts: 600, // 20 minutes max — terminal status settles much earlier
+          isComplete: (r) => r.done,
+          onDone: (r) => settle(r.outcome as 'completed' | 'failed' | 'orphaned' | 'error'),
         }
-      }
+      )
 
-      // Run first poll immediately, then on interval
-      poll()
-      intervalId = setInterval(poll, POLL_INTERVAL_MS)
+      poller.start(taskId)
     })
   }
 
@@ -922,7 +911,8 @@ export function usePatternAnalysis() {
     complexityHotspots,
     refactoringSuggestions,
     storageStats,
-    expandedSections,
+    isSectionExpanded,
+    toggleSection,
 
     // Computed
     totalPatterns,

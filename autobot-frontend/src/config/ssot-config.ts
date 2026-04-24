@@ -340,16 +340,20 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
  * This is called once on first access.
  */
 function buildConfig(): AutoBotConfig {
-  // VM IP addresses
+  // VM IP addresses — fall back to window.location.hostname so dev builds
+  // without VITE_*_HOST vars never produce malformed ws://:PORT URLs (#5627, #5646)
+  const mainHost = getEnv('VITE_BACKEND_HOST', '') || (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+  const resolveHost = (envVar: string) => getEnv(envVar, '') || mainHost;
+
   const vm: VMConfig = {
-    main: getEnv('VITE_BACKEND_HOST', ''),
-    frontend: getEnv('VITE_FRONTEND_HOST', ''),
-    npu: getEnv('VITE_NPU_WORKER_HOST', ''),
-    redis: getEnv('VITE_REDIS_HOST', ''),
-    aistack: getEnv('VITE_AI_STACK_HOST', ''),
-    browser: getEnv('VITE_BROWSER_HOST', ''),
-    ollama: getEnv('VITE_OLLAMA_HOST', ''),
-    slm: getEnv('VITE_SLM_HOST', ''),
+    main:     mainHost,
+    frontend: resolveHost('VITE_FRONTEND_HOST'),
+    npu:      resolveHost('VITE_NPU_WORKER_HOST'),
+    redis:    resolveHost('VITE_REDIS_HOST'),
+    aistack:  resolveHost('VITE_AI_STACK_HOST'),
+    browser:  resolveHost('VITE_BROWSER_HOST'),
+    ollama:   resolveHost('VITE_OLLAMA_HOST'),
+    slm:      getEnv('VITE_SLM_HOST', ''),  // intentionally empty — slmUrl guards this
   };
 
   // Service ports
@@ -359,7 +363,7 @@ function buildConfig(): AutoBotConfig {
     redis: getEnvNumber('VITE_REDIS_PORT', 6379),
     ollama: getEnvNumber('VITE_OLLAMA_PORT', 11434),
     vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
-    browser: getEnvNumber('VITE_BROWSER_PORT', 3000),
+    browser: getEnvNumber('VITE_BROWSER_PORT', 9001),
     aistack: getEnvNumber('VITE_AI_STACK_PORT', 8080),
     npu: getEnvNumber('VITE_NPU_WORKER_PORT', 8081),
     prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),

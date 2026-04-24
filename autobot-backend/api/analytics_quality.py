@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -1191,7 +1192,7 @@ def _filter_trends_by_period(trends: list, cutoff: datetime) -> list:
     filtered = []
     for t in trends:
         try:
-            date = datetime.fromisoformat(t.get("date", ""))
+            date = parse_utc_iso(t.get("date", ""))
             if date >= cutoff:
                 filtered.append(t)
         except (ValueError, TypeError):

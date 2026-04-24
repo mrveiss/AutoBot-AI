@@ -14,12 +14,12 @@ Public API (preserved):
     - get_semantic_chunker()
 """
 
-import threading
 from typing import List
 
 import numpy as np
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants
 from utils.semantic_chunker_base import SemanticChunk, SemanticChunkerBase
 
@@ -458,15 +458,4 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 # Public factory (preserves singleton semantics for all 15 CPU callers)
 # ----------------------------------------------------------------------
 
-_semantic_chunker_instance: "AutoBotSemanticChunker | None" = None
-_semantic_chunker_instance_lock = threading.Lock()
-
-
-def get_semantic_chunker() -> AutoBotSemanticChunker:
-    """Get the global semantic chunker instance (lazy, thread-safe)."""
-    global _semantic_chunker_instance
-    if _semantic_chunker_instance is None:
-        with _semantic_chunker_instance_lock:
-            if _semantic_chunker_instance is None:
-                _semantic_chunker_instance = AutoBotSemanticChunker()
-    return _semantic_chunker_instance
+get_semantic_chunker = lazy_singleton(AutoBotSemanticChunker)

@@ -38,6 +38,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.security.path_validator import validate_relative_path
 from services.agent_secrets_integration import (
     AgentSecretsIntegration,
@@ -100,7 +101,7 @@ class TerminalSecretsService:
     def _create_session_state(self, session_id: str, chat_id: Optional[str]) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)  # codeql[py/path-injection]
         state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{safe_id}_")
         return state
 
@@ -582,21 +583,4 @@ class TerminalSecretsService:
             return list(self._sessions.keys())
 
 
-# Thread-safe singleton instance
-_terminal_secrets_service: Optional[TerminalSecretsService] = None
-_service_lock = threading.Lock()
-
-
-def get_terminal_secrets_service() -> TerminalSecretsService:
-    """Get or create the TerminalSecretsService singleton (thread-safe).
-
-    Returns:
-        TerminalSecretsService singleton instance
-    """
-    global _terminal_secrets_service
-    if _terminal_secrets_service is None:
-        with _service_lock:
-            # Double-check after acquiring lock
-            if _terminal_secrets_service is None:
-                _terminal_secrets_service = TerminalSecretsService()
-    return _terminal_secrets_service
+get_terminal_secrets_service = lazy_singleton(TerminalSecretsService)

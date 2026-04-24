@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from typing import Dict, Optional, Tuple
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -182,19 +183,4 @@ class CommandValidator:
         }
 
 
-# Global instance (thread-safe)
-import threading
-
-_command_validator = None
-_command_validator_lock = threading.Lock()
-
-
-def get_command_validator() -> CommandValidator:
-    """Get the global command validator instance (thread-safe)."""
-    global _command_validator
-    if _command_validator is None:
-        with _command_validator_lock:
-            # Double-check after acquiring lock
-            if _command_validator is None:
-                _command_validator = CommandValidator()
-    return _command_validator
+get_command_validator = lazy_singleton(CommandValidator)

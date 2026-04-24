@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 
 # Embedding analytics integration (Issue #285)
@@ -283,18 +284,10 @@ class BackgroundVectorizer:
 
 
 # Global instance (thread-safe)
-import threading
 
 _background_vectorizer: Optional[BackgroundVectorizer] = None
-_background_vectorizer_lock = threading.Lock()
 
 
 def get_background_vectorizer() -> BackgroundVectorizer:
     """Get or create the global background vectorizer (thread-safe)."""
-    global _background_vectorizer
-    if _background_vectorizer is None:
-        with _background_vectorizer_lock:
-            # Double-check after acquiring lock
-            if _background_vectorizer is None:
-                _background_vectorizer = BackgroundVectorizer()
-    return _background_vectorizer
+    return _background_vectorizer()

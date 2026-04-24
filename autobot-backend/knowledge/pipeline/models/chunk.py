@@ -12,11 +12,12 @@ from typing import Any, Dict
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from autobot_shared.time_utils import now_utc
 
 
 def _utcnow() -> datetime:
     """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return datetime.now(timezone.utc)
+    return now_utc()
 
 
 class ProcessedChunk(BaseModel):

@@ -7,7 +7,6 @@ Tests for Step-level Error Handlers and Workflow Checkpoint Management
 Issue #2154.
 """
 
-import asyncio
 import json
 from typing import Any, Dict
 from unittest.mock import MagicMock
@@ -15,6 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from constants.status_enums import TaskStatus
+from tests.helpers.fake_redis import SyncHashFakeRedis
 
 from .error_handler import (
     CHECKPOINT_TTL,
@@ -94,32 +94,10 @@ class TestStepCheckpoint:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRedis:
-    """In-memory Redis substitute for checkpoint tests."""
-
-    def __init__(self) -> None:
-        self._hashes: Dict[str, Dict[str, str]] = {}
-        # Record (key, ttl) pairs for every expire() call so tests can assert
-        # that the correct TTL was applied (#3231).
-        self.expire_calls: list = []
-
-    def hset(self, key: str, field: str, value: str) -> None:
-        self._hashes.setdefault(key, {})[field] = value
-
-    def expire(self, key: str, ttl: int) -> None:
-        self.expire_calls.append((key, ttl))
-
-    def hgetall(self, key: str) -> Dict[str, str]:
-        return dict(self._hashes.get(key, {}))
-
-    def delete(self, key: str) -> None:
-        self._hashes.pop(key, None)
-
-
 class TestWorkflowCheckpointManager:
     def _manager_with_fake_redis(self) -> WorkflowCheckpointManager:
         mgr = WorkflowCheckpointManager()
-        mgr._redis = _FakeRedis()
+        mgr._redis = SyncHashFakeRedis()
         return mgr
 
     def test_save_and_load(self) -> None:
@@ -227,67 +205,57 @@ class TestWorkflowCheckpointManager:
 
 
 class TestStepErrorHandler:
-    def _run(self, coro: Any) -> Any:
-        return asyncio.run(coro)
-
     def _step(self, error_config: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": "step_x", "action": "run", "error_config": error_config}
 
-    def test_abort_by_default(self) -> None:
+    @pytest.mark.asyncio
+    async def test_abort_by_default(self) -> None:
         handler = StepErrorHandler()
         step = {"id": "s1", "action": "run"}
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.ABORT
 
-    def test_skip_action(self) -> None:
+    @pytest.mark.asyncio
+    async def test_skip_action(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "skip"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.SKIP
 
-    def test_retry_below_max(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_below_max(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "retry", "max_retries": 3, "base_delay": 0.0})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.RETRY
 
-    def test_retry_exhausted_becomes_abort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_exhausted_becomes_abort(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "retry", "max_retries": 3, "base_delay": 0.0})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 3, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 3, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.ABORT
 
-    def test_fallback_with_id(self) -> None:
+    @pytest.mark.asyncio
+    async def test_fallback_with_id(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "fallback", "fallback_step_id": "step_b"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.FALLBACK
         assert outcome["fallback_id"] == "step_b"
 
-    def test_fallback_without_id_becomes_abort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_fallback_without_id_becomes_abort(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "fallback"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.ABORT
 
-    def test_pause_action(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pause_action(self) -> None:
         handler = StepErrorHandler()
         step = self._step({"action": "pause"})
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.PAUSE
 
     def test_exponential_backoff_grows(self) -> None:
@@ -312,14 +280,13 @@ class TestStepErrorHandler:
         assert handler._compute_delay(cfg, 2) == 4.0
         assert handler._compute_delay(cfg, 3) == 6.0
 
-    def test_invalid_error_config_falls_back_to_abort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_invalid_error_config_falls_back_to_abort(self) -> None:
         handler = StepErrorHandler()
         step = {
             "id": "s1",
             "action": "run",
             "error_config": {"action": "invalid_action"},
         }
-        outcome = self._run(
-            handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
-        )
+        outcome = await handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         assert outcome["action"] == StepErrorAction.ABORT

@@ -28,7 +28,6 @@ SSOT Migration (Issue #763, #3829):
 
 import asyncio
 import logging
-import threading
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -43,6 +42,7 @@ from config.sync_ops import SyncOperationsMixin
 from config.timeout_config import TimeoutConfigMixin
 from config.validation import ValidationMixin
 from constants.path_constants import PATH
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -109,24 +109,7 @@ class ConfigManager(
         self._sync_cache_timestamp = time.time()
 
 
-# Create singleton instance with thread-safe locking (Issue #613)
-_config_manager_instance: Optional[ConfigManager] = None
-_config_manager_lock = threading.Lock()
-
-
-def get_config_manager() -> ConfigManager:
-    """Get or create the singleton ConfigManager instance (thread-safe).
-
-    Uses double-check locking pattern to ensure thread safety while
-    minimizing lock contention after initialization (Issue #613).
-    """
-    global _config_manager_instance
-    if _config_manager_instance is None:
-        with _config_manager_lock:
-            # Double-check after acquiring lock
-            if _config_manager_instance is None:
-                _config_manager_instance = ConfigManager()
-    return _config_manager_instance
+get_config_manager = lazy_singleton(ConfigManager)
 
 
 # Deprecated: use ConfigManager and get_config_manager instead

@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from services.secrets_service import SecretsService, get_secrets_service
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ class AgentSecretsIntegration:
             mapping: The AgentSecretMapping to register
         """
         self._custom_mappings[mapping.agent_type] = mapping
-        # codeql-suppress py/clear-text-logging-sensitive-data: logs agent type identifier, not a secret value
+        # codeql[py/clear-text-logging-sensitive-data]
         logger.info("Registered secret mapping for agent: %s", mapping.agent_type)
 
     def _determine_types_to_fetch(
@@ -251,7 +252,7 @@ class AgentSecretsIntegration:
         """
         mapping = self.get_agent_mapping(agent_type)
         if mapping is None:
-            # codeql-suppress py/clear-text-logging-sensitive-data: logs agent type identifier, not a secret value
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.debug("No secret mapping found for agent type: %s", agent_type)
             return {}
 
@@ -465,21 +466,4 @@ class AgentSecretsIntegration:
         return mapping.auto_inject
 
 
-# Thread-safe singleton instance
-_agent_secrets_integration: Optional[AgentSecretsIntegration] = None
-_integration_lock = threading.Lock()
-
-
-def get_agent_secrets_integration() -> AgentSecretsIntegration:
-    """Get or create the AgentSecretsIntegration singleton (thread-safe).
-
-    Returns:
-        AgentSecretsIntegration singleton instance
-    """
-    global _agent_secrets_integration
-    if _agent_secrets_integration is None:
-        with _integration_lock:
-            # Double-check after acquiring lock
-            if _agent_secrets_integration is None:
-                _agent_secrets_integration = AgentSecretsIntegration()
-    return _agent_secrets_integration
+get_agent_secrets_integration = lazy_singleton(AgentSecretsIntegration)

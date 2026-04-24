@@ -135,6 +135,7 @@ from api.terminal_models import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.simple_pty import simple_pty_manager
 
@@ -1401,7 +1402,7 @@ async def admin_execute_command(body: AdminExecuteRequest) -> dict:
     except ValueError as exc:
         return {
             "stdout": "",
-            "stderr": f"Invalid command syntax: {exc}",
+            "stderr": safe_http_detail(exc, "Invalid command syntax"),
             "exit_code": 1,
         }
     try:

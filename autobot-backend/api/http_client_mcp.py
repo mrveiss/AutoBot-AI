@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
@@ -96,7 +97,7 @@ BLOCKED_HEADERS = [
 
 # Rate limiting
 MAX_REQUESTS_PER_MINUTE = 120
-request_counter = {"count": 0, "reset_time": datetime.now(timezone.utc)}
+request_counter = {"count": 0, "reset_time": now_utc()}
 _rate_limit_lock = asyncio.Lock()
 
 # Request limits
@@ -186,7 +187,7 @@ def _build_http_response(
         "is_json": json_response is not None,
         "url": str(response.url),
         "method": method,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -286,7 +287,7 @@ async def check_rate_limit() -> bool:
     """
 
     async with _rate_limit_lock:
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         elapsed = (now - request_counter["reset_time"]).total_seconds()
 
         # Reset counter every minute (in-place modification for thread safety)
@@ -1023,7 +1024,7 @@ async def get_http_client_mcp_status() -> Metadata:
             0,
             60
             - (
-                datetime.now(timezone.utc) - request_counter["reset_time"]
+                now_utc() - request_counter["reset_time"]
             ).total_seconds(),
         )
 
@@ -1043,5 +1044,5 @@ async def get_http_client_mcp_status() -> Metadata:
             "default_timeout_seconds": DEFAULT_TIMEOUT,
             "max_timeout_seconds": MAX_TIMEOUT,
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }

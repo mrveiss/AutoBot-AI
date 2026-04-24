@@ -8,13 +8,12 @@ Standalone Redis Client for Windows NPU Worker
 This module provides Redis client initialization with connection pooling,
 retry logic, and health monitoring for the Windows NPU worker.
 
-STANDALONE DESIGN (Issue #1086): This module is deployed as part of the
-Windows NPU worker — a self-contained executable that runs on Windows hosts
-without access to the AutoBot monorepo. autobot_shared.redis_client cannot
-be imported here because autobot_shared is not packaged with the Windows
-deployment artifact. Direct redis.asyncio.Redis() instantiation is therefore
-intentional and required in this file only. All other backend code must use
-get_redis_client() from autobot_shared.redis_client.
+STANDALONE DESIGN (Issue #5438): This module is an intentional architectural
+exception documented in docs/developer/ARCHITECTURE_EXCEPTIONS.md. The Windows
+NPU worker is a self-contained PyInstaller executable that cannot import
+autobot_shared at runtime; direct redis.asyncio.Redis() instantiation is
+therefore required here. All other backend code must use get_redis_client()
+from autobot_shared.redis_client.
 
 Issue #725: Added mTLS support for secure Redis connections.
 

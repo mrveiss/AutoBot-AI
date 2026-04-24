@@ -13,11 +13,12 @@ import io
 import logging
 import sys
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import Optional, Tuple
 
 try:
     import paramiko
-    from paramiko import AutoAddPolicy, SSHClient
+    from paramiko import RejectPolicy, SSHClient
 except ImportError:
     paramiko = None
     SSHClient = None
@@ -96,7 +97,7 @@ class SSHBackend(ExecutionBackend):
         )
 
         try:
-            result.started_at = datetime.utcnow()
+            result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
             # Get SSH client
@@ -134,7 +135,7 @@ class SSHBackend(ExecutionBackend):
             logger.exception(f"Error executing task {task.task_id} via SSH: {e}")
 
         finally:
-            result.completed_at = datetime.utcnow()
+            result.completed_at = now_utc()
             if result.started_at:
                 result.execution_time_ms = (
                     result.completed_at - result.started_at
@@ -196,7 +197,8 @@ class SSHBackend(ExecutionBackend):
         """
         if self._client is None:
             self._client = SSHClient()
-            self._client.set_missing_host_key_policy(AutoAddPolicy())
+            self._client.load_system_host_keys()
+            self._client.set_missing_host_key_policy(RejectPolicy())
 
             try:
                 self._client.connect(
@@ -209,7 +211,15 @@ class SSHBackend(ExecutionBackend):
                 )
             except Exception as e:
                 self._client = None
-                raise RuntimeError(f"SSH connection failed: {e}")
+                err_msg = str(e)
+                if "not found in known_hosts" in err_msg or (
+                    "Server" in err_msg and "known_hosts" in err_msg
+                ):
+                    raise RuntimeError(
+                        f"SSH host key for '{self.hostname}' is not in known_hosts. "
+                        "Run: ssh-keyscan -H <host> >> ~/.ssh/known_hosts as the autobot service user."
+                    ) from e
+                raise RuntimeError(f"SSH connection failed: {e}") from e
 
         return self._client
 

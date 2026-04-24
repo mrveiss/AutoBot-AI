@@ -159,16 +159,16 @@ async def execute_a2a_task(
         logger.error("A2A task %s failed: %s", task_id, exc)
         manager.add_artifact(
             task_id,
-            TaskArtifact(artifact_type="error", content=str(exc)),
+            TaskArtifact(artifact_type="error", content=type(exc).__name__),
         )
-        manager.update_state(task_id, TaskState.FAILED, message=str(exc))
+        manager.update_state(task_id, TaskState.FAILED, message=type(exc).__name__)
         manager.publish_event(
             task_id,
             {
                 "event": "state_change",
                 "state": "failed",
                 "terminal": True,
-                "message": str(exc),
+                "message": type(exc).__name__,
                 "task_id": task_id,
             },
         )

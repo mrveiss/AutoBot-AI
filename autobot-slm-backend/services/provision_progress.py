@@ -34,13 +34,28 @@ SLOW_TASK_HINTS: dict[str, str] = {
     r"ollama\s+pull": "5-15 min per model",
     r"npm\s+install": "1-3 min",
     r"npm\s+ci": "1-3 min",
+    r"npm\s+run\s+build": "1-3 min",
+    r"rebuild.*frontend": "1-3 min",
+    r"frontend.*rebuild": "1-3 min",
+    r"build.*frontend": "1-3 min",
     r"pip\s+install": "2-5 min",
     r"pip3\s+install": "2-5 min",
+    r"install.*requirements": "2-5 min",
     r"vite\s+build": "30-60s",
     r"apt(-get)?\s+(install|upgrade|dist-upgrade)": "1-5 min",
     r"docker\s+pull": "2-10 min",
     r"git\s+clone": "30s-5 min",
+    r"wait.*healthy": "up to 10 min",
+    r"wait.*backend": "up to 10 min",
+    r"create.*venv|virtualenv": "30-60s",
+    r"filtered.*requirements": "2-5 min",
+    r"requirements.*filtered": "2-5 min",
+    r"install.*package": "1-3 min",
+    r"sync.*code": "30-60s",
+    r"rsync": "30-60s",
 }
+
+_TASK_NAME_MAX_LEN = 60
 
 
 def _get_slow_task_hint(task_name: str) -> Optional[str]:
@@ -99,7 +114,9 @@ class TaskProgressTracker:
             "message": "Still running... (elapsed: 2m 15s) [npm install — est. 1-3 min]"
         }
 
-    The hint suffix is omitted when no slow-task pattern matches *task_name*.
+    The task name (truncated to 60 chars) is always included so the user can
+    see what is running.  The ``— est. <hint>`` suffix is added when the task
+    name matches a pattern in ``SLOW_TASK_HINTS``.
 
     Args:
         task_name: Ansible task name (used for slow-task hint lookup and logs).
@@ -152,14 +169,19 @@ class TaskProgressTracker:
     async def _heartbeat_loop(self) -> None:
         """Send periodic heartbeat messages until cancelled."""
         hint = _get_slow_task_hint(self._task_name)
+        display_name = (
+            self._task_name[:_TASK_NAME_MAX_LEN] + "…"
+            if len(self._task_name) > _TASK_NAME_MAX_LEN
+            else self._task_name
+        )
         try:
             while True:
                 await asyncio.sleep(self._heartbeat_interval)
                 elapsed_str = format_elapsed(self.elapsed_seconds)
                 if hint:
-                    msg = f"Still running... (elapsed: {elapsed_str})" f" [{self._task_name} — est. {hint}]"
+                    msg = f"Still running... (elapsed: {elapsed_str}) [{display_name} — est. {hint}]"
                 else:
-                    msg = f"Still running... (elapsed: {elapsed_str})"
+                    msg = f"Still running... (elapsed: {elapsed_str}) [{display_name}]"
                 try:
                     await self._progress_callback({"stage": "heartbeat", "message": msg})
                 except Exception as exc:

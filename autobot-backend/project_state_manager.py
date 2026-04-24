@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
@@ -999,22 +1000,7 @@ class ProjectStateManager:
         return "\n".join(report)
 
 
-# Global instance (thread-safe)
-import threading
-
-_project_state_manager = None
-_project_state_manager_lock = threading.Lock()
-
-
-def get_project_state_manager() -> ProjectStateManager:
-    """Get the global project state manager instance (thread-safe)."""
-    global _project_state_manager
-    if _project_state_manager is None:
-        with _project_state_manager_lock:
-            # Double-check after acquiring lock
-            if _project_state_manager is None:
-                _project_state_manager = ProjectStateManager()
-    return _project_state_manager
+get_project_state_manager = lazy_singleton(ProjectStateManager)
 
 
 if __name__ == "__main__":

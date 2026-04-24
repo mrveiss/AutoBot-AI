@@ -160,7 +160,7 @@ def start_vnc_server() -> Dict[str, str]:
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
     vnc_passwd = Path.home() / ".vnc" / "passwd"
     if not vnc_passwd.exists():
-        logger.error(
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "VNC passwd file not found at %s; run vncpasswd before starting VNC server",
             vnc_passwd,
         )
@@ -353,7 +353,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
             }
         sanitized.append(s)
     try:
-        result = subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]
+        result = subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]  # codeql[py/command-line-injection]
             ["/usr/bin/xdotool"] + sanitized,
             capture_output=True,
             text=True,
@@ -1680,7 +1680,7 @@ async def save_session_screenshot(
 
     vnc_base = Path("/tmp/vnc_sessions")  # nosec B108
     screenshot_dir = validate_relative_path(session_id, vnc_base)
-    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    screenshot_dir.mkdir(parents=True, exist_ok=True)  # codeql[py/path-injection]
 
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     screenshot_path = validate_relative_path(

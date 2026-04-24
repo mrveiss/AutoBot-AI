@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,7 @@ class ProcessAdapterService:
         async with self._session_factory() as session:
             row = await session.get(ProcessRun, run_id)
             row.status = ProcessRunStatus.RUNNING.value
-            row.started_at = datetime.now(timezone.utc)
+            row.started_at = now_utc()
             cmd, args, timeout = row.command, row.args or [], row.timeout_seconds
             await session.commit()
         logger.info("Process %s started", run_id)
@@ -265,7 +266,7 @@ class ProcessAdapterService:
                 row.signal = sig_name
                 row.log_excerpt = excerpt
                 row.log_path = log_path
-                row.completed_at = datetime.now(timezone.utc)
+                row.completed_at = now_utc()
             await session.commit()
         logger.info(
             "Process %s finalised: status=%s exit=%s", run_id, status, exit_code
@@ -278,7 +279,7 @@ class ProcessAdapterService:
             if row:
                 row.status = ProcessRunStatus.FAILED.value
                 row.log_excerpt = reason[:_LOG_EXCERPT_MAX]
-                row.completed_at = datetime.now(timezone.utc)
+                row.completed_at = now_utc()
             await session.commit()
 
     async def _create_run_row(

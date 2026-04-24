@@ -502,25 +502,9 @@ class OSDetector:
         return None
 
 
-# Global detector instance (thread-safe)
-_detector_instance: Optional[OSDetector] = None
-_detector_lock = asyncio.Lock()
+from autobot_shared.singleton_factory import async_lazy_singleton
 
-
-async def get_os_detector() -> OSDetector:
-    """
-    Get singleton OS detector instance (thread-safe).
-
-    Returns:
-        OSDetector: Global detector instance
-    """
-    global _detector_instance
-    if _detector_instance is None:
-        async with _detector_lock:
-            # Double-check after acquiring lock
-            if _detector_instance is None:
-                _detector_instance = OSDetector()
-    return _detector_instance
+get_os_detector = async_lazy_singleton(OSDetector)
 
 
 if __name__ == "__main__":

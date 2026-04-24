@@ -11,7 +11,7 @@ Covers issue #4563 / feature #4528:
   4. Empty note guard — empty string NOT appended.
 """
 
-import asyncio
+import pytest
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -42,11 +42,7 @@ def _make_loop(first_turn_priming_enabled: bool = True) -> AgentLoop:
     return loop
 
 
-def _run(coro: Any) -> Any:
-    return asyncio.run(coro)
-
-
-def _stub_iteration(loop: AgentLoop, events_context: dict[str, Any]) -> IterationResult:
+async def _stub_iteration(loop: AgentLoop, events_context: dict[str, Any]) -> IterationResult:
     """
     Stub _analyze_events to return *events_context*, stub _select_tools to return
     no tools (causes _execute_iteration_phases to return early after Phase 2).
@@ -56,7 +52,7 @@ def _stub_iteration(loop: AgentLoop, events_context: dict[str, Any]) -> Iteratio
     loop._select_tools = AsyncMock(return_value=[])  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    return _run(loop._execute_iteration_phases(result))
+    return await loop._execute_iteration_phases(result)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +60,8 @@ def _stub_iteration(loop: AgentLoop, events_context: dict[str, Any]) -> Iteratio
 # ---------------------------------------------------------------------------
 
 
-def test_first_turn_note_appended_to_task_description():
+@pytest.mark.asyncio
+async def test_first_turn_note_appended_to_task_description():
     """When enabled and first_turn_note is present, it is appended to task_description."""
     loop = _make_loop(first_turn_priming_enabled=True)
     captured: dict[str, Any] = {}
@@ -83,7 +80,7 @@ def test_first_turn_note_appended_to_task_description():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     assert "task_description" in captured
     td = captured["task_description"]
@@ -92,7 +89,8 @@ def test_first_turn_note_appended_to_task_description():
     assert td == "Do the thing\n\nNote: This is the first iteration — no tool results exist yet."
 
 
-def test_first_turn_note_used_when_task_description_absent():
+@pytest.mark.asyncio
+async def test_first_turn_note_used_when_task_description_absent():
     """When task_description is absent/empty, the note becomes the full task_description."""
     loop = _make_loop(first_turn_priming_enabled=True)
     captured: dict[str, Any] = {}
@@ -110,7 +108,7 @@ def test_first_turn_note_used_when_task_description_absent():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     assert captured.get("task_description") == "First-turn note only."
 
@@ -120,7 +118,8 @@ def test_first_turn_note_used_when_task_description_absent():
 # ---------------------------------------------------------------------------
 
 
-def test_first_turn_note_not_injected_when_disabled():
+@pytest.mark.asyncio
+async def test_first_turn_note_not_injected_when_disabled():
     """When first_turn_priming_enabled=False, note is NOT appended even if present."""
     loop = _make_loop(first_turn_priming_enabled=False)
     captured: dict[str, Any] = {}
@@ -139,7 +138,7 @@ def test_first_turn_note_not_injected_when_disabled():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     # task_description must remain unmodified
     assert captured.get("task_description") == "Do the thing"
@@ -152,7 +151,8 @@ def test_first_turn_note_not_injected_when_disabled():
 # ---------------------------------------------------------------------------
 
 
-def test_first_turn_note_absent_from_context_after_pop():
+@pytest.mark.asyncio
+async def test_first_turn_note_absent_from_context_after_pop():
     """first_turn_note is popped from events_context before _select_tools sees it."""
     loop = _make_loop(first_turn_priming_enabled=True)
     captured: dict[str, Any] = {}
@@ -171,13 +171,14 @@ def test_first_turn_note_absent_from_context_after_pop():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     # The key must have been popped — _select_tools must not receive it raw.
     assert "first_turn_note" not in captured
 
 
-def test_first_turn_note_not_present_on_second_iteration():
+@pytest.mark.asyncio
+async def test_first_turn_note_not_present_on_second_iteration():
     """_analyze_events does NOT set first_turn_note on iteration 2+.
 
     Simulates what happens when _iteration_count > 1: _analyze_events returns
@@ -201,7 +202,7 @@ def test_first_turn_note_not_present_on_second_iteration():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     assert captured.get("task_description") == "Still working"
     assert "first_turn_note" not in captured
@@ -212,7 +213,8 @@ def test_first_turn_note_not_present_on_second_iteration():
 # ---------------------------------------------------------------------------
 
 
-def test_empty_first_turn_note_not_appended():
+@pytest.mark.asyncio
+async def test_empty_first_turn_note_not_appended():
     """When first_turn_note is an empty string, task_description is NOT modified."""
     loop = _make_loop(first_turn_priming_enabled=True)
     captured: dict[str, Any] = {}
@@ -231,7 +233,7 @@ def test_empty_first_turn_note_not_appended():
     loop._select_tools = fake_select_tools  # type: ignore[method-assign]
 
     result = IterationResult(iteration_number=1)
-    _run(loop._execute_iteration_phases(result))
+    await loop._execute_iteration_phases(result)
 
     # task_description must remain unchanged when note is empty
     assert captured.get("task_description") == "Existing description"

@@ -200,10 +200,10 @@ class TestRedisOptimizer:
     def test_no_false_positives_for_good_code(self):
         """Test that good Redis patterns don't trigger warnings."""
         code = textwrap.dedent("""
-            from utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
             async def good_pipeline_usage():
-                redis = await get_redis_client(async_client=True)
+                redis = await get_async_redis_client(database='main')
                 async with redis.pipeline() as pipe:
                     pipe.set("key1", "value1")
                     pipe.set("key2", "value2")
@@ -217,7 +217,7 @@ class TestRedisOptimizer:
             optimizer = RedisOptimizer()
             results = optimizer.analyze_file(f.name)
 
-            # Should not detect connection issues (uses get_redis_client)
+            # Should not detect connection issues (uses get_async_redis_client)
             connection_results = [
                 r
                 for r in results
@@ -230,10 +230,10 @@ class TestRedisOptimizer:
         """Test directory-wide analysis."""
         # Create test files
         (tmp_path / "good.py").write_text(textwrap.dedent("""
-            from utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
             async def good_code():
-                redis = await get_redis_client(async_client=True)
+                redis = await get_async_redis_client(database='main')
                 return await redis.get("key")
         """))
 

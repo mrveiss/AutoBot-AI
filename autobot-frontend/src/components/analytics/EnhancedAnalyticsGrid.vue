@@ -33,7 +33,7 @@
       </div>
       <EmptyState
         v-else
-        icon="fas fa-database"
+        icon="database"
         :message="$t('analytics.grid.noSystemMetrics')"
       >
         <template #actions>
@@ -68,7 +68,7 @@
       </div>
       <EmptyState
         v-else
-        icon="fas fa-wifi"
+        icon="wifi"
         :message="$t('analytics.grid.noCommunicationData')"
       />
     </BasePanel>
@@ -105,7 +105,7 @@
       </div>
       <EmptyState
         v-else
-        icon="fas fa-star"
+        icon="star"
         :message="$t('analytics.grid.noQualityMetrics')"
       />
     </BasePanel>
@@ -142,7 +142,7 @@
       </div>
       <EmptyState
         v-else
-        icon="fas fa-rocket"
+        icon="rocket"
         :message="$t('analytics.grid.noPerformanceData')"
       />
     </BasePanel>

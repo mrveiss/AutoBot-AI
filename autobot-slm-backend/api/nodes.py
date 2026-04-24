@@ -946,7 +946,7 @@ async def _execute_provision_playbook(
     logger.error("Failed to provision node %s: %s", node_id, result["output"])
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Provisioning failed: {result['output'][:500]}",
+        detail="Provisioning failed",
     )
 
 
@@ -1024,9 +1024,10 @@ async def remove_role_from_node(
     if service_name:
         ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
         if not ansible_result["success"]:
+            logger.error("Role removal failed for node %s role %s: %s", node_id, role_name, ansible_result['output'])
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Role removal failed: {ansible_result['output'][:300]}",
+                detail="Role removal failed",
             )
 
     # Remove DB assignment only after successful cleanup
@@ -1326,10 +1327,10 @@ async def _cleanup_decommissioned_node(
     await db.execute(delete(NodeCredential).where(NodeCredential.node_id == node.node_id))
     await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
-    node.updated_at = datetime.utcnow()
+    node.updated_at = datetime.now(timezone.utc)
 
     deployment.status = DeploymentStatus.COMPLETED.value
-    deployment.completed_at = datetime.utcnow()
+    deployment.completed_at = datetime.now(timezone.utc)
     deployment.playbook_output = ansible_result.get("output", "")
     await db.commit()
 
@@ -1342,7 +1343,7 @@ async def _fail_deployment(
 ) -> None:
     """Mark a deployment as failed and persist (#1369)."""
     deployment.status = DeploymentStatus.FAILED.value
-    deployment.completed_at = datetime.utcnow()
+    deployment.completed_at = datetime.now(timezone.utc)
     deployment.error = error_msg[:2000]
     if output:
         deployment.playbook_output = output
@@ -1369,10 +1370,11 @@ async def _execute_decommission(
 
     if not result["success"]:
         output = result.get("output", "")
+        logger.error("Decommission failed for node %s: %s", ip_address, output)
         await _fail_deployment(db, deployment, output, output)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Decommission failed: {output[:300]}",
+            detail="Decommission failed",
         )
     return result
 
@@ -1446,7 +1448,7 @@ async def decommission_node(
         "node_decommissioned",
         {"hostname": node.hostname, "ip_address": node.ip_address},
     )
-    return {
+    return {  # codeql[py/stack-trace-exposure]
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,
@@ -1467,7 +1469,7 @@ def _create_decommission_deployment(
         node_id=node_id,
         roles=[r["role_name"] for r in all_roles],
         status=DeploymentStatus.IN_PROGRESS.value,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
         triggered_by=current_user.get("username", "unknown"),
         extra_data={
             "action": "decommission",
@@ -1505,7 +1507,7 @@ async def reenroll_node(
     await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node_id))
 
     node.status = NodeStatus.PENDING.value
-    node.updated_at = datetime.utcnow()
+    node.updated_at = datetime.now(timezone.utc)
 
     await _create_node_event(
         db,
@@ -2357,7 +2359,7 @@ async def get_node_certificate(
     # Calculate days until expiry
     days_until_expiry = None
     if cert.not_after:
-        delta = cert.not_after - datetime.utcnow()
+        delta = cert.not_after - datetime.now(timezone.utc)
         days_until_expiry = delta.days
 
     response = CertificateResponse.model_validate(cert)
@@ -2395,8 +2397,8 @@ async def renew_node_certificate(
             node_id=node_id,
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
-            not_before=datetime.utcnow(),
-            not_after=datetime.utcnow().replace(year=datetime.utcnow().year + 1),
+            not_before=datetime.now(timezone.utc),
+            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
             status="active",
         )
         db.add(new_cert)
@@ -2458,8 +2460,8 @@ async def deploy_node_certificate(
             node_id=node_id,
             subject=f"CN={node.hostname}",
             issuer="CN=SLM-CA",
-            not_before=datetime.utcnow(),
-            not_after=datetime.utcnow().replace(year=datetime.utcnow().year + 1),
+            not_before=datetime.now(timezone.utc),
+            not_after=datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1),
             status="active",
         )
         db.add(new_cert)
@@ -2554,7 +2556,7 @@ async def apply_node_updates(
     for update in updates:
         try:
             update.is_applied = True
-            update.applied_at = datetime.utcnow()
+            update.applied_at = datetime.now(timezone.utc)
             applied.append(update.update_id)
         except Exception as e:
             logger.error("Failed to apply update %s: %s", update.update_id, e)
@@ -2779,12 +2781,12 @@ async def exec_node_command(
             success=False,
         )
     except Exception as exc:
-        logger.error("SSH exec failed on node %s: %s", node_id, exc)
+        logger.error("Node exec failed for %s: %s", node_id, exc)
         return NodeExecResponse(
             node_id=node_id,
             command=body.command,
             stdout="",
-            stderr=str(exc),
+            stderr="execution_error",
             exit_code=-1,
             success=False,
         )

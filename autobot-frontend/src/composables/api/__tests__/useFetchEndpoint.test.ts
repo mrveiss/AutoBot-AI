@@ -142,7 +142,8 @@ describe('useFetchEndpoint fallbackData hook (#5389)', () => {
       onError,
     })
     await ep.load()
-    expect(onError).toHaveBeenCalledWith('boom', expect.any(Error))
+    // #5457: onError now receives context (undefined when not provided).
+    expect(onError).toHaveBeenCalledWith('boom', expect.any(Error), undefined)
     expect(ep.data.value).toBe('stale')
     expect(ep.error.value).toBe('')
   })
@@ -167,5 +168,97 @@ describe('useFetchEndpoint fallbackData hook (#5389)', () => {
     })
     await ep.load()
     expect(ep.data.value).toEqual({ items: ['live'] })
+  })
+})
+
+describe('useFetchEndpoint context hook (#5457)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  it('onSuccess receives the per-call context', async () => {
+    mockFetch.mockResolvedValue(mkResponse('{"value": 42}'))
+    const onSuccess = vi.fn()
+    const ep = useFetchEndpoint<{ value: number }, number, { quick: boolean }>({
+      path: '/api/x',
+      pickData: (r) => r.value,
+      onSuccess,
+    })
+    await ep.load(undefined, { quick: true })
+    expect(onSuccess).toHaveBeenCalledWith(42, { value: 42 }, { quick: true })
+  })
+
+  it('concurrent load() calls each receive their own context in onSuccess', async () => {
+    // Simulates the #5455 exportReport race: two concurrent load() calls
+    // with different context must each see their own context in onSuccess.
+    const successCalls: Array<{ quick: boolean; data: number }> = []
+    mockFetch.mockImplementation(async () =>
+      mkResponse(JSON.stringify({ value: successCalls.length + 1 })),
+    )
+    const ep = useFetchEndpoint<{ value: number }, number, { quick: boolean }>({
+      path: '/api/x',
+      pickData: (r) => r.value,
+      onSuccess: (data, _raw, ctx) => {
+        successCalls.push({ quick: ctx.quick, data })
+      },
+    })
+    await Promise.all([
+      ep.load(undefined, { quick: true }),
+      ep.load(undefined, { quick: false }),
+    ])
+    expect(successCalls).toHaveLength(2)
+    const quickCall = successCalls.find((c) => c.quick === true)
+    const fullCall = successCalls.find((c) => c.quick === false)
+    expect(quickCall).toBeDefined()
+    expect(fullCall).toBeDefined()
+  })
+
+  it('onError receives the context', async () => {
+    mockFetch.mockRejectedValue(new Error('boom'))
+    const onError = vi.fn()
+    const ep = useFetchEndpoint<string, string, string>({
+      path: '/api/x',
+      pickData: (r) => r,
+      onError,
+    })
+    await ep.load(undefined, 'request-42')
+    expect(onError).toHaveBeenCalledWith('boom', expect.any(Error), 'request-42')
+  })
+
+  it('onNoData receives the context', async () => {
+    mockFetch.mockResolvedValue(mkResponse('{"value": 42}'))
+    const onNoData = vi.fn()
+    const ep = useFetchEndpoint<{ value: number }, number, string>({
+      path: '/api/x',
+      pickData: () => null, // trigger no-data path
+      onNoData,
+    })
+    await ep.load(undefined, 'tag-xyz')
+    expect(onNoData).toHaveBeenCalledWith('tag-xyz')
+  })
+
+  it('onResponse receives the context for error-shape override', async () => {
+    mockFetch.mockResolvedValue(mkResponse('err', { ok: false, status: 504 }))
+    const onResponse = vi.fn().mockReturnValue('timeout')
+    const ep = useFetchEndpoint<string, string, { traceId: string }>({
+      path: '/api/x',
+      pickData: (r) => r,
+      onResponse,
+    })
+    await ep.load(undefined, { traceId: 't-9' })
+    expect(onResponse).toHaveBeenCalledWith(expect.anything(), { traceId: 't-9' })
+    expect(ep.error.value).toBe('timeout')
+  })
+
+  it('context is optional — existing callers without Ctx still work', async () => {
+    mockFetch.mockResolvedValue(mkResponse('{"value": 42}'))
+    const onSuccess = vi.fn()
+    const ep = useFetchEndpoint<{ value: number }, number>({
+      path: '/api/x',
+      pickData: (r) => r.value,
+      onSuccess,
+    })
+    await ep.load() // no context arg
+    expect(onSuccess).toHaveBeenCalledWith(42, { value: 42 }, undefined)
   })
 })

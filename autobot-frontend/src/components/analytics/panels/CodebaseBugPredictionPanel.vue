@@ -310,7 +310,7 @@
 
     <EmptyState
       v-else
-      icon="fas fa-bug"
+      icon="bug"
       :message="$t('analytics.codebase.bugPrediction.noData')"
     />
   </div>

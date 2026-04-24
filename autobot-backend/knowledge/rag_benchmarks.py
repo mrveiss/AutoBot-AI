@@ -514,12 +514,161 @@ _TOPIC_DOCS = [
 ]
 
 # Ground-truth: query text -> expected doc IDs (at least one must appear in top-k)
+# Issue #5196: dataset grown from 5 to ≥50 queries across five categories.
+# Category tags (for human orientation only — not parsed by code):
+#   [factual]        direct knowledge questions about a well-defined concept
+#   [procedural]     how-to / step-by-step questions
+#   [multi-hop]      questions requiring reasoning across two related concepts
+#   [troubleshooting] diagnostic / "why is X broken" questions
+#   [edge-case]      boundary conditions and exceptional behaviour
 _GROUND_TRUTH = {
+    # ------------------------------------------------------------------ original 5
     "Python list comprehensions and generator expressions": {"python_02", "python_04"},
     "PostgreSQL indexes and query performance": {"db_02", "db_01"},
     "TLS encryption and secure network communication": {"net_03", "net_01"},
     "RAG retrieval augmented generation embedding search": {"ml_02", "ml_09"},
     "cosine similarity precision at k evaluation metrics": {"ml_04", "ml_05"},
+
+    # ------------------------------------------------------------------ [factual] — Python
+    "Python GIL Global Interpreter Lock threading bytecode": {"python_05"},
+    "Python type hints mypy static type checking PEP 484": {"python_07"},
+    "Python asyncio event loop coroutines I/O bound": {"python_08"},
+    "Python dataclasses PEP 557 auto-generated init repr eq": {"python_09"},
+    "Python unittest mock testing side effects assertions": {"python_10"},
+    "Python virtual environments venv package isolation": {"python_06"},
+    "Python decorators functools wraps metadata preservation": {"python_03"},
+    "Python high-level interpreted language syntax paradigms": {"python_01"},
+
+    # ------------------------------------------------------------------ [factual] — Database
+    "Redis in-memory data structure store cache message broker": {"db_04"},
+    "ChromaDB embedding database vector storage language model": {"db_05"},
+    "ACID atomicity consistency isolation durability transactions": {"db_06"},
+    "database connection pooling TCP reuse latency": {"db_09"},
+    "write-ahead log WAL database crash recovery consistency": {"db_10"},
+    "database table partitioning date range query performance": {"db_07"},
+    "vector similarity search cosine distance embeddings": {"db_08"},
+    "SQL database normalization third normal form redundancy": {"db_03"},
+
+    # ------------------------------------------------------------------ [factual] — Networking
+    "TCP reliable ordered error-checked data delivery": {"net_01"},
+    "HTTP/2 multiplexing single TCP connection latency": {"net_02"},
+    "DNS domain name system hostname IP address translation": {"net_05"},
+    "WebSockets full-duplex real-time browser server communication": {"net_06"},
+    "CIDR classless inter-domain routing IP address ranges": {"net_07"},
+    "Server-Sent Events SSE server push HTTP browser": {"net_08"},
+    "BGP border gateway protocol autonomous systems internet routing": {"net_09"},
+    "reverse proxy nginx HAProxy backend forwarding": {"net_10"},
+
+    # ------------------------------------------------------------------ [factual] — ML / RAG
+    "transformer self-attention mechanism input tokens weights": {"ml_01"},
+    "fine-tuning pre-trained language model domain-specific dataset": {"ml_03"},
+    "cross-encoder reranker query document pair scoring ranking": {"ml_06"},
+    "sentence transformers dense vectors semantic similarity embeddings": {"ml_07"},
+    "document chunking overlapping windows embedding retrieval": {"ml_08"},
+    "BM25 hybrid search dense sparse retrieval reciprocal rank fusion": {"ml_09"},
+    "quantisation INT8 INT4 model memory footprint weights": {"ml_10"},
+
+    # ------------------------------------------------------------------ [procedural]
+    "how to create a Python virtual environment and install packages": {"python_06"},
+    "steps to add a type hint to a Python function and check with mypy": {"python_07"},
+    "how to write an async Python coroutine using asyncio and await": {"python_08"},
+    "how to apply a Python decorator to preserve function metadata": {"python_03"},
+    "how to create a PostgreSQL index to speed up a slow SELECT query": {"db_02"},
+    "steps to configure Redis as a cache for a Python web application": {"db_04"},
+    "how to set up connection pooling for PostgreSQL in a Python service": {"db_09"},
+    "how to ingest documents into ChromaDB for vector similarity search": {"db_05"},
+    "steps to enable TLS on a web server for encrypted client connections": {"net_03"},
+    "how to configure nginx as a reverse proxy for a backend service": {"net_10"},
+    "how to implement Server-Sent Events SSE endpoint in a Python server": {"net_08"},
+    "steps to fine-tune a language model on a domain-specific corpus": {"ml_03"},
+    "how to chunk documents before embedding them for RAG retrieval": {"ml_08"},
+    "how to combine dense and sparse retrieval using hybrid search BM25": {"ml_09"},
+
+    # ------------------------------------------------------------------ [multi-hop]
+    "how does Python asyncio interact with PostgreSQL connection pools for scalable I/O": {
+        "python_08", "db_09",
+    },
+    "how do transformer embeddings enable vector similarity search in ChromaDB": {
+        "ml_01", "db_05",
+    },
+    "how does TLS affect load balancer configuration for HTTPS termination": {
+        "net_03", "net_04",
+    },
+    "relationship between Python GIL and asyncio for concurrent database queries": {
+        "python_05", "python_08",
+    },
+    "how does document chunking affect precision at k in RAG evaluation": {
+        "ml_08", "ml_05",
+    },
+    "why does database write-ahead logging complement ACID transaction guarantees": {
+        "db_10", "db_06",
+    },
+    "how does fine-tuning interact with quantisation for memory-efficient deployment": {
+        "ml_03", "ml_10",
+    },
+    "how does HTTP/2 multiplexing reduce load on reverse proxy backends": {
+        "net_02", "net_10",
+    },
+    "how do PostgreSQL partitions and indexes work together to accelerate queries": {
+        "db_07", "db_02",
+    },
+    "how does sentence transformer encoding feed into a cross-encoder reranker": {
+        "ml_07", "ml_06",
+    },
+
+    # ------------------------------------------------------------------ [troubleshooting]
+    "why are Python threads not achieving parallelism on CPU-bound work": {"python_05"},
+    "why does a PostgreSQL SELECT query remain slow despite having an index": {
+        "db_02", "db_07",
+    },
+    "why is Redis returning stale data after a server restart": {"db_04", "db_10"},
+    "why does a TLS handshake fail when connecting to a backend service": {"net_03"},
+    "why is ChromaDB returning low-relevance results for a domain query": {
+        "db_05", "ml_07",
+    },
+    "why does RAG retrieval return irrelevant documents for a specific query": {
+        "ml_02", "ml_08",
+    },
+    "why does cosine similarity score poorly for short queries in the embedding space": {
+        "ml_04", "ml_07",
+    },
+    "why is connection pool exhausted under high concurrency in a Python service": {
+        "db_09", "python_08",
+    },
+    "why does a DNS lookup return incorrect IP after a server migration": {"net_05"},
+    "why are Server-Sent Events disconnecting frequently from a browser client": {
+        "net_08", "net_06",
+    },
+
+    # ------------------------------------------------------------------ [edge-case]
+    "behaviour of Python GIL when using multiprocessing instead of threading": {
+        "python_05",
+    },
+    "what happens when a PostgreSQL write-ahead log fills up during high write load": {
+        "db_10", "db_06",
+    },
+    "how does chromadb handle duplicate document IDs on repeated insertion": {"db_05"},
+    "behaviour of cosine similarity when comparing a zero-magnitude embedding vector": {
+        "ml_04",
+    },
+    "what happens to active WebSocket connections when a backend server restarts": {
+        "net_06", "net_04",
+    },
+    "how does quantisation affect model output quality at very low bit widths INT4": {
+        "ml_10",
+    },
+    "what happens when document chunk size exceeds the language model context window": {
+        "ml_08", "ml_01",
+    },
+    "behaviour of Python dataclass when a mutable default value is used in a field": {
+        "python_09",
+    },
+    "what happens to in-flight Redis operations during a Redis server failover": {
+        "db_04",
+    },
+    "how does BGP react when an upstream autonomous system announces a longer prefix": {
+        "net_09",
+    },
 }
 
 

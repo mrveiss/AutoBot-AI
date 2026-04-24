@@ -114,7 +114,7 @@ class Team(Base, TenantMixin, TimestampMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the team."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(timezone.utc)
 
     @property
     def member_count(self) -> int:
@@ -174,7 +174,7 @@ class TeamMembership(Base, TimestampMixin):
     # When the user joined the team
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 

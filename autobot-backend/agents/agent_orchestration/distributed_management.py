@@ -19,6 +19,7 @@ from .types import CircuitState, DistributedAgentInfo
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +382,7 @@ class DistributedAgentManager:
         """
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.add(task_id)
-            self._task_assigned_at[task_id] = datetime.now(timezone.utc)
+            self._task_assigned_at[task_id] = now_utc()
 
     def remove_active_task(self, agent_id: str, task_id: str) -> None:
         """Remove an active task from an agent and clean up tracking state.
@@ -402,7 +403,7 @@ class DistributedAgentManager:
 
         Issue #2109: progress-protection guard rail.
         """
-        self._task_last_progress[task_id] = datetime.now(timezone.utc)
+        self._task_last_progress[task_id] = now_utc()
 
     # ------------------------------------------------------------------
     # Work-stealing helpers (Issue #2109)
@@ -521,7 +522,7 @@ class DistributedAgentManager:
 
         Issue #2109: called once per health-monitor cycle.
         """
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         stale_pairs = self._collect_stale_tasks(now)
         if not stale_pairs:
             return 0

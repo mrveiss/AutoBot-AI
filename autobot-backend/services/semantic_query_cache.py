@@ -127,9 +127,9 @@ class SemanticQueryCache(AsyncInitializable):
 
     async def _get_or_create_collection(self):
         """Open or create the ChromaDB collection."""
-        from utils.async_chromadb_client import get_async_chromadb_client
+        from knowledge.backends import get_async_default_client
 
-        client = await get_async_chromadb_client()
+        client = await get_async_default_client()
         if client is None:
             logger.warning("ChromaDB async client unavailable")
             return None

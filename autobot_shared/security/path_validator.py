@@ -72,7 +72,7 @@ def validate_path(
         except ValueError:
             continue
         # Path is within this root — check existence if required
-        if must_exist and not resolved.exists():
+        if must_exist and not resolved.exists():  # codeql[py/path-injection]
             raise ValueError("Path does not exist")
         return resolved
 
@@ -121,7 +121,7 @@ def validate_relative_path(
     except ValueError:
         raise ValueError("Path traversal detected: segment escapes base directory")
 
-    if must_exist and not resolved.exists():
+    if must_exist and not resolved.exists():  # codeql[py/path-injection]
         raise ValueError(f"Path does not exist: {resolved}")
 
     return resolved

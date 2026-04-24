@@ -253,7 +253,9 @@ class SSOService(BaseService):
         base_dn = provider.config.get("base_dn", "dc=example,dc=com")
         safe_username = sanitize_ldap_filter(username)
         search_filter = provider.config.get("search_filter", "(uid={})").format(safe_username)
-        conn.search(base_dn, search_filter, search_scope=SUBTREE)
+        conn.search(  # codeql[py/ldap-injection] safe_username is RFC-4515-escaped by sanitize_ldap_filter above
+            base_dn, search_filter, search_scope=SUBTREE
+        )
         if conn.entries:
             return conn.entries[0].entry_attributes_as_dict
         return None

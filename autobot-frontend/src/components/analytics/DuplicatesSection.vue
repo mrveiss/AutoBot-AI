@@ -93,7 +93,7 @@
     </div>
     <EmptyState
       v-else-if="!loading"
-      icon="fas fa-check-circle"
+      icon="check-circle"
       :message="$t('analytics.duplicates.emptyMessage')"
       variant="success"
     />

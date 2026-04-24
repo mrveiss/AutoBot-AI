@@ -71,7 +71,7 @@ async def get_usage_summary(
     Issue #1807: Billing-ready usage metrics.
     """
     tracker = get_cost_tracker()
-    end_date = datetime.utcnow()
+    end_date = now_utc()
     start_date = end_date - timedelta(days=days)
 
     cost_summary = await tracker.get_cost_summary(start_date, end_date)
@@ -268,7 +268,7 @@ async def export_usage_csv(
         writer.writerow(row)
 
     output.seek(0)
-    filename = f"usage_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    filename = f"usage_{now_utc().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",

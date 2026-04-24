@@ -544,18 +544,28 @@ EOF
 
     info "Running Ansible deployment (this may take several minutes)..."
     log "  Playbook: deploy-slm-manager.yml --skip-tags seed,provision"
+    info "  Live progress below — full output also in ${LOG_FILE}"
+    echo
 
     cd "${ansible_dir}"
-    if ansible-playbook \
+    set +o pipefail
+    ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
         --skip-tags "seed,provision" \
         -e "slm_admin_password=${ADMIN_PASSWORD}" \
         -e "target_host=localhost" \
-        >> "${LOG_FILE}" 2>&1; then
+        2>&1 | tee -a "${LOG_FILE}" | \
+        grep --line-buffered -E \
+            "^(PLAY \[|TASK \[|ok: \[|changed: \[|failed: \[|skipping: \[|fatal:|PLAY RECAP|[A-Za-z0-9_-].*: ok=)"
+    _ansible_exit=${PIPESTATUS[0]}
+    set -o pipefail
+
+    echo
+    if [[ ${_ansible_exit} -eq 0 ]]; then
         success "Ansible deployment completed"
     else
-        error "Ansible deployment failed"
+        error "Ansible deployment failed (exit ${_ansible_exit})"
         error "Check ${LOG_FILE} for details"
         error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags seed,provision"
         exit 1

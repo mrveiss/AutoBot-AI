@@ -238,7 +238,7 @@ class SyncOrchestrator:
 
             if node_role:
                 node_role.current_version = commit
-                node_role.last_synced_at = datetime.utcnow()
+                node_role.last_synced_at = datetime.now(timezone.utc)
                 node_role.status = RoleStatus.ACTIVE.value
             else:
                 node_role = NodeRole(
@@ -247,7 +247,7 @@ class SyncOrchestrator:
                     assignment_type="auto",
                     status=RoleStatus.ACTIVE.value,
                     current_version=commit,
-                    last_synced_at=datetime.utcnow(),
+                    last_synced_at=datetime.now(timezone.utc),
                 )
                 db.add(node_role)
 

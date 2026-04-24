@@ -426,13 +426,13 @@ onMounted(() => {
 
         <EmptyState
           v-else-if="!selectedCategory"
-          icon="fas fa-folder-open"
+          icon="folder-open"
           :message="$t('knowledge.systemDocs.selectCategory')"
         />
 
         <EmptyState
           v-else-if="filteredDocs.length === 0"
-          icon="fas fa-file-alt"
+          icon="file-alt"
           :message="searchQuery ? $t('knowledge.systemDocs.noSearchResults') : $t('knowledge.systemDocs.noDocs')"
         />
 

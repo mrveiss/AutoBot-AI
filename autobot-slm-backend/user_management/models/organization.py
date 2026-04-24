@@ -132,7 +132,7 @@ class Organization(Base, TimestampMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the organization."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(timezone.utc)
         self.is_active = False
 
     def get_setting(self, key: str, default=None):

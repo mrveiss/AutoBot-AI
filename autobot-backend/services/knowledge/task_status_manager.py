@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ class TaskStatus:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.now(timezone.utc).isoformat()
+            self.created_at = now_utc().isoformat()
         if self.updated_at is None:
-            self.updated_at = datetime.now(timezone.utc).isoformat()
+            self.updated_at = now_utc().isoformat()
 
 
 class TaskStatusManager:
@@ -71,7 +72,7 @@ class TaskStatusManager:
             status="queued",
             message=message,
             items_total=total_items,
-            updated_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=now_utc().isoformat(),
         )
 
         await cls._save_to_redis(status)
@@ -114,7 +115,7 @@ class TaskStatusManager:
         # Update fields
         existing.status = status
         existing.message = message
-        existing.updated_at = datetime.now(timezone.utc).isoformat()
+        existing.updated_at = now_utc().isoformat()
 
         if progress_percent is not None:
             existing.progress_percent = progress_percent

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 from llm_interface_pkg import LLMInterface
@@ -77,7 +78,7 @@ class ContextGeneratorCognifier(BaseCognifier):
             {
                 "summary": summary,
                 "model": self.model,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": now_utc().isoformat(),
             }
         )
         await asyncio.to_thread(redis.setex, cache_key, self.ttl_seconds, payload)
@@ -103,7 +104,7 @@ class ContextGeneratorCognifier(BaseCognifier):
         chunk.metadata["original_chunk"] = original
         chunk.metadata["has_context"] = bool(ctx_text)
         chunk.metadata["context_model"] = self.model
-        chunk.metadata["context_generated_at"] = datetime.now(timezone.utc).isoformat()
+        chunk.metadata["context_generated_at"] = now_utc().isoformat()
 
     async def _generate_chunk_context(self, doc_summary: str, chunk_text: str) -> str:
         if not doc_summary:

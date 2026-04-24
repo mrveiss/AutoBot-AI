@@ -16,7 +16,6 @@ Acceptance criteria tested:
 - RAGConfig mmr_lambda propagates to rerank_weights.
 """
 
-import asyncio
 import math
 import unittest
 from typing import Any, Dict, List
@@ -284,7 +283,7 @@ class TestRAGConfigMMRLambda(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestResultRerankerMMRIntegration(unittest.TestCase):
+class TestResultRerankerMMRIntegration(unittest.IsolatedAsyncioTestCase):
     """ResultReranker.rerank applies MMR when mmr_lambda > 0.
 
     These tests patch sentence_transformers in sys.modules so that the
@@ -311,9 +310,6 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
     def tearDown(self):
         self._st_patcher.stop()
 
-    def _run(self, coro):
-        return asyncio.run(coro)
-
     def _make_results(self) -> List[Dict[str, Any]]:
         emb_a = _unit([1.0, 0.0])
         emb_b = _unit([0.99, 0.14])  # near-duplicate of a
@@ -334,7 +330,7 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
         reranker._cross_encoder = mock_ce
         return reranker
 
-    def test_mmr_disabled_when_lambda_zero(self):
+    async def test_mmr_disabled_when_lambda_zero(self):
         """With mmr_lambda=0, apply_mmr_reorder is not called."""
         reranker = self._make_reranker_with_mock_ce([2.0, 1.8, 1.0])
         results = self._make_results()
@@ -345,10 +341,10 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
             "knowledge.search_components.reranking.apply_mmr_reorder",
             wraps=apply_mmr_reorder,
         ) as mock_mmr:
-            self._run(reranker.rerank("query", results, weights=weights))
+            await reranker.rerank("query", results, weights=weights)
             mock_mmr.assert_not_called()
 
-    def test_mmr_applied_when_lambda_positive(self):
+    async def test_mmr_applied_when_lambda_positive(self):
         """With mmr_lambda=0.5, apply_mmr_reorder is called after scoring."""
         reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
@@ -359,7 +355,7 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
             "knowledge.search_components.reranking.apply_mmr_reorder",
             wraps=apply_mmr_reorder,
         ) as mock_mmr:
-            final = self._run(reranker.rerank("query", results, weights=weights))
+            final = await reranker.rerank("query", results, weights=weights)
             mock_mmr.assert_called_once()
 
         # The diverse doc_c should appear before the near-duplicate doc_b
@@ -369,22 +365,22 @@ class TestResultRerankerMMRIntegration(unittest.TestCase):
         doc_c_pos = contents.index("doc_c")
         self.assertLess(doc_c_pos, doc_b_pos)
 
-    def test_mmr_does_not_drop_results(self):
+    async def test_mmr_does_not_drop_results(self):
         """MMR reorder must not drop any results."""
         reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
 
         weights = RerankWeights(mmr_lambda=0.5)
-        final = self._run(reranker.rerank("query", results, weights=weights))
+        final = await reranker.rerank("query", results, weights=weights)
         self.assertEqual(len(final), len(results))
 
-    def test_top_k_applied_after_mmr(self):
+    async def test_top_k_applied_after_mmr(self):
         """top_k slicing happens after the MMR reorder."""
         reranker = self._make_reranker_with_mock_ce([2.0, 1.9, 0.5])
         results = self._make_results()
 
         weights = RerankWeights(mmr_lambda=0.5)
-        final = self._run(reranker.rerank("query", results, top_k=2, weights=weights))
+        final = await reranker.rerank("query", results, top_k=2, weights=weights)
         self.assertEqual(len(final), 2)
 
 

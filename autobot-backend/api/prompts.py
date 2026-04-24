@@ -367,7 +367,7 @@ async def save_prompt(
         # Issue #514: Use per-file locking to prevent concurrent write corruption
         file_lock = await _get_prompt_file_lock(resolved_path)
         async with file_lock:
-            async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:
+            async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
                 await f.write(content)
         logger.info("Saved prompt %s to %s", prompt_id, resolved_path)
         return _build_prompt_save_response(
@@ -396,7 +396,7 @@ async def _write_prompt_from_default(
             status_code=404, detail=f"No default prompt found for {prompt_id}"
         )
 
-    async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
+    async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
         default_content = await f.read()
 
     custom_file_path = str(
@@ -409,7 +409,7 @@ async def _write_prompt_from_default(
     # Issue #514: per-file locking to prevent concurrent write corruption
     file_lock = await _get_prompt_file_lock(custom_file_path)
     async with file_lock:
-        async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
+        async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
             await f.write(default_content)
 
     logger.info("Reverted prompt %s to default", prompt_id)

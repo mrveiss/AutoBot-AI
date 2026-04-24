@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.time_utils import now_utc, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class KnowledgeAuditLog:
         """Helper for log_event. Ref: #1088."""
         user_key = f"audit:user:{user_id}"
         await asyncio.to_thread(
-            self.redis_client.zadd, user_key, {event_id: datetime.utcnow().timestamp()}
+            self.redis_client.zadd, user_key, {event_id: now_utc().timestamp()}
         )
         await asyncio.to_thread(self.redis_client.expire, user_key, self.ttl_seconds)
 
@@ -73,7 +73,7 @@ class KnowledgeAuditLog:
         """Helper for log_event. Ref: #1088."""
         fact_key = f"audit:fact:{fact_id}"
         await asyncio.to_thread(
-            self.redis_client.zadd, fact_key, {event_id: datetime.utcnow().timestamp()}
+            self.redis_client.zadd, fact_key, {event_id: now_utc().timestamp()}
         )
         await asyncio.to_thread(self.redis_client.expire, fact_key, self.ttl_seconds)
 
@@ -81,7 +81,7 @@ class KnowledgeAuditLog:
         """Helper for log_event. Ref: #1088."""
         org_key = f"audit:org:{organization_id}"
         await asyncio.to_thread(
-            self.redis_client.zadd, org_key, {event_id: datetime.utcnow().timestamp()}
+            self.redis_client.zadd, org_key, {event_id: now_utc().timestamp()}
         )
         await asyncio.to_thread(self.redis_client.expire, org_key, self.ttl_seconds)
 
@@ -107,7 +107,7 @@ class KnowledgeAuditLog:
         Returns:
             Event ID
         """
-        event_id = f"audit:{datetime.utcnow().timestamp()}"
+        event_id = f"audit:{now_utc().timestamp()}"
         event_data = {
             "id": event_id,
             "type": event_type,

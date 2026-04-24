@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -692,19 +693,4 @@ class AsyncEnhancedMemoryManager:
         logger.info("Async enhanced memory manager closed")
 
 
-# Global async enhanced memory manager instance (thread-safe)
-import threading
-
-_async_enhanced_memory_manager = None
-_async_enhanced_memory_manager_lock = threading.Lock()
-
-
-def get_async_enhanced_memory_manager() -> AsyncEnhancedMemoryManager:
-    """Get global async enhanced memory manager instance (thread-safe)"""
-    global _async_enhanced_memory_manager
-    if _async_enhanced_memory_manager is None:
-        with _async_enhanced_memory_manager_lock:
-            # Double-check after acquiring lock
-            if _async_enhanced_memory_manager is None:
-                _async_enhanced_memory_manager = AsyncEnhancedMemoryManager()
-    return _async_enhanced_memory_manager
+get_async_enhanced_memory_manager = lazy_singleton(AsyncEnhancedMemoryManager)

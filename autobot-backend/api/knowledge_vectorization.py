@@ -15,10 +15,26 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
 from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
+from knowledge.schemas.vectorization import (
+    BackgroundVectorizationResponse,
+    BatchVectorizeRequest,
+    ClearFailedJobsResponse,
+    DeleteJobResponse,
+    FailedJobsResponse,
+    ReindexWithContextRequest,
+    ReindexWithContextResponse,
+    ReindexWithContextStatusResponse,
+    RetryJobResponse,
+    VectorizationStatusPollResponse,
+    VectorizationStatusResponse,
+    VectorizeDocumentsResponse,
+    VectorizeFactJobResponse,
+    VectorizeFactsResponse,
+    VectorizeJobStatusResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from background_vectorization import get_background_vectorizer
@@ -28,7 +44,7 @@ from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCogn
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
-from utils.async_chromadb_client import get_async_chromadb_client
+from knowledge.backends import get_async_default_client
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -318,7 +334,7 @@ async def _perform_uncached_batch_check(
     operation="check_vectorization_status_batch",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorization_status")
+@router.post("/vectorization_status", response_model=VectorizationStatusResponse)
 async def check_vectorization_status_batch(
     request: dict, req: Request, _user: dict = Depends(get_current_user)
 ):
@@ -595,7 +611,7 @@ def _build_vectorization_response(
     operation="vectorize_existing_facts",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorize_facts")
+@router.post("/vectorize_facts", response_model=VectorizeFactsResponse)
 async def vectorize_existing_facts(
     req: Request,
     batch_size: int = 50,
@@ -1056,7 +1072,7 @@ async def _vectorize_fact_background(
     operation="vectorize_individual_fact",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorize_fact/{fact_id}")
+@router.post("/vectorize_fact/{fact_id}", response_model=VectorizeFactJobResponse)
 async def vectorize_individual_fact(
     fact_id: str,
     req: Request,
@@ -1106,28 +1122,6 @@ async def vectorize_individual_fact(
 # ===== BATCH DOCUMENT VECTORIZATION (Issue #2077) =====
 
 
-class BatchVectorizeRequest(BaseModel):
-    """Request model for batch document vectorization. Issue #2077."""
-
-    document_ids: List[str] = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="List of document IDs to vectorize (max 100 per request)",
-    )
-
-    @field_validator("document_ids")
-    @classmethod
-    def validate_document_ids(cls, v: List[str]) -> List[str]:
-        """Deduplicate and validate individual document IDs."""
-        seen: dict[str, None] = {}
-        for item in v:
-            if not isinstance(item, str) or not item.strip() or len(item) > 255:
-                raise ValueError(f"Invalid document ID: {item!r}")
-            seen[item] = None
-        return list(seen)
-
-
 async def _vectorize_single_document(kb, document_id: str) -> dict:
     """
     Vectorize a single document by ID, returning a per-document result dict.
@@ -1152,7 +1146,7 @@ async def _vectorize_single_document(kb, document_id: str) -> dict:
     operation="batch_vectorize_documents",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorize_documents")
+@router.post("/vectorize_documents", response_model=VectorizeDocumentsResponse)
 async def batch_vectorize_documents(
     request: BatchVectorizeRequest,
     req: Request,
@@ -1211,7 +1205,7 @@ async def batch_vectorize_documents(
     operation="get_vectorization_job_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/vectorize_job/{job_id}")
+@router.get("/vectorize_job/{job_id}", response_model=VectorizeJobStatusResponse)
 async def get_vectorization_job_status(
     job_id: str, req: Request, _user: dict = Depends(get_current_user)
 ):
@@ -1274,7 +1268,7 @@ def _collect_failed_keys(keys: list, results: list) -> List[str]:
     operation="get_failed_vectorization_jobs",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/vectorize_jobs/failed")
+@router.get("/vectorize_jobs/failed", response_model=FailedJobsResponse)
 async def get_failed_vectorization_jobs(
     req: Request, _user: dict = Depends(get_current_user)
 ):
@@ -1331,7 +1325,7 @@ async def get_failed_vectorization_jobs(
     operation="retry_vectorization_job",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorize_jobs/{job_id}/retry")
+@router.post("/vectorize_jobs/{job_id}/retry", response_model=RetryJobResponse)
 async def retry_vectorization_job(
     job_id: str,
     req: Request,
@@ -1383,7 +1377,7 @@ async def retry_vectorization_job(
     operation="delete_vectorization_job",
     error_code_prefix="KNOWLEDGE",
 )
-@router.delete("/vectorize_jobs/{job_id}")
+@router.delete("/vectorize_jobs/{job_id}", response_model=DeleteJobResponse)
 async def delete_vectorization_job(
     job_id: str, req: Request, _admin: bool = Depends(check_admin_permission)
 ):
@@ -1424,7 +1418,7 @@ async def delete_vectorization_job(
     operation="clear_failed_vectorization_jobs",
     error_code_prefix="KNOWLEDGE",
 )
-@router.delete("/vectorize_jobs/failed/clear")
+@router.delete("/vectorize_jobs/failed/clear", response_model=ClearFailedJobsResponse)
 async def clear_failed_vectorization_jobs(
     req: Request, _admin: bool = Depends(check_admin_permission)
 ):
@@ -1487,7 +1481,7 @@ async def clear_failed_vectorization_jobs(
     operation="start_background_vectorization",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/vectorize_facts/background")
+@router.post("/vectorize_facts/background", response_model=BackgroundVectorizationResponse)
 async def start_background_vectorization(
     req: Request,
     background_tasks: BackgroundTasks,
@@ -1519,7 +1513,7 @@ async def start_background_vectorization(
     operation="get_vectorization_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/vectorize_facts/status")
+@router.get("/vectorize_facts/status", response_model=VectorizationStatusPollResponse)
 async def get_vectorization_status(
     req: Request, _user: dict = Depends(get_current_user)
 ):
@@ -1537,8 +1531,6 @@ async def get_vectorization_status(
 # ===== CONTEXTUAL RETRIEVAL REINDEX (Issue #1513) =====
 
 _REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
-_REINDEX_DEFAULT_BATCH_SIZE = 20
-_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
 
 # Reindex task state (#1513, #1761)
 _reindex_state: dict = {
@@ -1549,30 +1541,6 @@ _reindex_state: dict = {
     "completed_at": None,
     "error": None,
 }
-
-
-class ReindexWithContextRequest(BaseModel):
-    """Request model for retroactive context enrichment (#1513)."""
-
-    collection_name: Optional[str] = Field(
-        default=None,
-        max_length=200,
-        pattern=_REINDEX_COLLECTION_PATTERN,
-        description="ChromaDB collection (defaults to knowledge_vectors)",
-    )
-    batch_size: int = Field(
-        default=_REINDEX_DEFAULT_BATCH_SIZE,
-        ge=1,
-        le=500,
-        description="Chunks to process per batch",
-    )
-
-
-class ReindexWithContextResponse(BaseModel):
-    """Response model for reindex_with_context (#1513)."""
-
-    status: str
-    message: str
 
 
 async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
@@ -1718,7 +1686,7 @@ async def _reindex_with_context_task(
 async def _run_reindex(collection_name: str, batch_size: int) -> None:
     """Core reindex logic, separated for testability (#1513)."""
     cognifier = ContextGeneratorCognifier()
-    client = await get_async_chromadb_client()
+    client = await get_async_default_client()
 
     try:
         collection = await client.get_or_create_collection(name=collection_name)
@@ -1812,7 +1780,7 @@ async def reindex_with_context(
     operation="get_reindex_with_context_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/reindex_with_context/status")
+@router.get("/reindex_with_context/status", response_model=ReindexWithContextStatusResponse)
 async def get_reindex_with_context_status(
     _user: dict = Depends(get_current_user),
 ) -> dict:

@@ -117,7 +117,7 @@
     <!-- Empty State -->
     <EmptyState
       v-else-if="store.pendingVerifications.length === 0"
-      icon="fas fa-shield-alt"
+      icon="shield-alt"
       :title="$t('knowledge.verification.emptyTitle')"
       :message="$t('knowledge.verification.emptyMessage')"
     />

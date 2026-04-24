@@ -11,6 +11,7 @@ Contains the main ConversationFlowAnalyzer class that coordinates analysis.
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
+from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional, Tuple
 
 from .classifiers import IntentClassifier, ResponseClassifier
@@ -78,7 +79,7 @@ class ConversationFlowAnalyzer:
         """
         if timestamp and isinstance(timestamp, str):
             try:
-                return datetime.fromisoformat(timestamp)
+                return parse_utc_iso(timestamp)
             except ValueError:
                 return None
         return None

@@ -30,6 +30,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -327,7 +329,7 @@ class NOAASource(OSINTSource):
 # ---------------------------------------------------------------------------
 
 
-class OSINTEngine:
+class OSINTEngine(AsyncRedisClientMixin):
     """Parallel OSINT intelligence sweep engine.
 
     Registers named sources, sweeps them concurrently with per-source timeout
@@ -345,12 +347,12 @@ class OSINTEngine:
 
     _REDIS_PREFIX = "osint"
     _RESULT_TTL = 3600  # 1 hour cache
+    _redis_database = "main"
 
     def __init__(self) -> None:
         self._sources: Dict[str, OSINTSource] = {}
         self._rules: List[CorrelationRule] = []
         self._last_sweep: Dict[str, float] = {}
-        self._redis = None
 
     # ------------------------------------------------------------------
     # Registration
@@ -477,14 +479,6 @@ class OSINTEngine:
     # ------------------------------------------------------------------
     # Redis caching
     # ------------------------------------------------------------------
-
-    async def _get_redis(self):
-        """Lazy-init async Redis client (main database)."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_async_redis_client
-
-            self._redis = await get_async_redis_client(database="main")
-        return self._redis
 
     async def _cache_results(self, results: List[SourceResult]) -> None:
         """Persist each SourceResult to Redis for RAG consumption."""

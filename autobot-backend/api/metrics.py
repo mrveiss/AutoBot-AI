@@ -8,6 +8,7 @@ Metrics API endpoints for workflow performance monitoring
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from autobot_shared.time_utils import now_utc
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -111,7 +112,7 @@ async def get_system_metrics_history(
     logger.info("Fetching system metrics history: duration=%s step=%s", duration, step)
 
     delta = _HISTORY_DURATION_MAP.get(duration, timedelta(hours=1))
-    end = datetime.utcnow()
+    end = now_utc()
     start = end - delta
 
     cpu_history, memory_history = await asyncio.gather(

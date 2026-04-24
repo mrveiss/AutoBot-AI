@@ -39,6 +39,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import QueryDefaults
 from type_defs.common import JSONObject, Metadata
 
@@ -121,7 +122,7 @@ BLOCKED_GIT_COMMANDS = [
 
 # Rate limiting
 MAX_GIT_OPS_PER_MINUTE = 60
-git_counter = {"count": 0, "reset_time": datetime.now(timezone.utc)}
+git_counter = {"count": 0, "reset_time": now_utc()}
 _rate_limit_lock = asyncio.Lock()
 
 # Output limits
@@ -224,7 +225,7 @@ async def check_rate_limit() -> bool:
     """
 
     async with _rate_limit_lock:
-        now = datetime.now(timezone.utc)
+        now = now_utc()
         elapsed = (now - git_counter["reset_time"]).total_seconds()
 
         # Reset counter every minute (in-place modification for thread safety)
@@ -771,7 +772,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
         "repository": request.repo_path,
         "output": result["stdout"],
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -818,7 +819,7 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
         "commit_count": request.max_count,
         "output": result["stdout"],
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -869,7 +870,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
         "diff_lines": min(diff_lines, MAX_DIFF_LINES),
         "output": result["stdout"],
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -922,7 +923,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
         "branches": branches,
         "branch_count": len(branches),
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -966,7 +967,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
         "file": request.file_path,
         "output": result["stdout"],
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -1004,7 +1005,7 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
         "ref": request.ref,
         "output": result["stdout"],
         "errors": result["stderr"] if result["stderr"] else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -1062,7 +1063,7 @@ async def get_git_repo_info() -> Metadata:
         "success": True,
         "repositories": repos_info,
         "repository_count": len(repos_info),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }
 
 
@@ -1087,7 +1088,7 @@ async def get_git_mcp_status() -> Metadata:
         time_until_reset = max(
             0,
             60
-            - (datetime.now(timezone.utc) - git_counter["reset_time"]).total_seconds(),
+            - (now_utc() - git_counter["reset_time"]).total_seconds(),
         )
 
     return {
@@ -1106,5 +1107,5 @@ async def get_git_mcp_status() -> Metadata:
             "max_log_entries": MAX_LOG_ENTRIES,
             "max_diff_lines": MAX_DIFF_LINES,
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now_utc().isoformat(),
     }

@@ -349,7 +349,8 @@ const selectHost = (host: InfrastructureHost) => {
 // Set host as default
 const setAsDefault = (host: InfrastructureHost) => {
   defaultHostId.value = host.id;
-  localStorage.setItem('autobot_default_ssh_host', host.id);
+  // host.id is a non-secret UI preference (selected hostname), not a credential or token
+  localStorage.setItem('autobot_default_ssh_host', host.id); // codeql[js/clear-text-storage-of-sensitive-data]
   logger.info('Set default host:', { hostId: host.id, hostName: host.name });
 };
 
@@ -752,8 +753,8 @@ onUnmounted(() => {
   background: transparent;
   border: 1px solid var(--border-secondary);
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;

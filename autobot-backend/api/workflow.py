@@ -389,6 +389,97 @@ class WorkflowExecutionRequest(BaseModel):
     auto_approve: bool = False
 
 
+# ---------------------------------------------------------------------------
+# Response models for response_model= annotations (#5317 — first batch)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowSummary(BaseModel):
+    """Summary of a single workflow as returned by list/detail endpoints."""
+
+    workflow_id: str
+    user_message: str
+    classification: str
+    status: str
+    total_steps: int
+    current_step: int
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class WorkflowListResponse(BaseModel):
+    """Response shape for GET /workflows."""
+
+    success: bool
+    active_workflows: int
+    workflows: list[WorkflowSummary]
+
+
+class WorkflowDetailResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}."""
+
+    success: bool
+    workflow: Metadata
+
+
+class WorkflowStatusResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}/status."""
+
+    success: bool
+    workflow_id: str
+    status: str
+    current_step: int
+    total_steps: int
+    progress: float
+    current_step_info: Optional[Metadata] = None
+    estimated_remaining: Optional[str] = None
+
+
+class WorkflowApproveResponse(BaseModel):
+    """Response shape for POST /workflow/{workflow_id}/approve."""
+
+    success: bool
+    message: str
+    next_action: str
+
+
+class WorkflowCancelResponse(BaseModel):
+    """Response shape for DELETE /workflow/{workflow_id}."""
+
+    success: bool
+    message: str
+
+
+class PendingApprovalStep(BaseModel):
+    """A single step awaiting user approval."""
+
+    step_id: str
+    description: str
+    agent_type: str
+    action: str
+    context: Metadata
+
+
+class WorkflowPendingApprovalsResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}/pending_approvals."""
+
+    success: bool
+    workflow_id: str
+    pending_approvals: list[PendingApprovalStep]
+
+
+class WorkflowExecutionResponse(BaseModel):
+    """Response shape for POST /execute (covers both simple and complex paths)."""
+
+    success: bool
+    type: str
+    result: Optional[str] = None
+    routing_method: Optional[str] = None
+    workflow_id: Optional[str] = None
+    execution_started: Optional[bool] = None
+    status_endpoint: Optional[str] = None
+
+
 # In-memory workflow storage (in production, use Redis or database)
 active_workflows: Dict[str, Metadata] = {}
 pending_approvals: Dict[str, asyncio.Future] = {}
@@ -435,7 +526,7 @@ def _legacy_workflow_to_summary(workflow_id: str, workflow_data: Dict) -> Dict:
     operation="list_active_workflows",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflows")
+@router.get("/workflows", response_model=WorkflowListResponse)
 async def list_active_workflows(admin_check: bool = Depends(check_admin_permission)):
     """List all active workflows with their current status.
 
@@ -475,7 +566,7 @@ async def list_active_workflows(admin_check: bool = Depends(check_admin_permissi
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}")
+@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow_details(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -497,7 +588,7 @@ async def get_workflow_details(
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}/status")
+@router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 async def get_workflow_status(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -584,7 +675,7 @@ async def _update_step_status_and_metrics(
     operation="approve_workflow_step",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/workflow/{workflow_id}/approve")
+@router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 async def approve_workflow_step(
     workflow_id: str,
     approval: WorkflowApprovalResponse,
@@ -630,7 +721,7 @@ async def approve_workflow_step(
     operation="execute_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/execute")
+@router.post("/execute", response_model=WorkflowExecutionResponse)
 async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
@@ -1044,7 +1135,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.delete("/workflow/{workflow_id}")
+@router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 async def cancel_workflow(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1081,7 +1172,10 @@ async def cancel_workflow(
     operation="get_pending_approvals",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}/pending_approvals")
+@router.get(
+    "/workflow/{workflow_id}/pending_approvals",
+    response_model=WorkflowPendingApprovalsResponse,
+)
 async def get_pending_approvals(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):

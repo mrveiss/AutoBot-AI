@@ -10,6 +10,7 @@ In multi_company and provider modes, each organization is isolated.
 
 import uuid
 from datetime import datetime
+from autobot_shared.time_utils import now_utc
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
@@ -133,7 +134,7 @@ class Organization(Base):
 
     def soft_delete(self) -> None:
         """Soft delete the organization."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = now_utc()
         self.is_active = False
 
     def get_setting(self, key: str, default=None):

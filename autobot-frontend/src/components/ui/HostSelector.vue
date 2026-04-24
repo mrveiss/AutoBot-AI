@@ -1,9 +1,11 @@
 <template>
   <div class="host-selector">
     <!-- Collapsed state - shows current selection -->
-    <div
+    <button
       v-if="!expanded"
+      type="button"
       class="host-selector-collapsed"
+      :aria-expanded="expanded"
       @click="toggleExpanded"
     >
       <div class="selected-host" v-if="selectedHost">
@@ -19,13 +21,13 @@
         <span>{{ t('ui.hostSelector.selectHost') }}</span>
       </div>
       <Icon name="chevron-down" size="sm" class="expand-icon" />
-    </div>
+    </button>
 
     <!-- Expanded state - shows host list -->
     <div v-else class="host-selector-expanded">
       <div class="selector-header">
         <h4>{{ t('ui.hostSelector.infrastructureHosts') }}</h4>
-        <button class="btn-close" @click="toggleExpanded">
+        <button class="btn-close" @click="toggleExpanded" :aria-label="t('ui.modal.closeDialog')">
           <Icon name="times" size="sm" />
         </button>
       </div>
@@ -57,9 +59,10 @@
 
       <!-- Host list -->
       <div class="host-list" v-if="!loading">
-        <div
+        <button
           v-for="host in filteredHosts"
           :key="host.id"
+          type="button"
           class="host-item"
           :class="{ selected: selectedHost?.id === host.id }"
           @click="selectHost(host)"
@@ -84,7 +87,7 @@
               {{ cap.toUpperCase() }}
             </span>
           </div>
-        </div>
+        </button>
 
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
@@ -99,7 +102,7 @@
       </div>
 
       <!-- Loading state -->
-      <div v-else class="loading-state">
+      <div v-else class="loading-state" role="status" aria-live="polite">
         <LoadingSpinner size="md" />
         <span>{{ t('ui.hostSelector.loadingHosts') }}</span>
       </div>
@@ -332,6 +335,11 @@ defineExpose({
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all var(--duration-150);
+  appearance: none;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  width: 100%;
 }
 
 .host-selector-collapsed:hover {
@@ -428,6 +436,11 @@ defineExpose({
   padding: var(--spacing-1);
   cursor: pointer;
   color: var(--text-muted);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-close:hover {
@@ -477,6 +490,14 @@ defineExpose({
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-150);
+  appearance: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
 .host-item:hover {

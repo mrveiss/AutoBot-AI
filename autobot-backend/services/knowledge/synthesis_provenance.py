@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class SynthesisProvenanceLog:
             "synthesis_ids": json.dumps(synthesis_ids),
             "llm_model": llm_model,
             "prompt_template": prompt_template,
-            "ran_at": datetime.now(timezone.utc).isoformat(),
+            "ran_at": now_utc().isoformat(),
             "duration_ms": str(duration_ms),
             "parent_run_id": parent_run_id or "",
             "source_doc_ids": json.dumps(source_doc_ids or source_docs),

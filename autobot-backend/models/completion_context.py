@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 
 @dataclass
@@ -120,7 +120,7 @@ class CompletionContext:
         """Deserialize from dictionary."""
         return cls(
             context_id=data["context_id"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
+            timestamp=parse_utc_iso(data["timestamp"]),
             file_path=data["file_context"]["file_path"],
             language=data["file_context"]["language"],
             imports=data["file_context"]["imports"],

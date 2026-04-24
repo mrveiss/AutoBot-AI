@@ -672,11 +672,11 @@ class DocIndexerService:
 
             from llama_index.embeddings.ollama import OllamaEmbedding
 
-            from utils.chromadb_client import get_chromadb_client
+            from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
             self._client = await asyncio.to_thread(
-                get_chromadb_client, str(chromadb_path)
+                get_default_client, str(chromadb_path)
             )
 
             self._collection = self._client.get_or_create_collection(

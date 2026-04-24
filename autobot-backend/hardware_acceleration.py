@@ -18,6 +18,7 @@ from typing import Any, Dict
 import psutil
 
 from config import config_manager
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -705,19 +706,4 @@ class HardwareAccelerationManager:
         return status
 
 
-# Global instance (thread-safe)
-import threading
-
-_hardware_acceleration_manager = None
-_hardware_acceleration_manager_lock = threading.Lock()
-
-
-def get_hardware_acceleration_manager() -> HardwareAccelerationManager:
-    """Get the singleton hardware acceleration manager instance (thread-safe)."""
-    global _hardware_acceleration_manager
-    if _hardware_acceleration_manager is None:
-        with _hardware_acceleration_manager_lock:
-            # Double-check after acquiring lock
-            if _hardware_acceleration_manager is None:
-                _hardware_acceleration_manager = HardwareAccelerationManager()
-    return _hardware_acceleration_manager
+get_hardware_acceleration_manager = lazy_singleton(HardwareAccelerationManager)
