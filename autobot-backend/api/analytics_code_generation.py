@@ -479,6 +479,10 @@ class CodeValidator:
         if paren_count != 0:
             errors.append(f"Unbalanced parentheses: {paren_count:+d}")
 
+        # Polynomial-ReDoS guard: cap input before running regex patterns (#5695)
+        if len(code) > 500_000:
+            raise ValueError("Code input exceeds maximum analysis size (500 000 chars)")
+
         # Count constructs (patterns hardened against ReDoS, #1721)
         function_pattern = r"\bfunction\s+(\w+)"
         arrow_pattern = r"(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>"
@@ -514,8 +518,9 @@ class CodeValidator:
         elif language == CodeLanguage.VUE:
             # Extract script section and validate (#1721, #1733: ReDoS fix -
             # replaced nested quantifier with [\s\S]*? for linear-time matching)
+            # \s* before > allows whitespace in closing tag (#5695, bad-tag-filter)
             script_match = re.search(
-                r"<script[^>]*>([\s\S]*?)</script>",
+                r"<script[^>]*>([\s\S]*?)</script\s*>",
                 code,
                 re.IGNORECASE,
             )

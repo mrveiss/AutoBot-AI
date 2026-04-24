@@ -61,8 +61,9 @@ _TS_ZOD_RE: Pattern = re.compile(r"z\.(?:object|string|number|boolean|array)\s*\
 
 # Vue patterns (#1721: hardened against bad-tag-filter bypass)
 # #1733: ReDoS fix - replaced nested quantifier ([^<]*(?:...[^<]*)*)  with [\s\S]*?
+# #5695: \s* before > to match closing tags with trailing whitespace (bad-tag-filter)
 _VUE_SCRIPT_RE: Pattern = re.compile(
-    r"<script[^>]*>([\s\S]*?)</script>",
+    r"<script[^>]*>([\s\S]*?)</script\s*>",
     re.IGNORECASE,
 )
 _VUE_TEMPLATE_RE: Pattern = re.compile(

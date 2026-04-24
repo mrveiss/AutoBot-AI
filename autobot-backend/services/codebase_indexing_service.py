@@ -48,8 +48,9 @@ _VUE_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
+# #5695: \s* before > to match closing tags with trailing whitespace (bad-tag-filter)
 _VUE_SCRIPT_RE = re.compile(
-    r"<script[^>]*>([\s\S]*?)</script>",
+    r"<script[^>]*>([\s\S]*?)</script\s*>",
     re.IGNORECASE,
 )
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
