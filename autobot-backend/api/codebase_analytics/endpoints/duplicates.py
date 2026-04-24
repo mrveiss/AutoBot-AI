@@ -23,6 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import AnalyticsConfig
 from utils.background_task_manager import BackgroundTaskManager
 from utils.chromadb_client import get_all_paginated
@@ -346,7 +347,9 @@ async def _handle_detection_failure(
     if fallback:
         return JSONResponse(fallback)
 
-    return JSONResponse(_build_detection_error_response())
+    resp = _build_detection_error_response()
+    resp["message"] = safe_http_detail(error, resp["message"])
+    return JSONResponse(resp)
 
 
 @router.get("/duplicates")
