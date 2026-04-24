@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
@@ -226,9 +226,7 @@ class LLMCostTracker:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     # Pattern-based pricing fallbacks for unknown models (#1961).

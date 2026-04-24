@@ -23,7 +23,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
@@ -122,7 +123,7 @@ class ResourceOptimization:
         }
 
 
-class AnalyticsService:
+class AnalyticsService(AsyncRedisClientMixin):
     """
     Centralized analytics service providing a unified interface.
 
@@ -142,13 +143,13 @@ class AnalyticsService:
     REDIS_PREFIX = "analytics_service:"
     MAINTENANCE_KEY = f"{REDIS_PREFIX}maintenance"
     OPTIMIZATION_KEY = f"{REDIS_PREFIX}optimization"
+    _redis_database = RedisDatabase.ANALYTICS
 
     def __init__(self):
         """Initialize analytics service with lazy-loaded dependencies."""
         self._behavior: Optional[UserBehaviorAnalytics] = None
         self._agents: Optional[AgentAnalytics] = None
         self._cost: Optional[LLMCostTracker] = None
-        self._redis = None
 
     @property
     def behavior(self) -> UserBehaviorAnalytics:
@@ -170,14 +171,6 @@ class AnalyticsService:
         if self._cost is None:
             self._cost = get_cost_tracker()
         return self._cost
-
-    async def get_redis(self):
-        """Get Redis client for analytics database."""
-        if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
-        return self._redis
 
     # =========================================================================
     # UNIFIED DASHBOARD
@@ -500,7 +493,7 @@ class AnalyticsService:
         recommendations = []
 
         try:
-            redis = await self.get_redis()
+            redis = await self._get_redis()
             info = await redis.info("memory")
 
             # Check Redis memory usage
@@ -716,7 +709,7 @@ class AnalyticsService:
         recommendations = []
 
         try:
-            redis = await self.get_redis()
+            redis = await self._get_redis()
             info = await redis.info()
 
             # Check hit rate

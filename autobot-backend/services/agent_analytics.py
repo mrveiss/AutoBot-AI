@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
@@ -212,9 +212,7 @@ class AgentAnalytics:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
+            self._redis_client = await get_async_redis_client(database=RedisDatabase.ANALYTICS)
         return self._redis_client
 
     async def track_task_start(
