@@ -120,6 +120,57 @@ class HookStatus(BaseModel):
     config: HookConfig
 
 
+class CheckToggleResponse(BaseModel):
+    """Response for POST /checks/{check_id}/toggle."""
+
+    check_id: str
+    enabled: bool
+    message: str
+
+
+class HookConfigUpdateResponse(BaseModel):
+    """Response for POST /config — echoes back the new config."""
+
+    message: str
+    config: HookConfig
+
+
+class HookInstallResponse(BaseModel):
+    """Response for POST /install and POST /uninstall."""
+
+    success: bool
+    message: str
+    path: Optional[str] = None
+
+
+class CommonIssueItem(BaseModel):
+    """Single issue entry in the summary common_issues list."""
+
+    check_id: str
+    count: int
+    name: str
+
+
+class PrecommitSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    total_runs: int
+    pass_rate: float
+    average_duration_ms: float
+    common_issues: list[CommonIssueItem]
+    checks_enabled: Optional[int] = None
+    total_checks: Optional[int] = None
+
+
+class CategoryItem(BaseModel):
+    """Single category entry for GET /categories."""
+
+    category: str
+    enabled: int
+    disabled: int
+    total: int
+
+
 # ============================================================================
 # Check Definitions
 # ============================================================================
@@ -453,7 +504,7 @@ def _calculate_check_statistics(
 # ============================================================================
 
 
-@router.get("/check")
+@router.get("/check", response_model=CommitCheckResult)
 async def check_staged_files(
     admin_check: bool = Depends(check_admin_permission),
     fast_mode: bool = Query(True, description="Skip expensive checks"),
@@ -511,7 +562,7 @@ async def check_staged_files(
     return result
 
 
-@router.post("/check-content")
+@router.post("/check-content", response_model=list[CheckResult])
 async def check_content(
     content: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -534,7 +585,7 @@ async def check_content(
     return results
 
 
-@router.get("/checks")
+@router.get("/checks", response_model=list[CheckDefinition])
 async def list_checks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[CheckDefinition]:
@@ -546,7 +597,7 @@ async def list_checks(
     return list(BUILTIN_CHECKS.values())
 
 
-@router.get("/checks/{check_id}")
+@router.get("/checks/{check_id}", response_model=CheckDefinition)
 async def get_check(
     check_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -561,7 +612,7 @@ async def get_check(
     return BUILTIN_CHECKS[check_id]
 
 
-@router.post("/checks/{check_id}/toggle")
+@router.post("/checks/{check_id}/toggle", response_model=CheckToggleResponse)
 async def toggle_check(
     check_id: str,
     enabled: bool,
@@ -584,7 +635,7 @@ async def toggle_check(
     }
 
 
-@router.get("/config")
+@router.get("/config", response_model=HookConfig)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookConfig:
@@ -597,7 +648,7 @@ async def get_config(
         return _hook_config
 
 
-@router.post("/config")
+@router.post("/config", response_model=HookConfigUpdateResponse)
 async def update_config(
     config: HookConfig,
     admin_check: bool = Depends(check_admin_permission),
@@ -614,7 +665,7 @@ async def update_config(
     return {"message": "Configuration updated", "config": config}
 
 
-@router.get("/status")
+@router.get("/status", response_model=HookStatus)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookStatus:
@@ -741,7 +792,7 @@ async def _write_hook_file(hook_path: Path, content: str) -> dict:
         raise HTTPException(status_code=500, detail="Failed to install hooks")
 
 
-@router.post("/install")
+@router.post("/install", response_model=HookInstallResponse)
 async def install_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -765,7 +816,7 @@ async def install_hooks(
     return await _write_hook_file(hook_path, hook_content)
 
 
-@router.post("/uninstall")
+@router.post("/uninstall", response_model=HookInstallResponse)
 async def uninstall_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -799,7 +850,7 @@ async def uninstall_hooks(
         raise HTTPException(status_code=500, detail="Failed to uninstall hooks")
 
 
-@router.get("/history")
+@router.get("/history", response_model=list[CommitCheckResult])
 async def get_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
@@ -813,7 +864,7 @@ async def get_history(
         return _check_history[:limit]
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=PrecommitSummaryResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -876,7 +927,7 @@ async def get_summary(
     }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=list[CategoryItem])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
