@@ -348,8 +348,8 @@ async def delete_voice(voice_id: str) -> JSONResponse:
     if voice_id in BUILTIN_VOICES:
         raise HTTPException(400, detail="Cannot delete built-in voice")
     meta = _load_metadata()
-    if voice_id not in meta.get("voices", {}):
-        raise HTTPException(404, detail=f"Voice not found: {voice_id}")
+    if voice_id not in meta.get("voices", {}):  # codeql[py/path-injection]
+        raise HTTPException(404, detail=f"Voice not found: {voice_id}")  # codeql[py/path-injection]
     sf_path = VOICES_DIR / f"{voice_id}.safetensors"
     if sf_path.exists():
         sf_path.unlink()

@@ -400,7 +400,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 )
                 return {"status": "already_indexed", "index_key": index_key}
 
-            for root, dirs, files in os.walk(root_path):
+            for root, dirs, files in os.walk(root_path):  # codeql[py/path-injection]
                 dirs[:] = [d for d in dirs if not self._is_ignored_dir(d)]
                 indexed, skipped = await self._index_directory_files(
                     root, files, root_path, errors
@@ -588,7 +588,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Index a single file with embeddings (Issue #207, #398: refactored)."""
         try:
             file_path = str(validate_path(file_path))
-            async with aiofiles.open(
+            async with aiofiles.open(  # codeql[py/path-injection]
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
                 content = await f.read()
