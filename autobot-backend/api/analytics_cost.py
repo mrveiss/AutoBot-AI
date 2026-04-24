@@ -461,7 +461,6 @@ async def set_budget_alert(
     """
     # Store in Redis for persistence
     tracker = get_cost_tracker()
-    redis = await tracker.get_redis()
 
     alert_data = {
         "name": alert.name,
@@ -472,9 +471,7 @@ async def set_budget_alert(
         "created_at": utc_timestamp(),
     }
 
-    import json
-
-    await redis.hset(tracker.BUDGET_ALERTS_KEY, alert.name, json.dumps(alert_data))
+    await tracker.set_budget_alert(alert.name, alert_data)
 
     return {
         "status": "created",
@@ -497,17 +494,10 @@ async def get_budget_alerts(
     Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
-    redis = await tracker.get_redis()
-
-    import json
-
-    alerts_data = await redis.hgetall(tracker.BUDGET_ALERTS_KEY)
+    alerts_map = await tracker.get_all_budget_alerts()
     alerts = []
 
-    for name, data in alerts_data.items():
-        name_str = name if isinstance(name, str) else name.decode("utf-8")
-        data_str = data if isinstance(data, str) else data.decode("utf-8")
-        alert = json.loads(data_str)
+    for name_str, alert in alerts_map.items():
         alert["name"] = name_str
         alerts.append(alert)
 
@@ -517,26 +507,21 @@ async def get_budget_alerts(
     }
 
 
-def _calculate_alert_status(name: str, data: str, current_costs: dict) -> dict:
+def _calculate_alert_status(name: str, alert: dict, current_costs: dict) -> dict:
     """
     Calculate budget status for a single alert.
 
     Issue #620: Extracted from get_budget_status.
+    Issue #5731: Accepts decoded alert dict instead of raw JSON string.
 
     Args:
-        name: Alert name (may be bytes)
-        data: Alert data JSON (may be bytes)
+        name: Alert name string
+        alert: Decoded alert configuration dict
         current_costs: Current costs by period
 
     Returns:
         Status dict for the alert
     """
-    import json
-
-    name_str = name if isinstance(name, str) else name.decode("utf-8")
-    data_str = data if isinstance(data, str) else data.decode("utf-8")
-    alert = json.loads(data_str)
-
     period = alert.get("period", "monthly")
     threshold = alert.get("threshold_usd", 0)
     current = current_costs.get(period, 0)
@@ -544,7 +529,7 @@ def _calculate_alert_status(name: str, data: str, current_costs: dict) -> dict:
     percent_used = (current / threshold) * 100 if threshold > 0 else 0
 
     return {
-        "name": name_str,
+        "name": name,
         "period": period,
         "threshold_usd": threshold,
         "current_usd": current,
@@ -604,17 +589,16 @@ async def get_budget_status(
     Issue #620: Refactored to use extracted helper methods.
     """
     tracker = get_cost_tracker()
-    redis = await tracker.get_redis()
     today = now_utc()
 
     # Get alerts and current costs (Issue #620: uses helper)
-    alerts_data = await redis.hgetall(tracker.BUDGET_ALERTS_KEY)
+    alerts_map = await tracker.get_all_budget_alerts()
     current_costs = await _get_current_costs(tracker, today)
 
     # Calculate status for each alert (Issue #620: uses helper)
     statuses = [
-        _calculate_alert_status(name, data, current_costs)
-        for name, data in alerts_data.items()
+        _calculate_alert_status(name_str, alert, current_costs)
+        for name_str, alert in alerts_map.items()
     ]
 
     return {

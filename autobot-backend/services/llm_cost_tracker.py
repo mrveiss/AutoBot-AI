@@ -1047,6 +1047,26 @@ class LLMCostTracker(AsyncRedisClientMixin):
             logger.error("Failed to get user cost: %s", e)
             return {"user_id": user_id, "error": "Failed to retrieve user cost"}
 
+    async def set_budget_alert(self, name: str, alert_data: dict) -> None:
+        """Persist a budget alert configuration to Redis (#5731)."""
+        redis = await self._get_redis()
+        await redis.hset(self.BUDGET_ALERTS_KEY, name, json.dumps(alert_data))
+
+    async def get_all_budget_alerts(self) -> dict:
+        """Return all budget alert configurations from Redis (#5731).
+
+        Returns:
+            Dict mapping alert name (str) to decoded alert dict.
+        """
+        redis = await self._get_redis()
+        raw = await redis.hgetall(self.BUDGET_ALERTS_KEY)
+        result = {}
+        for k, v in raw.items():
+            k_str = k if isinstance(k, str) else k.decode("utf-8")
+            v_str = v if isinstance(v, str) else v.decode("utf-8")
+            result[k_str] = json.loads(v_str)
+        return result
+
     async def get_all_user_costs(self) -> list[dict[str, Any]]:
         """Get cost breakdown for all users (#1807)."""
         try:
