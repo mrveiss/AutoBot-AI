@@ -113,7 +113,7 @@ class AgentDiaryService:
             # We fetch a generous window so that filtering by category+source
             # still yields enough entries even on large KBs.  The result is then
             # sorted and capped to last_n.
-            all_facts = await kb.get_all_facts(limit=_DIARY_FETCH_LIMIT)
+            all_facts = await kb.get_all_facts(limit=self._DIARY_FETCH_LIMIT)
             entries = [
                 f for f in all_facts
                 if (f.get("metadata") or {}).get("category") == self.CATEGORY
