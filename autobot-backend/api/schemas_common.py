@@ -321,3 +321,206 @@ class PackageManagersResponse(BaseModel):
     detected: Optional[str] = None
     available: List[str]
     package_managers: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Generic data envelope  (ai_stack_integration, agent, etc.)
+# ---------------------------------------------------------------------------
+
+
+class DataResponse(BaseModel):
+    """Generic envelope returned by create_success_response() helpers.
+
+    Covers all endpoints that delegate to utils.response_helpers.create_success_response,
+    which always produces {"success": True, "data": ..., "message": ..., "timestamp": ...}.
+    """
+
+    success: bool
+    data: Optional[Any] = None
+    message: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# agent.py — simple message / approval responses
+# ---------------------------------------------------------------------------
+
+
+class AgentMessageResponse(BaseModel):
+    """Response for /goal, /pause, /resume — plain {"message": str}."""
+
+    message: str
+
+
+class AgentCommandApprovalResponse(BaseModel):
+    """Response for POST /command_approval."""
+
+    message: str
+    task_id: str
+    approved: bool
+
+
+class AgentCommandExecuteResponse(BaseModel):
+    """Response for POST /execute_command — success path returns {"message", "output", "status"}."""
+
+    message: str
+    output: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AgentHealthResponse(BaseModel):
+    """Response for GET /health/enhanced."""
+
+    status: str
+    ai_stack_available: bool
+    multi_agent_coordination: bool
+    enhanced_capabilities: bool
+    timestamp: str
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# enhanced_memory.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MemoryStatisticsResponse(BaseModel):
+    """Response for GET /statistics."""
+
+    period_days: int
+    timestamp: str
+    task_execution: Optional[Any] = None
+    markdown_system: Optional[Any] = None
+    active_tasks: Optional[Any] = None
+    performance_insights: Optional[Any] = None
+
+
+class MemoryTaskHistoryResponse(BaseModel):
+    """Response for GET /tasks/history."""
+
+    total_records: int
+    filter_criteria: Dict[str, Any]
+    tasks: List[Any]
+
+
+class MemoryTaskCreateResponse(BaseModel):
+    """Response for POST /tasks."""
+
+    task_id: str
+    status: str
+    timestamp: str
+
+
+class MemoryTaskUpdateResponse(BaseModel):
+    """Response for PUT /tasks/{task_id}."""
+
+    task_id: str
+    status: str
+    timestamp: str
+
+
+class MemoryMarkdownReferenceResponse(BaseModel):
+    """Response for POST /tasks/{task_id}/markdown-reference."""
+
+    task_id: str
+    markdown_file: str
+    reference_type: str
+    status: str
+    timestamp: str
+
+
+class MemoryMarkdownScanResponse(BaseModel):
+    """Response for GET /markdown/scan."""
+
+    status: str
+    scan_results: Optional[Any] = None
+    timestamp: str
+
+
+class MemoryMarkdownSearchResponse(BaseModel):
+    """Response for GET /markdown/search."""
+
+    query: str
+    filters: Dict[str, Any]
+    total_results: int
+    results: List[Any]
+
+
+class MemoryDocumentReferencesResponse(BaseModel):
+    """Response for GET /markdown/{file_path}/references."""
+
+    file_path: str
+    timestamp: str
+    references: Optional[Any] = None
+
+
+class MemoryEmbeddingCacheStatsResponse(BaseModel):
+    """Response for GET /embeddings/cache-stats."""
+
+    cache_size: Optional[Any] = None
+    timestamp: str
+    status: str
+
+
+class MemoryCleanupResponse(BaseModel):
+    """Response for DELETE /cleanup."""
+
+    status: str
+    cleanup_results: Dict[str, Any]
+    days_kept: int
+    timestamp: str
+
+
+class MemoryActiveTasksResponse(BaseModel):
+    """Response for GET /active-tasks."""
+
+    count: int
+    active_tasks: List[Any]
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# agent_config.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AgentConfigEnableDisableResponse(BaseModel):
+    """Response for POST /agents/{agent_id}/enable and /disable."""
+
+    status: str
+    message: str
+    agent_name: str
+
+
+class AgentConfigUpdateModelResponse(BaseModel):
+    """Response for POST /agents/{agent_id}/model."""
+
+    status: str
+    message: str
+    updated_config: Dict[str, Any]
+
+
+class AgentConfigHealthResponse(BaseModel):
+    """Response for GET /agents/{agent_id}/health."""
+
+    agent_id: str
+    agent_name: str
+    status: str
+    enabled: bool
+    model: Optional[str] = None
+    checks: Dict[str, Any]
+    timestamp: str
+    response_time: float
+
+
+class AgentConfigOverviewResponse(BaseModel):
+    """Response for GET /status/overview."""
+
+    total_agents: int
+    enabled_agents: int
+    healthy_agents: int
+    unhealthy_agents: int
+    disabled_agents: int
+    overall_health: str
+    agents: List[Any]
+    timestamp: str
