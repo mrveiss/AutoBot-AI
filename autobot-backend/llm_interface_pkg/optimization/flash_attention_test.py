@@ -7,10 +7,15 @@ Unit tests for Flash Attention v2 with variable-length sequence optimization.
 Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 """
 
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
+
+# Skip all tests in this file when torch is the conftest MagicMock stub (#5728)
+_TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
+pytestmark = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
 
 from llm_interface_pkg.optimization.flash_attention import (
     AttentionBackend,

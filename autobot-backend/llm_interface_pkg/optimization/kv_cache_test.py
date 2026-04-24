@@ -7,8 +7,14 @@ Unit tests for layer-aligned KV cache management.
 Issue #1964: Layer-aligned KV cache management for sequential layer processing.
 """
 
+import types
+
 import pytest
 import torch
+
+# Detect conftest MagicMock torch stub; skip tensor-operation tests when absent (#5728)
+_TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
+requires_torch = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
 
 from llm_interface_pkg.optimization.kv_cache import (
     RTX_4070_KV_CACHE_FRACTION,
@@ -143,6 +149,7 @@ class TestKVCacheConfig:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestLayerKVCacheGetUpdate:
     """Tests for LayerKVCache.get() and update()."""
 
@@ -232,6 +239,7 @@ class TestLayerKVCacheGetUpdate:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestLayerKVCacheValidation:
     """Tests for input tensor shape validation."""
 
@@ -277,6 +285,7 @@ class TestLayerKVCacheValidation:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestLayerKVCacheTrim:
     """Tests for LayerKVCache.trim_to_length()."""
 
@@ -345,6 +354,7 @@ class TestLayerKVCacheTrim:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestLayerKVCacheClearMemory:
     """Tests for clear() and memory_usage_bytes()."""
 
@@ -403,6 +413,7 @@ class TestLayerKVCacheClearMemory:
 # ---------------------------------------------------------------------------
 
 
+@requires_torch
 class TestNumFilledLayers:
     """Tests for the num_filled_layers property."""
 
