@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from knowledge.backends import BaseClient
 from utils.async_initializable import AsyncInitializable
 
 # FAISS import with graceful fallback
@@ -749,7 +750,7 @@ class HybridVectorSearch(AsyncInitializable):
 
     def __init__(
         self,
-        chromadb_client: Optional[Any] = None,
+        chromadb_client: Optional[BaseClient] = None,
         config: Optional[VectorSearchConfig] = None,
     ):
         """Initialize hybrid search; FAISS/GPU init is deferred to _initialize_impl."""
@@ -1062,7 +1063,7 @@ _hybrid_search_lock = asyncio.Lock()
 
 
 async def get_hybrid_vector_search(
-    chromadb_client: Optional[Any] = None,
+    chromadb_client: Optional[BaseClient] = None,
     config: Optional[VectorSearchConfig] = None,
 ) -> HybridVectorSearch:
     """
