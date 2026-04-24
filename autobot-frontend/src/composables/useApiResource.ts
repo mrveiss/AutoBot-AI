@@ -18,11 +18,17 @@
  *   onMounted(stats.refresh)
  *   // stats.data.value, stats.error.value, stats.isLoading.value are reactive
  *
+ * Fetchers that want abort support accept an AbortSignal:
+ *
+ *   const stats = useApiResource<KnowledgeStats>((signal) =>
+ *     apiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`, { signal })
+ *   )
+ *
  * Prior art in this repo: `composables/analytics/useAnalyticsEndpoint.ts`
  * solves a narrower problem (fetchWithAuth + path + source-scoping). This
  * composable is the generic form — any fetcher callback, no URL assumptions.
  *
- * Issue #5149.
+ * Issue #5149. AbortController integration: #5179.
  */
 
 import { ref, getCurrentScope, onScopeDispose, type Ref } from 'vue'
@@ -36,6 +42,13 @@ export interface UseApiResourceOptions {
    * Set to false to clear `data` before each refresh.
    */
   keepPreviousData?: boolean
+  /**
+   * Abort the prior in-flight request when `refresh()` is called again.
+   * Default: true. The signal is passed to the fetcher only when the fetcher
+   * declares at least one parameter (`fetcher.length >= 1`), preserving full
+   * backward compatibility with zero-arg fetchers.
+   */
+  abortPrior?: boolean
 }
 
 export interface UseApiResourceReturn<T> {
@@ -57,13 +70,17 @@ export interface UseApiResourceReturn<T> {
  * caller wins. This prevents stale data from overwriting fresh data when a
  * consumer fires refresh() multiple times in quick succession.
  *
+ * Network efficiency: when `abortPrior` is true (default), each new refresh()
+ * call aborts the previous in-flight request via AbortController so no
+ * redundant network requests complete in the background.
+ *
  * Lifecycle: on `onScopeDispose` (component unmount / effect scope teardown),
- * any pending fetches are effectively ignored — their resolutions no longer
- * touch the refs. This prevents the classic "setState on unmounted component"
- * warning and any memory leak from stale closures.
+ * any pending fetches are aborted and their resolutions no longer touch the
+ * refs. This prevents the classic "setState on unmounted component" warning
+ * and any memory leak from stale closures.
  */
 export function useApiResource<T>(
-  fetcher: () => Promise<T>,
+  fetcher: ((signal: AbortSignal) => Promise<T>) | (() => Promise<T>),
   options: UseApiResourceOptions = {}
 ): UseApiResourceReturn<T> {
   const data = ref<T | null>(null) as Ref<T | null>
@@ -71,13 +88,24 @@ export function useApiResource<T>(
   const isLoading = ref(false)
 
   const keepPreviousData = options.keepPreviousData !== false
+  const abortPrior = options.abortPrior !== false
 
   // Monotonic ID for race-condition tracking. Incremented per refresh() call.
   // When a fetch resolves, we ignore it unless its ID still matches the latest.
   let latestCallId = 0
   let disposed = false
+  // Tracks the AbortController for the current in-flight request.
+  let currentController: AbortController | null = null
 
   const refresh = async (): Promise<void> => {
+    // Abort the previous in-flight request before starting a new one.
+    if (abortPrior && currentController !== null) {
+      currentController.abort()
+    }
+
+    const controller = abortPrior ? new AbortController() : null
+    currentController = controller
+
     const callId = ++latestCallId
     isLoading.value = true
     error.value = null
@@ -86,15 +114,32 @@ export function useApiResource<T>(
     }
 
     try {
-      const result = await fetcher()
+      // Pass the signal only when the fetcher declares a parameter — this
+      // preserves backward compatibility with zero-arg fetchers that do not
+      // accept (or need) an AbortSignal.
+      const result =
+        controller !== null && fetcher.length >= 1
+          ? await (fetcher as (signal: AbortSignal) => Promise<T>)(
+              controller.signal
+            )
+          : await (fetcher as () => Promise<T>)()
+
       if (disposed || callId !== latestCallId) return
       data.value = result
     } catch (e) {
+      // AbortError means this call was superseded — not a real failure.
+      // Check by name to handle both DOMException (browser) and plain Error
+      // objects with name='AbortError' (some fetch polyfills / jsdom).
+      if (e instanceof Error && e.name === 'AbortError') return
       if (disposed || callId !== latestCallId) return
       error.value = e instanceof Error ? e : new Error(String(e))
     } finally {
+      // Only clear the loading state for the call that is still current.
       if (disposed || callId !== latestCallId) return
       isLoading.value = false
+      if (currentController === controller) {
+        currentController = null
+      }
     }
   }
 
@@ -105,6 +150,10 @@ export function useApiResource<T>(
   if (getCurrentScope()) {
     onScopeDispose(() => {
       disposed = true
+      if (currentController !== null) {
+        currentController.abort()
+        currentController = null
+      }
     })
   }
 
