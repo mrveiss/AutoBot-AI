@@ -637,7 +637,7 @@ async def signup(request: Request, signup_data: SignupRequest):
         from user_management.services.user_service import DuplicateUserError
 
         if isinstance(exc, DuplicateUserError):
-            raise HTTPException(status_code=409, detail=str(exc))
+            raise HTTPException(status_code=409, detail="Username already taken")
         logger.error("Signup error for %s: %s", signup_data.username, exc)
         raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 

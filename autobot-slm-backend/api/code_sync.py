@@ -407,7 +407,7 @@ async def get_file_drift(
     try:
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Failed to determine component path") from exc
     deployed_dir = get_default_deployed_dir(component)
 
     logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
