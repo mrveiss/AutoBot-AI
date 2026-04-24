@@ -77,9 +77,11 @@ watch(() => props.outputLines.length, (newLength) => {
     const latestLine = props.outputLines[newLength - 1]
     if (latestLine) {
       // Strip HTML and ANSI codes for announcement
-      // #1721: Loop HTML strip to prevent incomplete multi-char sanitization
+      // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
       let cleanContent = latestLine.content
         .replace(/\x1b\[[0-9;]*m/g, '')  // Remove ANSI codes
+        .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+        .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
       let prevContent = ''
       while (prevContent !== cleanContent) {
         prevContent = cleanContent

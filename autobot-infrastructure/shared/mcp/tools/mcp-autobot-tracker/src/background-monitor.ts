@@ -537,8 +537,9 @@ export class BackgroundMonitor {
 
     // Check disk space
     try {
-      // #1721: Use execFile to avoid shell injection from env constants
-      const { stdout } = await execFileAsync('df', ['-h', PathConstants.PROJECT_ROOT]);
+      // PathConstants.PROJECT_ROOT is a build-time constant derived from __dirname, not user input.
+      // execFile (not exec) passes arguments as an array, avoiding shell interpolation entirely.
+      const { stdout } = await execFileAsync('df', ['-h', PathConstants.PROJECT_ROOT]); // codeql[js/shell-command-injection-from-environment]
       const diskInfo = stdout.split('\n')[1].split(/\s+/);
       healthData.system.disk = {
         usage: diskInfo[4],

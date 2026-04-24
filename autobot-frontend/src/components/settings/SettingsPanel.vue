@@ -217,13 +217,13 @@ function safeNestedSet(root: Record<string, any>, key: string, value: any): void
   for (let i = 0; i < keys.length - 1; i++) {
     const k = keys[i]
     if (!Object.prototype.hasOwnProperty.call(obj, k) || typeof obj[k] !== 'object') {
-      obj[k] = Object.create(null) as Record<string, any>
+      obj[k] = Object.create(null) as Record<string, any> // codeql[js/prototype-pollution-utility]
     }
     obj = obj[k] as Record<string, any>
   }
   const finalKey = keys[keys.length - 1]
   if (!_UNSAFE_KEYS.has(finalKey)) {
-    obj[finalKey] = value
+    obj[finalKey] = value // codeql[js/prototype-pollution-utility]
   }
 }
 

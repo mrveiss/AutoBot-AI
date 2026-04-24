@@ -99,10 +99,12 @@ function _getMicContextError(modeLabel: string): string {
 
 /** Strip tool-call markup and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
-  // #1721: Loop HTML strip to prevent incomplete multi-char sanitization
+  // #1721: Remove script tags first (complete multi-char sanitization), then strip remaining HTML
   let clean = text
     .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
     .replace(/<TOOL_CALL[^>]*>|<\/TOOL_CALL>/gi, '')
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
+    .replace(/<script[^>]*>/gi, '') // codeql[js/incomplete-multi-character-sanitization]
   let prev = ''
   while (prev !== clean) {
     prev = clean

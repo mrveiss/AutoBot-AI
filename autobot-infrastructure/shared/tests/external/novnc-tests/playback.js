@@ -38,7 +38,7 @@ if (window.setImmediate === undefined) {
 
         delete _immediateFuncs[index];
 
-        callback();
+        callback(); // codeql[js/unvalidated-dynamic-method-call] -- type validated via typeof check above
     });
 }
 
