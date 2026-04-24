@@ -42,6 +42,64 @@ import re
 RBAC_MARKER_PATH = Path("/etc/autobot/rbac-initialized")
 
 
+class SaveSettingsResponse(BaseModel):
+    """Response for save settings endpoints — passes through ConfigService result dict."""
+
+    status: Optional[str] = None
+    message: Optional[str] = None
+    success: Optional[bool] = None
+
+
+class ClearCacheResponse(BaseModel):
+    """Response for POST /clear-cache."""
+
+    status: str
+    message: str
+    available_endpoints: Optional[dict] = None
+
+
+class TaskQueuedResponse(BaseModel):
+    """Response when a Celery task is queued."""
+
+    task_id: str
+    status: str
+    message: str
+    dry_run: Optional[bool] = None
+
+
+class TaskStatusResponse(BaseModel):
+    """Response for Celery task status polling."""
+
+    task_id: str
+    status: str
+    message: Optional[str] = None
+    progress: Optional[Any] = None
+    result: Optional[Any] = None
+    error: Optional[str] = None
+
+
+class RBACStatusResponse(BaseModel):
+    """Response for GET /rbac/status."""
+
+    initialized: bool
+    message: str
+
+
+class WorkerStatusResponse(BaseModel):
+    """Response for GET /updates/worker-status."""
+
+    available: bool
+    message: str
+
+
+class UpdateStatusResponse(BaseModel):
+    """Response for GET /updates/status."""
+
+    last_update: Optional[str] = None
+    marker_exists: bool
+    message: str
+
+
 class RBACInitRequest(BaseModel):
     """Request model for RBAC initialization."""
 
@@ -70,7 +128,7 @@ class RBACInitRequest(BaseModel):
     operation="get_settings",
     error_code_prefix="SETTINGS",
 )
-@router.get("/")
+@router.get("/", response_model=dict)
 async def get_settings():
     """Get application settings - now uses full config from config.yaml"""
     try:
@@ -85,7 +143,7 @@ async def get_settings():
     operation="get_settings_explicit",
     error_code_prefix="SETTINGS",
 )
-@router.get("/settings")
+@router.get("/settings", response_model=dict)
 async def get_settings_explicit():
     """Get application settings.
 
@@ -109,7 +167,7 @@ async def get_settings_explicit():
     operation="save_settings",
     error_code_prefix="SETTINGS",
 )
-@router.post("/")
+@router.post("/", response_model=dict)
 async def save_settings(
     settings_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -143,7 +201,7 @@ async def save_settings(
     operation="save_settings_explicit",
     error_code_prefix="SETTINGS",
 )
-@router.post("/settings")
+@router.post("/settings", response_model=dict)
 async def save_settings_explicit(
     settings_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -185,7 +243,7 @@ async def save_settings_explicit(
     operation="get_backend_settings",
     error_code_prefix="SETTINGS",
 )
-@router.get("/backend")
+@router.get("/backend", response_model=dict)
 async def get_backend_settings():
     """Get backend-specific settings"""
     try:
@@ -200,7 +258,7 @@ async def get_backend_settings():
     operation="save_backend_settings",
     error_code_prefix="SETTINGS",
 )
-@router.post("/backend")
+@router.post("/backend", response_model=dict)
 async def save_backend_settings(
     backend_settings: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -229,7 +287,7 @@ async def save_backend_settings(
     operation="get_full_config",
     error_code_prefix="SETTINGS",
 )
-@router.get("/config")
+@router.get("/config", response_model=dict)
 async def get_full_config():
     """Get complete application configuration"""
     try:
@@ -244,7 +302,7 @@ async def get_full_config():
     operation="save_full_config",
     error_code_prefix="SETTINGS",
 )
-@router.post("/config")
+@router.post("/config", response_model=dict)
 async def save_full_config(
     config_data: dict,
     session: AsyncSession = Depends(get_db_session),
@@ -273,7 +331,7 @@ async def save_full_config(
     operation="clear_cache",
     error_code_prefix="SETTINGS",
 )
-@router.post("/clear-cache")
+@router.post("/clear-cache", response_model=ClearCacheResponse)
 async def clear_cache():
     """Clear application cache - includes config cache"""
     try:
@@ -306,7 +364,7 @@ async def clear_cache():
     operation="initialize_rbac",
     error_code_prefix="RBAC",
 )
-@router.post("/rbac/initialize")
+@router.post("/rbac/initialize", response_model=TaskQueuedResponse)
 async def initialize_rbac_endpoint(
     request: RBACInitRequest,
     _: None = Depends(check_admin_permission),
@@ -355,7 +413,7 @@ async def initialize_rbac_endpoint(
     operation="get_rbac_task_status",
     error_code_prefix="RBAC",
 )
-@router.get("/rbac/status/{task_id}")
+@router.get("/rbac/status/{task_id}", response_model=TaskStatusResponse)
 async def get_rbac_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -402,7 +460,7 @@ async def get_rbac_task_status(
     operation="get_rbac_status",
     error_code_prefix="RBAC",
 )
-@router.get("/rbac/status")
+@router.get("/rbac/status", response_model=RBACStatusResponse)
 async def get_rbac_status(
     _: None = Depends(check_admin_permission),
 ):
@@ -458,7 +516,7 @@ class SystemUpdateRequest(BaseModel):
     operation="run_system_update",
     error_code_prefix="UPDATES",
 )
-@router.post("/updates/run")
+@router.post("/updates/run", response_model=TaskQueuedResponse)
 async def run_system_update_endpoint(
     request: SystemUpdateRequest,
     _: None = Depends(check_admin_permission),
@@ -526,7 +584,7 @@ async def run_system_update_endpoint(
     operation="get_update_task_status",
     error_code_prefix="UPDATES",
 )
-@router.get("/updates/status/{task_id}")
+@router.get("/updates/status/{task_id}", response_model=TaskStatusResponse)
 async def get_update_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -615,7 +673,7 @@ def _check_celery_worker_available() -> tuple[bool, str]:
     operation="check_celery_health",
     error_code_prefix="UPDATES",
 )
-@router.get("/updates/worker-status")
+@router.get("/updates/worker-status", response_model=WorkerStatusResponse)
 async def check_celery_worker_status(
     _: None = Depends(check_admin_permission),
 ):
@@ -638,7 +696,7 @@ async def check_celery_worker_status(
     operation="check_available_updates",
     error_code_prefix="UPDATES",
 )
-@router.post("/updates/check")
+@router.post("/updates/check", response_model=TaskQueuedResponse)
 async def check_updates_endpoint(
     _: None = Depends(check_admin_permission),
 ):
@@ -690,7 +748,7 @@ async def check_updates_endpoint(
     operation="get_update_status",
     error_code_prefix="UPDATES",
 )
-@router.get("/updates/status")
+@router.get("/updates/status", response_model=UpdateStatusResponse)
 async def get_update_status(
     _: None = Depends(check_admin_permission),
 ):
