@@ -211,7 +211,15 @@ class SSHBackend(ExecutionBackend):
                 )
             except Exception as e:
                 self._client = None
-                raise RuntimeError(f"SSH connection failed: {e}")
+                err_msg = str(e)
+                if "not found in known_hosts" in err_msg or (
+                    "Server" in err_msg and "known_hosts" in err_msg
+                ):
+                    raise RuntimeError(
+                        f"SSH host key for '{self.hostname}' is not in known_hosts. "
+                        "Run: ssh-keyscan -H <host> >> ~/.ssh/known_hosts as the autobot service user."
+                    ) from e
+                raise RuntimeError(f"SSH connection failed: {e}") from e
 
         return self._client
 
