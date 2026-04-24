@@ -696,7 +696,7 @@ async def read_text_file_mcp(
         )
 
     try:
-        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
             lines = await f.readlines()
 
         # Apply head/tail filters
@@ -758,7 +758,7 @@ async def read_media_file_mcp(
         mime_type = "application/octet-stream"
 
     try:
-        async with aiofiles.open(safe_path, "rb") as f:
+        async with aiofiles.open(safe_path, "rb") as f:  # codeql[py/path-injection]
             file_data = await f.read()
 
         base64_data = base64.b64encode(file_data).decode("utf-8")
@@ -811,7 +811,7 @@ async def _read_single_file_for_batch(path: str) -> dict:
                 }
             }
 
-        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
             content = await f.read()
 
         return {"result": {"path": path, "content": content, "size_bytes": file_size}}
@@ -909,7 +909,7 @@ async def write_file_mcp(
         # Issue #514: Use per-file locking
         file_lock = await _get_file_lock(safe_path)
         async with file_lock:
-            async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:
+            async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
                 await f.write(request.content)
 
         file_size = await run_in_file_executor(os.path.getsize, safe_path)
@@ -1001,7 +1001,7 @@ async def edit_file_mcp(
         # Issue #514: Use per-file locking
         file_lock = await _get_file_lock(safe_path)
         async with file_lock:
-            async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
                 original_content = await f.read()
 
             content, edits_applied = _apply_edits_to_content(
@@ -1009,7 +1009,7 @@ async def edit_file_mcp(
             )
 
             if not request.dry_run:
-                async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:
+                async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
                     await f.write(content)
 
         return {

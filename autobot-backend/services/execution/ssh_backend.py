@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 
 try:
     import paramiko
-    from paramiko import AutoAddPolicy, SSHClient
+    from paramiko import RejectPolicy, SSHClient
 except ImportError:
     paramiko = None
     SSHClient = None
@@ -197,7 +197,8 @@ class SSHBackend(ExecutionBackend):
         """
         if self._client is None:
             self._client = SSHClient()
-            self._client.set_missing_host_key_policy(AutoAddPolicy())
+            self._client.load_system_host_keys()
+            self._client.set_missing_host_key_policy(RejectPolicy())
 
             try:
                 self._client.connect(

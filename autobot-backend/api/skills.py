@@ -270,5 +270,5 @@ async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
         logger.error("Failed to get suggestions for %s: %s", name, e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve suggestions: {e}",
+            detail="Failed to retrieve suggestions",
         )

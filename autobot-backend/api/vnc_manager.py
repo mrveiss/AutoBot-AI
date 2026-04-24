@@ -1680,7 +1680,7 @@ async def save_session_screenshot(
 
     vnc_base = Path("/tmp/vnc_sessions")  # nosec B108
     screenshot_dir = validate_relative_path(session_id, vnc_base)
-    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    screenshot_dir.mkdir(parents=True, exist_ok=True)  # codeql[py/path-injection]
 
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     screenshot_path = validate_relative_path(

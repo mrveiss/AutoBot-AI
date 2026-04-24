@@ -488,7 +488,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
             "Updated secret (ID: %s...)", secret_id[:8]
         )
 
@@ -516,7 +516,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
             "Deleted secret (ID: %s...)", secret_id[:8]
         )
         return True

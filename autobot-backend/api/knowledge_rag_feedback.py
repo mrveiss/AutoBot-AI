@@ -115,6 +115,6 @@ async def record_rag_feedback(
         )
     except Exception as exc:
         logger.warning("record_rag_feedback: stream write failed: %s", exc)
-        return {"status": "error", "reason": str(exc)}
+        return {"status": "error", "reason": "stream_write_failed"}
 
     return {"status": "recorded", "stream_key": stream_key, "decision": body.decision}

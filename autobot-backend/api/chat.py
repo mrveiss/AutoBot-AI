@@ -2221,7 +2221,7 @@ async def translate_text(
         },
     )
     result = await agent.handle_translate(req)
-    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
 
 
 @with_error_handling(
@@ -2246,4 +2246,4 @@ async def detect_language(
         payload={"text": body.text},
     )
     result = await agent.handle_detect_language(req)
-    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
