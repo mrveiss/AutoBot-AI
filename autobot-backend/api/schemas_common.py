@@ -524,3 +524,267 @@ class AgentConfigOverviewResponse(BaseModel):
     overall_health: str
     agents: List[Any]
     timestamp: str
+
+# ---------------------------------------------------------------------------
+# LLM schemas  (llm.py)
+# ---------------------------------------------------------------------------
+
+
+class LLMConnectionTestResponse(BaseModel):
+    """Response for POST /llm/test_connection."""
+
+    status: str
+    message: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+
+class LLMModelsResponse(BaseModel):
+    """Response for GET /llm/models."""
+
+    models: List[Any]
+    total_count: int
+
+
+class LLMCurrentResponse(BaseModel):
+    """Response for GET /llm/current."""
+
+    model: str
+    provider: str
+    config: Dict[str, Any]
+
+
+class LLMEmbeddingModelsResponse(BaseModel):
+    """Response for GET /llm/embedding/models."""
+
+    models: List[Any]
+    total_count: int
+
+
+# ---------------------------------------------------------------------------
+# LLM Optimization schemas  (llm_optimization.py)
+# ---------------------------------------------------------------------------
+
+
+class LLMOptimizationHealthResponse(BaseModel):
+    """Response for GET /llm-optimization/health."""
+
+    status: str
+    available_models: int
+    cache_size: int
+    ollama_connection: bool
+    redis_connected: bool
+
+
+class LLMAvailableModelsResponse(BaseModel):
+    """Response for GET /llm-optimization/models/available."""
+
+    models_count: int
+    models: List[Any]
+    timestamp: float
+
+
+class LLMSelectModelResponse(BaseModel):
+    """Response for POST /llm-optimization/models/select."""
+
+    selected_model: Optional[str] = None
+    model_details: Optional[Dict[str, Any]] = None
+    task_complexity: str
+    selection_reasoning: Dict[str, Any]
+    timestamp: float
+
+
+class LLMTrackPerformanceResponse(BaseModel):
+    """Response for POST /llm-optimization/models/performance/track."""
+
+    status: str
+    message: str
+    recorded_data: Dict[str, Any]
+
+
+class LLMOptimizationSuggestionsResponse(BaseModel):
+    """Response for GET /llm-optimization/optimization/suggestions."""
+
+    suggestions_count: int
+    suggestions: List[Any]
+    timestamp: float
+
+
+class LLMModelsComparisonResponse(BaseModel):
+    """Response for GET /llm-optimization/models/comparison."""
+
+    comparison: Dict[str, Any]
+    best_models: Dict[str, Any]
+    total_models: int
+    timestamp: float
+
+    model_config = {"extra": "allow"}
+
+
+class LLMBenchmarkResponse(BaseModel):
+    """Response for POST /llm-optimization/models/benchmark/{model_name}."""
+
+    model_name: str
+    test_queries: List[str]
+    iterations_per_query: int
+    status: str
+    message: str
+    expected_metrics: List[str]
+    timestamp: float
+
+
+class LLMSystemResourcesResponse(BaseModel):
+    """Response for GET /llm-optimization/system/resources."""
+
+    resources: Dict[str, Any]
+    recommendations: List[Any]
+    optimal_model_size_gb: float
+    timestamp: float
+
+
+class LLMOptimizationConfigResponse(BaseModel):
+    """Response for GET /llm-optimization/config."""
+
+    performance_threshold: float
+    cache_ttl: int
+    min_samples: int
+    model_classification: Dict[str, Any]
+    task_complexity_levels: List[str]
+    optimization_factors: List[str]
+
+
+class LLMInferenceSettingsResponse(BaseModel):
+    """Response for GET/POST /llm-optimization/inference/settings."""
+
+    settings: Dict[str, Any]
+    timestamp: float
+
+
+class LLMInferenceMetricsResponse(BaseModel):
+    """Response for GET /llm-optimization/inference/metrics."""
+
+    optimization: Dict[str, Any]
+    cache: Dict[str, Any]
+    provider_usage: Dict[str, Any]
+    total_requests: int
+    avg_response_time: float
+    fallback_count: int
+    timestamp: float
+
+
+class LLMProviderOptimizationSummaryResponse(BaseModel):
+    """Response for GET /llm-optimization/inference/provider/{provider_type}/optimizations."""
+
+    provider: str
+    is_local: bool
+    is_cloud: bool
+    optimizations: Dict[str, Any]
+    timestamp: float
+
+
+class LLMModelPerformanceHistoryResponse(BaseModel):
+    """Response for GET /llm-optimization/models/performance/history/{model_name}.
+
+    Shape is opaque — defined by model.to_performance_history_dict().
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# LLM Awareness schemas  (llm_awareness.py)
+# ---------------------------------------------------------------------------
+
+
+class LLMAwarenessStatusResponse(BaseModel):
+    """Response for GET /llm-awareness/status."""
+
+    status: str
+    service: str
+    timestamp: str
+    system_identity: Dict[str, Any]
+    capabilities_count: int
+    system_maturity: str
+
+
+class LLMSystemContextResponse(BaseModel):
+    """Response for GET /llm-awareness/context."""
+
+    status: str
+    format: str
+    context: Dict[str, Any]
+    timestamp: str
+
+
+class LLMCapabilitiesSummaryResponse(BaseModel):
+    """Response for GET /llm-awareness/capabilities."""
+
+    status: str
+    capabilities: Dict[str, Any]
+    timestamp: str
+
+
+class LLMInjectContextResponse(BaseModel):
+    """Response for POST /llm-awareness/inject-context."""
+
+    status: str
+    original_prompt: str
+    enhanced_prompt: str
+    context_level: str
+    timestamp: str
+
+
+class LLMAnalyzeQueryResponse(BaseModel):
+    """Response for POST /llm-awareness/analyze-query."""
+
+    status: str
+    analysis: Dict[str, Any]
+    timestamp: str
+
+
+class LLMCapabilitySummaryTextResponse(BaseModel):
+    """Response for GET /llm-awareness/summary/text."""
+
+    status: str
+    summary: str
+    format: str
+    timestamp: str
+
+
+class LLMPhaseInfoResponse(BaseModel):
+    """Response for GET /llm-awareness/phase-info."""
+
+    status: str
+    phase_info: Dict[str, Any]
+    timestamp: str
+
+
+class LLMAwarenessMetricsResponse(BaseModel):
+    """Response for GET /llm-awareness/metrics."""
+
+    status: str
+    metrics: Dict[str, Any]
+    timestamp: str
+
+
+class LLMExportAwarenessResponse(BaseModel):
+    """Response for POST /llm-awareness/export."""
+
+    status: str
+    message: str
+    output_path: str
+    format: str
+    timestamp: str
+
+
+class LLMAwarenessHealthResponse(BaseModel):
+    """Response for GET /llm-awareness/health."""
+
+    status: str
+    service: str
+    components: Dict[str, Any]
+    system_maturity: str
+    capabilities_count: int
+    timestamp: str
+
+
