@@ -2,7 +2,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 //
-// Tests for useApiResource (#5149)
+// Tests for useApiResource (#5149, #5179)
 
 import { describe, it, expect, vi } from 'vitest'
 import { effectScope, nextTick } from 'vue'
@@ -223,5 +223,80 @@ describe('useApiResource', () => {
     // frozen at its last-observed state, data/error untouched.
     expect(ref1.data.value).toBe(null)
     expect(ref1.error.value).toBe(null)
+  })
+
+  it('AbortController: passes signal to fetcher on each refresh()', async () => {
+    const signals: (AbortSignal | undefined)[] = []
+    const { refresh } = useApiResource((signal) => {
+      signals.push(signal)
+      return Promise.resolve(1)
+    })
+
+    await refresh()
+    await refresh()
+
+    expect(signals).toHaveLength(2)
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
+    expect(signals[1]).toBeInstanceOf(AbortSignal)
+    // Each call gets a distinct signal
+    expect(signals[0]).not.toBe(signals[1])
+  })
+
+  it('AbortController: aborts previous in-flight signal when new refresh() starts', async () => {
+    const d = deferred<number>()
+    let capturedSignal: AbortSignal | undefined
+
+    const { refresh } = useApiResource((signal) => {
+      capturedSignal = signal
+      return d.promise
+    })
+
+    // Start first refresh — captures signal from first controller
+    const p1 = refresh()
+    const firstSignal = capturedSignal!
+    expect(firstSignal.aborted).toBe(false)
+
+    // Start second refresh — first controller must be aborted
+    const p2 = refresh()
+    expect(firstSignal.aborted).toBe(true)
+
+    d.resolve(99)
+    await Promise.allSettled([p1, p2])
+  })
+
+  it('AbortController: AbortError from fetcher does not surface in error.value', async () => {
+    const abortError = new DOMException('Aborted', 'AbortError')
+    const { data, error, isLoading, refresh } = useApiResource(() =>
+      Promise.reject(abortError)
+    )
+
+    await refresh()
+
+    // AbortError is swallowed — not a user-visible failure
+    expect(error.value).toBe(null)
+    expect(data.value).toBe(null)
+    expect(isLoading.value).toBe(false)
+  })
+
+  it('AbortController: onScopeDispose aborts the active controller', async () => {
+    const d = deferred<number>()
+    const scope = effectScope()
+    let capturedSignal: AbortSignal | undefined
+
+    let resource!: ReturnType<typeof useApiResource<number>>
+    scope.run(() => {
+      resource = useApiResource((signal) => {
+        capturedSignal = signal
+        return d.promise
+      })
+    })
+
+    resource.refresh()
+    const signalBeforeDispose = capturedSignal!
+    expect(signalBeforeDispose.aborted).toBe(false)
+
+    // Disposing the scope should abort the active controller
+    scope.stop()
+    expect(signalBeforeDispose.aborted).toBe(true)
   })
 })
