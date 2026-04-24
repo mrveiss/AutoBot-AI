@@ -28,6 +28,18 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
+
+from api.schemas_common import (
+    LLMPatternsCacheOpportunitiesResponse,
+    LLMPatternsCategoryDistributionResponse,
+    LLMPatternsCostBreakdownResponse,
+    LLMPatternsHealthResponse,
+    LLMPatternsAnalyzeResponse,
+    LLMPatternsModelComparisonResponse,
+    LLMPatternsRecordResponse,
+    LLMPatternsRecommendationsResponse,
+    LLMPatternsStatsResponse,
+)
 from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import RedisDatabase
@@ -1005,7 +1017,7 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
-@router.get("/health")
+@router.get("/health", response_model=LLMPatternsHealthResponse)
 async def get_health():
     """Get LLM pattern analyzer health status.
 
@@ -1033,7 +1045,7 @@ async def get_health():
     }
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)
 async def analyze_prompt(request: PromptAnalysisRequest):
     """
     Analyze a prompt for optimization opportunities.
@@ -1044,7 +1056,7 @@ async def analyze_prompt(request: PromptAnalysisRequest):
     return await analyzer.analyze_prompt(request.prompt, request.model)
 
 
-@router.post("/record")
+@router.post("/record", response_model=LLMPatternsRecordResponse)
 async def record_usage(request: UsageRecordRequest):
     """
     Record an LLM usage event.
@@ -1055,7 +1067,7 @@ async def record_usage(request: UsageRecordRequest):
     return await analyzer.record_usage(request)
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=LLMPatternsStatsResponse)
 async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     """
     Get usage statistics for the specified period.
@@ -1066,7 +1078,7 @@ async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     return await analyzer.get_usage_stats(days)
 
 
-@router.get("/cache-opportunities")
+@router.get("/cache-opportunities", response_model=LLMPatternsCacheOpportunitiesResponse)
 async def get_cache_opportunities(
     min_occurrences: int = Query(default=3, ge=2, le=100)
 ):
@@ -1085,7 +1097,7 @@ async def get_cache_opportunities(
     }
 
 
-@router.get("/recommendations")
+@router.get("/recommendations", response_model=LLMPatternsRecommendationsResponse)
 async def get_recommendations():
     """
     Get optimization recommendations based on usage patterns.
@@ -1096,7 +1108,7 @@ async def get_recommendations():
     return {"recommendations": await analyzer.get_optimization_recommendations()}
 
 
-@router.get("/model-comparison")
+@router.get("/model-comparison", response_model=LLMPatternsModelComparisonResponse)
 async def get_model_comparison():
     """
     Compare costs and usage across different models.
@@ -1107,7 +1119,7 @@ async def get_model_comparison():
     return {"models": await analyzer.get_model_comparison(), "period_days": 7}
 
 
-@router.get("/category-distribution")
+@router.get("/category-distribution", response_model=LLMPatternsCategoryDistributionResponse)
 async def get_category_distribution():
     """
     Get distribution of prompt categories.
@@ -1118,7 +1130,7 @@ async def get_category_distribution():
     return await analyzer.get_category_distribution()
 
 
-@router.get("/cost-breakdown")
+@router.get("/cost-breakdown", response_model=LLMPatternsCostBreakdownResponse)
 async def get_cost_breakdown(days: int = Query(default=7, ge=1, le=30)):
     """
     Get detailed cost breakdown.

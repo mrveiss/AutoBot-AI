@@ -9,6 +9,12 @@ import tempfile
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
+from api.schemas_common import (
+    VoiceDeleteResponse,
+    VoiceListenResponse,
+    VoiceSpeakResponse,
+    VoiceTranscribeResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.tts_client import get_tts_client
@@ -24,7 +30,7 @@ logger = logging.getLogger(__name__)
     operation="voice_listen_api",
     error_code_prefix="VOICE",
 )
-@router.post("/listen")
+@router.post("/listen", response_model=VoiceListenResponse)
 async def voice_listen_api(request: Request, user_role: str = Form("user")):
     """Listen and convert speech to text"""
     security_layer = request.app.state.security_layer
@@ -65,7 +71,7 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
     operation="voice_speak_api",
     error_code_prefix="VOICE",
 )
-@router.post("/speak")
+@router.post("/speak", response_model=VoiceSpeakResponse)
 async def voice_speak_api(
     request: Request, text: str = Form(...), user_role: str = Form("user")
 ):
@@ -114,7 +120,7 @@ async def voice_speak_api(
     operation="voice_synthesize_api",
     error_code_prefix="VOICE",
 )
-@router.post("/synthesize")
+@router.post("/synthesize", response_model=None)
 async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
@@ -150,7 +156,7 @@ async def voice_synthesize_api(
     operation="voice_clone_api",
     error_code_prefix="VOICE",
 )
-@router.post("/clone-voice")
+@router.post("/clone-voice", response_model=None)
 async def voice_clone_api(
     request: Request,
     text: str = Form(...),
@@ -186,7 +192,7 @@ async def voice_clone_api(
 # ------------------------------------------------------------------
 
 
-@router.get("/voices")
+@router.get("/voices", response_model=None)
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
@@ -199,7 +205,7 @@ async def voice_list_api():
     operation="voice_create_api",
     error_code_prefix="VOICE",
 )
-@router.post("/voices/create")
+@router.post("/voices/create", response_model=None)
 async def voice_create_api(
     name: str = Form(...),
     audio: UploadFile = File(...),
@@ -216,7 +222,7 @@ async def voice_create_api(
     operation="voice_delete_api",
     error_code_prefix="VOICE",
 )
-@router.delete("/voices/{voice_id}")
+@router.delete("/voices/{voice_id}", response_model=VoiceDeleteResponse)
 async def voice_delete_api(voice_id: str):
     """Delete a custom voice profile."""
     tts = get_tts_client()
@@ -299,7 +305,7 @@ async def _transcribe_with_whisper(
     operation="voice_transcribe_api",
     error_code_prefix="VOICE",
 )
-@router.post("/transcribe")
+@router.post("/transcribe", response_model=VoiceTranscribeResponse)
 async def voice_transcribe_api(
     request: Request,
     audio: UploadFile = File(...),

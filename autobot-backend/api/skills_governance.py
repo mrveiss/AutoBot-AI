@@ -9,6 +9,17 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from api.schemas_common import (
+    SkillsApprovalDecisionResponse,
+    SkillsApprovalItem,
+    SkillsDraftListItem,
+    SkillsDraftPromoteResponse,
+    SkillsDraftTestResponse,
+    SkillsGapResponse,
+    SkillsGovernanceConfigResponse,
+    SkillsGovernanceUpdateResponse,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,7 +96,7 @@ def _governance_default() -> Dict[str, Any]:
     return {"mode": "semi_auto", "gap_detection_enabled": True}
 
 
-@router.post("/gaps", summary="Generate a skill to fill a capability gap")
+@router.post("/gaps", summary="Generate a skill to fill a capability gap", response_model=SkillsGapResponse)
 async def detect_gap(
     req: GapRequest,
     _: None = Depends(check_admin_permission),
@@ -131,7 +142,7 @@ async def detect_gap(
     }
 
 
-@router.get("/drafts", summary="List all skill drafts")
+@router.get("/drafts", summary="List all skill drafts", response_model=List[SkillsDraftListItem])
 async def list_drafts() -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
     engine = get_skills_engine()
@@ -153,7 +164,7 @@ async def list_drafts() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/drafts/{skill_id}/test", summary="Validate a skill draft")
+@router.post("/drafts/{skill_id}/test", summary="Validate a skill draft", response_model=SkillsDraftTestResponse)
 async def test_draft(
     skill_id: str,
     _: None = Depends(check_admin_permission),
@@ -173,7 +184,7 @@ async def test_draft(
     }
 
 
-@router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin")
+@router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin", response_model=SkillsDraftPromoteResponse)
 async def promote_draft(
     skill_id: str,
     _: None = Depends(check_admin_permission),
@@ -228,7 +239,7 @@ async def promote_draft(
     return {"promoted": True, "path": promoted_path, "name": skill.name}
 
 
-@router.get("/approvals", summary="List pending skill approvals")
+@router.get("/approvals", summary="List pending skill approvals", response_model=List[SkillsApprovalItem])
 async def list_approvals() -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
     engine = get_skills_engine()
@@ -250,7 +261,7 @@ async def list_approvals() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval")
+@router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval", response_model=SkillsApprovalDecisionResponse)
 async def decide_approval(
     approval_id: str,
     body: ApprovalDecision,
@@ -269,7 +280,7 @@ async def decide_approval(
     return {"approval_id": approval_id, "status": approval.status}
 
 
-@router.get("/", summary="Get current governance configuration")
+@router.get("/", summary="Get current governance configuration", response_model=SkillsGovernanceConfigResponse)
 async def get_governance() -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
     engine = get_skills_engine()
@@ -287,7 +298,7 @@ async def get_governance() -> Dict[str, Any]:
     }
 
 
-@router.put("/", summary="Update the governance mode")
+@router.put("/", summary="Update the governance mode", response_model=SkillsGovernanceUpdateResponse)
 async def update_governance(
     body: GovernanceModeUpdate,
     _: None = Depends(check_admin_permission),
