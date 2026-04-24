@@ -139,7 +139,7 @@ async def _resolve_db_url(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
             "Failed to resolve database secret: %s", exc
         )
         raise HTTPException(
