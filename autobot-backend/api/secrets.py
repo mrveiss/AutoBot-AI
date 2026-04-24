@@ -690,7 +690,7 @@ def audit_log(
     operation="create_secret",
     error_code_prefix="SECRETS",
 )
-@router.post("/")
+@router.post("/", response_model=None)
 async def create_secret(
     request: SecretCreateRequest,
     http_request: Request,
@@ -735,7 +735,7 @@ async def create_secret(
     operation="list_secrets",
     error_code_prefix="SECRETS",
 )
-@router.get("/")
+@router.get("/", response_model=None)
 async def list_secrets(
     http_request: Request,
     chat_id: Optional[str] = Query(None),
@@ -768,7 +768,7 @@ async def list_secrets(
     operation="get_secret_types",
     error_code_prefix="SECRETS",
 )
-@router.get("/types")
+@router.get("/types", response_model=None)
 async def get_secret_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -792,7 +792,7 @@ async def get_secret_types(
     operation="get_secrets_status",
     error_code_prefix="SECRETS",
 )
-@router.get("/status")
+@router.get("/status", response_model=None)
 async def get_secrets_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -824,7 +824,7 @@ async def get_secrets_status(
     operation="get_secrets_stats",
     error_code_prefix="SECRETS",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=None)
 async def get_secrets_stats(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -873,7 +873,7 @@ async def get_secrets_stats(
     operation="get_secret",
     error_code_prefix="SECRETS",
 )
-@router.get("/{secret_id}")
+@router.get("/{secret_id}", response_model=None)
 async def get_secret(
     secret_id: str,
     http_request: Request,
@@ -948,7 +948,7 @@ async def get_secret(
     operation="update_secret",
     error_code_prefix="SECRETS",
 )
-@router.put("/{secret_id}")
+@router.put("/{secret_id}", response_model=None)
 async def update_secret(
     secret_id: str,
     request: SecretUpdateRequest,
@@ -1011,7 +1011,7 @@ async def update_secret(
     operation="delete_secret",
     error_code_prefix="SECRETS",
 )
-@router.delete("/{secret_id}")
+@router.delete("/{secret_id}", response_model=None)
 async def delete_secret(
     secret_id: str,
     http_request: Request,
@@ -1060,7 +1060,7 @@ async def delete_secret(
     operation="transfer_secrets",
     error_code_prefix="SECRETS",
 )
-@router.post("/transfer")
+@router.post("/transfer", response_model=None)
 async def transfer_secrets(
     request: SecretTransferRequest,
     http_request: Request,
@@ -1102,7 +1102,7 @@ async def transfer_secrets(
     operation="get_chat_cleanup_info",
     error_code_prefix="SECRETS",
 )
-@router.get("/chat/{chat_id}/cleanup")
+@router.get("/chat/{chat_id}/cleanup", response_model=None)
 async def get_chat_cleanup_info(
     chat_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1122,7 +1122,7 @@ async def get_chat_cleanup_info(
     operation="delete_chat_secrets",
     error_code_prefix="SECRETS",
 )
-@router.delete("/chat/{chat_id}")
+@router.delete("/chat/{chat_id}", response_model=None)
 async def delete_chat_secrets(
     chat_id: str,
     http_request: Request,

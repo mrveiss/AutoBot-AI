@@ -15,6 +15,19 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    StateTrackingChangeResponse,
+    StateTrackingChangesResponse,
+    StateTrackingExportResponse,
+    StateTrackingMetricsAllResponse,
+    StateTrackingMilestonesResponse,
+    StateTrackingPhaseHistoryResponse,
+    StateTrackingReportResponse,
+    StateTrackingSnapshotResponse,
+    StateTrackingStatusResponse,
+    StateTrackingSummaryResponse,
+    StateTrackingTrendsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_project_state_tracker import (
     StateChangeType,
@@ -47,7 +60,7 @@ class ExportRequest(BaseModel):
     operation="get_state_tracking_status",
     error_code_prefix="STATE",
 )
-@router.get("/status")
+@router.get("/status", response_model=StateTrackingStatusResponse)
 async def get_state_tracking_status():
     """Get overall state tracking system status"""
     try:
@@ -84,7 +97,7 @@ async def get_state_tracking_status():
     operation="get_state_summary",
     error_code_prefix="STATE",
 )
-@router.get("/summary")
+@router.get("/summary", response_model=StateTrackingSummaryResponse)
 async def get_state_summary():
     """Get comprehensive state summary"""
     try:
@@ -109,7 +122,7 @@ async def get_state_summary():
     operation="capture_state_snapshot",
     error_code_prefix="STATE",
 )
-@router.post("/snapshot")
+@router.post("/snapshot", response_model=StateTrackingSnapshotResponse)
 async def capture_state_snapshot(background_tasks: BackgroundTasks):
     """Manually trigger a state snapshot"""
     try:
@@ -141,7 +154,7 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
     operation="record_state_change",
     error_code_prefix="STATE",
 )
-@router.post("/change")
+@router.post("/change", response_model=StateTrackingChangeResponse)
 async def record_state_change(request: StateChangeRequest):
     """Record a state change event"""
     try:
@@ -192,7 +205,7 @@ async def record_state_change(request: StateChangeRequest):
     operation="get_milestones",
     error_code_prefix="STATE",
 )
-@router.get("/milestones")
+@router.get("/milestones", response_model=StateTrackingMilestonesResponse)
 async def get_milestones():
     """Get project milestone status"""
     try:
@@ -221,7 +234,7 @@ async def get_milestones():
     operation="get_metric_trends",
     error_code_prefix="STATE",
 )
-@router.get("/trends/{metric}")
+@router.get("/trends/{metric}", response_model=StateTrackingTrendsResponse)
 async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
     """Get trend data for a specific metric"""
     try:
@@ -280,7 +293,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
     operation="get_recent_changes",
     error_code_prefix="STATE",
 )
-@router.get("/changes")
+@router.get("/changes", response_model=StateTrackingChangesResponse)
 async def get_recent_changes(
     limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None
 ):
@@ -337,7 +350,7 @@ async def get_recent_changes(
     operation="generate_state_report",
     error_code_prefix="STATE",
 )
-@router.get("/report")
+@router.get("/report", response_model=StateTrackingReportResponse)
 async def generate_state_report():
     """Generate comprehensive state tracking report"""
     try:
@@ -368,7 +381,7 @@ async def generate_state_report():
     operation="export_state_data",
     error_code_prefix="STATE",
 )
-@router.post("/export")
+@router.post("/export", response_model=StateTrackingExportResponse)
 async def export_state_data(request: ExportRequest):
     """Export state tracking data"""
     try:
@@ -423,7 +436,7 @@ async def export_state_data(request: ExportRequest):
     operation="get_all_metrics",
     error_code_prefix="STATE",
 )
-@router.get("/metrics/all")
+@router.get("/metrics/all", response_model=StateTrackingMetricsAllResponse)
 async def get_all_metrics():
     """Get current values for all tracking metrics"""
     try:
@@ -451,7 +464,7 @@ async def get_all_metrics():
     operation="get_phase_history",
     error_code_prefix="STATE",
 )
-@router.get("/phase-history/{phase_name}")
+@router.get("/phase-history/{phase_name}", response_model=StateTrackingPhaseHistoryResponse)
 async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)):
     """Get historical data for a specific phase"""
     try:

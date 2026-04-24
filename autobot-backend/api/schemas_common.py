@@ -1488,3 +1488,318 @@ class ValidationJudgeStatusResponse(BaseModel):
     timestamp: str
 
 
+
+# ---------------------------------------------------------------------------
+# templates.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TemplatesRootResponse(BaseModel):
+    """Response for GET / (templates root)."""
+
+    message: str
+    endpoints: Dict[str, str]
+
+
+class TemplateListResponse(BaseModel):
+    """Response for GET /templates."""
+
+    success: bool
+    templates: List[Any]
+    total: int
+
+
+class TemplateSecretsUsageResponse(BaseModel):
+    """Response for GET /templates/secrets-usage."""
+
+    success: bool
+    secrets_usage: Dict[str, Any]
+
+
+class TemplateSearchResponse(BaseModel):
+    """Response for GET /templates/search."""
+
+    success: bool
+    query: str
+    results: List[Any]
+    total: int
+
+
+class TemplateCategoriesResponse(BaseModel):
+    """Response for GET /templates/categories."""
+
+    success: bool
+    categories: List[Any]
+
+
+class TemplateStatsResponse(BaseModel):
+    """Response for GET /templates/stats."""
+
+    success: bool
+    statistics: Dict[str, Any]
+
+
+class TemplateDetailResponse(BaseModel):
+    """Response for GET /templates/{template_id}."""
+
+    success: bool
+    template: Dict[str, Any]
+
+
+class TemplatePreviewResponse(BaseModel):
+    """Response for GET /templates/{template_id}/preview."""
+
+    success: bool
+    template_id: str
+    template_name: str
+    description: str
+    estimated_duration_minutes: Optional[int] = None
+    agents_involved: List[str]
+    workflow_preview: List[str]
+    variables_used: Dict[str, Any]
+    total_steps: int
+    approval_required_steps: int
+
+
+class TemplateValidationResponse(BaseModel):
+    """Response for POST /templates/{template_id}/validate."""
+
+    success: bool
+    template_id: str
+    validation: Dict[str, Any]
+
+
+class TemplateCreateWorkflowResponse(BaseModel):
+    """Response for POST /templates/{template_id}/create-workflow.
+
+    success=False path includes validation dict; success=True includes workflow.
+    Extra fields allowed to handle both paths.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class TemplateExecuteResponse(BaseModel):
+    """Response for POST /templates/{template_id}/execute."""
+
+    success: bool
+    workflow_id: str
+    template_info: Dict[str, Any]
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# state_tracking.py schemas
+# ---------------------------------------------------------------------------
+
+
+class StateTrackingStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    service: str
+    timestamp: str
+    tracking_active: bool
+    snapshot_count: Optional[Any] = None
+    change_count: Optional[Any] = None
+    latest_snapshot: Optional[Any] = None
+
+
+class StateTrackingSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    status: str
+    summary: Dict[str, Any]
+    timestamp: str
+
+
+class StateTrackingSnapshotResponse(BaseModel):
+    """Response for POST /snapshot."""
+
+    status: str
+    message: str
+    timestamp: str
+
+
+class StateTrackingChangeResponse(BaseModel):
+    """Response for POST /change (success path only).
+
+    JSONResponse(400) for invalid change_type bypasses response_model.
+    """
+
+    status: str
+    message: str
+    change_type: str
+    timestamp: str
+
+
+class StateTrackingMilestonesResponse(BaseModel):
+    """Response for GET /milestones."""
+
+    status: str
+    milestones: Dict[str, Any]
+    achieved_count: int
+    total_count: int
+    timestamp: str
+
+
+class StateTrackingTrendsResponse(BaseModel):
+    """Response for GET /trends/{metric} (success path only).
+
+    JSONResponse(400) for invalid metrics bypasses response_model.
+    """
+
+    status: str
+    metric: str
+    days: int
+    data_points: int
+    trend_data: List[Any]
+    timestamp: str
+
+
+class StateTrackingChangesResponse(BaseModel):
+    """Response for GET /changes."""
+
+    status: str
+    changes: List[Any]
+    total_changes: int
+    showing: int
+    timestamp: str
+
+
+class StateTrackingReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    report: str
+    format: str
+    timestamp: str
+
+
+class StateTrackingExportResponse(BaseModel):
+    """Response for POST /export."""
+
+    status: str
+    message: str
+    filename: str
+    path: str
+    format: str
+    timestamp: str
+
+
+class StateTrackingMetricsAllResponse(BaseModel):
+    """Response for GET /metrics/all."""
+
+    status: str
+    metrics: Dict[str, Any]
+    available_metrics: List[str]
+    timestamp: str
+
+
+class StateTrackingPhaseHistoryResponse(BaseModel):
+    """Response for GET /phase-history/{phase_name}."""
+
+    status: str
+    phase_name: str
+    days: int
+    data_points: int
+    history: List[Any]
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# secrets.py schemas  (all endpoints use JSONResponse → response_model=None)
+# development_speedup.py schemas  (all endpoints use JSONResponse → response_model=None)
+# No new Pydantic models needed for those two files.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_review.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CodeReviewAnalyzeResponse(BaseModel):
+    """Response for GET /analyze (code review diff analysis).
+
+    Returns either the no-data envelope or the full analysis payload.
+    Extra fields allowed to cover both shapes.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+class CodeReviewReviewByIdResponse(BaseModel):
+    """Response for GET /review/{review_id}.
+
+    Shape is the opaque result_payload dict stored in Redis — allow extra fields.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class CodeReviewFileResponse(BaseModel):
+    """Response for POST /review-file."""
+
+    status: str
+    file_path: Optional[str] = None
+    timestamp: str
+    total_comments: int
+    score: float
+    comments: List[Any]
+    summary: Dict[str, Any]
+
+
+class CodeReviewHistoryResponse(BaseModel):
+    """Response for GET /history.
+
+    Returns either no-data envelope or success+reviews shape.
+    Extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+class CodeReviewMetricsResponse(BaseModel):
+    """Response for GET /metrics — no-data envelope."""
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+class CodeReviewFeedbackResponse(BaseModel):
+    """Response for POST /feedback."""
+
+    status: str
+    feedback: Dict[str, Any]
+
+
+class CodeReviewSummaryResponse(BaseModel):
+    """Response for GET /summary — no-data envelope."""
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+class CodeReviewPatternToggleResponse(BaseModel):
+    """Response for POST /patterns/toggle."""
+
+    status: str
+    pattern_id: str
+    enabled: bool
+
+
+class CodeReviewPatternPreferencesResponse(BaseModel):
+    """Response for GET /patterns/preferences."""
+
+    patterns: Dict[str, Any]
+
+
