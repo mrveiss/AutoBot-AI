@@ -36,6 +36,28 @@ happens once per process.
 Prometheus counter ``autobot_sanitizer_hits_total`` is exposed when
 ``prometheus_client`` is installed; in environments where it is absent
 (tests, minimal installs) the counter degrades to a no-op.
+
+Rule tuning log (Issue #5197 — updated 2026-04)
+------------------------------------------------
+Tuning decisions are recorded here for quarterly review cadence.
+
+``you_are_now_ai_role`` (STRIP — promoted 2026-04)
+    Pattern targets explicit AI-role-hijack phrasing: "you are now [an AI /
+    an unrestricted / a jailbroken / DAN / GPT / …]".  Analytic FP estimate
+    <2 %: legitimate queries almost never describe an AI system switching
+    roles mid-sentence with these exact continuations.  Promoted from the
+    broader LOG_ONLY catch-all to STRIP to neutralise the match rather than
+    only observe it.  Next review: 2026-Q3 — compare ``you_are_now_ai_role``
+    vs ``you_are_now`` hit ratio; if ``you_are_now`` (LOG_ONLY residual) is
+    >5 % of total role-match hits, tighten further or promote.
+
+``you_are_now`` (LOG_ONLY — retained)
+    Residual catch-all for "you are now a/an/the <anything>" not covered by
+    the specific pattern above.  Analytic FP estimate ~20–30 %: common in
+    instructional text ("you are now a US resident"), onboarding copy ("you
+    are now a premium member"), and technical documentation.  Retains
+    LOG_ONLY to keep monitoring signal without breaking legitimate queries.
+    Next review: 2026-Q3.
 """
 
 from __future__ import annotations
@@ -182,6 +204,27 @@ class QuerySanitizer:
                 action=SanitizerAction.REJECT,
                 description="'Disregard/forget previous instructions' variant",
             ),
+            # Promoted from LOG_ONLY → STRIP (Issue #5197, 2026-04):
+            # Targets high-confidence AI-role-hijack variants.  Analytic FP
+            # estimate <2 % — legitimate queries rarely use these exact
+            # continuations.  See module docstring for tuning rationale.
+            SanitizerRule(
+                name="you_are_now_ai_role",
+                pattern=re.compile(
+                    r"\byou\s+are\s+now\s+"
+                    r"(?:"
+                    r"an?\s+(?:unrestricted|jailbroken|unfiltered|uncensored|evil|rogue|"
+                    r"different\s+ai|new\s+ai|ai\s+(?:without|that\s+ignores))"
+                    r"|(?:DAN|GPT|Claude|Gemini|Llama)\b"
+                    r")",
+                    re.IGNORECASE,
+                ),
+                action=SanitizerAction.STRIP,
+                description=(
+                    "AI-role-hijack variant of 'you are now' — "
+                    "high-confidence injection (promoted from LOG_ONLY, #5197)"
+                ),
+            ),
             SanitizerRule(
                 name="you_are_now",
                 pattern=re.compile(
@@ -189,7 +232,7 @@ class QuerySanitizer:
                     re.IGNORECASE,
                 ),
                 action=SanitizerAction.LOG_ONLY,
-                description="Role reassignment attempt (low-confidence — log only)",
+                description="Role reassignment catch-all (high-FP — log only, see module docstring)",
             ),
             SanitizerRule(
                 name="new_instructions",
@@ -243,13 +286,29 @@ class QuerySanitizer:
             _sanitizer_hits.labels(
                 rule=rule.name, source=source, action=rule.action.value
             ).inc(count)
-            logger.info(
-                "sanitizer hit: rule=%s count=%d action=%s source=%s",
-                rule.name,
-                count,
-                rule.action.value,
-                source,
-            )
+
+            if rule.action == SanitizerAction.LOG_ONLY:
+                # For LOG_ONLY rules include a truncated snippet of the first
+                # match so operators can assess true-positive vs false-positive
+                # rate from logs without needing to replay raw input.
+                first_match = matches[0] if isinstance(matches[0], str) else matches[0][0]
+                snippet = first_match[:80]
+                logger.warning(
+                    "sanitizer LOG_ONLY hit: rule=%s count=%d source=%s snippet=%r "
+                    "— review quarterly per Issue #5197",
+                    rule.name,
+                    count,
+                    source,
+                    snippet,
+                )
+            else:
+                logger.info(
+                    "sanitizer hit: rule=%s count=%d action=%s source=%s",
+                    rule.name,
+                    count,
+                    rule.action.value,
+                    source,
+                )
 
             if rule.action == SanitizerAction.REJECT:
                 result.rejected = True
