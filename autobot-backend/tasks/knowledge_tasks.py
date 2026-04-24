@@ -656,6 +656,18 @@ def cleanup_orphan_documents(self, dry_run: bool = False) -> Metadata:
 def _resolve_cache_directories() -> list:
     """Return list of cache/temp directory Paths that cleanup_generated_files manages.
 
+    Covered directories and the modules that write to them:
+    - ``DATA_DIR/cache`` — ``utils/graceful_degradation.py`` writes
+      ``data/cache/claude_responses/*.json`` via ``GracefulDegradationManager``;
+      rglob covers all subdirectories recursively.
+    - ``TEMP_DIR`` — miscellaneous temporary scratch space.
+
+    Directories intentionally excluded:
+    - ``DATA_DIR/embeddings_cache`` — no write sites found in the codebase.
+    - ``DATA_DIR/chunks_temp`` — no write sites found in the codebase.
+    - ``DATA_DIR/exports`` — only ``KnowledgeDocuments.export_all_data()`` could
+      write here, but that method has no call sites and is therefore dead code.
+
     Only directories that actually exist are returned; the task silently skips
     missing paths to avoid errors in fresh installs.
     """
@@ -665,12 +677,8 @@ def _resolve_cache_directories() -> list:
 
     candidates = [
         PATH.DATA_DIR / "cache",
-        PATH.DATA_DIR / "embeddings_cache",
-        PATH.DATA_DIR / "chunks_temp",
-        PATH.DATA_DIR / "exports",
         PATH.TEMP_DIR,
     ]
-    # Include legacy hash-cache json file's parent only if explicit dir exists.
     return [p for p in candidates if isinstance(p, Path) and p.exists()]
 
 
