@@ -17,6 +17,22 @@ from constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_manager, cache_response
+from api.schemas_common import (
+    SystemFrontendConfigResponse,
+    SystemHealthResponse,
+    SystemInfoResponse,
+    SystemReloadConfigResponse,
+    SystemPromptReloadResponse,
+    SystemAdminCheckResponse,
+    SystemDynamicImportResponse,
+    SystemCacheStatsResponse,
+    SystemCacheActivityResponse,
+    SystemMetricsResponse,
+    SystemCacheCoordinatorStatsResponse,
+    SystemCacheEvictResponse,
+    SystemCacheClearResponse,
+    SystemBackupStatusResponse,
+)
 
 config = get_config_manager()
 
@@ -146,7 +162,7 @@ def _build_frontend_meta_config() -> dict:
     operation="get_frontend_config",
     error_code_prefix="SYSTEM",
 )
-@router.get("/frontend-config")
+@router.get("/frontend-config", response_model=SystemFrontendConfigResponse)
 @cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
     """Get configuration values needed by the frontend.
@@ -180,8 +196,8 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     operation="get_system_health",
     error_code_prefix="SYSTEM",
 )
-@router.get("/health")
-@router.get("/system/health")  # Frontend compatibility alias
+@router.get("/health", response_model=SystemHealthResponse)
+@router.get("/system/health", response_model=SystemHealthResponse)  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 async def get_system_health(
     request: Request = None,
@@ -240,7 +256,7 @@ async def get_system_health(
     operation="get_system_info",
     error_code_prefix="SYSTEM",
 )
-@router.get("/info")
+@router.get("/info", response_model=SystemInfoResponse)
 @cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
     """Get system information
@@ -273,7 +289,7 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
     operation="reload_system_config",
     error_code_prefix="SYSTEM",
 )
-@router.post("/reload_config")
+@router.post("/reload_config", response_model=SystemReloadConfigResponse)
 async def reload_system_config(admin_check: bool = Depends(check_admin_permission)):
     """Reload system configuration and clear caches
 
@@ -307,7 +323,7 @@ async def reload_system_config(admin_check: bool = Depends(check_admin_permissio
     operation="reload_prompts",
     error_code_prefix="SYSTEM",
 )
-@router.get("/prompt_reload")
+@router.get("/prompt_reload", response_model=SystemPromptReloadResponse)
 async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     """Reload prompt templates
 
@@ -339,7 +355,7 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     operation="admin_check",
     error_code_prefix="SYSTEM",
 )
-@router.get("/admin_check")
+@router.get("/admin_check", response_model=SystemAdminCheckResponse)
 async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     """Check admin status and permissions
 
@@ -361,7 +377,7 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     operation="dynamic_import",
     error_code_prefix="SYSTEM",
 )
-@router.post("/dynamic_import")
+@router.post("/dynamic_import", response_model=SystemDynamicImportResponse)
 async def dynamic_import(
     request: Request,
     module_name: str = Form(...),
@@ -403,7 +419,7 @@ async def dynamic_import(
     operation="get_detailed_health",
     error_code_prefix="SYSTEM",
 )
-@router.get("/health/detailed")
+@router.get("/health/detailed", response_model=SystemHealthResponse)
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 async def get_detailed_health(
     request: Request, admin_check: bool = Depends(check_admin_permission)
@@ -541,7 +557,7 @@ def _determine_overall_health_status(health_status: dict) -> None:
     operation="get_cache_stats",
     error_code_prefix="SYSTEM",
 )
-@router.get("/cache/stats")
+@router.get("/cache/stats", response_model=SystemCacheStatsResponse)
 @cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
     """Get cache statistics and performance metrics
@@ -649,7 +665,7 @@ def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:
     operation="get_cache_activity",
     error_code_prefix="SYSTEM",
 )
-@router.get("/cache/activity")
+@router.get("/cache/activity", response_model=SystemCacheActivityResponse)
 @cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)):
     """Get recent cache activity and key information.
@@ -711,7 +727,7 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
     operation="get_system_metrics",
     error_code_prefix="SYSTEM",
 )
-@router.get("/metrics")
+@router.get("/metrics", response_model=SystemMetricsResponse)
 @cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
 async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)):
     """Get system performance metrics
@@ -780,7 +796,7 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
     operation="get_cache_coordinator_stats",
     error_code_prefix="SYSTEM",
 )
-@router.get("/api/cache/stats")
+@router.get("/api/cache/stats", response_model=SystemCacheCoordinatorStatsResponse)
 async def get_cache_coordinator_stats(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -812,7 +828,7 @@ async def get_cache_coordinator_stats(
     operation="trigger_cache_eviction",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/evict")
+@router.post("/api/cache/evict", response_model=SystemCacheEvictResponse)
 async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permission)):
     """
     Manually trigger coordinated cache eviction.
@@ -842,7 +858,7 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     operation="clear_cache",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/clear/{cache_name}")
+@router.post("/api/cache/clear/{cache_name}", response_model=SystemCacheClearResponse)
 async def clear_cache(
     cache_name: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -874,7 +890,7 @@ async def clear_cache(
         raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
-@router.get("/system/backup/status")
+@router.get("/system/backup/status", response_model=SystemBackupStatusResponse)
 async def get_backup_status(
     request: Request,
     _: None = Depends(check_admin_permission),
