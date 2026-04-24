@@ -1398,10 +1398,10 @@ async def admin_execute_command(body: AdminExecuteRequest) -> dict:
             }
     try:
         cmd_parts = shlex.split(body.command)
-    except ValueError as exc:
+    except ValueError:
         return {
             "stdout": "",
-            "stderr": f"Invalid command syntax: {exc}",
+            "stderr": "Invalid command syntax",
             "exit_code": 1,
         }
     try:

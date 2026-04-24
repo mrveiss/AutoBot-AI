@@ -218,7 +218,7 @@ def create_success_response(
     }
     if request_id:
         response["request_id"] = request_id
-    return JSONResponse(status_code=status_code, content=response)
+    return JSONResponse(status_code=status_code, content=response)  # codeql[py/stack-trace-exposure]
 
 
 def create_error_response(

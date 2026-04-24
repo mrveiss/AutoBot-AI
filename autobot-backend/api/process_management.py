@@ -222,4 +222,4 @@ def _read_log_file(log_path: str) -> str:
             return fh.read()
     except OSError as exc:
         logger.warning("Could not read log file %s: %s", log_path, exc)
-        return f"Log file unavailable: {exc}"
+        return "Log file unavailable"
