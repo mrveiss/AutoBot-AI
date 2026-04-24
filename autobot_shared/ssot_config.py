@@ -129,7 +129,7 @@ class PortConfig(BaseSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
-    browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
+    browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(
         default=8100, alias="AUTOBOT_CHROMADB_PORT"
