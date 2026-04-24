@@ -788,3 +788,288 @@ class LLMAwarenessHealthResponse(BaseModel):
     timestamp: str
 
 
+# ---------------------------------------------------------------------------
+# system.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SystemFrontendConfigResponse(BaseModel):
+    """Response for GET /frontend-config."""
+
+    status: str
+    config: Dict[str, Any]
+    timestamp: str
+
+
+class SystemHealthResponse(BaseModel):
+    """Response for GET /health and GET /system/health.
+
+    Shape varies between healthy/degraded/unhealthy paths — extra fields
+    (cpu_percent, memory_percent, services, etc.) are allowed through.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+    timestamp: str
+
+
+class SystemInfoResponse(BaseModel):
+    """Response for GET /info."""
+
+    name: str
+    version: str
+    python_version: str
+    timestamp: str
+    features: Dict[str, Any]
+
+
+class SystemReloadConfigResponse(BaseModel):
+    """Response for POST /reload_config."""
+
+    status: str
+    message: str
+    timestamp: str
+
+
+class SystemPromptReloadResponse(BaseModel):
+    """Response for GET /prompt_reload."""
+
+    status: str
+    message: str
+    timestamp: str
+
+
+class SystemAdminCheckResponse(BaseModel):
+    """Response for GET /admin_check."""
+
+    user: str
+    admin: bool
+    timestamp: str
+
+
+class SystemDynamicImportResponse(BaseModel):
+    """Response for POST /dynamic_import."""
+
+    status: str
+    message: str
+    module_info: Dict[str, Any]
+    timestamp: str
+
+
+class SystemCacheStatsResponse(BaseModel):
+    """Response for GET /cache/stats.
+
+    Redis info and performance sections are dynamic — extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    timestamp: str
+    cache: Dict[str, Any]
+
+
+class SystemCacheActivityResponse(BaseModel):
+    """Response for GET /cache/activity."""
+
+    model_config = {"extra": "allow"}
+
+    timestamp: str
+    activity: Dict[str, Any]
+
+
+class SystemMetricsResponse(BaseModel):
+    """Response for GET /metrics.
+
+    psutil-derived payload is dynamic; extra fields allowed through.
+    """
+
+    model_config = {"extra": "allow"}
+
+    timestamp: str
+
+
+class SystemCacheCoordinatorStatsResponse(BaseModel):
+    """Response for GET /api/cache/stats.
+
+    Shape is defined by CacheCoordinator.get_unified_stats() — opaque.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SystemCacheEvictResponse(BaseModel):
+    """Response for POST /api/cache/evict."""
+
+    status: str
+    evicted: int
+    timestamp: str
+
+
+class SystemCacheClearResponse(BaseModel):
+    """Response for POST /api/cache/clear/{cache_name}."""
+
+    status: str
+    cache: str
+    timestamp: str
+
+
+class SystemBackupStatusResponse(BaseModel):
+    """Response for GET /system/backup/status.
+
+    BackupScheduler.get_status() returns an opaque dict with a timestamp added.
+    """
+
+    model_config = {"extra": "allow"}
+
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# agent_terminal.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AgentTerminalSessionCreateResponse(BaseModel):
+    """Response for POST /agent-terminal/sessions."""
+
+    status: str
+    session_id: str
+    agent_id: str
+    agent_role: str
+    conversation_id: Optional[str] = None
+    host: str
+    state: str
+    created_at: float
+    pty_session_id: Optional[str] = None
+
+
+class AgentTerminalSessionItem(BaseModel):
+    """Single session entry within list response."""
+
+    session_id: str
+    agent_id: str
+    agent_role: str
+    conversation_id: Optional[str] = None
+    host: str
+    state: str
+    created_at: float
+    last_activity: Optional[float] = None
+    command_count: int
+    pty_session_id: Optional[str] = None
+
+
+class AgentTerminalSessionListResponse(BaseModel):
+    """Response for GET /agent-terminal/sessions."""
+
+    status: str
+    total: int
+    sessions: List[AgentTerminalSessionItem]
+
+
+class AgentTerminalSessionDetailResponse(BaseModel):
+    """Response for GET /agent-terminal/sessions/{session_id}.
+
+    session_info dict shape is opaque — extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+class AgentTerminalSessionDeleteResponse(BaseModel):
+    """Response for DELETE /agent-terminal/sessions/{session_id}."""
+
+    status: str
+    session_id: str
+
+
+class AgentTerminalCommandStateResponse(BaseModel):
+    """Response for GET /agent-terminal/commands/{command_id}."""
+
+    command_id: str
+    terminal_session_id: Optional[str] = None
+    chat_id: Optional[str] = None
+    command: str
+    purpose: Optional[str] = None
+    state: str
+    output: Optional[str] = None
+    stderr: Optional[str] = None
+    return_code: Optional[int] = None
+    risk_level: str
+    risk_reasons: Optional[List[str]] = None
+    requested_at: Optional[float] = None
+    approved_at: Optional[float] = None
+    execution_started_at: Optional[float] = None
+    execution_completed_at: Optional[float] = None
+    approved_by_user_id: Optional[str] = None
+    approval_comment: Optional[str] = None
+
+
+class AgentTerminalInfoResponse(BaseModel):
+    """Response for GET /agent-terminal/."""
+
+    name: str
+    version: str
+    description: str
+    features: List[str]
+    agent_roles: List[str]
+    session_states: List[str]
+    endpoints: Dict[str, str]
+    security_features: Dict[str, str]
+
+
+class AgentTerminalToolApprovalResponse(BaseModel):
+    """Response for POST /agent-terminal/tools/approve/{approval_id}."""
+
+    status: str
+    approval_id: str
+    approved: bool
+
+
+class AgentTerminalHostSelectionRequestResponse(BaseModel):
+    """Response for POST /agent-terminal/host-selection/request."""
+
+    request_id: str
+    status: str
+    message: str
+
+
+class AgentTerminalHostSelectionGetResponse(BaseModel):
+    """Response for GET /agent-terminal/host-selection/{request_id}."""
+
+    request_id: str
+    status: str
+    selected_host_id: Optional[str] = None
+    selected_host_name: Optional[str] = None
+    connection_info: Optional[Dict[str, Any]] = None
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+class AgentTerminalHostSelectionSubmitResponse(BaseModel):
+    """Response for POST /agent-terminal/host-selection/{request_id}/select."""
+
+    status: str
+    request_id: str
+    selected_host_id: Optional[str] = None
+    selected_host_name: Optional[str] = None
+    connection_info: Optional[Dict[str, Any]] = None
+
+
+class AgentTerminalHostSelectionCancelResponse(BaseModel):
+    """Response for POST /agent-terminal/host-selection/{request_id}/cancel."""
+
+    status: str
+    request_id: str
+
+
+class AgentTerminalPendingSelectionsResponse(BaseModel):
+    """Response for GET /agent-terminal/host-selection."""
+
+    status: str
+    pending_count: int
+    pending_selections: List[Dict[str, Any]]
+
+
