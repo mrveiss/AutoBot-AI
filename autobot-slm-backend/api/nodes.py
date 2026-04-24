@@ -2049,7 +2049,7 @@ async def _execute_reboot_playbook(node_id: str, node) -> dict:
     logger.error("Failed to reboot node %s: %s", node_id, result["output"])
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Failed to reboot node: {result['output'][:500]}",
+        detail="Failed to reboot node",
     )
 
 
