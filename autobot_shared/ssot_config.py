@@ -1257,6 +1257,14 @@ class AutoBotConfig(BaseSettings):
             "Default 04:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
         ),
     )
+    knowledge_sync_queue_prune_schedule: str = Field(
+        default="0 5 * * *",
+        alias="AUTOBOT_KNOWLEDGE_SYNC_QUEUE_PRUNE_SCHEDULE",
+        description=(
+            "Cron schedule for prune_sync_queue_done task. "
+            "Default 05:00 UTC nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
     knowledge_cache_ttl_days: int = Field(
         default=7,
         alias="AUTOBOT_KNOWLEDGE_CACHE_TTL_DAYS",

@@ -811,6 +811,41 @@ def cleanup_generated_files(
 
 
 # =========================================================================
+# Issue #5081: Prune done entries from the sync queue DONE zset
+# =========================================================================
+
+
+@celery_app.task(bind=True, name="tasks.prune_sync_queue_done")
+def prune_sync_queue_done(self) -> dict:
+    """Remove expired entries from the doc_sync:queue:done zset.
+
+    Issue #5081: The DONE zset grew unbounded because prune_done() was only
+    callable via admin API.  This task is scheduled via Celery Beat so
+    pruning runs automatically on a configurable cron.
+
+    Returns:
+        Dict with pruning statistics:
+            - status: 'success' | 'failed'
+            - pruned: Number of entries removed
+    """
+    from services.knowledge.sync_queue import get_document_sync_queue
+
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={"current": 0, "total": 1, "status": "Pruning sync queue done entries..."},
+        )
+        logger.info("Starting sync queue done-entry pruning...")
+        queue = get_document_sync_queue()
+        pruned = _run_async_in_loop(queue.prune_done())
+        logger.info("prune_sync_queue_done: pruned=%d", pruned)
+        return {"status": "success", "pruned": pruned}
+    except Exception as e:
+        logger.exception("prune_sync_queue_done failed: %s", e)
+        return {"status": "failed", "error": str(e), "pruned": 0}
+
+
+# =========================================================================
 # Periodic Task Beat Schedule (add to celery_app.conf.beat_schedule)
 # =========================================================================
 #
