@@ -29,7 +29,14 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+try:
+    from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+    _REDIS_CHECKPOINTER_AVAILABLE = True
+except ImportError:
+    AsyncRedisSaver = None  # type: ignore[assignment,misc]
+    _REDIS_CHECKPOINTER_AVAILABLE = False
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 from typing_extensions import TypedDict
@@ -226,7 +233,9 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
                 message=state["user_message"],
             )
         except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_MESSAGE_RECEIVED failed (non-fatal): %s", _hook_exc)
+            logger.debug(
+                "Plugin hook ON_MESSAGE_RECEIVED failed (non-fatal): %s", _hook_exc
+            )
 
         return {
             "terminal_session_id": terminal_session_id,
@@ -498,7 +507,10 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         if stream_cb:
             stream_cb(error_msg)
         emit_step_complete(
-            step_name, _cot_start, output_summary=f"LLM error: {exc}", session_id=session_id
+            step_name,
+            _cot_start,
+            output_summary=f"LLM error: {exc}",
+            session_id=session_id,
         )
         # Issue #3278: notify plugins on agent error.
         try:
@@ -885,9 +897,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
         try:
             # Convert context_str back to results format for extensions
             # Results format: list of dicts with content/metadata
-            results = (
-                [{"content": context_str}] if context_str else []
-            )
+            results = [{"content": context_str}] if context_str else []
             results = await _emit_after_rag_results(
                 results,
                 user_query,
@@ -1150,9 +1160,15 @@ def build_chat_graph() -> StateGraph:
     return builder
 
 
-async def get_redis_checkpointer() -> AsyncRedisSaver:
+async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
     """Get or create the Redis checkpointer for graph persistence."""
     global _checkpointer, _REDIS_URI
+
+    if not _REDIS_CHECKPOINTER_AVAILABLE:
+        raise RuntimeError(
+            "AsyncRedisSaver unavailable: langgraph-checkpoint-redis requires "
+            "redisvl with a compatible redis-py version (issue #5623)."
+        )
 
     if _checkpointer is not None:
         return _checkpointer
