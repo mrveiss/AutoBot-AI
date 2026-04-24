@@ -128,9 +128,9 @@ export function useApiResource<T>(
       data.value = result
     } catch (e) {
       // AbortError means this call was superseded — not a real failure.
-      // Check by name to handle both DOMException (browser) and plain Error
-      // objects with name='AbortError' (some fetch polyfills / jsdom).
-      if (e instanceof Error && e.name === 'AbortError') return
+      // Guard by name only: DOMException is not an Error subclass in jsdom,
+      // and some fetch polyfills throw plain Error objects with name='AbortError'.
+      if (e != null && (e as { name?: unknown }).name === 'AbortError') return
       if (disposed || callId !== latestCallId) return
       error.value = e instanceof Error ? e : new Error(String(e))
     } finally {
