@@ -14,13 +14,13 @@ After the first batch: **238** endpoints with `response_model=` (13.4%), **1540*
 
 ## Summary
 
-- **Total endpoints** (excluding `_test.py`): **1778**
-- **With `response_model=`**: **231** (13.0%)
-- **Missing `response_model=`**: **1547** (87.0%)
+- **Total endpoints** (excluding `_test.py`): **1780** (includes 2 `/v1/` endpoints from `openai_compat.py`)
+- **With `response_model=`**: **232** (13.0%)
+- **Missing `response_model=`**: **1548** (87.0%)
 - **Explicit typed return** (Pydantic/dataclass, excluding `Dict`/`Any`/`JSONResponse`): **175**
 - **No return-type annotation at all**: **1362**
 
-- **Frontend-consumed endpoints (strict match)**: **353** / 1778
+- **Frontend-consumed endpoints (strict match)**: **353** / 1778 (openai_compat `/v1/` paths appear only in `types/generated/` which is excluded from FE matching)
 - **HIGH-risk endpoints** (FE-consumed + missing `response_model=`): **307**
 
 The issue reported **1694** endpoints / **241** with `response_model=` (14%). After excluding `_test.py` files this audit finds **1778** endpoints / **231** with `response_model=` (**13.0%**). The minor delta is from (a) test-file exclusion, (b) the 10 commits that landed on `Dev_new_gui` since #5317 was filed.
@@ -29,7 +29,7 @@ The issue reported **1694** endpoints / **241** with `response_model=` (14%). Af
 
 **HIGH** — 307 endpoints across 72 modules. FE-consumed (strict-match against `/api/...` string literals and `${getApiBase()}<path>` templates in non-generated `*.ts` / `*.vue` sources) and lacking `response_model=`. Any shape change can silently break the repository/composable that parses the response — exact class of bug that caused #5200, #5212, #5214, #5215.
 
-**MEDIUM** — 129 modules, 841 endpoints. Missing `response_model=` but no FE path match was detected. Still drift-risk for Python internal callers (agent tools, batch jobs, service-to-service) — just not a direct frontend surface. MEDIUM must be re-audited: our FE-matching heuristic has known under-estimation (see Methodology).
+**MEDIUM** — 129 modules, 842 endpoints (includes 1 from `openai_compat.py`). Missing `response_model=` but no FE path match was detected. Still drift-risk for Python internal callers (agent tools, batch jobs, service-to-service) — just not a direct frontend surface. MEDIUM must be re-audited: our FE-matching heuristic has known under-estimation (see Methodology).
 
 **LOW** — 1 endpoint returning a primitive type (e.g. `bool`, `str`). Near-zero drift risk — conversion optional, only valuable for OpenAPI completeness. (The low count here reflects how few handlers annotate primitive returns explicitly; more are hiding in MEDIUM under `(no annotation)`.)
 
@@ -275,7 +275,7 @@ Each batch ~20 HIGH-risk endpoints. Target: 50%+ HIGH coverage in 3 batches; ful
   - `(router_var, '/prefix', [tags], 'name')` — core_routers.py
   - `('api.module', '/prefix', [tags], 'name')` — feature_routers.py
   - `('api.module', 'router', '/prefix', [tags], 'name')` — monitoring_routers.py 5-tuple form
-- Resolved 214/215 modules (only `openai_compat.py` is registered under `/v1`, not `/api/`).
+- Resolved 215/215 modules (`openai_compat.py` covered below — registered under `/v1/`, not `/api/`).
 - Full backend path = `/api + <registry_prefix> + <decorator_path>`.
 
 ### Frontend consumption detection (strict)
@@ -311,6 +311,24 @@ grep -rn 'response_model=' \
 #   /tmp/modules_with_prefix.json     — per-module: prefix resolution + source
 #   /tmp/audit_summary.json           — per-module counts + proposed batches
 ```
+
+## openai_compat.py (/v1/ prefix)
+
+`autobot-backend/api/openai_compat.py` is the only module registered under the `/v1/` prefix (not `/api/`), so it was excluded from the main FE-matching pass. Enumerated manually below.
+
+**Frontend consumption note:** Both `/v1/chat/completions` and `/v1/models` appear in `autobot-frontend/src/types/generated/api.ts` (the OpenAPI-generated file), which the FE-matching methodology explicitly excludes. No non-generated `*.ts` / `*.vue` files reference these paths — they are consumed externally (OpenAI-compatible clients, not the AutoBot frontend).
+
+| Method | Path | Function | `response_model=` | Return annotation | Classification |
+|--------|------|----------|--------------------|-------------------|----------------|
+| POST | `/v1/chat/completions` | `chat_completions` | `None` (explicit) | `-> Any` | **MEDIUM** |
+| GET  | `/v1/models`           | `list_models`      | `ModelListResponse` | `-> ModelListResponse` | ✅ covered |
+
+**Classification rationale:**
+
+- `POST /v1/chat/completions` — `response_model=None` disables FastAPI response validation. Returns either a `ChatCompletionResponse` Pydantic model (non-streaming) or a `StreamingResponse` (streaming) selected at runtime; `-> Any` is the only accurate annotation. Not FE-consumed from non-generated sources. Risk: **MEDIUM** — Python internal callers and external OpenAI-compat clients get no schema enforcement on the non-streaming path. Adding `response_model=ChatCompletionResponse` would break streaming; the correct fix is a `Union` or a dedicated streaming endpoint.
+- `GET /v1/models` — already has `response_model=ModelListResponse` and a matching `-> ModelListResponse` return type. No action needed.
+
+**Updated MEDIUM count:** 841 (original) + 1 (`/v1/chat/completions`) = **842**.
 
 ## Related
 
