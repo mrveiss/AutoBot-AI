@@ -69,7 +69,7 @@ def _require_browser():
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/health")
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint for research browser service"""
     if not _BROWSER_AVAILABLE:
@@ -97,7 +97,7 @@ async def health_check():
     operation="research_url",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/url")
+@router.post("/url", response_model=None)
 async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     _require_browser()
@@ -113,7 +113,7 @@ async def research_url(request: ResearchRequest):
     operation="handle_session_action",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/session/action")
+@router.post("/session/action", response_model=None)
 async def handle_session_action(request: SessionAction):
     """Handle actions on a research session"""
     _require_browser()
@@ -163,7 +163,7 @@ async def handle_session_action(request: SessionAction):
     operation="get_session_status",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/session/{session_id}/status")
+@router.get("/session/{session_id}/status", response_model=None)
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
     _require_browser()
@@ -192,7 +192,7 @@ async def get_session_status(session_id: str):
     operation="download_mhtml",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/session/{session_id}/mhtml/{filename}")
+@router.get("/session/{session_id}/mhtml/{filename}", response_model=None)
 async def download_mhtml(session_id: str, filename: str):
     """Download an MHTML file from a research session"""
     _require_browser()
@@ -238,7 +238,7 @@ async def download_mhtml(session_id: str, filename: str):
     operation="cleanup_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.delete("/session/{session_id}")
+@router.delete("/session/{session_id}", response_model=None)
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
     _require_browser()
@@ -255,7 +255,7 @@ async def cleanup_session(session_id: str):
     operation="list_sessions",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/sessions")
+@router.get("/sessions", response_model=None)
 async def list_sessions():
     """List all active research sessions"""
     _require_browser()
@@ -289,7 +289,7 @@ class NavigationRequest(BaseModel):
     operation="navigate_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/session/{session_id}/navigate")
+@router.post("/session/{session_id}/navigate", response_model=None)
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
     _require_browser()
@@ -308,7 +308,7 @@ async def navigate_session(session_id: str, request: NavigationRequest):
     operation="get_browser_info",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/browser/{session_id}")
+@router.get("/browser/{session_id}", response_model=None)
 async def get_browser_info(session_id: str):
     """Get browser information for frontend integration (Issue #665: refactored)."""
     _require_browser()
@@ -417,7 +417,7 @@ class CreateChatBrowserRequest(BaseModel):
     operation="get_or_create_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.post("/chat-session")
+@router.post("/chat-session", response_model=None)
 async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
     Get existing or create new browser session for a chat conversation.
@@ -485,7 +485,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     operation="get_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/chat-session/{conversation_id}")
+@router.get("/chat-session/{conversation_id}", response_model=None)
 async def get_chat_browser_session(conversation_id: str):
     """
     Get browser session info for a chat conversation.
@@ -536,7 +536,7 @@ async def get_chat_browser_session(conversation_id: str):
     operation="delete_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.delete("/chat-session/{conversation_id}")
+@router.delete("/chat-session/{conversation_id}", response_model=None)
 async def delete_chat_browser_session(conversation_id: str):
     """
     Close browser session for a chat conversation.

@@ -14,6 +14,17 @@ from fastapi import APIRouter, HTTPException, Query
 
 # Prometheus query helpers shared from monitoring module (Issue #1283)
 from api.monitoring import _query_prometheus_range
+from api.schemas_common import (
+    MetricsDashboardResponse,
+    MetricsExportResponse,
+    MetricsMonitoringStartResponse,
+    MetricsMonitoringStopResponse,
+    MetricsPerformanceSummaryResponse,
+    MetricsSystemCurrentResponse,
+    MetricsSystemHistoryResponse,
+    MetricsSystemSummaryResponse,
+    MetricsWorkflowResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
@@ -28,7 +39,7 @@ router = APIRouter()
     operation="get_workflow_metrics",
     error_code_prefix="METRICS",
 )
-@router.get("/workflow/{workflow_id}")
+@router.get("/workflow/{workflow_id}", response_model=MetricsWorkflowResponse)
 async def get_workflow_metrics(workflow_id: str):
     """Get metrics for a specific workflow"""
     try:
@@ -47,7 +58,7 @@ async def get_workflow_metrics(workflow_id: str):
     operation="get_performance_summary",
     error_code_prefix="METRICS",
 )
-@router.get("/performance/summary")
+@router.get("/performance/summary", response_model=MetricsPerformanceSummaryResponse)
 async def get_performance_summary(
     time_window_hours: int = Query(
         default=24, ge=1, le=168, description="Time window in hours (1-168)"
@@ -68,7 +79,7 @@ async def get_performance_summary(
     operation="get_current_system_metrics",
     error_code_prefix="METRICS",
 )
-@router.get("/system/current")
+@router.get("/system/current", response_model=MetricsSystemCurrentResponse)
 async def get_current_system_metrics():
     """Get current system resource metrics"""
     try:
@@ -96,7 +107,7 @@ _HISTORY_DURATION_MAP = {
     operation="get_system_metrics_history",
     error_code_prefix="METRICS",
 )
-@router.get("/system/history")
+@router.get("/system/history", response_model=MetricsSystemHistoryResponse)
 async def get_system_metrics_history(
     duration: str = Query(
         "1h", description="Time duration (e.g., 15m, 1h, 6h, 1d, 7d)"
@@ -133,7 +144,7 @@ async def get_system_metrics_history(
     operation="get_system_summary",
     error_code_prefix="METRICS",
 )
-@router.get("/system/summary")
+@router.get("/system/summary", response_model=MetricsSystemSummaryResponse)
 async def get_system_summary(
     minutes: int = Query(
         default=10, ge=1, le=60, description="Time window in minutes (1-60)"
@@ -159,7 +170,7 @@ async def get_system_summary(
     operation="export_workflow_metrics",
     error_code_prefix="METRICS",
 )
-@router.get("/export/workflow")
+@router.get("/export/workflow", response_model=MetricsExportResponse)
 async def export_workflow_metrics(
     format: str = Query(default="json", description="Export format")
 ):
@@ -178,7 +189,7 @@ async def export_workflow_metrics(
     operation="export_system_metrics",
     error_code_prefix="METRICS",
 )
-@router.get("/export/system")
+@router.get("/export/system", response_model=MetricsExportResponse)
 async def export_system_metrics(
     format: str = Query(default="json", description="Export format")
 ):
@@ -197,7 +208,7 @@ async def export_system_metrics(
     operation="start_system_monitoring",
     error_code_prefix="METRICS",
 )
-@router.post("/system/monitoring/start")
+@router.post("/system/monitoring/start", response_model=MetricsMonitoringStartResponse)
 async def start_system_monitoring():
     """Start continuous system monitoring"""
     try:
@@ -218,7 +229,7 @@ async def start_system_monitoring():
     operation="stop_system_monitoring",
     error_code_prefix="METRICS",
 )
-@router.post("/system/monitoring/stop")
+@router.post("/system/monitoring/stop", response_model=MetricsMonitoringStopResponse)
 async def stop_system_monitoring():
     """Stop continuous system monitoring"""
     try:
@@ -235,7 +246,7 @@ async def stop_system_monitoring():
     operation="get_metrics_dashboard",
     error_code_prefix="METRICS",
 )
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=MetricsDashboardResponse)
 async def get_metrics_dashboard():
     """Get comprehensive metrics dashboard data"""
     try:
