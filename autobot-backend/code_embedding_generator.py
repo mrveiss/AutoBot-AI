@@ -437,17 +437,13 @@ class CodeEmbeddingGenerator:
         }
 
 
-# Singleton instance
-_code_embedding_generator: Optional[CodeEmbeddingGenerator] = None
-_code_embedding_lock = asyncio.Lock()
+from autobot_shared.singleton_factory import async_lazy_singleton
 
 
-async def get_code_embedding_generator() -> CodeEmbeddingGenerator:
-    """Get or create the code embedding generator instance."""
-    global _code_embedding_generator
-    if _code_embedding_generator is None:
-        async with _code_embedding_lock:
-            if _code_embedding_generator is None:
-                _code_embedding_generator = CodeEmbeddingGenerator()
-                await _code_embedding_generator.initialize()
-    return _code_embedding_generator
+async def _init_code_embedding_generator() -> CodeEmbeddingGenerator:
+    instance = CodeEmbeddingGenerator()
+    await instance.initialize()
+    return instance
+
+
+get_code_embedding_generator = async_lazy_singleton(_init_code_embedding_generator)

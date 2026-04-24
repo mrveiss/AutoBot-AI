@@ -2,9 +2,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for autobot_shared.singleton_factory."""
+import asyncio
 import threading
 import pytest
-from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
+from autobot_shared.singleton_factory import async_lazy_singleton, lazy_optional_singleton, lazy_singleton
 
 
 class TestLazySingleton:
@@ -173,3 +174,58 @@ def test_lazy_optional_singleton_none_not_reinitialised():
     result = get()  # must use cached None, not call factory again
     assert result is None
     assert call_count == 1  # still exactly one call
+
+
+# ---------------------------------------------------------------------------
+# async_lazy_singleton
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncLazySingleton:
+    @pytest.mark.asyncio
+    async def test_sync_factory_cached(self):
+        """Sync factory called once; all awaits return the same instance."""
+        calls = []
+        def factory():
+            calls.append(1)
+            return object()
+        get = async_lazy_singleton(factory)
+        a = await get()
+        b = await get()
+        assert a is b
+        assert len(calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_async_factory_cached(self):
+        """Async factory called once; all awaits return the same instance."""
+        calls = []
+        async def factory():
+            calls.append(1)
+            return object()
+        get = async_lazy_singleton(factory)
+        a = await get()
+        b = await get()
+        assert a is b
+        assert len(calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_independent_closures(self):
+        """Two async_lazy_singleton calls produce independent singletons."""
+        get_a = async_lazy_singleton(object)
+        get_b = async_lazy_singleton(object)
+        assert await get_a() is await get_a()
+        assert await get_b() is await get_b()
+        assert await get_a() is not await get_b()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_callers_receive_same_instance(self):
+        """Concurrent awaiters all receive the same object; factory called once."""
+        calls = []
+        async def factory():
+            calls.append(1)
+            await asyncio.sleep(0)
+            return object()
+        get = async_lazy_singleton(factory)
+        results = await asyncio.gather(*[get() for _ in range(20)])
+        assert all(r is results[0] for r in results)
+        assert len(calls) == 1
