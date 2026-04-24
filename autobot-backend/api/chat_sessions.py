@@ -374,7 +374,7 @@ _EXPORT_CONTENT_TYPES = {
     operation="get_session_messages",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/sessions/{session_id}")
+@router.get("/chat/sessions/{session_id}", response_model=None)
 async def get_session_messages(
     session_id: str,
     request: Request,
@@ -421,7 +421,7 @@ async def get_session_messages(
     operation="list_sessions",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/sessions")
+@router.get("/chat/sessions", response_model=None)
 async def list_sessions(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -777,7 +777,7 @@ async def _track_session_in_memory_graph(
     operation="create_session",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/sessions")
+@router.post("/chat/sessions", response_model=None)
 async def create_session(session_data: SessionCreate, request: Request):
     """
     Create a new chat session.
@@ -847,7 +847,7 @@ async def create_session(session_data: SessionCreate, request: Request):
     operation="update_session",
     error_code_prefix="CHAT",
 )
-@router.put("/chat/sessions/{session_id}")
+@router.put("/chat/sessions/{session_id}", response_model=None)
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
@@ -1348,7 +1348,7 @@ def _build_delete_session_response(
     operation="delete_session",
     error_code_prefix="CHAT",
 )
-@router.delete("/chat/sessions/{session_id}")
+@router.delete("/chat/sessions/{session_id}", response_model=None)
 async def delete_session(
     session_id: str,
     request: Request,
@@ -1410,7 +1410,7 @@ async def delete_session(
     operation="export_session",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/sessions/{session_id}/export")
+@router.get("/chat/sessions/{session_id}/export", response_model=None)
 async def export_session(session_id: str, request: Request, format: str = "json"):
     """
     Export a chat session in various formats.
@@ -1495,7 +1495,7 @@ def _clear_and_restore_session(
     operation="reset_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/reset")
+@router.post("/chat/reset", response_model=None)
 async def reset_chat(
     request: Request, reset_request: Optional[ChatResetRequest] = None
 ):
@@ -1668,7 +1668,7 @@ async def _process_activity_batch(
     operation="add_session_activity",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/sessions/{session_id}/activities")
+@router.post("/chat/sessions/{session_id}/activities", response_model=None)
 async def add_session_activity(
     session_id: str,
     activity_data: ActivityCreate,
@@ -1732,7 +1732,7 @@ async def add_session_activity(
     operation="add_session_activities_batch",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/sessions/{session_id}/activities/batch")
+@router.post("/chat/sessions/{session_id}/activities/batch", response_model=None)
 async def add_session_activities_batch(
     session_id: str,
     batch_data: ActivityBatchCreate,
@@ -1835,7 +1835,7 @@ async def _fetch_activities_from_graph(
     operation="get_session_activities",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/sessions/{session_id}/activities")
+@router.get("/chat/sessions/{session_id}/activities", response_model=None)
 async def get_session_activities(
     session_id: str,
     request: Request,
@@ -1917,7 +1917,7 @@ async def _share_session_facts(
     operation="share_session",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/sessions/{session_id}/share")
+@router.post("/chat/sessions/{session_id}/share", response_model=None)
 async def share_session(
     session_id: str,
     share_data: SessionShareRequest,
@@ -1969,7 +1969,7 @@ async def share_session(
     operation="get_session_share_preview",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/sessions/{session_id}/share/preview")
+@router.get("/chat/sessions/{session_id}/share/preview", response_model=None)
 async def get_share_preview(
     session_id: str,
     request: Request,
@@ -2006,7 +2006,7 @@ async def get_share_preview(
     )
 
 
-@router.delete("/sessions/{session_id}/checkpoints")
+@router.delete("/sessions/{session_id}/checkpoints", response_model=None)
 async def clear_session_checkpoints(
     session_id: str,
     current_user: Dict = Depends(get_current_user),

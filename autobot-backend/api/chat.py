@@ -790,8 +790,8 @@ async def stream_chat_response(
     operation="list_chats",
     error_code_prefix="CHAT",
 )
-@router.get("/chats")
-@router.get("/chat/chats")  # Frontend compatibility alias
+@router.get("/chats", response_model=None)
+@router.get("/chat/chats", response_model=None)  # Frontend compatibility alias
 async def list_chats(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -832,8 +832,8 @@ async def list_chats(
     operation="send_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat")
-@router.post("/chat/message")  # Alternative endpoint
+@router.post("/chat", response_model=None)
+@router.post("/chat/message", response_model=None)  # Alternative endpoint
 async def send_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -917,7 +917,7 @@ async def send_message(
     operation="stream_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/stream")
+@router.post("/chat/stream", response_model=None)
 async def stream_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -962,7 +962,7 @@ async def stream_message(
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/health")
+@router.get("/chat/health", response_model=None)
 async def chat_health_check(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1015,7 +1015,7 @@ async def chat_health_check(
     operation="chat_statistics",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/stats")
+@router.get("/chat/stats", response_model=None)
 async def chat_statistics(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1177,7 +1177,7 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/message")
+@router.post("/chats/{chat_id}/message", response_model=None)
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1252,7 +1252,7 @@ async def _stream_graph_resume(
     operation="resume_chat_graph",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/resume")
+@router.post("/chats/{chat_id}/resume", response_model=None)
 async def resume_chat_graph(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1392,7 +1392,7 @@ async def _merge_chat_messages(
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/save")
+@router.post("/chats/{chat_id}/save", response_model=None)
 async def save_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1443,7 +1443,7 @@ async def save_chat_by_id(
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.delete("/chats/{chat_id}")
+@router.delete("/chats/{chat_id}", response_model=None)
 async def delete_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1489,7 +1489,7 @@ async def delete_chat_by_id(
     operation="send_direct_chat_response",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/direct")
+@router.post("/chat/direct", response_model=None)
 async def send_direct_chat_response(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1950,7 +1950,7 @@ async def _generate_enhanced_stream(
     operation="enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/enhanced")
+@router.post("/enhanced", response_model=None)
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
@@ -2022,7 +2022,7 @@ async def enhanced_chat(
     operation="stream_enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/stream-enhanced")
+@router.post("/stream-enhanced", response_model=None)
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
@@ -2056,7 +2056,7 @@ async def stream_enhanced_chat(
     operation="enhanced_chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/health-enhanced")
+@router.get("/health-enhanced", response_model=None)
 async def enhanced_chat_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2110,7 +2110,7 @@ async def enhanced_chat_health_check(
     operation="get_enhanced_chat_capabilities",
     error_code_prefix="CHAT",
 )
-@router.get("/capabilities")
+@router.get("/capabilities", response_model=None)
 async def get_enhanced_chat_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2201,7 +2201,7 @@ class DetectLanguageRequest(BaseModel):
     operation="translate_text",
     error_code_prefix="TRANSLATE",
 )
-@router.post("/translate")
+@router.post("/translate", response_model=None)
 async def translate_text(
     body: TranslateRequest,
     current_user: dict = Depends(get_current_user),
@@ -2230,7 +2230,7 @@ async def translate_text(
     operation="detect_language",
     error_code_prefix="TRANSLATE",
 )
-@router.post("/detect-language")
+@router.post("/detect-language", response_model=None)
 async def detect_language(
     body: DetectLanguageRequest,
     current_user: dict = Depends(get_current_user),
