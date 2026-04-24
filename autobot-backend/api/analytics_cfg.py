@@ -1144,7 +1144,7 @@ def _calculate_cfg_summary(
     operation="analyze_cfg",
     error_code_prefix="CFG",
 )
-@router.post("/analyze")
+@router.post("/analyze", response_model=None)
 async def analyze_control_flow(
     request: AnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1200,7 +1200,7 @@ async def analyze_control_flow(
     operation="analyze_cfg_file",
     error_code_prefix="CFG",
 )
-@router.post("/analyze-file")
+@router.post("/analyze-file", response_model=None)
 async def analyze_file_control_flow(
     request: AnalyzeFileRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1281,7 +1281,7 @@ def _convert_cfg_to_dot(graph: ControlFlowGraph) -> Dict[str, str]:
     operation="export_cfg_dot",
     error_code_prefix="CFG",
 )
-@router.post("/export/dot")
+@router.post("/export/dot", response_model=None)
 async def export_cfg_dot(
     request: AnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1306,7 +1306,7 @@ async def export_cfg_dot(
     operation="get_complexity_metrics",
     error_code_prefix="CFG",
 )
-@router.post("/complexity")
+@router.post("/complexity", response_model=None)
 async def get_complexity_metrics(
     request: AnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1365,7 +1365,7 @@ async def get_complexity_metrics(
     operation="detect_unreachable",
     error_code_prefix="CFG",
 )
-@router.post("/unreachable")
+@router.post("/unreachable", response_model=None)
 async def detect_unreachable_code(
     request: AnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1401,7 +1401,7 @@ async def detect_unreachable_code(
     operation="detect_infinite_loops",
     error_code_prefix="CFG",
 )
-@router.post("/infinite-loops")
+@router.post("/infinite-loops", response_model=None)
 async def detect_infinite_loops(
     request: AnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1445,7 +1445,7 @@ async def detect_infinite_loops(
     operation="cfg_health",
     error_code_prefix="CFG",
 )
-@router.get("/health")
+@router.get("/health", response_model=None)
 async def cfg_health(
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:

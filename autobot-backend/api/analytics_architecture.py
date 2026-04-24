@@ -1250,7 +1250,7 @@ async def get_analyzer() -> ArchitectureAnalyzer:
 # =============================================================================
 
 
-@router.post("/analyze", summary="Analyze codebase architecture")
+@router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
 async def analyze_architecture(
     admin_check: bool = Depends(check_admin_permission),
     request: AnalysisRequest = None,
@@ -1270,7 +1270,7 @@ async def analyze_architecture(
     )
 
 
-@router.get("/patterns", summary="List available pattern types")
+@router.get("/patterns", response_model=None, summary="List available pattern types")
 async def list_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1293,7 +1293,7 @@ async def list_pattern_types(
     return {"patterns": patterns, "total": len(patterns)}
 
 
-@router.get("/quick-scan", summary="Quick architecture scan")
+@router.get("/quick-scan", response_model=None, summary="Quick architecture scan")
 async def quick_scan(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query("backend/api/", description="Path to scan"),
@@ -1326,7 +1326,7 @@ async def quick_scan(
     }
 
 
-@router.get("/layers", summary="Get architecture layers")
+@router.get("/layers", response_model=None, summary="Get architecture layers")
 async def get_layers(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1350,7 +1350,7 @@ async def get_layers(
     }
 
 
-@router.get("/diagram", summary="Generate architecture diagram")
+@router.get("/diagram", response_model=None, summary="Generate architecture diagram")
 async def get_diagram(
     admin_check: bool = Depends(check_admin_permission),
     format: str = Query("mermaid", description="Diagram format"),
@@ -1375,7 +1375,7 @@ async def get_diagram(
     }
 
 
-@router.get("/consistency", summary="Check pattern consistency")
+@router.get("/consistency", response_model=None, summary="Check pattern consistency")
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
     pattern: Optional[PatternType] = Query(None, description="Specific pattern"),
@@ -1404,7 +1404,7 @@ async def check_consistency(
     }
 
 
-@router.get("/health", summary="Health check")
+@router.get("/health", response_model=None, summary="Health check")
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
