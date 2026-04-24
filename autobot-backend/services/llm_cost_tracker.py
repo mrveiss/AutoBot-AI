@@ -1049,8 +1049,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     async def set_budget_alert(self, name: str, alert_data: dict) -> None:
         """Persist a budget alert configuration to Redis (#5731)."""
-        redis = await self._get_redis()
-        await redis.hset(self.BUDGET_ALERTS_KEY, name, json.dumps(alert_data))
+        try:
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Redis unavailable — budget alert '%s' not persisted", name)
+                return
+            await redis.hset(self.BUDGET_ALERTS_KEY, name, json.dumps(alert_data))
+        except Exception as e:
+            logger.error("Failed to persist budget alert '%s': %s", name, e)
 
     async def get_all_budget_alerts(self) -> dict:
         """Return all budget alert configurations from Redis (#5731).
@@ -1058,14 +1064,21 @@ class LLMCostTracker(AsyncRedisClientMixin):
         Returns:
             Dict mapping alert name (str) to decoded alert dict.
         """
-        redis = await self._get_redis()
-        raw = await redis.hgetall(self.BUDGET_ALERTS_KEY)
-        result = {}
-        for k, v in raw.items():
-            k_str = k if isinstance(k, str) else k.decode("utf-8")
-            v_str = v if isinstance(v, str) else v.decode("utf-8")
-            result[k_str] = json.loads(v_str)
-        return result
+        try:
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Redis unavailable — returning empty budget alerts")
+                return {}
+            raw = await redis.hgetall(self.BUDGET_ALERTS_KEY)
+            result = {}
+            for k, v in raw.items():
+                k_str = k if isinstance(k, str) else k.decode("utf-8")
+                v_str = v if isinstance(v, str) else v.decode("utf-8")
+                result[k_str] = json.loads(v_str)
+            return result
+        except Exception as e:
+            logger.error("Failed to retrieve budget alerts: %s", e)
+            return {}
 
     async def get_all_user_costs(self) -> list[dict[str, Any]]:
         """Get cost breakdown for all users (#1807)."""
