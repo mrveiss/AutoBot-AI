@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 import tempfile
-import threading
+from autobot_shared.singleton_factory import lazy_singleton
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -203,15 +203,4 @@ class MCPProcessManager:
         return json.loads(line.decode())
 
 
-_manager: Optional[MCPProcessManager] = None
-_manager_lock = threading.Lock()
-
-
-def get_mcp_manager() -> MCPProcessManager:
-    """Get the singleton MCPProcessManager instance (thread-safe)."""
-    global _manager
-    if _manager is None:
-        with _manager_lock:
-            if _manager is None:
-                _manager = MCPProcessManager()
-    return _manager
+get_mcp_manager = lazy_singleton(MCPProcessManager)

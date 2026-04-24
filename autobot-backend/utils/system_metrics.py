@@ -16,6 +16,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
@@ -567,19 +568,4 @@ class SystemMetricsCollector:
         self._is_collecting = False
 
 
-# Global metrics collector instance (thread-safe)
-import threading
-
-_metrics_collector = None
-_metrics_collector_lock = threading.Lock()
-
-
-def get_metrics_collector() -> SystemMetricsCollector:
-    """Get the global metrics collector instance (thread-safe)"""
-    global _metrics_collector
-    if _metrics_collector is None:
-        with _metrics_collector_lock:
-            # Double-check after acquiring lock
-            if _metrics_collector is None:
-                _metrics_collector = SystemMetricsCollector()
-    return _metrics_collector
+get_metrics_collector = lazy_singleton(SystemMetricsCollector)

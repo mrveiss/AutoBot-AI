@@ -14,23 +14,11 @@ import pkgutil
 import threading
 from typing import Any, Dict, List, Optional, Set, Type
 
+from autobot_shared.singleton_factory import lazy_singleton
 from skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
 
 logger = logging.getLogger(__name__)
-
-_registry_instance: Optional["SkillRegistry"] = None
-_registry_lock = threading.Lock()
-
-
-def get_skill_registry() -> "SkillRegistry":
-    """Get the singleton SkillRegistry instance."""
-    global _registry_instance
-    if _registry_instance is None:
-        with _registry_lock:
-            if _registry_instance is None:
-                _registry_instance = SkillRegistry()
-    return _registry_instance
 
 
 class SkillRegistry:
@@ -279,3 +267,6 @@ def _find_enabled_dependents(skills: Dict[str, BaseSkill], name: str) -> List[st
         if skill.enabled and name in skill.get_manifest().dependencies:
             dependents.append(skill_name)
     return dependents
+
+
+get_skill_registry = lazy_singleton(SkillRegistry)
