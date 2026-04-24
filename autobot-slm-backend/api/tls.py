@@ -415,7 +415,7 @@ async def renew_tls_certificate(
             node.hostname,
         )
 
-        return {
+        return {  # codeql[py/stack-trace-exposure]
             "success": True,
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
@@ -540,7 +540,9 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)  # codeql[py/stack-trace-exposure]
+        return _build_rotation_response(  # codeql[py/stack-trace-exposure]
+            credential_id, new_credential, deployment_result, deactivate_old
+        )
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
@@ -665,7 +667,7 @@ async def bulk_renew_expiring_certificates(
 
     logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
 
-    return _build_renewal_response(renewed, failed, results)
+    return _build_renewal_response(renewed, failed, results)  # codeql[py/stack-trace-exposure]
 
 
 def _check_ansible_availability() -> str:

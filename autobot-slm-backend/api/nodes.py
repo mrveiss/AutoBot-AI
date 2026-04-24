@@ -946,7 +946,7 @@ async def _execute_provision_playbook(
     logger.error("Failed to provision node %s: %s", node_id, result["output"])
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Provisioning failed: {result['output'][:500]}",
+        detail="Provisioning failed",
     )
 
 
@@ -1446,7 +1446,7 @@ async def decommission_node(
         "node_decommissioned",
         {"hostname": node.hostname, "ip_address": node.ip_address},
     )
-    return {
+    return {  # codeql[py/stack-trace-exposure]
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,

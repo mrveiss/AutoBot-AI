@@ -1104,7 +1104,7 @@ async def _stream_chat_workflow_messages(
 
     except Exception as e:
         logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": str(e), "request_id": request_id}
+        evt = {"type": "error", "content": "stream_error", "request_id": request_id}
         yield f"data: {json.dumps(evt)}\n\n"
 
 

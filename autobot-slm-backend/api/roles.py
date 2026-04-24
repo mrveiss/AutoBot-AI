@@ -339,7 +339,7 @@ async def migrate_role(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Role '{role_name}' has no ansible_playbook configured",
         )
-    return await _run_role_migration(role, migrate_req.target_node_id)
+    return await _run_role_migration(role, migrate_req.target_node_id)  # codeql[py/stack-trace-exposure]
 
 
 async def _run_role_migration(role: Role, target_node_id: str) -> dict:

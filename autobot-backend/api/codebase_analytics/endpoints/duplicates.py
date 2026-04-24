@@ -223,21 +223,18 @@ def _build_timeout_response() -> dict:
     }
 
 
-def _build_detection_error_response(error_msg: str) -> dict:
+def _build_detection_error_response() -> dict:
     """
     Build error response for duplicate detection failure.
 
     Issue #620: Extracted from get_duplicate_code to reduce function length.
-
-    Args:
-        error_msg: Error message to include
 
     Returns:
         JSONResponse-compatible dict for error scenario
     """
     return {
         "status": "error",
-        "message": f"Duplicate detection failed: {error_msg}",
+        "message": "Duplicate detection failed",
         "duplicates": [],
         "total_count": 0,
     }
@@ -349,7 +346,7 @@ async def _handle_detection_failure(
     if fallback:
         return JSONResponse(fallback)
 
-    return JSONResponse(_build_detection_error_response(str(error)))
+    return JSONResponse(_build_detection_error_response())
 
 
 @router.get("/duplicates")
