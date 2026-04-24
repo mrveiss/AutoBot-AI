@@ -2788,6 +2788,14 @@
         "create": "Crear",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "Mi conector"
+      },
+      "tier": {
+        "ready": "Ready",
+        "readyTooltip": "Zero-config connector — works immediately, no credentials required.",
+        "freeKey": "Free key needed",
+        "freeKeyTooltip": "Needs a free API key or environment variable (for example a Notion integration token).",
+        "setupRequired": "Setup required",
+        "setupRequiredTooltip": "Needs credentials, OAuth, a cookie, or a private connection string."
       }
     },
     "modals": {
