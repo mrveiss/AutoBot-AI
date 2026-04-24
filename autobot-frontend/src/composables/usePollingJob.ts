@@ -24,15 +24,15 @@
  * ```
  */
 
-import { ref, readonly, onScopeDispose, getCurrentScope } from 'vue'
+import { ref, readonly, onScopeDispose, getCurrentScope, isRef } from 'vue'
 import type { Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('usePollingJob')
 
 export interface UsePollingJobOptions<T> {
-  /** Poll interval in milliseconds. Default: 2000. */
-  intervalMs?: number
+  /** Poll interval in milliseconds. Accepts a plain number or a `Ref<number>` for reactive intervals. Default: 2000. */
+  intervalMs?: number | Ref<number>
   /** Maximum attempts before auto-stopping. Default: 60. */
   maxAttempts?: number
   /** Callback fired once when `isComplete` returns true. */
@@ -60,7 +60,6 @@ export function usePollingJob<T>(
   options: UsePollingJobOptions<T> = {}
 ): UsePollingJobReturn<T> {
   const {
-    intervalMs = 2000,
     maxAttempts = 60,
     onDone,
     isComplete
@@ -118,7 +117,8 @@ export function usePollingJob<T>(
     isPolling.value = true
     // Fire immediately so callers don't wait `intervalMs` before the first tick
     void poll(taskId)
-    timer = setInterval(() => void poll(taskId), intervalMs)
+    const ms = isRef(options.intervalMs) ? options.intervalMs.value : (options.intervalMs ?? 2000)
+    timer = setInterval(() => void poll(taskId), ms)
   }
 
   // Auto-cleanup when owning scope (component / effectScope) disposes

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { effectScope, nextTick } from 'vue'
+import { effectScope, nextTick, ref } from 'vue'
 
 import { usePollingJob } from '../usePollingJob'
 
@@ -240,5 +240,56 @@ describe('usePollingJob', () => {
 
     expect(error.value).toBeInstanceOf(Error)
     expect(error.value?.message).toBe('string rejection')
+  })
+
+  it('accepts Ref<number> for intervalMs and uses its value at start() time', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ status: 'PENDING' })
+    const intervalRef = ref(500)
+    const { start, stop, attempts } = usePollingJob(fetcher, {
+      intervalMs: intervalRef
+    })
+
+    start('task-ref-interval')
+    // Immediate fire
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+
+    // Tick at captured interval (500ms)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+
+    expect(attempts.value).toBe(3)
+    stop()
+  })
+
+  it('picks up updated Ref<number> value when start() is called again', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ status: 'PENDING' })
+    const intervalRef = ref(1000)
+    const { start, stop } = usePollingJob(fetcher, {
+      intervalMs: intervalRef
+    })
+
+    // First polling session at 1000ms interval
+    start('task-ref-update')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    stop()
+
+    // Update ref and restart — new interval should be 200ms
+    intervalRef.value = 200
+    start('task-ref-update')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(fetcher).toHaveBeenCalledTimes(4)
+    // Old 1000ms interval should NOT fire at t=800ms
+    await vi.advanceTimersByTimeAsync(600)
+    expect(fetcher).toHaveBeenCalledTimes(7) // 3 more at 200ms: t=400, 600, 800
+    stop()
   })
 })
