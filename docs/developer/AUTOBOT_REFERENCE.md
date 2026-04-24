@@ -202,6 +202,32 @@ mcp__memory__create_entities --entities '[{"name": "...", "entityType": "...", "
 
 ---
 
+## SSH Execution Backend
+
+AutoBot uses Paramiko with `RejectPolicy` — unknown host keys are **rejected**, not silently accepted.
+
+**Before first SSH execution to any node, populate known_hosts:**
+
+```bash
+# Run as the autobot service user on the backend host
+ssh-keyscan -H <node-ip-or-hostname> >> ~/.ssh/known_hosts
+```
+
+Or run the Ansible playbook (preferred for fleet-wide setup):
+
+```bash
+cd autobot-slm-backend/ansible
+ansible-playbook -i inventory/slm-nodes.yml playbooks/setup-ssh-known-hosts.yml
+```
+
+**Error message when host key is missing:**
+```
+RuntimeError: SSH host key for 'x.x.x.x' is not in known_hosts.
+Run: ssh-keyscan -H <host> >> ~/.ssh/known_hosts as the autobot service user.
+```
+
+---
+
 ## Documentation
 
 **Key docs:**
