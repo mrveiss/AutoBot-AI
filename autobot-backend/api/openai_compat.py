@@ -17,7 +17,9 @@ default.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
+import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 from uuid import uuid4
@@ -33,6 +35,50 @@ from llm_providers.provider_registry import get_provider_registry
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["openai-compat"])
+
+# ---------------------------------------------------------------------------
+# Rate limiting — per-IP sliding window (mirrors a2a.py pattern, #5132)
+# ---------------------------------------------------------------------------
+
+_OAI_RATE_LIMIT = int(os.environ.get("AUTOBOT_OAI_RATE_LIMIT", "60"))  # per minute
+_OAI_RATE_BUCKET_MAX_KEYS = 10_000
+_oai_rate_buckets: Dict[str, list] = {}
+
+
+def _check_oai_rate_limit(remote_addr: str) -> None:
+    """Enforce a per-IP rate limit on /v1/chat/completions requests.
+
+    Raises HTTP 429 if the caller has exceeded _OAI_RATE_LIMIT requests/minute.
+    Uses a sliding 60-second window stored in-process per worker.
+    Stale entries are evicted when the dict exceeds _OAI_RATE_BUCKET_MAX_KEYS.
+    """
+    now = time.time()
+    window_start = now - 60
+    bucket = [t for t in _oai_rate_buckets.get(remote_addr, []) if t > window_start]
+    if len(bucket) >= _OAI_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded ({_OAI_RATE_LIMIT} requests/min). Try again later.",
+        )
+    bucket.append(now)
+    _oai_rate_buckets[remote_addr] = bucket
+    if len(_oai_rate_buckets) > _OAI_RATE_BUCKET_MAX_KEYS:
+        cutoff = now - 60
+        stale = [
+            ip
+            for ip, ts in _oai_rate_buckets.items()
+            if not any(t > cutoff for t in ts)
+        ]
+        for ip in stale:
+            del _oai_rate_buckets[ip]
+
+
+def _remote_addr(request: Request) -> str:
+    """Extract real client IP (respects X-Forwarded-For from nginx)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +323,7 @@ async def chat_completions(
     OpenAI-format response (streaming or non-streaming).
     """
     _get_user(request)
+    _check_oai_rate_limit(_remote_addr(request))
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body)
@@ -284,6 +331,12 @@ async def chat_completions(
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
         raise HTTPException(status_code=503, detail="No LLM providers available")
+
+    # Fix 3: validate stream_completion is an async generator function (#5132)
+    if not inspect.isasyncgenfunction(provider.stream_completion):
+        raise ValueError(
+            f"Provider {provider.provider_name!r} stream_completion must be an async generator function"
+        )
 
     completion_id = _make_completion_id()
     # Use resolved provider name as model echo when caller sent "autobot-default"
@@ -354,7 +407,7 @@ async def list_models(request: Request) -> ModelListResponse:
 
     for provider_info in registry.list_providers():
         provider_name = provider_info["name"]
-        provider = registry._providers.get(str(provider_name))
+        provider = registry.get_provider_by_name(str(provider_name))
         if provider is None:
             continue
         try:
