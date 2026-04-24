@@ -120,6 +120,30 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+# Response schemas for OpenAPI documentation and response validation
+from api.schemas_common import (
+    AdminExecuteResponse,
+    CommandAssessResponse,
+    SSHKeyAgentResponse,
+    SSHKeyListResponse,
+    SSHKeyPathResponse,
+    TerminalAuditLogResponse,
+    TerminalCapabilitiesResponse,
+    TerminalCommandHistoryResponse,
+    TerminalFeaturesResponse,
+    TerminalHealthResponse,
+    TerminalInfoResponse,
+    TerminalSecurityPoliciesResponse,
+    TerminalSessionCreateResponse,
+    TerminalSessionDeleteResponse,
+    TerminalSessionDetailResponse,
+    TerminalSessionListResponse,
+    TerminalSignalResponse,
+    TerminalInputResponse,
+    TerminalStatsResponse,
+    TerminalSystemStatusResponse,
+)
+
 # Import models from dedicated module (Issue #185 - split oversized files)
 from api.terminal_models import (
     MODERATE_RISK_PATTERNS,
@@ -300,7 +324,7 @@ router.include_router(tools_router, prefix="/terminal")
     operation="create_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions")
+@router.post("/sessions", response_model=TerminalSessionCreateResponse)
 async def create_terminal_session(
     request: TerminalSessionRequest,
     current_user: dict = Depends(get_current_user),
@@ -371,7 +395,7 @@ async def create_terminal_session(
     operation="list_terminal_sessions",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions")
+@router.get("/sessions", response_model=TerminalSessionListResponse)
 async def list_terminal_sessions(
     current_user: dict = Depends(get_current_user),
 ):
@@ -403,7 +427,7 @@ async def list_terminal_sessions(
     operation="get_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}")
+@router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
 async def get_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -435,7 +459,7 @@ async def get_terminal_session(
     operation="delete_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.delete("/sessions/{session_id}")
+@router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
 async def delete_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -476,7 +500,7 @@ async def delete_terminal_session(
     operation="setup_ssh_keys",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/ssh-keys")
+@router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 async def setup_ssh_keys(
     session_id: str,
     request: SSHKeySetupRequest,
@@ -519,7 +543,7 @@ async def setup_ssh_keys(
     operation="list_session_ssh_keys",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/ssh-keys")
+@router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 async def list_session_ssh_keys(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -549,7 +573,7 @@ async def list_session_ssh_keys(
     operation="add_key_to_agent",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent")
+@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
 async def add_key_to_ssh_agent(
     session_id: str,
     key_name: str,
@@ -591,7 +615,7 @@ async def add_key_to_ssh_agent(
     operation="get_key_path",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path")
+@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
 async def get_ssh_key_path(
     session_id: str,
     key_name: str,
@@ -626,7 +650,7 @@ async def get_ssh_key_path(
     operation="execute_single_command",
     error_code_prefix="TERMINAL",
 )
-@router.post("/command")
+@router.post("/command", response_model=CommandAssessResponse)
 async def execute_single_command(
     request: CommandRequest,
     current_user: dict = Depends(get_current_user),
@@ -670,7 +694,7 @@ async def execute_single_command(
     operation="send_terminal_input",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/input")
+@router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
 async def send_terminal_input(
     session_id: str,
     request: TerminalInputRequest,
@@ -701,7 +725,7 @@ async def send_terminal_input(
     operation="send_terminal_signal",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/signal/{signal_name}")
+@router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
 async def send_terminal_signal(
     session_id: str,
     signal_name: str,
@@ -738,7 +762,7 @@ async def send_terminal_signal(
     operation="get_terminal_command_history",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/history")
+@router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
 async def get_terminal_command_history(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -777,7 +801,7 @@ async def get_terminal_command_history(
     operation="get_session_audit_log",
     error_code_prefix="TERMINAL",
 )
-@router.get("/audit/{session_id}")
+@router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
 async def get_session_audit_log(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1065,7 +1089,7 @@ async def ssh_terminal_websocket(
     operation="terminal_info",
     error_code_prefix="TERMINAL",
 )
-@router.get("/")
+@router.get("/", response_model=TerminalInfoResponse)
 async def terminal_info(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1104,7 +1128,7 @@ async def terminal_info(
     operation="terminal_health_check",
     error_code_prefix="TERMINAL",
 )
-@router.get("/health")
+@router.get("/health", response_model=TerminalHealthResponse)
 async def terminal_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1150,7 +1174,7 @@ async def terminal_health_check(
     operation="get_terminal_system_status",
     error_code_prefix="TERMINAL",
 )
-@router.get("/status")
+@router.get("/status", response_model=TerminalSystemStatusResponse)
 async def get_terminal_system_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1194,7 +1218,7 @@ async def get_terminal_system_status(
     operation="get_terminal_capabilities",
     error_code_prefix="TERMINAL",
 )
-@router.get("/capabilities")
+@router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
 async def get_terminal_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1250,7 +1274,7 @@ async def get_terminal_capabilities(
     operation="get_security_policies",
     error_code_prefix="TERMINAL",
 )
-@router.get("/security")
+@router.get("/security", response_model=TerminalSecurityPoliciesResponse)
 async def get_security_policies(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1292,7 +1316,7 @@ async def get_security_policies(
     operation="get_terminal_features",
     error_code_prefix="TERMINAL",
 )
-@router.get("/features")
+@router.get("/features", response_model=TerminalFeaturesResponse)
 async def get_terminal_features(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1351,7 +1375,7 @@ async def get_terminal_features(
     operation="get_terminal_statistics",
     error_code_prefix="TERMINAL",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=TerminalStatsResponse)
 async def get_terminal_statistics(
     session_id: str = None,
     current_user: dict = Depends(get_current_user),
@@ -1380,8 +1404,8 @@ async def get_terminal_statistics(
 # SLM Admin Terminal (Issue #983) ================================================
 
 
-@router.post("/execute", summary="Execute command (SLM admin terminal)")
-async def admin_execute_command(body: AdminExecuteRequest) -> dict:
+@router.post("/execute", summary="Execute command (SLM admin terminal)", response_model=AdminExecuteResponse)
+async def admin_execute_command(body: AdminExecuteRequest) -> AdminExecuteResponse:
     """Execute a single shell command and return stdout/stderr/exit_code.
 
     Runs on the local backend machine. No auth required — accessible via
