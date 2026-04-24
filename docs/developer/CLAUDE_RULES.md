@@ -257,3 +257,32 @@ $ <same grep>
 Full Phase 0d specification and concrete examples: [`skills/batch-implement.md` §Phase 0d](skills/batch-implement.md).
 
 > Violation: Filing a follow-up issue #5410 for 2 dialogs that the original #5371 grep should have surfaced, because #5371 grepped for `handleKeydown` (symbol) instead of `key === 'Tab'` (behavior).
+
+---
+
+## Latency Budgets
+
+**Hot paths have explicit p95 targets. PRs touching these paths must include a perf measurement or justify any regression.**
+
+| Hot path | p95 target |
+|---|---|
+| Memory wake-up (L0+L1 injection) | ≤ 100 ms |
+| KB hybrid search (no rerank) | ≤ 200 ms |
+| KB hybrid search (with rerank) | ≤ 500 ms |
+| Memory-graph entity lookup | ≤ 50 ms |
+| Agent-tool dispatch overhead | ≤ 30 ms |
+| Pre-compact hook (background) | ≤ 500 ms |
+| Stop hook (background) | ≤ 500 ms |
+| Chat turn p95 (agent response start) | ≤ 1500 ms |
+
+**PR template line for hot-path changes:**
+
+```
+Perf impact on [memory wake-up / KB search / entity lookup / tool dispatch / hooks / chat turn]: [measurement or N/A]
+```
+
+**Enforcement:** Any PR that degrades a hot path beyond its p95 target must include either a Prometheus histogram measurement confirming the regression is within budget, or an explicit justification approved by the reviewer.
+
+**Prometheus histogram verification** — ensuring each target above has a corresponding histogram — is tracked as a separate follow-up. Do not block PRs on missing histograms; file a discovery issue if a histogram is absent.
+
+> Violation: Merging a change to KB hybrid search without reporting measured p95 latency when the code path is on the hot-path list above.
