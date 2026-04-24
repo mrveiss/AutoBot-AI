@@ -19,7 +19,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
 logger = logging.getLogger(__name__)
@@ -29,19 +30,10 @@ _REPORT_KEY_PREFIX = "saved_report:"
 _REPORT_INDEX_KEY = "saved_reports:index"
 
 
-class SavedReportsService:
+class SavedReportsService(AsyncRedisClientMixin):
     """Redis-backed CRUD service for saved analytics reports."""
 
-    def __init__(self):
-        self._redis = None
-
-    async def _get_redis(self):
-        """Get async Redis client for the analytics database."""
-        if self._redis is None:
-            self._redis = get_redis_client(
-                async_client=True, database=RedisDatabase.ANALYTICS
-            )
-        return self._redis
+    _redis_database = RedisDatabase.ANALYTICS
 
     # ------------------------------------------------------------------
     # CRUD
