@@ -290,7 +290,7 @@ def _build_unified_report_response(
     category=ErrorCategory.API,
     error_code_prefix="UNIFIED",
 )
-@router.get("/report")
+@router.get("/report", response_model=None)
 async def get_unified_report():
     """
     Get unified analytics report aggregating all analytics sources.
@@ -329,7 +329,7 @@ async def get_unified_report():
     category=ErrorCategory.API,
     error_code_prefix="UNIFIED",
 )
-@router.get("/summary")
+@router.get("/summary", response_model=None)
 async def get_quick_summary():
     """
     Get a quick summary of code health.
@@ -365,7 +365,7 @@ async def get_quick_summary():
     category=ErrorCategory.API,
     error_code_prefix="UNIFIED",
 )
-@router.get("/trends")
+@router.get("/trends", response_model=None)
 async def get_trends():
     """
     Get analytics trends over time.

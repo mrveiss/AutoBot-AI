@@ -16,6 +16,15 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    DataResponse,
+    RUMClearResponse,
+    RUMConfigResponse,
+    RUMDisableResponse,
+    RUMEventResponse,
+    RUMMetricsResponse,
+    RUMStatusResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -275,7 +284,7 @@ rum_logger = setup_rum_logger()
     operation="configure_rum",
     error_code_prefix="RUM",
 )
-@router.post("/config")
+@router.post("/config", response_model=RUMConfigResponse)
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
     try:
@@ -312,7 +321,7 @@ async def configure_rum(config: RumConfig):
     operation="log_rum_event",
     error_code_prefix="RUM",
 )
-@router.post("/event")
+@router.post("/event", response_model=RUMEventResponse)
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
     try:
@@ -371,7 +380,7 @@ async def log_rum_event(event: RumEvent):
     operation="disable_rum",
     error_code_prefix="RUM",
 )
-@router.post("/disable")
+@router.post("/disable", response_model=RUMDisableResponse)
 async def disable_rum():
     """Disable RUM monitoring"""
     try:
@@ -393,7 +402,7 @@ async def disable_rum():
     operation="clear_rum_data",
     error_code_prefix="RUM",
 )
-@router.post("/clear")
+@router.post("/clear", response_model=RUMClearResponse)
 async def clear_rum_data():
     """Clear all RUM data"""
     try:
@@ -426,7 +435,7 @@ async def clear_rum_data():
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
-@router.get("/export")
+@router.get("/export", response_model=DataResponse)
 async def export_rum_data():
     """Export RUM data for analysis"""
 
@@ -471,7 +480,7 @@ async def export_rum_data():
     operation="get_rum_status",
     error_code_prefix="RUM",
 )
-@router.get("/status")
+@router.get("/status", response_model=RUMStatusResponse)
 async def get_rum_status():
     """Get current RUM status and statistics"""
 
@@ -676,7 +685,7 @@ def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int
     operation="receive_rum_metrics",
     error_code_prefix="RUM",
 )
-@router.post("/metrics")
+@router.post("/metrics", response_model=RUMMetricsResponse)
 async def receive_rum_metrics(metrics: RumMetrics):
     """
     Receive RUM metrics from frontend and record them to Prometheus.

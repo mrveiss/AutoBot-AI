@@ -16,6 +16,15 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    ElevationAuthorizeResponse,
+    ElevationExecuteResponse,
+    ElevationHealthResponse,
+    ElevationPendingResponse,
+    ElevationRequestResponse,
+    ElevationStatusResponse,
+    SuccessResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -58,7 +67,7 @@ class ElevationAuthorization(BaseModel):
     operation="request_elevation",
     error_code_prefix="ELEVATION",
 )
-@router.post("/request")
+@router.post("/request", response_model=ElevationRequestResponse)
 async def request_elevation(request: ElevationRequest):
     """Request elevation for a privileged operation"""
     request_id = str(uuid.uuid4())
@@ -88,7 +97,7 @@ async def request_elevation(request: ElevationRequest):
     operation="authorize_elevation",
     error_code_prefix="ELEVATION",
 )
-@router.post("/authorize")
+@router.post("/authorize", response_model=ElevationAuthorizeResponse)
 async def authorize_elevation(auth: ElevationAuthorization):
     """Authorize an elevation request with password"""
     request_id = auth.request_id
@@ -153,7 +162,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
     operation="get_elevation_status",
     error_code_prefix="ELEVATION",
 )
-@router.get("/status/{request_id}")
+@router.get("/status/{request_id}", response_model=ElevationStatusResponse)
 async def get_elevation_status(request_id: str):
     """Check the status of an elevation request"""
     async with _pending_requests_lock:
@@ -176,7 +185,7 @@ async def get_elevation_status(request_id: str):
     operation="execute_elevated_command",
     error_code_prefix="ELEVATION",
 )
-@router.post("/execute/{session_token}")
+@router.post("/execute/{session_token}", response_model=ElevationExecuteResponse)
 async def execute_elevated_command(session_token: str, command: str):
     """Execute a command with elevated privileges using session token"""
     async with _elevation_sessions_lock:
@@ -222,7 +231,7 @@ async def execute_elevated_command(session_token: str, command: str):
     operation="get_pending_requests",
     error_code_prefix="ELEVATION",
 )
-@router.get("/pending")
+@router.get("/pending", response_model=ElevationPendingResponse)
 async def get_pending_requests_endpoint():
     """Get all pending elevation requests"""
     async with _pending_requests_lock:
@@ -313,7 +322,7 @@ async def run_elevated_command(command: str) -> dict:
     operation="revoke_elevation_session",
     error_code_prefix="ELEVATION",
 )
-@router.delete("/session/{session_token}")
+@router.delete("/session/{session_token}", response_model=SuccessResponse)
 async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
     if session_token in elevation_sessions:
@@ -328,7 +337,7 @@ async def revoke_elevation_session(session_token: str):
     operation="elevation_health_check",
     error_code_prefix="ELEVATION",
 )
-@router.get("/health")
+@router.get("/health", response_model=ElevationHealthResponse)
 async def elevation_health_check():
     """Health check for elevation system"""
     return {
