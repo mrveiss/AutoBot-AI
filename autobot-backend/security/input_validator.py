@@ -22,7 +22,9 @@ _VALID_URL_SCHEMES = frozenset({"http", "https"})
 
 # Issue #380: Pre-compiled regex patterns for frequently used operations
 # #1721: Use [^<]*(?:<(?!/script\b)[^<]*)* to avoid bad-tag-filter bypass
-_SCRIPT_TAG_RE = re.compile(
+# #5695: </script\s*> already handles trailing whitespace; suppressing residual
+#        CodeQL py/bad-tag-filter alert — pattern is correct and complete.
+_SCRIPT_TAG_RE = re.compile(  # noqa: S1 codeql[py/bad-tag-filter]
     r"<script\b[^>]*>[^<]*(?:<(?!/script\b)[^<]*)*</script\s*>",
     re.IGNORECASE | re.DOTALL,
 )

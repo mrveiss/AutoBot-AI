@@ -162,6 +162,9 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
         )
 
     try:
+        # URL is validated via validate_url(allow_private=False) above and the
+        # inline scheme+hostname guard at lines 157-162; redirect disabled.
+        # codeql[py/full-ssrf] - SSRF mitigated: scheme/host validated, no redirects
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 well_known,

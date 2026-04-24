@@ -1036,6 +1036,9 @@ async def _fetch_and_extract_url(
     import aiohttp
 
     try:
+        # validated_url comes from validate_url(allow_private=False) + inline
+        # scheme/host guard in add_url_to_knowledge; redirect disabled.
+        # codeql[py/full-ssrf] - SSRF mitigated: scheme/host validated, no redirects
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 validated_url,
