@@ -19,6 +19,15 @@ from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from api.schemas_common import (
+    ValidationDashboardAlertsResponse,
+    ValidationDashboardGenerateResponse,
+    ValidationDashboardMetricsResponse,
+    ValidationDashboardRecommendationsResponse,
+    ValidationDashboardReportResponse,
+    ValidationDashboardTrendsResponse,
+    ValidationJudgmentResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import (
@@ -150,7 +159,7 @@ class DashboardGenerateRequest(BaseModel):
     operation="get_dashboard_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/status")
+@router.get("/status", response_model=None)
 async def get_dashboard_status():
     """Get validation dashboard service status"""
     generator = get_dashboard_generator()
@@ -185,7 +194,7 @@ async def get_dashboard_status():
     operation="get_validation_report",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/report")
+@router.get("/report", response_model=ValidationDashboardReportResponse)
 async def get_validation_report():
     """Get current validation report data.
 
@@ -238,7 +247,7 @@ async def get_validation_report():
     operation="get_dashboard_html",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/dashboard", response_class=HTMLResponse)
+@router.get("/dashboard", response_class=HTMLResponse, response_model=None)
 async def get_dashboard_html():
     """Get HTML validation dashboard"""
     generator = get_dashboard_generator()
@@ -296,7 +305,7 @@ async def get_dashboard_html():
     operation="get_dashboard_file",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/dashboard/file")
+@router.get("/dashboard/file", response_model=None)
 async def get_dashboard_file():
     """Get dashboard HTML file for download"""
     generator = get_dashboard_generator()
@@ -329,7 +338,7 @@ async def get_dashboard_file():
     operation="generate_dashboard",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.post("/generate")
+@router.post("/generate", response_model=ValidationDashboardGenerateResponse)
 async def generate_dashboard(
     request: DashboardGenerateRequest, background_tasks: BackgroundTasks
 ):
@@ -391,7 +400,7 @@ async def generate_dashboard(
     operation="get_dashboard_metrics",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/metrics")
+@router.get("/metrics", response_model=ValidationDashboardMetricsResponse)
 async def get_dashboard_metrics():
     """Get dashboard-specific metrics"""
     generator = get_dashboard_generator()
@@ -452,7 +461,7 @@ async def get_dashboard_metrics():
     operation="get_trend_data",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/trends")
+@router.get("/trends", response_model=ValidationDashboardTrendsResponse)
 async def get_trend_data():
     """Get trend data for charts"""
     generator = get_dashboard_generator()
@@ -482,7 +491,7 @@ async def get_trend_data():
     operation="get_system_alerts",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/alerts")
+@router.get("/alerts", response_model=ValidationDashboardAlertsResponse)
 async def get_system_alerts():
     """Get current system alerts"""
     generator = get_dashboard_generator()
@@ -521,7 +530,7 @@ async def get_system_alerts():
     operation="get_system_recommendations",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/recommendations")
+@router.get("/recommendations", response_model=ValidationDashboardRecommendationsResponse)
 async def get_system_recommendations():
     """Get current system recommendations"""
     generator = get_dashboard_generator()
@@ -569,7 +578,7 @@ async def get_system_recommendations():
     operation="judge_workflow_step",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.post("/judge_workflow_step")
+@router.post("/judge_workflow_step", response_model=ValidationJudgmentResponse)
 async def judge_workflow_step(request: dict):
     """Use LLM judges to evaluate a workflow step"""
     try:
@@ -626,7 +635,7 @@ async def judge_workflow_step(request: dict):
     operation="judge_agent_response",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.post("/judge_agent_response")
+@router.post("/judge_agent_response", response_model=ValidationJudgmentResponse)
 async def judge_agent_response(request: dict):
     """Use LLM judges to evaluate an agent response"""
     judges = get_validation_judges()
@@ -686,7 +695,7 @@ async def judge_agent_response(request: dict):
     operation="get_judge_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/judge_status")
+@router.get("/judge_status", response_model=None)
 async def get_judge_status():
     """Get status of validation judges"""
     judges = get_validation_judges()

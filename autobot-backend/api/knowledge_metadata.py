@@ -26,6 +26,19 @@ from api.knowledge_models import (
     UpdateMetadataTemplateRequest,
     ValidateMetadataRequest,
 )
+from api.schemas_common import (
+    KnowledgeFactRevertResponse,
+    KnowledgeFactVersionCompareResponse,
+    KnowledgeFactVersionDetailResponse,
+    KnowledgeFactVersionHistoryDeleteResponse,
+    KnowledgeFactVersionListResponse,
+    KnowledgeMetadataSearchResponse,
+    KnowledgeMetadataTemplateDeleteResponse,
+    KnowledgeMetadataTemplateDetailResponse,
+    KnowledgeMetadataTemplateListResponse,
+    KnowledgeMetadataTemplateResponse,
+    KnowledgeMetadataValidateResponse,
+)
 from auth_middleware import check_admin_permission
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
@@ -43,7 +56,7 @@ router = APIRouter(
 # ============================================================================
 
 
-@router.post("/metadata/templates")
+@router.post("/metadata/templates", response_model=KnowledgeMetadataTemplateResponse)
 async def create_metadata_template(request: CreateMetadataTemplateRequest):
     """
     Create a new metadata template.
@@ -93,7 +106,7 @@ async def create_metadata_template(request: CreateMetadataTemplateRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/metadata/templates")
+@router.get("/metadata/templates", response_model=KnowledgeMetadataTemplateListResponse)
 async def list_metadata_templates(category: str = None):
     """
     List all metadata templates, optionally filtered by category.
@@ -120,7 +133,7 @@ async def list_metadata_templates(category: str = None):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/metadata/templates/{template_id}")
+@router.get("/metadata/templates/{template_id}", response_model=KnowledgeMetadataTemplateDetailResponse)
 async def get_metadata_template(template_id: str):
     """Get a specific metadata template by ID."""
     try:
@@ -139,7 +152,7 @@ async def get_metadata_template(template_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/metadata/templates/{template_id}")
+@router.put("/metadata/templates/{template_id}", response_model=KnowledgeMetadataTemplateResponse)
 async def update_metadata_template(
     template_id: str, request: UpdateMetadataTemplateRequest
 ):
@@ -176,7 +189,7 @@ async def update_metadata_template(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/metadata/templates/{template_id}")
+@router.delete("/metadata/templates/{template_id}", response_model=KnowledgeMetadataTemplateDeleteResponse)
 async def delete_metadata_template(template_id: str):
     """Delete a metadata template."""
     try:
@@ -204,7 +217,7 @@ async def delete_metadata_template(template_id: str):
 # ============================================================================
 
 
-@router.post("/metadata/validate")
+@router.post("/metadata/validate", response_model=KnowledgeMetadataValidateResponse)
 async def validate_metadata(request: ValidateMetadataRequest):
     """
     Validate metadata against applicable templates.
@@ -231,7 +244,7 @@ async def validate_metadata(request: ValidateMetadataRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/metadata/search")
+@router.post("/metadata/search", response_model=KnowledgeMetadataSearchResponse)
 async def search_by_metadata(request: SearchByMetadataRequest):
     """
     Search facts by metadata field value.
@@ -283,7 +296,7 @@ async def search_by_metadata(request: SearchByMetadataRequest):
 # ============================================================================
 
 
-@router.get("/facts/{fact_id}/versions")
+@router.get("/facts/{fact_id}/versions", response_model=KnowledgeFactVersionListResponse)
 async def list_fact_versions(fact_id: str, limit: int = 10):
     """
     List version history for a fact.
@@ -316,7 +329,7 @@ async def list_fact_versions(fact_id: str, limit: int = 10):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/facts/{fact_id}/versions/{version}")
+@router.get("/facts/{fact_id}/versions/{version}", response_model=KnowledgeFactVersionDetailResponse)
 async def get_fact_version(fact_id: str, version: int):
     """
     Get a specific version of a fact.
@@ -342,7 +355,7 @@ async def get_fact_version(fact_id: str, version: int):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/facts/{fact_id}/revert")
+@router.post("/facts/{fact_id}/revert", response_model=KnowledgeFactRevertResponse)
 async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
     """
     Revert a fact to a previous version.
@@ -382,7 +395,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/facts/{fact_id}/versions/compare")
+@router.post("/facts/{fact_id}/versions/compare", response_model=KnowledgeFactVersionCompareResponse)
 async def compare_versions(fact_id: str, request: CompareVersionsRequest):
     """
     Compare two versions of a fact.
@@ -412,7 +425,7 @@ async def compare_versions(fact_id: str, request: CompareVersionsRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/facts/{fact_id}/versions")
+@router.delete("/facts/{fact_id}/versions", response_model=KnowledgeFactVersionHistoryDeleteResponse)
 async def delete_version_history(fact_id: str, confirm: bool = False):
     """
     Delete all version history for a fact.

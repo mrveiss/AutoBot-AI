@@ -1073,3 +1073,418 @@ class AgentTerminalPendingSelectionsResponse(BaseModel):
     pending_selections: List[Dict[str, Any]]
 
 
+# ---------------------------------------------------------------------------
+# knowledge_metadata.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeMetadataTemplateResponse(BaseModel):
+    """Response for POST /metadata/templates and PUT /metadata/templates/{id}."""
+
+    status: str
+    message: Optional[str] = None
+    template: Optional[Dict[str, Any]] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeMetadataTemplateListResponse(BaseModel):
+    """Response for GET /metadata/templates."""
+
+    status: str
+    count: Optional[int] = None
+    templates: Optional[List[Any]] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeMetadataTemplateDetailResponse(BaseModel):
+    """Response for GET /metadata/templates/{template_id}."""
+
+    status: str
+    template: Optional[Dict[str, Any]] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeMetadataTemplateDeleteResponse(BaseModel):
+    """Response for DELETE /metadata/templates/{template_id}."""
+
+    status: str
+    message: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeMetadataValidateResponse(BaseModel):
+    """Response for POST /metadata/validate."""
+
+    valid: Optional[bool] = None
+    errors: Optional[List[Any]] = None
+    warnings: Optional[List[Any]] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeMetadataSearchResponse(BaseModel):
+    """Response for POST /metadata/search."""
+
+    status: str
+    count: Optional[int] = None
+    facts: Optional[List[Any]] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeFactVersionListResponse(BaseModel):
+    """Response for GET /facts/{fact_id}/versions."""
+
+    status: str
+    fact_id: Optional[str] = None
+    versions: Optional[List[Any]] = None
+    count: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeFactVersionDetailResponse(BaseModel):
+    """Response for GET /facts/{fact_id}/versions/{version}."""
+
+    status: str
+    fact_id: Optional[str] = None
+    version: Optional[int] = None
+    content: Optional[Any] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeFactRevertResponse(BaseModel):
+    """Response for POST /facts/{fact_id}/revert."""
+
+    status: str
+    message: Optional[str] = None
+    new_version: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeFactVersionCompareResponse(BaseModel):
+    """Response for POST /facts/{fact_id}/versions/compare."""
+
+    status: str
+    fact_id: Optional[str] = None
+    version_a: Optional[int] = None
+    version_b: Optional[int] = None
+    diff: Optional[Any] = None
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeFactVersionHistoryDeleteResponse(BaseModel):
+    """Response for DELETE /facts/{fact_id}/versions."""
+
+    status: str
+    message: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# knowledge_collections.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeCollectionCreateResponse(BaseModel):
+    """Response for POST /collections."""
+
+    status: str
+    collection: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class KnowledgeCollectionListResponse(BaseModel):
+    """Response for GET /collections."""
+
+    status: str
+    collections: List[Any]
+    total_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class KnowledgeCollectionDetailResponse(BaseModel):
+    """Response for GET /collections/{collection_id}."""
+
+    status: str
+    collection: Optional[Dict[str, Any]] = None
+
+
+class KnowledgeCollectionUpdateResponse(BaseModel):
+    """Response for PUT /collections/{collection_id}."""
+
+    status: str
+    collection: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class KnowledgeCollectionDeleteResponse(BaseModel):
+    """Response for DELETE /collections/{collection_id}."""
+
+    status: str
+    collection_id: Optional[str] = None
+    facts_in_collection: int
+    facts_deleted: int
+    message: Optional[str] = None
+
+
+class KnowledgeCollectionAddFactsResponse(BaseModel):
+    """Response for POST /collections/{collection_id}/facts."""
+
+    status: str
+    collection_id: Optional[str] = None
+    added_count: int
+    already_in_collection: int
+    not_found: List[Any]
+    total_facts: int
+    message: Optional[str] = None
+
+
+class KnowledgeCollectionRemoveFactsResponse(BaseModel):
+    """Response for DELETE /collections/{collection_id}/facts."""
+
+    status: str
+    collection_id: Optional[str] = None
+    removed_count: int
+    not_in_collection: int
+    total_facts: int
+    message: Optional[str] = None
+
+
+class KnowledgeCollectionFactsListResponse(BaseModel):
+    """Response for GET /collections/{collection_id}/facts."""
+
+    status: str
+    collection_id: Optional[str] = None
+    collection_name: Optional[str] = None
+    facts: List[Any]
+    total_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class KnowledgeFactCollectionsResponse(BaseModel):
+    """Response for GET /facts/{fact_id}/collections."""
+
+    status: str
+    fact_id: Optional[str] = None
+    collections: List[Any]
+    count: int
+
+
+class KnowledgeCollectionExportResponse(BaseModel):
+    """Response for POST /collections/{collection_id}/export."""
+
+    status: str
+    collection: Optional[Dict[str, Any]] = None
+    facts: List[Any]
+    total_count: int
+    exported_at: Optional[str] = None
+
+
+class KnowledgeCollectionBulkDeleteResponse(BaseModel):
+    """Response for POST /collections/{collection_id}/bulk-delete."""
+
+    status: str
+    collection_id: Optional[str] = None
+    facts_to_delete: Optional[int] = None
+    deleted_count: int
+    confirm_required: bool
+    message: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# knowledge_categories.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeCategoryCreateResponse(BaseModel):
+    """Response for POST /categories."""
+
+    status: str
+    category: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class KnowledgeCategoryTreeResponse(BaseModel):
+    """Response for GET /categories/tree."""
+
+    status: str
+    tree: List[Any]
+    total_categories: int
+
+
+class KnowledgeCategoryDetailResponse(BaseModel):
+    """Response for GET /categories/{category_id} and GET /categories/path/{path}."""
+
+    status: str
+    category: Optional[Dict[str, Any]] = None
+
+
+class KnowledgeCategoryUpdateResponse(BaseModel):
+    """Response for PUT /categories/{category_id}."""
+
+    status: str
+    category: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+class KnowledgeCategoryDeleteResponse(BaseModel):
+    """Response for DELETE /categories/{category_id}."""
+
+    status: str
+    deleted_count: int
+    facts_reassigned: int
+    message: Optional[str] = None
+
+
+class KnowledgeCategoryChildrenResponse(BaseModel):
+    """Response for GET /categories/{category_id}/children."""
+
+    status: str
+    parent_id: Optional[str] = None
+    children: List[Any]
+    count: int
+
+
+class KnowledgeCategoryAncestorsResponse(BaseModel):
+    """Response for GET /categories/{category_id}/ancestors."""
+
+    status: str
+    category_id: Optional[str] = None
+    ancestors: List[Any]
+    depth: int
+
+
+class KnowledgeCategoryFactsResponse(BaseModel):
+    """Response for GET /categories/{category_id}/facts."""
+
+    status: str
+    category_id: Optional[str] = None
+    category_path: Optional[str] = None
+    facts: List[Any]
+    total_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+    include_descendants: bool
+
+
+class KnowledgeFactAssignCategoryResponse(BaseModel):
+    """Response for POST /facts/{fact_id}/category."""
+
+    status: str
+    fact_id: Optional[str] = None
+    category_id: Optional[str] = None
+    category_path: Optional[str] = None
+    message: Optional[str] = None
+
+
+class KnowledgeCategorySearchResponse(BaseModel):
+    """Response for POST /categories/search."""
+
+    status: str
+    pattern: Optional[str] = None
+    categories: List[Any]
+    count: int
+
+
+# ---------------------------------------------------------------------------
+# validation_dashboard.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class ValidationDashboardStatusResponse(BaseModel):
+    """Response for GET /status (healthy path; unavailable path uses JSONResponse)."""
+
+    status: str
+    service: str
+    output_directory: Optional[str] = None
+    refresh_interval: Optional[int] = None
+    data_retention_days: Optional[int] = None
+    timestamp: str
+
+
+class ValidationDashboardReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    report: Optional[Any] = None
+    timestamp: str
+
+
+class ValidationDashboardGenerateResponse(BaseModel):
+    """Response for POST /generate."""
+
+    status: str
+    message: str
+    settings: Dict[str, Any]
+    timestamp: str
+
+
+class ValidationDashboardMetricsResponse(BaseModel):
+    """Response for GET /metrics."""
+
+    status: str
+    metrics: Dict[str, Any]
+    timestamp: str
+
+
+class ValidationDashboardTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    trends: Optional[Any] = None
+    timestamp: str
+
+
+class ValidationDashboardAlertsResponse(BaseModel):
+    """Response for GET /alerts."""
+
+    status: str
+    alerts: List[Any]
+    alert_counts: Dict[str, int]
+    timestamp: str
+
+
+class ValidationDashboardRecommendationsResponse(BaseModel):
+    """Response for GET /recommendations."""
+
+    status: str
+    recommendations: List[Any]
+    recommendation_counts: Dict[str, int]
+    timestamp: str
+
+
+class ValidationJudgmentResponse(BaseModel):
+    """Response for POST /judge_workflow_step and POST /judge_agent_response."""
+
+    status: str
+    judgment: Dict[str, Any]
+    timestamp: str
+
+
+class ValidationJudgeStatusResponse(BaseModel):
+    """Response for GET /judge_status (healthy path; unavailable path uses JSONResponse)."""
+
+    status: str
+    service: str
+    available_judges: List[str]
+    judge_metrics: Dict[str, Any]
+    timestamp: str
+
+
