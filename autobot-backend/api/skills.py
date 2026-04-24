@@ -74,7 +74,7 @@ class SkillFeedbackRequest(BaseModel):
 # --- Endpoints ---
 
 
-@router.get("/", summary="List all skills")
+@router.get("/", summary="List all skills", response_model=None)
 async def list_skills(
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search query"),
@@ -101,7 +101,7 @@ async def list_skills(
     }
 
 
-@router.get("/categories", summary="List skill categories")
+@router.get("/categories", summary="List skill categories", response_model=None)
 async def list_categories() -> Dict[str, Any]:
     """List all available skill categories with counts."""
     manager = _get_manager()
@@ -109,14 +109,14 @@ async def list_categories() -> Dict[str, Any]:
     return {"categories": {cat: len(skills) for cat, skills in by_cat.items()}}
 
 
-@router.get("/health", summary="Get health of all skills")
+@router.get("/health", summary="Get health of all skills", response_model=None)
 async def get_all_health() -> Dict[str, Any]:
     """Get health status for all registered skills."""
     registry = get_skill_registry()
     return {"skills": registry.get_all_health()}
 
 
-@router.post("/initialize", summary="Initialize skills system")
+@router.post("/initialize", summary="Initialize skills system", response_model=None)
 async def initialize_skills() -> Dict[str, Any]:
     """Discover and load all builtin skills."""
     manager = _get_manager()
@@ -124,7 +124,7 @@ async def initialize_skills() -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}", summary="Get skill details")
+@router.get("/{name}", summary="Get skill details", response_model=None)
 async def get_skill(name: str) -> Dict[str, Any]:
     """Get detailed information about a specific skill."""
     registry = get_skill_registry()
@@ -134,7 +134,7 @@ async def get_skill(name: str) -> Dict[str, Any]:
     return detail
 
 
-@router.post("/{name}/enable", summary="Enable a skill")
+@router.post("/{name}/enable", summary="Enable a skill", response_model=None)
 async def enable_skill(name: str) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -146,7 +146,7 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/disable", summary="Disable a skill")
+@router.post("/{name}/disable", summary="Disable a skill", response_model=None)
 async def disable_skill(name: str) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -158,7 +158,7 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.put("/{name}/config", summary="Update skill config")
+@router.put("/{name}/config", summary="Update skill config", response_model=None)
 async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     """Update a skill's configuration values."""
     registry = get_skill_registry()
@@ -173,7 +173,7 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/execute", summary="Execute a skill action")
+@router.post("/{name}/execute", summary="Execute a skill action", response_model=None)
 async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
     manager = _get_manager()
@@ -186,7 +186,7 @@ async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}/health", summary="Get skill health")
+@router.get("/{name}/health", summary="Get skill health", response_model=None)
 async def get_skill_health(name: str) -> Dict[str, Any]:
     """Get health status for a specific skill."""
     registry = get_skill_registry()
@@ -196,7 +196,7 @@ async def get_skill_health(name: str) -> Dict[str, Any]:
     return health.model_dump()
 
 
-@router.get("/{name}/actions", summary="List skill actions")
+@router.get("/{name}/actions", summary="List skill actions", response_model=None)
 async def list_skill_actions(name: str) -> Dict[str, Any]:
     """List available actions for a skill."""
     registry = get_skill_registry()
@@ -209,7 +209,7 @@ async def list_skill_actions(name: str) -> Dict[str, Any]:
     }
 
 
-@router.get("/{name}/metrics", summary="Get skill metrics")
+@router.get("/{name}/metrics", summary="Get skill metrics", response_model=None)
 async def get_skill_metrics(
     name: str,
     days: int = Query(30, description="Number of days to analyze"),
@@ -231,7 +231,7 @@ async def get_skill_metrics(
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
-@router.post("/{name}/feedback", summary="Submit skill feedback")
+@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=None)
 async def submit_skill_feedback(
     name: str,
     body: SkillFeedbackRequest,
@@ -257,7 +257,7 @@ async def submit_skill_feedback(
         raise HTTPException(status_code=500, detail="Failed to log feedback")
 
 
-@router.get("/{name}/suggestions", summary="Get skill refinement suggestions")
+@router.get("/{name}/suggestions", summary="Get skill refinement suggestions", response_model=None)
 async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
     """Get suggestions for improving a skill (Issue #4339)."""
     try:

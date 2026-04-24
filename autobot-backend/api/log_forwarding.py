@@ -150,6 +150,95 @@ class DestinationResponse(BaseModel):
     failed_count: int
 
 
+class LogFwdMessageResponse(BaseModel):
+    """Simple message-only response (start, stop, delete)."""
+
+    message: str
+
+
+class LogFwdCreateUpdateResponse(BaseModel):
+    """Response for create/update destination endpoints."""
+
+    message: str
+    destination: Dict[str, Any]
+
+
+class LogFwdTestResponse(BaseModel):
+    """Response for POST /destinations/{name}/test."""
+
+    name: str
+    healthy: bool
+    last_error: Optional[str] = None
+    message: str
+
+
+class LogFwdTestAllResponse(BaseModel):
+    """Response for POST /test-all."""
+
+    results: Dict[str, Any]
+    total: int
+    healthy: int
+    unhealthy: int
+
+
+class LogFwdDestinationStatusItem(BaseModel):
+    """Single entry in the destinations list within LogFwdStatusResponse."""
+
+    name: str
+    type: str
+    enabled: bool
+    healthy: bool
+    last_error: Optional[str] = None
+    sent_count: int
+    failed_count: int
+    scope: str
+
+
+class LogFwdStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    running: bool
+    hostname: str
+    queue_size: int
+    destinations: List[LogFwdDestinationStatusItem]
+    total_destinations: int
+    enabled_destinations: int
+    healthy_destinations: int
+    total_sent: int
+    total_failed: int
+
+
+class LogFwdDestinationTypesResponse(BaseModel):
+    """Response for GET /destination-types."""
+
+    types: List[Any]
+    scopes: List[Any]
+    log_levels: List[str]
+    syslog_protocols: List[Any]
+
+
+class LogFwdKnownHostItem(BaseModel):
+    """A single host entry in the known-hosts response."""
+
+    hostname: str
+    ip: Optional[str] = None
+    description: str
+
+
+class LogFwdKnownHostsResponse(BaseModel):
+    """Response for GET /known-hosts."""
+
+    hosts: List[LogFwdKnownHostItem]
+    current_hostname: str
+
+
+class LogFwdAutoStartResponse(BaseModel):
+    """Response for GET/PUT /auto-start."""
+
+    auto_start: bool
+    message: str
+
+
 def _build_updated_destination_config(
     name: str,
     existing: DestinationConfig,
@@ -259,7 +348,7 @@ def _destination_to_response(dest) -> DestinationResponse:
     operation="list_destinations",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations")
+@router.get("/destinations", response_model=None)
 async def list_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Dict[str, Any]]:
@@ -291,7 +380,7 @@ async def list_destinations(
     operation="get_destination",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations/{name}")
+@router.get("/destinations/{name}", response_model=None)
 async def get_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -327,7 +416,7 @@ async def get_destination(
     operation="create_destination",
     error_code_prefix="LOGFWD",
 )
-@router.post("/destinations")
+@router.post("/destinations", response_model=LogFwdCreateUpdateResponse)
 async def create_destination_endpoint(
     data: DestinationCreate,
     admin_check: bool = Depends(check_admin_permission),
@@ -374,7 +463,7 @@ async def create_destination_endpoint(
     operation="update_destination",
     error_code_prefix="LOGFWD",
 )
-@router.put("/destinations/{name}")
+@router.put("/destinations/{name}", response_model=LogFwdCreateUpdateResponse)
 async def update_destination(
     name: str,
     data: DestinationUpdate,
@@ -425,7 +514,7 @@ async def update_destination(
     operation="delete_destination",
     error_code_prefix="LOGFWD",
 )
-@router.delete("/destinations/{name}")
+@router.delete("/destinations/{name}", response_model=LogFwdMessageResponse)
 async def delete_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -459,7 +548,7 @@ async def delete_destination(
     operation="test_destination",
     error_code_prefix="LOGFWD",
 )
-@router.post("/destinations/{name}/test")
+@router.post("/destinations/{name}/test", response_model=LogFwdTestResponse)
 async def test_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -503,7 +592,7 @@ async def test_destination(
     operation="test_all_destinations",
     error_code_prefix="LOGFWD",
 )
-@router.post("/test-all")
+@router.post("/test-all", response_model=LogFwdTestAllResponse)
 async def test_all_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -531,7 +620,7 @@ async def test_all_destinations(
     operation="get_status",
     error_code_prefix="LOGFWD",
 )
-@router.get("/status")
+@router.get("/status", response_model=LogFwdStatusResponse)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -587,7 +676,7 @@ async def get_status(
     operation="start_forwarding",
     error_code_prefix="LOGFWD",
 )
-@router.post("/start")
+@router.post("/start", response_model=LogFwdMessageResponse)
 async def start_forwarding(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
@@ -621,7 +710,7 @@ async def start_forwarding(
     operation="stop_forwarding",
     error_code_prefix="LOGFWD",
 )
-@router.post("/stop")
+@router.post("/stop", response_model=LogFwdMessageResponse)
 async def stop_forwarding(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
@@ -722,7 +811,7 @@ def _get_syslog_protocol_list() -> list:
     operation="get_destination_types",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destination-types")
+@router.get("/destination-types", response_model=LogFwdDestinationTypesResponse)
 async def get_destination_types(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -752,7 +841,7 @@ async def get_destination_types(
     operation="get_known_hosts",
     error_code_prefix="LOGFWD",
 )
-@router.get("/known-hosts")
+@router.get("/known-hosts", response_model=LogFwdKnownHostsResponse)
 async def get_known_hosts(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -804,7 +893,7 @@ async def get_known_hosts(
     operation="get_auto_start",
     error_code_prefix="LOGFWD",
 )
-@router.get("/auto-start")
+@router.get("/auto-start", response_model=LogFwdAutoStartResponse)
 async def get_auto_start(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -828,7 +917,7 @@ async def get_auto_start(
     operation="set_auto_start",
     error_code_prefix="LOGFWD",
 )
-@router.put("/auto-start")
+@router.put("/auto-start", response_model=LogFwdAutoStartResponse)
 async def set_auto_start(
     enabled: bool = Query(..., description="Enable or disable auto-start"),
     admin_check: bool = Depends(check_admin_permission),
