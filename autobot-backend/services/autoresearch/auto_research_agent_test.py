@@ -115,7 +115,7 @@ class TestParseArxivAtom:
         results = _parse_arxiv_atom(ARXIV_ATOM_SAMPLE)
         assert results[0].source == "arxiv"
         assert "Attention" in results[0].title
-        assert "arxiv.org" in results[0].url
+        assert "arxiv.org" in results[0].url  # codeql[py/incomplete-url-substring-sanitization]
 
     def test_empty_xml_returns_empty_list(self):
         assert _parse_arxiv_atom("<feed></feed>") == []
@@ -137,7 +137,7 @@ class TestParseGitHubResults:
         r = results[0]
         assert r.source == "github"
         assert r.title == "karpathy/nanoGPT"
-        assert "github.com" in r.url
+        assert "github.com" in r.url  # codeql[py/incomplete-url-substring-sanitization]
 
     def test_empty_items_returns_empty_list(self):
         assert _parse_github_results({"items": []}) == []
@@ -416,9 +416,9 @@ def _mock_http_handler(request):
     """Return stub responses for arXiv and GitHub during tests."""
     import httpx
 
-    if "arxiv.org" in str(request.url):
+    if "arxiv.org" in str(request.url):  # codeql[py/incomplete-url-substring-sanitization]
         return httpx.Response(200, text=ARXIV_ATOM_SAMPLE)
-    if "api.github.com" in str(request.url):
+    if "api.github.com" in str(request.url):  # codeql[py/incomplete-url-substring-sanitization]
         return httpx.Response(200, json=GITHUB_JSON_SAMPLE)
     return httpx.Response(404)
 
