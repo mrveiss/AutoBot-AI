@@ -129,6 +129,7 @@ class CrossLanguagePatternDetector:
 
         # Thread-safe initialization locks
         self._cache_lock = asyncio.Lock()
+        self._redis_lock = asyncio.Lock()
 
         # Statistics
         self._cache_hits = 0
@@ -166,12 +167,16 @@ class CrossLanguagePatternDetector:
     async def _get_redis_client(self):
         """Get Redis client for caching."""
         if self._redis_client is None and self.use_cache:
-            try:
-                self._redis_client = await get_async_redis_client(database="analytics")
-                logger.info("Redis client initialized for analytics")
-            except Exception as e:
-                logger.warning("Redis not available for caching: %s", e)
-                self._redis_client = None
+            async with self._redis_lock:
+                if self._redis_client is None:
+                    try:
+                        self._redis_client = await get_async_redis_client(
+                            database="analytics"
+                        )
+                        logger.info("Redis client initialized for analytics")
+                    except Exception as e:
+                        logger.warning("Redis not available for caching: %s", e)
+                        self._redis_client = None
         return self._redis_client
 
     async def _get_embedding_cache(self):
