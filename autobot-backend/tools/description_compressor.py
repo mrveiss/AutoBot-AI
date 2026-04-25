@@ -15,12 +15,20 @@ import logging
 
 import aiohttp
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 2592000  # 30 days
+
+
+class _RedisHelper(AsyncRedisClientLockedMixin):
+    _redis_database = "main"
+
+
+_get_redis_helper = lazy_singleton(_RedisHelper)
 
 
 def _cache_key(tool_name: str, tool_spec: dict) -> str:
@@ -41,7 +49,7 @@ def _fallback_description(tool_spec: dict) -> str:
 
 async def _fetch_from_cache(key: str) -> str | None:
     """Return cached compressed description or None on cache miss / Redis unavailable."""
-    redis = await get_async_redis_client(database="main")
+    redis = await _get_redis_helper()._get_redis()
     if redis is None:
         return None
     try:
@@ -54,7 +62,7 @@ async def _fetch_from_cache(key: str) -> str | None:
 
 async def _store_in_cache(key: str, value: str) -> None:
     """Persist compressed description to Redis; silently skips on failure."""
-    redis = await get_async_redis_client(database="main")
+    redis = await _get_redis_helper()._get_redis()
     if redis is None:
         return
     try:

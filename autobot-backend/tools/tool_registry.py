@@ -550,14 +550,34 @@ class ToolRegistry:
         """Return a mapping of tool_name -> compressed description for all registered tools.
 
         Uses :func:`tools.description_compressor.compress_description` with Redis
-        caching and Ollama LLM compression.  Falls back to the raw description
-        string for any tool whose spec lacks one, and skips compression entirely
-        for tools without a spec dict (SDK-only tools are not iterated here).
+        caching and Ollama LLM compression.  Falls back to the tool name string for
+        any tool whose description cannot be resolved.
         """
+        import inspect  # noqa: PLC0415
+
         from tools.description_compressor import compress_description  # noqa: PLC0415
 
+        def _get_description(name: str) -> str:
+            # Registry tools: use method docstring first line
+            method = getattr(self, name, None)
+            if method is not None:
+                doc = inspect.getdoc(method)
+                if doc:
+                    return doc.split("\n")[0]
+            # Browser/builtin tools: use Anthropic schema description
+            try:
+                from chat_workflow.tool_handler import _BUILTIN_TOOL_SCHEMAS  # noqa: PLC0415
+
+                schema = _BUILTIN_TOOL_SCHEMAS.get(name, {})
+                desc = (schema or {}).get("description", "")
+                if desc:
+                    return desc
+            except ImportError:
+                pass
+            return name  # last resort
+
         tool_names = self.get_available_tools()
-        tasks = [compress_description(name, {"name": name}) for name in tool_names]
+        tasks = [compress_description(name, {"description": _get_description(name)}) for name in tool_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         compressed: Dict[str, str] = {}
