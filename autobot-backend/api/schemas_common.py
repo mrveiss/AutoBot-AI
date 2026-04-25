@@ -1596,13 +1596,11 @@ class TemplateCreateWorkflowResponse(BaseModel):
     success: bool
 
 
-class TemplateExecuteResponse(BaseModel):
+class TemplateExecuteResponse(SuccessMessageResponse):
     """Response for POST /templates/{template_id}/execute."""
 
-    success: bool
     workflow_id: str
     template_info: Dict[str, Any]
-    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -1869,11 +1867,9 @@ class MetricsExportResponse(BaseModel):
     data: Optional[Any] = None
 
 
-class MetricsMonitoringStartResponse(BaseModel):
+class MetricsMonitoringStartResponse(SuccessMessageResponse):
     """Response for POST /system/monitoring/start."""
 
-    success: bool
-    message: str
     collection_interval: Optional[Any] = None
 
 
@@ -3173,21 +3169,17 @@ class RegistryHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ElevationRequestResponse(BaseModel):
+class ElevationRequestResponse(SuccessMessageResponse):
     """Response for POST /elevation/request."""
 
-    success: bool
     request_id: str
-    message: str
 
 
-class ElevationAuthorizeResponse(BaseModel):
+class ElevationAuthorizeResponse(SuccessMessageResponse):
     """Response for POST /elevation/authorize."""
 
-    success: bool
     session_token: str
     expires_in: int
-    message: str
 
 
 class ElevationStatusResponse(BaseModel):
@@ -3277,13 +3269,11 @@ class UsageRecordResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class StructuredThinkingClearResponse(BaseModel):
+class StructuredThinkingClearResponse(SuccessMessageResponse):
     """Response for POST /mcp/clear_history."""
 
-    success: bool
     session_id: str
     thoughts_cleared: int
-    message: str
 
 
 class StructuredThinkingSessionsResponse(BaseModel):
@@ -3355,11 +3345,9 @@ class AdvancedControlActiveTakeoversResponse(BaseModel):
     count: int
 
 
-class AdvancedControlEmergencyStopResponse(BaseModel):
+class AdvancedControlEmergencyStopResponse(SuccessMessageResponse):
     """Response for POST /system/emergency-stop."""
 
-    success: bool
-    message: str
     takeover_request_id: str
 
 
@@ -3446,35 +3434,29 @@ class NPUStatusResponse(BaseModel):
     load_balancing_strategy: str
 
 
-class NPUWorkerUnpairResponse(BaseModel):
+class NPUWorkerUnpairResponse(SuccessMessageResponse):
     """Response for POST /npu/workers/{worker_id}/unpair."""
 
-    success: bool
     worker_id: str
-    message: str
 
 
-class NPUWorkerRepairResponse(BaseModel):
+class NPUWorkerRepairResponse(SuccessMessageResponse):
     """Response for POST /npu/workers/{worker_id}/repair."""
 
-    success: bool
     old_worker_id: str
     new_worker_id: str
     config: Dict[str, Any]
     server_timestamp: str
-    message: str
 
 
-class NPUWorkerPairResponse(BaseModel):
+class NPUWorkerPairResponse(SuccessMessageResponse):
     """Response for POST /npu/workers/pair."""
 
-    success: bool
     worker_id: str
     url: str
     platform: str
     device_info: Dict[str, Any]
     paired_at: str
-    message: str
 
 
 class NPUWorkerHeartbeatResponse(BaseModel):
@@ -3492,12 +3474,10 @@ class NPUPoolWorkersResponse(BaseModel):
     workers: List[Any]
 
 
-class NPUPoolReloadResponse(BaseModel):
+class NPUPoolReloadResponse(SuccessMessageResponse):
     """Response for POST /npu/pool/reload."""
 
-    success: bool
     workers_loaded: int
-    message: str
 
 
 
@@ -3514,51 +3494,39 @@ class WakeWordListResponse(BaseModel):
     total: int
 
 
-class WakeWordMutateResponse(BaseModel):
+class WakeWordMutateResponse(SuccessMessageResponse):
     """Response for POST /words and DELETE /words/{wake_word}."""
 
-    success: bool
-    message: str
     wake_words: List[str]
 
 
-class WakeWordConfigUpdateResponse(BaseModel):
+class WakeWordConfigUpdateResponse(SuccessMessageResponse):
     """Response for PUT /config."""
 
-    success: bool
-    message: str
     config: Dict[str, Any]
 
 
-class WakeWordStatsResetResponse(BaseModel):
+class WakeWordStatsResetResponse(SuccessMessageResponse):
     """Response for POST /stats/reset."""
 
-    success: bool
-    message: str
     stats: Dict[str, Any]
 
 
-class WakeWordFeedbackResponse(BaseModel):
+class WakeWordFeedbackResponse(SuccessMessageResponse):
     """Response for POST /feedback."""
 
-    success: bool
-    message: str
     stats: Dict[str, Any]
 
 
-class WakeWordToggleResponse(BaseModel):
+class WakeWordToggleResponse(SuccessMessageResponse):
     """Response for POST /enable and POST /disable."""
 
-    success: bool
-    message: str
     config: Dict[str, Any]
 
 
-class WakeWordListeningToggleResponse(BaseModel):
+class WakeWordListeningToggleResponse(SuccessMessageResponse):
     """Response for POST /listening/start and POST /listening/stop."""
 
-    success: bool
-    message: str
     status: Dict[str, Any]
 
 
