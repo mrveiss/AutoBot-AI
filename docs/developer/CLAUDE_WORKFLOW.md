@@ -159,3 +159,65 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 **Self-Improvement:** After corrections, update `tasks/lessons.md`.
 
 **Elegance Gate:** For non-trivial changes, pause and ask "Is there a more elegant way?" — but elegance means the simplest correct solution.
+
+---
+
+## Pre-Merge Validation
+
+Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
+
+### Gate 0: Squash-Duplicate Detection
+
+Before running any other validation, check whether the branch contains commits that are already squash-merged to `Dev_new_gui`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
+
+```bash
+# Gate 0: Squash-Duplicate Detection
+DUPES=$(git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+TOTAL=$(git log origin/Dev_new_gui...$BRANCH --oneline 2>/dev/null | wc -l)
+NEW=$((TOTAL - DUPES))
+if [ "$DUPES" -gt 0 ]; then
+  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to Dev_new_gui — $NEW truly new"
+  git log --cherry-pick --right-only origin/Dev_new_gui...$BRANCH --format="  %H %s"
+fi
+```
+
+**If DUPES == TOTAL:** The entire branch is already in `Dev_new_gui`. Close the issue without creating a PR — the work is done.
+
+**If DUPES > 0 but < TOTAL:** Some commits are new. Rebase the branch onto `origin/Dev_new_gui` to drop the duplicate patches before opening a PR. This prevents merge conflicts and duplicate hunks in the diff.
+
+**If DUPES == 0:** No duplicates — proceed to Gate 1.
+
+### Gate 1: Syntax and Imports
+
+```bash
+# Backend
+python -m py_compile <changed_files>
+python -c 'import <module>' for each modified file
+
+# Frontend
+npx tsc --noEmit -p autobot-vue/tsconfig.app.json
+```
+
+### Gate 2: Call-Site Impact
+
+For every function removed or renamed, grep all callers and verify none are broken:
+
+```bash
+grep -r "old_function_name" --include="*.py" src/
+grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-vue/src/
+```
+
+### Gate 3: Targeted Tests
+
+Run tests only for changed files to keep validation fast:
+
+```bash
+python -m pytest tests/$(dirname <changed_file>) -x -q
+```
+
+### Gate 4: Linting
+
+```bash
+python -m black --check <changed_files>
+npm run lint --prefix autobot-vue 2>&1 | grep "error"
+```
