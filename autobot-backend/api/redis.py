@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
     operation="get_redis_config",
     error_code_prefix="REDIS",
 )
-@router.get("/config")
+@router.get("/config", response_model=DataResponse)
 async def get_redis_config():
     """Get current Redis configuration"""
     try:
@@ -34,7 +35,7 @@ async def get_redis_config():
     operation="update_redis_config",
     error_code_prefix="REDIS",
 )
-@router.post("/config")
+@router.post("/config", response_model=DataResponse)
 async def update_redis_config(config_data: dict):
     """Update Redis configuration"""
     try:
@@ -50,7 +51,7 @@ async def update_redis_config(config_data: dict):
     operation="get_redis_status",
     error_code_prefix="REDIS",
 )
-@router.get("/status")
+@router.get("/status", response_model=DataResponse)
 async def get_redis_status():
     """Get Redis connection status"""
     try:
@@ -69,7 +70,7 @@ async def get_redis_status():
     operation="test_redis_connection",
     error_code_prefix="REDIS",
 )
-@router.post("/test_connection")
+@router.post("/test_connection", response_model=DataResponse)
 async def test_redis_connection():
     """Test Redis connection with current configuration"""
     try:
@@ -88,7 +89,7 @@ async def test_redis_connection():
     operation="get_redis_health",
     error_code_prefix="REDIS",
 )
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def get_redis_health():
     """Get Redis health status for frontend health checks"""
     try:

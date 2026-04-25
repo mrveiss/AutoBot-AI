@@ -18,13 +18,14 @@ from services.resilience.circuit_breaker_manager import (
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def get_resilience_health() -> Dict[str, Any]:
     """
     Get overall system resilience health.
@@ -48,7 +49,7 @@ async def get_resilience_health() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to get resilience health")
 
 
-@router.get("/circuit-breakers")
+@router.get("/circuit-breakers", response_model=DataResponse)
 async def get_circuit_breaker_status() -> Dict[str, Any]:
     """
     Get status of all circuit breakers.
@@ -66,7 +67,7 @@ async def get_circuit_breaker_status() -> Dict[str, Any]:
         )
 
 
-@router.get("/error-budgets")
+@router.get("/error-budgets", response_model=DataResponse)
 async def get_error_budget_status() -> Dict[str, Any]:
     """
     Get status of all error budgets.
@@ -84,7 +85,7 @@ async def get_error_budget_status() -> Dict[str, Any]:
         )
 
 
-@router.post("/circuit-breakers/{service_name}/reset")
+@router.post("/circuit-breakers/{service_name}/reset", response_model=DataResponse)
 async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
     """
     Manually reset circuit breaker for service.
@@ -106,7 +107,7 @@ async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
         )
 
 
-@router.post("/error-budgets/{component}/reset")
+@router.post("/error-budgets/{component}/reset", response_model=DataResponse)
 async def reset_error_budget(component: str) -> Dict[str, str]:
     """
     Manually reset error budget for component.

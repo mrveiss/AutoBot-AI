@@ -34,6 +34,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +303,7 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/rules")
+@router.post("/rules", response_model=DataResponse)
 async def add_permission_rule(
     request: AddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -350,7 +351,7 @@ async def add_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/rules")
+@router.delete("/rules", response_model=DataResponse)
 async def remove_permission_rule(
     request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -441,7 +442,7 @@ async def get_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/memory/{project_path:path}")
+@router.delete("/memory/{project_path:path}", response_model=DataResponse)
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -477,7 +478,7 @@ async def clear_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/memory")
+@router.post("/memory", response_model=DataResponse)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
@@ -520,7 +521,7 @@ async def store_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/memory/stats")
+@router.get("/memory/stats", response_model=DataResponse)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.

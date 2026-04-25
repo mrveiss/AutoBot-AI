@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ router = APIRouter()
     operation="get_available_models",
     error_code_prefix="MODELS",
 )
-@router.get("/available")
+@router.get("/available", response_model=DataResponse)
 async def get_available_models(
     current_user: dict = Depends(get_current_user),
 ):

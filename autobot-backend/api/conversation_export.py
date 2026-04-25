@@ -32,6 +32,7 @@ from services.conversation_export import (
 )
 from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ def _build_export_response(
     operation="export_conversation",
     error_code_prefix="CONVEXPORT",
 )
-@router.get("/conversations/{session_id}/export")
+@router.get("/conversations/{session_id}/export", response_model=DataResponse)
 async def export_conversation(
     session_id: str,
     request: Request,
@@ -192,7 +193,7 @@ async def export_conversation(
     operation="export_all_conversations",
     error_code_prefix="CONVEXPORT",
 )
-@router.get("/conversations/export-all")
+@router.get("/conversations/export-all", response_model=DataResponse)
 async def export_all_conversations(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -227,7 +228,7 @@ async def export_all_conversations(
     operation="import_conversation",
     error_code_prefix="CONVEXPORT",
 )
-@router.post("/conversations/import")
+@router.post("/conversations/import", response_model=DataResponse)
 async def import_conversation_endpoint(
     body: ConversationImportRequest,
     request: Request,

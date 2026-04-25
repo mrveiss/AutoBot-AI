@@ -30,6 +30,7 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -363,7 +364,7 @@ def _build_timeline_response(
     operation="get_evolution_timeline",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/timeline")
+@router.get("/timeline", response_model=DataResponse)
 async def get_evolution_timeline(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
@@ -433,7 +434,7 @@ async def get_evolution_timeline(
     operation="get_pattern_evolution",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/patterns")
+@router.get("/patterns", response_model=DataResponse)
 async def get_pattern_evolution(
     pattern_type: Optional[str] = Query(
         None, description="Filter by pattern type (e.g., god_class, long_method)"
@@ -607,7 +608,7 @@ def _build_trends_success_response(
     operation="get_quality_trends",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/trends")
+@router.get("/trends", response_model=DataResponse)
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
@@ -679,7 +680,7 @@ async def get_quality_trends(
     operation="record_snapshot",
     error_code_prefix="EVOLUTION",
 )
-@router.post("/snapshot")
+@router.post("/snapshot", response_model=DataResponse)
 async def record_quality_snapshot(
     snapshot: QualitySnapshot,
     admin_check: bool = Depends(check_admin_permission),
@@ -716,7 +717,7 @@ async def record_quality_snapshot(
     operation="record_pattern_snapshot",
     error_code_prefix="EVOLUTION",
 )
-@router.post("/pattern-snapshot")
+@router.post("/pattern-snapshot", response_model=DataResponse)
 async def record_pattern_snapshot(
     snapshot: PatternSnapshot,
     admin_check: bool = Depends(check_admin_permission),
@@ -835,7 +836,7 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     operation="export_evolution_data",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/export")
+@router.get("/export", response_model=DataResponse)
 async def export_evolution_data(
     format: str = Query("json", description="Export format: json, csv"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -896,7 +897,7 @@ async def export_evolution_data(
     operation="get_evolution_summary",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/summary")
+@router.get("/summary", response_model=DataResponse)
 async def get_evolution_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),

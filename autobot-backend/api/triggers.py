@@ -26,6 +26,7 @@ from services.trigger_service import (
     TriggerService,
     TriggerType,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ async def list_triggers(
     "/triggers/{trigger_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Unregister a trigger",
+    response_model=DataResponse,
 )
 async def delete_trigger(
     trigger_id: str,
@@ -196,6 +198,7 @@ async def delete_trigger(
     "/triggers/webhook/{trigger_id}",
     status_code=status.HTTP_200_OK,
     summary="Receive an external webhook event",
+    response_model=DataResponse,
 )
 async def receive_webhook(
     trigger_id: str,

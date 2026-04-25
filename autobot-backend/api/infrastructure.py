@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 
 from auth_middleware import get_current_user
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["infrastructure"])
@@ -55,7 +56,7 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
         return []
 
 
-@router.get("/hosts")
+@router.get("/hosts", response_model=DataResponse)
 async def get_infrastructure_hosts(
     capability: Optional[str] = Query(
         None, description="Filter by capability (ssh, vnc)"

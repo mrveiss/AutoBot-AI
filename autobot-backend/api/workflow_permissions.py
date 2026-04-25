@@ -27,6 +27,7 @@ from services.workflow_permission_service import (
     WorkflowPermissionService,
 )
 from services.workflow_rbac import require_workflow_permission
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,7 @@ async def grant_workflow_permission(
     "/workflows/{workflow_id}/permissions/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke a workflow permission",
+    response_model=DataResponse,
 )
 async def revoke_workflow_permission(
     workflow_id: str,

@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -594,7 +595,7 @@ async def analyze_path(
     return result
 
 
-@router.post("/analyze-content")
+@router.post("/analyze-content", response_model=DataResponse)
 async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
@@ -618,7 +619,7 @@ async def analyze_content(
     return issues
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=DataResponse)
 async def list_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[PatternDefinition]:
@@ -629,7 +630,7 @@ async def list_patterns(
     return list(PERFORMANCE_PATTERNS.values())
 
 
-@router.get("/patterns/{pattern_id}")
+@router.get("/patterns/{pattern_id}", response_model=DataResponse)
 async def get_pattern(
     pattern_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -643,7 +644,7 @@ async def get_pattern(
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
-@router.post("/patterns/{pattern_id}/toggle")
+@router.post("/patterns/{pattern_id}/toggle", response_model=DataResponse)
 async def toggle_pattern(
     pattern_id: str,
     enabled: bool,
@@ -664,7 +665,7 @@ async def toggle_pattern(
     }
 
 
-@router.get("/history")
+@router.get("/history", response_model=DataResponse)
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -677,7 +678,7 @@ async def get_history(
         return list(_analysis_history[:limit])
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=DataResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -737,7 +738,7 @@ async def get_summary(
         }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=DataResponse)
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
@@ -778,7 +779,7 @@ async def get_categories(
     ]
 
 
-@router.get("/hotspots")
+@router.get("/hotspots", response_model=DataResponse)
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=50),
     admin_check: bool = Depends(check_admin_permission),

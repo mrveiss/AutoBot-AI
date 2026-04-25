@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
+from api.schemas_common import DataResponse, SuccessResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -286,7 +287,7 @@ async def health_check(
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.post("/reload")
+@router.post("/reload", response_model=DataResponse)
 async def reload_agent(
     admin_check: bool = Depends(check_admin_permission),
 ):

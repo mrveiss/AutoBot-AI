@@ -23,6 +23,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -322,7 +323,7 @@ def _doc_index_tool_schema() -> dict:
     operation="manual_mcp_tools",
     error_code_prefix="MANUAL_MCP",
 )
-@router.get("/mcp/tools")
+@router.get("/mcp/tools", response_model=DataResponse)
 async def get_manual_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[dict]:
@@ -342,7 +343,7 @@ async def get_manual_mcp_tools(
     operation="manual_mcp_lookup",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/lookup_man_page")
+@router.post("/mcp/lookup_man_page", response_model=DataResponse)
 async def mcp_lookup_man_page(
     request: ManPageRequest,
     current_user: dict = Depends(get_current_user),
@@ -382,7 +383,7 @@ async def mcp_lookup_man_page(
     operation="manual_mcp_search",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/search_man_pages")
+@router.post("/mcp/search_man_pages", response_model=DataResponse)
 async def mcp_search_man_pages(
     request: ManPageSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -418,7 +419,7 @@ async def mcp_search_man_pages(
     operation="manual_mcp_doc_index",
     error_code_prefix="MANUAL_MCP",
 )
-@router.post("/mcp/get_doc_index")
+@router.post("/mcp/get_doc_index", response_model=DataResponse)
 async def mcp_get_doc_index(
     request: ManPageSearchRequest,
     current_user: dict = Depends(get_current_user),

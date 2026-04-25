@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_middleware import check_admin_permission
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,7 +58,7 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     return repo
 
 
-@router.post("/", summary="Register a new skill repository")
+@router.post("/", summary="Register a new skill repository", response_model=DataResponse)
 async def add_repo(
     body: AddRepoRequest,
     _: None = Depends(check_admin_permission),
@@ -86,8 +87,8 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
-@router.get("", summary="List all registered skill repositories")
-@router.get("/", include_in_schema=False)
+@router.get("", summary="List all registered skill repositories", response_model=DataResponse)
+@router.get("/", include_in_schema=False, response_model=DataResponse)
 async def list_repos() -> List[Dict[str, Any]]:
     """Return all registered skill repositories."""
     engine = get_skills_engine()
@@ -110,7 +111,7 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/{repo_id}/sync", summary="Sync packages from a repository")
+@router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=DataResponse)
 async def sync_repo(
     repo_id: str,
     _: None = Depends(check_admin_permission),
@@ -134,7 +135,7 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
-@router.get("/{repo_id}/browse", summary="Browse packages in a repository")
+@router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=DataResponse)
 async def browse_repo(repo_id: str) -> Dict[str, Any]:
     """List the skill package names available in the specified repository."""
     engine = get_skills_engine()

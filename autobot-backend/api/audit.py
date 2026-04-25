@@ -33,6 +33,7 @@ from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
@@ -377,7 +378,7 @@ async def get_failed_operations(
     operation="cleanup_old_logs",
     error_code_prefix="AUDIT",
 )
-@router.post("/cleanup")
+@router.post("/cleanup", response_model=DataResponse)
 async def cleanup_old_logs(
     request: Request,
     cleanup_request: CleanupRequest,
@@ -422,7 +423,7 @@ async def cleanup_old_logs(
     operation="list_operation_types",
     error_code_prefix="AUDIT",
 )
-@router.get("/operations")
+@router.get("/operations", response_model=DataResponse)
 async def list_operation_types(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):

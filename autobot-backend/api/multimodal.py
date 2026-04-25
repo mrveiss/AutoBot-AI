@@ -29,6 +29,7 @@ from multimodal_processor import (
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -330,7 +331,7 @@ async def process_text(
     operation="generate_embedding",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/embeddings/generate")
+@router.post("/embeddings/generate", response_model=DataResponse)
 async def generate_embedding(
     request: EmbeddingRequest,
     current_user: dict = Depends(get_current_user),
@@ -459,7 +460,7 @@ async def cross_modal_search(
     operation="get_multimodal_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=DataResponse)
 async def get_multimodal_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -628,7 +629,7 @@ def _create_combined_input(
     operation="combine_multimodal_inputs",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/fusion/combine")
+@router.post("/fusion/combine", response_model=DataResponse)
 async def combine_multimodal_inputs(
     text: Optional[str] = Form(default=None),
     image_file: Optional[UploadFile] = File(default=None),
@@ -697,7 +698,7 @@ async def combine_multimodal_inputs(
     operation="get_performance_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/stats")
+@router.get("/performance/stats", response_model=DataResponse)
 async def get_performance_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -743,7 +744,7 @@ async def get_performance_stats(
     operation="optimize_performance",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/optimize")
+@router.post("/performance/optimize", response_model=DataResponse)
 async def optimize_performance(
     current_user: dict = Depends(get_current_user),
 ):
@@ -778,7 +779,7 @@ async def optimize_performance(
     operation="get_performance_summary",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/summary")
+@router.get("/performance/summary", response_model=DataResponse)
 async def get_performance_summary(
     current_user: dict = Depends(get_current_user),
 ):
@@ -806,7 +807,7 @@ async def get_performance_summary(
     operation="update_batch_size",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/batch-size")
+@router.post("/performance/batch-size", response_model=DataResponse)
 async def update_batch_size(
     modality: str,
     batch_size: int,
@@ -857,7 +858,7 @@ async def update_batch_size(
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):

@@ -21,6 +21,7 @@ from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -425,6 +426,7 @@ async def link_task(
 @router.delete(
     "/approval-gates/{approval_id}/tasks/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=DataResponse,
 )
 async def unlink_task(
     approval_id: uuid.UUID,

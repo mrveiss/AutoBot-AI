@@ -27,6 +27,7 @@ from services.causal_inference_engine import (
     CausalAnalysisReport,
     CausalInferenceEngine,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ async def health_check():
         return HealthCheckResponse(status="error", engine_ready=False)
 
 
-@router.get("/analyze-failure")
+@router.get("/analyze-failure", response_model=DataResponse)
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
     error_description: Optional[str] = Query(

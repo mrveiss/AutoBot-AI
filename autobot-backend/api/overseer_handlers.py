@@ -26,6 +26,7 @@ from agents.overseer.types import (
 )
 from auth_middleware import get_current_user
 from chat_history import ChatHistoryManager
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -470,7 +471,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         await handler.disconnect()
 
 
-@router.post("/query/{session_id}")
+@router.post("/query/{session_id}", response_model=DataResponse)
 async def submit_query(
     session_id: str,
     query: str,
@@ -515,7 +516,7 @@ async def submit_query(
         return {"success": False, "error": "Internal server error"}
 
 
-@router.get("/status/{session_id}")
+@router.get("/status/{session_id}", response_model=DataResponse)
 async def get_status(
     session_id: str,
     current_user: dict = Depends(get_current_user),
