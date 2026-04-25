@@ -1,107 +1,75 @@
 # TypeScript Error Baseline — Dev_new_gui
 
-**Date:** 2026-04-24
+**Date:** 2026-04-25
 **Branch:** Dev_new_gui
 **Command:** `npx vue-tsc --noEmit -p tsconfig.app.json`
-**Total: 2005**
+**Total: 188**
 
-> Note: Issue #5096 originally reported 169 errors. The actual count at audit time is 2005.
-> The delta-check gate uses this file as the authoritative baseline.
+> **Correction (2026-04-25):** The original baseline of 2005 (recorded 2026-04-24) was inflated.
+> Re-running `npx vue-tsc --noEmit -p tsconfig.app.json` on 2026-04-25 produces **188 errors**.
+> The 686 TS2307 "cannot find module" errors in the original are absent — they were artefacts of
+> a different tsconfig or invocation. Zero missing-module errors exist on this branch.
 
 ---
 
-## Breakdown by Error Code (top 20)
+## Breakdown by Error Code
 
 | Error Code | Count | Description |
 |-----------|-------|-------------|
-| TS7006 | 772 | Parameter implicitly has an `any` type |
-| TS2307 | 686 | Cannot find module or its type declarations |
-| TS2339 | 331 | Property does not exist on type |
-| TS18046 | 100 | Variable is of type `unknown` |
-| TS2365 | 26 | Operator not applicable to types |
+| TS18046 | 74 | Variable is of type `unknown` |
+| TS2322 | 27 | Type X is not assignable to type Y |
+| TS2353 | 23 | Object literal may only specify known properties |
+| TS2339 | 22 | Property does not exist on type |
 | TS2304 | 18 | Cannot find name |
-| TS2882 | 15 | Cannot access ambient const before init |
-| TS7031 | 13 | Binding element implicitly has `any` type |
-| TS7053 | 12 | Element implicitly has `any` (index expression) |
-| TS2345 | 9 | Argument of type X not assignable to parameter of type Y |
-| TS2362 | 5 | Left-hand side of arithmetic not of type `any`/`number`/`bigint` |
-| TS5097 | 3 | `rootDir` is not below `rootDirs` |
+| TS2561 | 6 | Object literal may only specify known properties (did you mean?) |
+| TS2769 | 4 | No overload matches this call |
 | TS2352 | 3 | Type conversion may be a mistake |
-| TS2769 | 2 | No overload matches this call |
+| TS2440 | 2 | Import declaration conflicts with local declaration |
 | TS2559 | 2 | Type has no properties in common |
-| TS2322 | 2 | Type X is not assignable to type Y |
-| TS5083 | 1 | Cannot read file `tsconfig.node.json` |
-| TS2664 | 1 | Invalid module name in augmentation |
+| TS2345 | 2 | Argument of type X not assignable to Y |
+| TS7053 | 1 | Element implicitly has `any` type (index expression) |
+| TS7006 | 1 | Parameter implicitly has an `any` type |
 | TS2554 | 1 | Expected N arguments but got M |
-| TS2363 | 1 | Right-hand side of arithmetic not of type `any`/`number`/`bigint` |
+| TS2551 | 1 | Property does not exist (did you mean?) |
+| TS2351 | 1 | This expression is not callable |
 
 ---
 
-## Breakdown by File (top 15 files)
+## Breakdown by File (top 15)
 
 | File | Error Count |
 |------|-------------|
-| `src/components/desktop/PopoutChromiumBrowser.vue` | 170 |
-| `src/App.vue` | 105 |
-| `src/components/browser/BrowserSessionManager.vue` | 59 |
-| `src/stores/useChatStore.ts` | 43 |
-| `src/components/charts/FunctionCallGraph.vue` | 27 |
-| `src/components/visualizations/ResourceHeatmap.vue` | 23 |
-| `src/stores/useKnowledgeStore.ts` | 22 |
-| `src/main.ts` | 20 |
-| `src/composables/useBatchProcessing.ts` | 20 |
-| `src/views/WorkflowBuilderView.vue` | 18 |
-| `src/components/knowledge/KnowledgeStats.vue` | 17 |
-| `src/stores/useAppStore.ts` | 16 |
-| `src/composables/useApi.ts` | 16 |
-| `src/components/knowledge/KnowledgeGraph.vue` | 16 |
-| `src/composables/useAuditApi.ts` | 15 |
+| `src/composables/useApi.ts` | 15 |
+| `src/composables/useBatchProcessing.ts` | 14 |
+| `src/components/visualizations/ResourceHeatmap.vue` | 14 |
+| `src/composables/useAutoResearch.ts` | 7 |
+| `src/composables/useAuditApi.ts` | 7 |
+| `src/composables/useAIDocument.ts` | 7 |
+| `src/components/ui/BaseAlert.stories.ts` | 7 |
+| `src/composables/useKnowledgeGraph.ts` | 6 |
+| `src/components/ui/EmptyState.stories.ts` | 6 |
+| `src/components/chat/TranslationShortcutPanel.vue` | 6 |
+| `src/components/base/BaseCard.stories.ts` | 6 |
+| `src/components/auth/LoginForm.vue` | 6 |
+| `src/composables/usePreferences.ts` | 5 |
+| `src/composables/useOperationsApi.ts` | 5 |
+| `src/components/ui/CommandPermissionDialog.vue` | 5 |
 
 ---
 
 ## How to Update This Baseline
 
-Run the following from `autobot-frontend/`:
+1. Run: `cd autobot-frontend && npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -c "error TS"`
+2. Update `**Total:**` line above with the new count
+3. Update the breakdown tables
+4. Commit: `docs(frontend): update TypeScript error baseline to N errors`
 
-```bash
-cd autobot-frontend
-
-# Get full error list
-npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 > /tmp/ts-errors.txt
-
-# Total count
-grep -c "error TS" /tmp/ts-errors.txt
-
-# Breakdown by error code
-grep "error TS" /tmp/ts-errors.txt \
-  | sed 's/.*error \(TS[0-9]*\).*/\1/' \
-  | sort | uniq -c | sort -rn | head -20
-
-# Breakdown by file
-grep "error TS" /tmp/ts-errors.txt \
-  | cut -d'(' -f1 \
-  | sort | uniq -c | sort -rn | head -15
-```
-
-Update the `Total:` line and the tables in this file, then commit with message:
-`docs(frontend): update TypeScript baseline to <N> errors (#<issue>)`
-
-The delta-check script (`autobot-frontend/scripts/check-ts-delta.sh`) reads the `Total:` line
-from this file automatically — no changes to the script are needed after updating this doc.
+The `check-ts-delta.sh` script reads the `**Total:**` line automatically — keep that format exact.
 
 ---
 
-## CI Delta-Check
+## High-Value Fix Opportunities
 
-The script `autobot-frontend/scripts/check-ts-delta.sh` enforces this baseline:
-- Runs `npx vue-tsc --noEmit -p tsconfig.app.json` and counts errors
-- Reads the `Total:` value from this file
-- Exits 1 (fail) if `current_errors > baseline`
-- Exits 0 (pass) if `current_errors <= baseline`
-
-Add to CI:
-```yaml
-- name: TypeScript delta check
-  run: bash autobot-frontend/scripts/check-ts-delta.sh
-  working-directory: .
-```
+- **TS18046 (74)** — `unknown` type errors in catch blocks and API responses: add `instanceof Error` guards or type assertions
+- **TS2353 (23)** — extra properties in stories files: Storybook ArgTypes need updating for component API changes
+- **TS2339 (22)** — property doesn't exist: composable return types need explicit interface definitions
