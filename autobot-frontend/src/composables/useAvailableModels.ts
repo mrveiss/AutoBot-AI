@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from './useLoadingState'
 
 const logger = createLogger('useAvailableModels')
 
@@ -41,7 +42,7 @@ export function useAvailableModels() {
   const models = ref<AvailableModel[]>([])
   const providersQueried = ref<string[]>([])
   const providersErrored = ref<string[]>([])
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   const modelNames = computed(() => models.value.map((m) => m.name))
@@ -53,30 +54,29 @@ export function useAvailableModels() {
   const hasErrors = computed(() => providersErrored.value.length > 0)
 
   async function fetchModels(): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data: AvailableModelsResult = await ApiClient.get(
-        `${getApiBase()}/models/available`,
-      )
-      models.value = data.models ?? []
-      providersQueried.value = data.providers_queried ?? []
-      providersErrored.value = data.providers_errored ?? []
-      logger.debug(
-        'Fetched %d models from providers: %s',
-        models.value.length,
-        data.providers_queried?.join(', '),
-      )
-      if (data.providers_errored?.length) {
-        logger.warn('Providers with errors: %s', data.providers_errored.join(', '))
+    return wrap(async () => {
+      try {
+        const data: AvailableModelsResult = await ApiClient.get(
+          `${getApiBase()}/models/available`,
+        )
+        models.value = data.models ?? []
+        providersQueried.value = data.providers_queried ?? []
+        providersErrored.value = data.providers_errored ?? []
+        logger.debug(
+          'Fetched %d models from providers: %s',
+          models.value.length,
+          data.providers_queried?.join(', '),
+        )
+        if (data.providers_errored?.length) {
+          logger.warn('Providers with errors: %s', data.providers_errored.join(', '))
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        error.value = msg
+        logger.error('Failed to fetch available models: %s', msg)
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      error.value = msg
-      logger.error('Failed to fetch available models: %s', msg)
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   return {
