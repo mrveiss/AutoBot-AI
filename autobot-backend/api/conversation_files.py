@@ -651,7 +651,7 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     operation="download_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/download/{file_id}", response_model=DataResponse)
+@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Download a specific file from a conversation.

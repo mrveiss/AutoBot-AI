@@ -740,7 +740,7 @@ async def upload_file(
     operation="download_file",
     error_code_prefix="FILES",
 )
-@router.get("/download/{path:path}", response_model=DataResponse)
+@router.get("/download/{path:path}", response_model=None)
 async def download_file(request: Request, path: str):
     """
     Download a file from the sandbox.

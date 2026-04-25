@@ -109,7 +109,7 @@ async def get_process_status(
     return JSONResponse(status_code=200, content=data)
 
 
-@router.get("/processes/{process_id}/logs", response_model=DataResponse)
+@router.get("/processes/{process_id}/logs", response_model=None)
 async def get_process_logs(
     process_id: str,
     current_user: dict = Depends(get_current_user),

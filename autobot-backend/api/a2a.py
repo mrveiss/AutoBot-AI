@@ -289,7 +289,7 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     "/tasks/{task_id}/stream",
     summary="Stream A2A task events (SSE)",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def stream_task_events(task_id: str) -> StreamingResponse:
     """
