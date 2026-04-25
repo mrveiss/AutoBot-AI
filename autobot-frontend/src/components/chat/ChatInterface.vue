@@ -1043,6 +1043,12 @@ const initializeChatInterface = async () => {
 }
 
 // Lifecycle
+let _lgMediaQuery: MediaQueryList | null = null
+
+function _onLgBreakpoint(e: MediaQueryListEvent): void {
+  if (e.matches) showMobileSidebar.value = false
+}
+
 onMounted(async () => {
   // Initialize chat interface with streamlined loading
   await initializeChatInterface()
@@ -1061,11 +1067,17 @@ onMounted(async () => {
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
 
+  // Reset mobile sidebar when viewport reaches desktop width (#4446)
+  _lgMediaQuery = window.matchMedia('(min-width: 1024px)')
+  _lgMediaQuery.addEventListener('change', _onLgBreakpoint)
+
 })
 
 onUnmounted(() => {
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+  _lgMediaQuery?.removeEventListener('change', _onLgBreakpoint)
+  _lgMediaQuery = null
 
   // Clean up intervals
   heartbeatPoller.stop()
