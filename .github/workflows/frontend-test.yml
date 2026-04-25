@@ -62,6 +62,10 @@ jobs:
         working-directory: autobot-frontend
         run: npm run type-check
 
+
+      - name: Check TypeScript error delta
+        working-directory: autobot-frontend
+        run: npm run check-ts-delta
       - name: Run linting
         working-directory: autobot-frontend
         run: npm run lint
