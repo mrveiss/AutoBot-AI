@@ -22,6 +22,21 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 
+class SuccessMessageResponse(BaseModel):
+    """Base for endpoints that always return success: bool + message: str."""
+
+    success: bool
+    message: str
+
+
+class SuccessDataResponse(BaseModel):
+    """Base for endpoints that return success, message, and an optional data dict."""
+
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
 class SuccessResponse(BaseModel):
     """Minimal success/failure envelope used by several endpoints."""
 
@@ -1862,11 +1877,8 @@ class MetricsMonitoringStartResponse(BaseModel):
     collection_interval: Optional[Any] = None
 
 
-class MetricsMonitoringStopResponse(BaseModel):
+class MetricsMonitoringStopResponse(SuccessMessageResponse):
     """Response for POST /system/monitoring/stop."""
-
-    success: bool
-    message: str
 
 
 class MetricsDashboardResponse(BaseModel):
@@ -2285,28 +2297,16 @@ class FeatureFlagStatusResponse(BaseModel):
     data: Optional[Any] = None
 
 
-class FeatureFlagEnforcementModeResponse(BaseModel):
+class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
 
-    success: bool
-    message: str
-    data: Optional[Dict[str, Any]] = None
 
-
-class FeatureFlagEndpointSetResponse(BaseModel):
+class FeatureFlagEndpointSetResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/endpoint/{endpoint:path}."""
 
-    success: bool
-    message: str
-    data: Optional[Dict[str, Any]] = None
 
-
-class FeatureFlagEndpointRemoveResponse(BaseModel):
+class FeatureFlagEndpointRemoveResponse(SuccessDataResponse):
     """Response for DELETE /feature-flags/endpoint/{endpoint:path}."""
-
-    success: bool
-    message: str
-    data: Optional[Dict[str, Any]] = None
 
 
 class AccessControlMetricsResponse(BaseModel):
@@ -2330,11 +2330,8 @@ class AccessControlUserMetricsResponse(BaseModel):
     data: Optional[Any] = None
 
 
-class AccessControlCleanupResponse(BaseModel):
+class AccessControlCleanupResponse(SuccessMessageResponse):
     """Response for POST /access-control/cleanup."""
-
-    success: bool
-    message: str
 
 
 # ---------------------------------------------------------------------------
