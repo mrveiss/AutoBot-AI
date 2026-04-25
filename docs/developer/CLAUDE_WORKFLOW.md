@@ -72,6 +72,22 @@ Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.s
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
 - Prefer incremental `Edit` over full file `Write` for files >50 lines
 
+**schemas_common.py serialization constraint (response_model= batches):**
+`autobot-backend/api/schemas_common.py` is an append-only file — every `response_model=` audit batch appends new Pydantic schema classes to its end. When two such batches branch from the same `Dev_new_gui` head and both append to this file, git always produces a `CONFLICT (content)`. This is not a real code conflict; it is a git limitation with concurrent appends to the same file.
+
+Rules:
+- **Do not run two `response_model=` audit batches in parallel.** Serialize them — wait for the first batch's PR to merge before starting the next.
+- This constraint applies until issue #5799 (per-domain schema split) is resolved.
+- If a conflict occurs anyway, the resolution is always deterministic:
+
+```bash
+# Step 1: take origin/Dev_new_gui as the authoritative base
+git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-backend/api/schemas_common.py
+
+# Step 2: append the new schema classes from our branch at the end
+# (extract them from git diff or the conflicting branch's version)
+```
+
 ---
 
 ## Agent Delegation

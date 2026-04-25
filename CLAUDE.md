@@ -182,6 +182,13 @@ Default behavior:
 
 **Only stop to ask** if: a specific issue has unresolved dependencies, an architectural decision is needed, or the pre-flight checklist finds a problem (dirty branch, unresolved PRs, etc.).
 
+**schemas_common.py serialization constraint (response_model= batches):** `autobot-backend/api/schemas_common.py` is append-only — every `response_model=` audit batch adds new classes to the end. When two such batches branch from the same `Dev_new_gui` head and both append to this file, git always produces a `CONFLICT (content)` even though there is no real logical conflict. This is a git limitation with concurrent appends to the same file, not a true code conflict. Until issue #5799 (per-domain schema split) is resolved, **`response_model=` audit batches must be serialized** — do not run two such batches in parallel. If a conflict occurs anyway, the resolution is always:
+```bash
+# Take origin/Dev_new_gui as the base, then append our new sections at the end
+git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-backend/api/schemas_common.py
+# Then manually append the new schema classes from the conflicting branch
+```
+
 ---
 
 ## Parallel Agents Strategy
