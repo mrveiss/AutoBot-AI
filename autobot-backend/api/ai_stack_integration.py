@@ -129,7 +129,7 @@ class ContentClassificationRequest(BaseModel):
     operation="ai_stack_health_check",
     error_code_prefix="AI_STACK",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DataResponse)
 async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Check AI Stack health and connectivity.

@@ -146,7 +146,7 @@ def _remote_addr(request: Request) -> str:
     "/agent-card",
     summary="A2A Agent Card",
     tags=["a2a"],
-    response_model=None,
+    response_model=DataResponse,
 )
 async def get_agent_card(request: Request) -> Dict[str, Any]:
     """
@@ -162,7 +162,7 @@ async def get_agent_card(request: Request) -> Dict[str, Any]:
     "/agent-card/signed",
     summary="Signed A2A Agent Card",
     tags=["a2a"],
-    response_model=None,
+    response_model=DataResponse,
 )
 async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     """

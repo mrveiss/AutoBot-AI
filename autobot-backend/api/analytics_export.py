@@ -29,6 +29,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
@@ -214,7 +215,7 @@ async def export_usage_csv(
     operation="export_full_json",
     error_code_prefix="EXPORT",
 )
-@router.get("/json/full", response_model=None)
+@router.get("/json/full", response_model=DataResponse)
 async def export_full_json(
     days: int = Query(default=30, ge=1, le=365, description="Number of days"),
     admin_check: bool = Depends(check_admin_permission),
@@ -548,7 +549,7 @@ def _get_grafana_panels() -> list:
     operation="export_grafana_dashboard",
     error_code_prefix="EXPORT",
 )
-@router.get("/grafana-dashboard", response_model=None)
+@router.get("/grafana-dashboard", response_model=DataResponse)
 async def export_grafana_dashboard(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -604,7 +605,7 @@ async def export_grafana_dashboard(
     operation="get_export_formats",
     error_code_prefix="EXPORT",
 )
-@router.get("/formats", response_model=None)
+@router.get("/formats", response_model=DataResponse)
 async def get_export_formats(
     admin_check: bool = Depends(check_admin_permission),
 ):

@@ -32,6 +32,7 @@ from utils.response_helpers import (
 )
 
 from .schemas_common import DataResponse
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -731,7 +732,7 @@ async def get_enhanced_stats(
     operation="enhanced_knowledge_health",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
-@router.get("/health/enhanced", response_model=None)
+@router.get("/health/enhanced", response_model=DataResponse)
 async def enhanced_knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):

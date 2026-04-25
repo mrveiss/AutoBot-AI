@@ -159,7 +159,7 @@ class DashboardGenerateRequest(BaseModel):
     operation="get_dashboard_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=DataResponse)
 async def get_dashboard_status():
     """Get validation dashboard service status"""
     generator = get_dashboard_generator()
@@ -695,7 +695,7 @@ async def judge_agent_response(request: dict):
     operation="get_judge_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/judge_status", response_model=None)
+@router.get("/judge_status", response_model=DataResponse)
 async def get_judge_status():
     """Get status of validation judges"""
     judges = get_validation_judges()

@@ -24,6 +24,7 @@ from services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ BROWSER_VM_URL = (
     operation="get_playwright_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=DataResponse)
 async def get_playwright_status():
     """Get Playwright service status and capabilities"""
     try:
@@ -103,7 +104,7 @@ async def get_playwright_status():
     operation="health_check",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DataResponse)
 async def health_check():
     """Health check endpoint for Playwright service"""
     try:
@@ -130,7 +131,7 @@ async def health_check():
     operation="web_search",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/search", response_model=None)
+@router.post("/search", response_model=DataResponse)
 async def web_search(request: SearchRequest):
     """
     Perform web search using embedded Playwright
@@ -171,7 +172,7 @@ async def web_search(request: SearchRequest):
     operation="test_frontend",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/test-frontend", response_model=None)
+@router.post("/test-frontend", response_model=DataResponse)
 async def test_frontend(request: FrontendTestRequest):
     """
     Test frontend functionality using embedded Playwright
@@ -205,7 +206,7 @@ async def test_frontend(request: FrontendTestRequest):
     operation="send_test_message",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/send-test-message", response_model=None)
+@router.post("/send-test-message", response_model=DataResponse)
 async def send_test_message(request: TestMessageRequest):
     """
     Send test message through frontend using embedded Playwright
@@ -243,7 +244,7 @@ async def send_test_message(request: TestMessageRequest):
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/screenshot", response_model=None)
+@router.post("/screenshot", response_model=DataResponse)
 async def capture_screenshot(request: ScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright
@@ -282,7 +283,7 @@ async def capture_screenshot(request: ScreenshotRequest):
     operation="quick_automation_test",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/automation/quick-test", response_model=None)
+@router.post("/automation/quick-test", response_model=DataResponse)
 async def quick_automation_test(background_tasks: BackgroundTasks):
     """
     Quick automation test to verify all Playwright functionality
@@ -345,7 +346,7 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     operation="navigate",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/navigate", response_model=None)
+@router.post("/navigate", response_model=DataResponse)
 async def navigate_to_url(request: NavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
@@ -390,7 +391,7 @@ async def navigate_to_url(request: NavigateRequest):
     operation="reload",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/reload", response_model=None)
+@router.post("/reload", response_model=DataResponse)
 async def reload_page(request: ReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
@@ -431,7 +432,7 @@ async def reload_page(request: ReloadRequest):
     operation="go_back",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/back", response_model=None)
+@router.post("/back", response_model=DataResponse)
 async def go_back():
     """
     Navigate back in browser history using Playwright on Browser VM
@@ -473,7 +474,7 @@ async def go_back():
     operation="go_forward",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/forward", response_model=None)
+@router.post("/forward", response_model=DataResponse)
 async def go_forward():
     """
     Navigate forward in browser history using Playwright on Browser VM
@@ -517,7 +518,7 @@ async def go_forward():
     operation="worker_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/worker-status", response_model=None)
+@router.get("/worker-status", response_model=DataResponse)
 async def get_worker_status():
     """
     Get browser worker connectivity status from Browser VM (#1130)
@@ -550,7 +551,7 @@ async def get_worker_status():
     operation="worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/worker-screenshot", response_model=None)
+@router.post("/worker-screenshot", response_model=DataResponse)
 async def take_worker_screenshot():
     """
     Take screenshot of the persistent navigation page on Browser VM (#1130)
@@ -588,7 +589,7 @@ async def take_worker_screenshot():
     operation="interact",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/interact", response_model=None)
+@router.post("/interact", response_model=DataResponse)
 async def interact_with_page(request: InteractRequest):
     """Proxy interactive browser actions to Browser VM (#1416)"""
     allowed = {"click", "scroll", "type", "hover"}
@@ -639,7 +640,7 @@ async def interact_with_page(request: InteractRequest):
     operation="get_capabilities",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/capabilities", response_model=None)
+@router.get("/capabilities", response_model=DataResponse)
 async def get_capabilities():
     """Get Playwright service capabilities and features"""
     return {

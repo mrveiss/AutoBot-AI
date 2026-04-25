@@ -584,7 +584,7 @@ async def _resolve_agent_effective_config(
     operation="list_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents", response_model=None)
+@router.get("/agents", response_model=DataResponse)
 async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     Get list of all available agents with their configurations
@@ -704,7 +704,7 @@ async def _resolve_agent_entry(
     operation="get_all_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/all", response_model=None)
+@router.get("/agents/all", response_model=DataResponse)
 async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all AutoBot agents for the Agent Registry dashboard.
@@ -750,7 +750,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     operation="list_specialized_agents",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/specialized", response_model=None)
+@router.get("/agents/specialized", response_model=DataResponse)
 async def list_specialized_agents(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -783,7 +783,7 @@ async def list_specialized_agents(
     operation="get_specialized_agent",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/specialized/{agent_id}", response_model=None)
+@router.get("/agents/specialized/{agent_id}", response_model=DataResponse)
 async def get_specialized_agent(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -813,7 +813,7 @@ async def get_specialized_agent(
     operation="get_agents_usage",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/usage", response_model=None)
+@router.get("/agents/usage", response_model=DataResponse)
 async def get_agents_usage(
     agent_id: Optional[str] = Query(
         None, description="Filter to a specific agent (all agents if omitted)"
@@ -930,7 +930,7 @@ async def get_agents_usage(
     operation="get_agent_config",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/{agent_id}", response_model=None)
+@router.get("/agents/{agent_id}", response_model=DataResponse)
 async def get_agent_config(
     agent_id: str, admin_check: bool = Depends(check_admin_permission)
 ):

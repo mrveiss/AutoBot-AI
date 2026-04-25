@@ -21,6 +21,7 @@ from enterprise_feature_manager import (
     FeatureStatus,
     get_enterprise_manager,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
@@ -283,7 +284,7 @@ def _build_service_distribution(vm_topology: dict) -> dict:
     operation="get_enterprise_status",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=DataResponse)
 async def get_enterprise_status():
     """
     Get comprehensive enterprise feature status.
@@ -317,7 +318,7 @@ async def get_enterprise_status():
     operation="enable_enterprise_feature",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.post("/features/enable", response_model=None)
+@router.post("/features/enable", response_model=DataResponse)
 async def enable_enterprise_feature(request: FeatureEnableRequest):
     """
     Enable a specific enterprise feature.
@@ -374,7 +375,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
     operation="enable_all_enterprise_features",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.post("/features/enable-all", response_model=None)
+@router.post("/features/enable-all", response_model=DataResponse)
 async def enable_all_enterprise_features():
     """
     Enable all enterprise features in dependency order.
@@ -410,7 +411,7 @@ async def enable_all_enterprise_features():
     operation="list_enterprise_features",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.get("/features", response_model=None)
+@router.get("/features", response_model=DataResponse)
 async def list_enterprise_features(
     category: Optional[FeatureCategory] = Query(
         None, description="Filter by feature category"
@@ -468,7 +469,7 @@ async def list_enterprise_features(
     operation="bulk_enable_features",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.post("/features/bulk-enable", response_model=None)
+@router.post("/features/bulk-enable", response_model=DataResponse)
 async def bulk_enable_features(request: BulkFeatureRequest):
     """
     Enable multiple enterprise features in batch.
@@ -529,7 +530,7 @@ async def bulk_enable_features(request: BulkFeatureRequest):
     operation="get_enterprise_health",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DataResponse)
 async def get_enterprise_health():
     """
     Get health status of all enterprise features.
@@ -584,7 +585,7 @@ async def get_enterprise_health():
     operation="optimize_system_performance",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.post("/performance/optimize", response_model=None)
+@router.post("/performance/optimize", response_model=DataResponse)
 async def optimize_system_performance(request: PerformanceOptimizationRequest):
     """
     Optimize system performance based on target metrics.
@@ -625,7 +626,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
     operation="get_infrastructure_status",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.get("/infrastructure", response_model=None)
+@router.get("/infrastructure", response_model=DataResponse)
 async def get_infrastructure_status():
     """
     Get 6-VM distributed infrastructure status and topology.
@@ -674,7 +675,7 @@ async def get_infrastructure_status():
     operation="deploy_zero_downtime",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.post("/deployment/zero-downtime", response_model=None)
+@router.post("/deployment/zero-downtime", response_model=DataResponse)
 async def deploy_zero_downtime():
     """
     Execute zero-downtime deployment across the distributed infrastructure.
@@ -722,7 +723,7 @@ async def deploy_zero_downtime():
     operation="validate_phase4_completion",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
-@router.get("/phase4/validation", response_model=None)
+@router.get("/phase4/validation", response_model=DataResponse)
 async def validate_phase4_completion():
     """
     Validate that Phase 4 enterprise features are properly implemented.

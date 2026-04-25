@@ -532,7 +532,7 @@ def _calculate_analysis_score(
     return critical, high, medium, low, score
 
 
-@router.get("/analyze", response_model=None)
+@router.get("/analyze", response_model=DataResponse)
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
