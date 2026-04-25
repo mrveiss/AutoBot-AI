@@ -153,7 +153,7 @@ async def get_usage_by_user_single(
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
-@router.get("/me", response_model=DataResponse)
+@router.get("/me", response_model=None)
 async def get_my_usage(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:

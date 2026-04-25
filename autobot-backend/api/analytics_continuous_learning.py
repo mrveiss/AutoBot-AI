@@ -1139,7 +1139,7 @@ async def trigger_retrain(
     return await engine.trigger_retrain(request)
 
 
-@router.get("/insights", summary="Get generated insights", response_model=DataResponse)
+@router.get("/insights", summary="Get generated insights", response_model=None)
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
     active_only: bool = Query(True, description="Only active insights"),
@@ -1158,7 +1158,7 @@ async def get_insights(
     }
 
 
-@router.post("/insights/generate", summary="Generate insights now", response_model=DataResponse)
+@router.post("/insights/generate", summary="Generate insights now", response_model=None)
 async def generate_insights_now(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1188,7 +1188,7 @@ async def get_monitoring_status(
     return engine.monitor.get_status()
 
 
-@router.put("/config", summary="Update learning config", response_model=DataResponse)
+@router.put("/config", summary="Update learning config", response_model=None)
 async def update_config(
     admin_check: bool = Depends(check_admin_permission),
     config: LearningConfig = None,
@@ -1216,7 +1216,7 @@ async def get_config(
     return engine.config
 
 
-@router.get("/health", summary="Health check", response_model=DataResponse)
+@router.get("/health", summary="Health check", response_model=None)
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:

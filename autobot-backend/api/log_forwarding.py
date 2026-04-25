@@ -381,7 +381,7 @@ async def list_destinations(
     operation="get_destination",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations/{name}", response_model=DataResponse)
+@router.get("/destinations/{name}", response_model=None)
 async def get_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),

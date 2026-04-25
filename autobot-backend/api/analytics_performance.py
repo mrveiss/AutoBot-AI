@@ -644,7 +644,7 @@ async def get_pattern(
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
-@router.post("/patterns/{pattern_id}/toggle", response_model=DataResponse)
+@router.post("/patterns/{pattern_id}/toggle", response_model=None)
 async def toggle_pattern(
     pattern_id: str,
     enabled: bool,
@@ -678,7 +678,7 @@ async def get_history(
         return list(_analysis_history[:limit])
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=None)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:

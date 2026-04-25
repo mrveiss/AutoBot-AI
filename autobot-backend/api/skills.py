@@ -75,7 +75,7 @@ class SkillFeedbackRequest(BaseModel):
 # --- Endpoints ---
 
 
-@router.get("/", summary="List all skills", response_model=DataResponse)
+@router.get("/", summary="List all skills", response_model=None)
 async def list_skills(
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search query"),
@@ -102,7 +102,7 @@ async def list_skills(
     }
 
 
-@router.get("/categories", summary="List skill categories", response_model=DataResponse)
+@router.get("/categories", summary="List skill categories", response_model=None)
 async def list_categories() -> Dict[str, Any]:
     """List all available skill categories with counts."""
     manager = _get_manager()
@@ -110,7 +110,7 @@ async def list_categories() -> Dict[str, Any]:
     return {"categories": {cat: len(skills) for cat, skills in by_cat.items()}}
 
 
-@router.get("/health", summary="Get health of all skills", response_model=DataResponse)
+@router.get("/health", summary="Get health of all skills", response_model=None)
 async def get_all_health() -> Dict[str, Any]:
     """Get health status for all registered skills."""
     registry = get_skill_registry()
@@ -197,7 +197,7 @@ async def get_skill_health(name: str) -> Dict[str, Any]:
     return health.model_dump()
 
 
-@router.get("/{name}/actions", summary="List skill actions", response_model=DataResponse)
+@router.get("/{name}/actions", summary="List skill actions", response_model=None)
 async def list_skill_actions(name: str) -> Dict[str, Any]:
     """List available actions for a skill."""
     registry = get_skill_registry()

@@ -50,7 +50,7 @@ def set_analytics_dependencies(controller, state):
     operation="index_codebase",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/code/index", response_model=DataResponse)
+@router.post("/code/index", response_model=None)
 async def index_codebase(
     request: CodeAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -210,7 +210,7 @@ async def get_code_quality_assessment(
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/code/quality-metrics", response_model=DataResponse)
+@router.get("/code/quality-metrics", response_model=None)
 async def get_code_quality_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -320,7 +320,7 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/code/communication-chains", response_model=DataResponse)
+@router.get("/code/communication-chains", response_model=None)
 async def get_communication_chains(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -592,7 +592,7 @@ def _score_to_grade(score: float) -> str:
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/code/metrics/quality-score", response_model=DataResponse)
+@router.get("/code/metrics/quality-score", response_model=None)
 async def get_code_quality_score(
     admin_check: bool = Depends(check_admin_permission),
 ):
