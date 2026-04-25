@@ -15,6 +15,7 @@
 import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '../useLoadingState'
 import type {
   IntegrationResponse,
   ManPagesPopulateResponse,
@@ -108,19 +109,16 @@ export interface UseManPagesReturn {
 
 export function useManPages(): UseManPagesReturn {
   const summary = ref<ManPagesSummary | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<Error | null>(null)
 
   const refresh = async (): Promise<ManPagesSummary | null> => {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await fetchManPagesSummary()
       summary.value = data
       return data
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   return {

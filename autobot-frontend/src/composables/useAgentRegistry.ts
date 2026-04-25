@@ -13,6 +13,7 @@ import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useAgentRegistry')
 
@@ -68,8 +69,8 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
   const specializedAgents = ref<SpecializedAgent[]>([])
   const summary = ref<AgentSummary | null>(null)
   const selectedAgent = ref<SpecializedAgent | null>(null)
-  const isLoading = ref(false)
-  const isLoadingDetail = ref(false)
+  const { isLoading, wrap } = useLoadingState()
+  const { isLoading: isLoadingDetail, wrap: wrapDetail } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -99,41 +100,39 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
   // ----- Actions -----
 
   async function fetchAllAgents() {
-    isLoading.value = true
     errors.value = []
-    try {
-      const data = await ApiClient.get(`${getApiBase()}/agent_config/agents/all`)
-      backendAgents.value = data.agents || []
-      specializedAgents.value = data.specialized_agents || []
-      summary.value = data.summary || null
-      logger.debug(
-        'Fetched %d backend + %d specialized agents',
-        backendAgents.value.length,
-        specializedAgents.value.length
-      )
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      errors.value = [...errors.value, msg]
-      logger.error('Failed to fetch agents: %s', msg)
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.get(`${getApiBase()}/agent_config/agents/all`)
+        backendAgents.value = data.agents || []
+        specializedAgents.value = data.specialized_agents || []
+        summary.value = data.summary || null
+        logger.debug(
+          'Fetched %d backend + %d specialized agents',
+          backendAgents.value.length,
+          specializedAgents.value.length
+        )
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        errors.value = [...errors.value, msg]
+        logger.error('Failed to fetch agents: %s', msg)
+      }
+    })
   }
 
   async function fetchAgentDetail(agentId: string) {
-    isLoadingDetail.value = true
-    try {
-      const data = await ApiClient.get(
-        `${getApiBase()}/agent_config/agents/specialized/${agentId}`
-      )
-      selectedAgent.value = data
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Failed to fetch specialized agent %s: %s', agentId, msg)
-      selectedAgent.value = null
-    } finally {
-      isLoadingDetail.value = false
-    }
+    return wrapDetail(async () => {
+      try {
+        const data = await ApiClient.get(
+          `${getApiBase()}/agent_config/agents/specialized/${agentId}`
+        )
+        selectedAgent.value = data
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('Failed to fetch specialized agent %s: %s', agentId, msg)
+        selectedAgent.value = null
+      }
+    })
   }
 
   if (autoFetch) {
