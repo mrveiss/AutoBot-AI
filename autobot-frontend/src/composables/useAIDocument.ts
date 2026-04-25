@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from './useLoadingState'
 
 const logger = createLogger('useAIDocument')
 
@@ -64,9 +65,9 @@ export interface RefineDocumentPayload {
 export function useAIDocument() {
   const documents = ref<AIDocument[]>([])
   const currentDocument = ref<AIDocument | null>(null)
-  const isLoading = ref(false)
-  const isSaving = ref(false)
-  const isRefining = ref(false)
+  const { isLoading, wrap } = useLoadingState()
+  const { isLoading: isSaving, wrap: wrapSaving } = useLoadingState()
+  const { isLoading: isRefining, wrap: wrapRefining } = useLoadingState()
   const error = ref<string | null>(null)
   const total = ref(0)
 
@@ -93,52 +94,49 @@ export function useAIDocument() {
 
   /** Fetch the list of documents owned by the authenticated user. */
   async function fetchDocuments(limit = 50, offset = 0): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const response = await apiClient.get<{ documents: AIDocument[]; total: number }>(
-        `${_base()}?limit=${limit}&offset=${offset}`
-      )
-      documents.value = response.data.documents
-      total.value = response.data.total
-    } catch (err) {
-      await _handleError('fetchDocuments', err)
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const response = await apiClient.get<{ documents: AIDocument[]; total: number }>(
+          `${_base()}?limit=${limit}&offset=${offset}`
+        )
+        documents.value = response.data.documents
+        total.value = response.data.total
+      } catch (err) {
+        await _handleError('fetchDocuments', err)
+      }
+    })
   }
 
   /** Load a single document into `currentDocument`. */
   async function fetchDocument(docId: string): Promise<AIDocument> {
-    isLoading.value = true
     error.value = null
-    try {
-      const response = await apiClient.get<AIDocument>(`${_base()}/${docId}`)
-      currentDocument.value = response.data
-      return response.data
-    } catch (err) {
-      return await _handleError('fetchDocument', err)
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const response = await apiClient.get<AIDocument>(`${_base()}/${docId}`)
+        currentDocument.value = response.data
+        return response.data
+      } catch (err) {
+        return await _handleError('fetchDocument', err)
+      }
+    })
   }
 
   /** Create a new AI document and prepend it to the local list. */
   async function createDocument(payload: CreateDocumentPayload): Promise<AIDocument> {
-    isSaving.value = true
     error.value = null
-    try {
-      const response = await apiClient.post<AIDocument>(_base(), payload)
-      const created = response.data
-      documents.value.unshift(created)
-      total.value += 1
-      logger.info(`Created document ${created.id}: ${created.title}`)
-      return created
-    } catch (err) {
-      return await _handleError('createDocument', err)
-    } finally {
-      isSaving.value = false
-    }
+    return wrapSaving(async () => {
+      try {
+        const response = await apiClient.post<AIDocument>(_base(), payload)
+        const created = response.data
+        documents.value.unshift(created)
+        total.value += 1
+        logger.info(`Created document ${created.id}: ${created.title}`)
+        return created
+      } catch (err) {
+        return await _handleError('createDocument', err)
+      }
+    })
   }
 
   /** Save edits to an existing document. */
@@ -146,25 +144,24 @@ export function useAIDocument() {
     docId: string,
     payload: UpdateDocumentPayload
   ): Promise<AIDocument> {
-    isSaving.value = true
     error.value = null
-    try {
-      const response = await apiClient.put<AIDocument>(`${_base()}/${docId}`, payload)
-      const updated = response.data
-      // Sync local list
-      const idx = documents.value.findIndex((d) => d.id === docId)
-      if (idx !== -1) {
-        documents.value[idx] = updated
+    return wrapSaving(async () => {
+      try {
+        const response = await apiClient.put<AIDocument>(`${_base()}/${docId}`, payload)
+        const updated = response.data
+        // Sync local list
+        const idx = documents.value.findIndex((d) => d.id === docId)
+        if (idx !== -1) {
+          documents.value[idx] = updated
+        }
+        if (currentDocument.value?.id === docId) {
+          currentDocument.value = updated
+        }
+        return updated
+      } catch (err) {
+        return await _handleError('updateDocument', err)
       }
-      if (currentDocument.value?.id === docId) {
-        currentDocument.value = updated
-      }
-      return updated
-    } catch (err) {
-      return await _handleError('updateDocument', err)
-    } finally {
-      isSaving.value = false
-    }
+    })
   }
 
   /** Delete a document and remove it from the local list. */
@@ -188,28 +185,27 @@ export function useAIDocument() {
     docId: string,
     payload: RefineDocumentPayload
   ): Promise<AIDocument> {
-    isRefining.value = true
     error.value = null
-    try {
-      const response = await apiClient.post<AIDocument>(
-        `${_base()}/${docId}/refine`,
-        payload
-      )
-      const refined = response.data
-      const idx = documents.value.findIndex((d) => d.id === docId)
-      if (idx !== -1) {
-        documents.value[idx] = refined
+    return wrapRefining(async () => {
+      try {
+        const response = await apiClient.post<AIDocument>(
+          `${_base()}/${docId}/refine`,
+          payload
+        )
+        const refined = response.data
+        const idx = documents.value.findIndex((d) => d.id === docId)
+        if (idx !== -1) {
+          documents.value[idx] = refined
+        }
+        if (currentDocument.value?.id === docId) {
+          currentDocument.value = refined
+        }
+        logger.info(`Refined document ${docId}`)
+        return refined
+      } catch (err) {
+        return await _handleError('refineDocument', err)
       }
-      if (currentDocument.value?.id === docId) {
-        currentDocument.value = refined
-      }
-      logger.info(`Refined document ${docId}`)
-      return refined
-    } catch (err) {
-      return await _handleError('refineDocument', err)
-    } finally {
-      isRefining.value = false
-    }
+    })
   }
 
   /** Convenience: save an AI chat message as a new document. */

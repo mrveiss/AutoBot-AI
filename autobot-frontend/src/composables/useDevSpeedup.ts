@@ -11,6 +11,7 @@ import { ref, onMounted, getCurrentInstance } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from './useLoadingState'
 
 const logger = createLogger('useDevSpeedup')
 
@@ -84,161 +85,152 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
   const refactorSuggestions = ref<RefactorSuggestion[]>([])
   const generatedTests = ref<TestCase[]>([])
   const actionHistory = ref<SpeedupAction[]>([])
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   // ===== API Methods =====
 
   async function quickSearch(query: string, type?: 'file' | 'code' | 'symbol'): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ results: SearchResult[] }>(`${getApiBase()}/dev-speedup/quick-search`, { query, type })
-      searchResults.value = data.results || []
-      logger.debug('Search results:', searchResults.value.length)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to search'
-      logger.error('Search failed:', err)
-      error.value = message
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ results: SearchResult[] }>(`${getApiBase()}/dev-speedup/quick-search`, { query, type })
+        searchResults.value = data.results || []
+        logger.debug('Search results:', searchResults.value.length)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to search'
+        logger.error('Search failed:', err)
+        error.value = message
+      }
+    })
   }
 
   async function generateSnippet(description: string, language: string): Promise<CodeSnippet | null> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ snippet: CodeSnippet }>(`${getApiBase()}/dev-speedup/snippet-generate`, { description, language })
-      const snippet = data.snippet
-      snippets.value.unshift(snippet)
-      logger.debug('Generated snippet:', snippet)
-      return snippet
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate snippet'
-      logger.error('Snippet generation failed:', err)
-      error.value = message
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ snippet: CodeSnippet }>(`${getApiBase()}/dev-speedup/snippet-generate`, { description, language })
+        const snippet = data.snippet
+        snippets.value.unshift(snippet)
+        logger.debug('Generated snippet:', snippet)
+        return snippet
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to generate snippet'
+        logger.error('Snippet generation failed:', err)
+        error.value = message
+        return null
+      }
+    })
   }
 
   async function fetchTemplates(category?: string): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const params = category ? `?category=${category}` : ''
-      const data = await ApiClient.get<{ templates: CodeTemplate[] }>(`${getApiBase()}/dev-speedup/templates${params}`)
-      templates.value = data.templates || []
-      logger.debug('Fetched templates:', templates.value.length)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch templates'
-      logger.error('Failed to fetch templates:', err)
-      error.value = message
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const params = category ? `?category=${category}` : ''
+        const data = await ApiClient.get<{ templates: CodeTemplate[] }>(`${getApiBase()}/dev-speedup/templates${params}`)
+        templates.value = data.templates || []
+        logger.debug('Fetched templates:', templates.value.length)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch templates'
+        logger.error('Failed to fetch templates:', err)
+        error.value = message
+      }
+    })
   }
 
   async function suggestRefactor(code: string, language: string): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ suggestions: RefactorSuggestion[] }>(`${getApiBase()}/dev-speedup/refactor-suggest`, { code, language })
-      refactorSuggestions.value = data.suggestions || []
-      logger.debug('Refactor suggestions:', refactorSuggestions.value.length)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to get refactor suggestions'
-      logger.error('Refactor suggestions failed:', err)
-      error.value = message
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ suggestions: RefactorSuggestion[] }>(`${getApiBase()}/dev-speedup/refactor-suggest`, { code, language })
+        refactorSuggestions.value = data.suggestions || []
+        logger.debug('Refactor suggestions:', refactorSuggestions.value.length)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to get refactor suggestions'
+        logger.error('Refactor suggestions failed:', err)
+        error.value = message
+      }
+    })
   }
 
   async function generateBoilerplate(type: string, options: Record<string, unknown>): Promise<string | null> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ code: string }>(`${getApiBase()}/dev-speedup/boilerplate`, { type, ...options })
-      logger.debug('Generated boilerplate')
-      return data.code
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate boilerplate'
-      logger.error('Boilerplate generation failed:', err)
-      error.value = message
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ code: string }>(`${getApiBase()}/dev-speedup/boilerplate`, { type, ...options })
+        logger.debug('Generated boilerplate')
+        return data.code
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to generate boilerplate'
+        logger.error('Boilerplate generation failed:', err)
+        error.value = message
+        return null
+      }
+    })
   }
 
   async function generateTests(code: string, language: string, framework?: string): Promise<void> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ tests: TestCase[] }>(`${getApiBase()}/dev-speedup/test-generate`, { code, language, framework })
-      generatedTests.value = data.tests || []
-      logger.debug('Generated tests:', generatedTests.value.length)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate tests'
-      logger.error('Test generation failed:', err)
-      error.value = message
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ tests: TestCase[] }>(`${getApiBase()}/dev-speedup/test-generate`, { code, language, framework })
+        generatedTests.value = data.tests || []
+        logger.debug('Generated tests:', generatedTests.value.length)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to generate tests'
+        logger.error('Test generation failed:', err)
+        error.value = message
+      }
+    })
   }
 
   async function optimizeCode(code: string, language: string): Promise<string | null> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ optimized_code: string }>(`${getApiBase()}/dev-speedup/optimize`, { code, language })
-      logger.debug('Code optimized')
-      return data.optimized_code
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to optimize code'
-      logger.error('Code optimization failed:', err)
-      error.value = message
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ optimized_code: string }>(`${getApiBase()}/dev-speedup/optimize`, { code, language })
+        logger.debug('Code optimized')
+        return data.optimized_code
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to optimize code'
+        logger.error('Code optimization failed:', err)
+        error.value = message
+        return null
+      }
+    })
   }
 
   async function formatCode(code: string, language: string): Promise<string | null> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ formatted_code: string }>(`${getApiBase()}/dev-speedup/format`, { code, language })
-      logger.debug('Code formatted')
-      return data.formatted_code
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to format code'
-      logger.error('Code formatting failed:', err)
-      error.value = message
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ formatted_code: string }>(`${getApiBase()}/dev-speedup/format`, { code, language })
+        logger.debug('Code formatted')
+        return data.formatted_code
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to format code'
+        logger.error('Code formatting failed:', err)
+        error.value = message
+        return null
+      }
+    })
   }
 
   async function lintFix(code: string, language: string): Promise<string | null> {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await ApiClient.post<{ fixed_code: string }>(`${getApiBase()}/dev-speedup/lint-fix`, { code, language })
-      logger.debug('Linting fixed')
-      return data.fixed_code
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fix linting'
-      logger.error('Lint fix failed:', err)
-      error.value = message
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await ApiClient.post<{ fixed_code: string }>(`${getApiBase()}/dev-speedup/lint-fix`, { code, language })
+        logger.debug('Linting fixed')
+        return data.fixed_code
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fix linting'
+        logger.error('Lint fix failed:', err)
+        error.value = message
+        return null
+      }
+    })
   }
 
   async function fetchHistory(): Promise<void> {

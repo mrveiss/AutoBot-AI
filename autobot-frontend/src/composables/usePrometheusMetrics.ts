@@ -18,6 +18,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from './useLoadingState'
 
 // Create scoped logger
 const logger = createLogger('usePrometheusMetrics')
@@ -248,7 +249,7 @@ export function usePrometheusMetrics(
   const gpuDetails = ref<GPUMetrics | null>(null)
   const npuDetails = ref<NPUMetrics | null>(null)
 
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
   const lastUpdate = ref<Date | null>(null)
   const isConnected = ref(false)
@@ -418,8 +419,7 @@ export function usePrometheusMetrics(
   }
 
   async function fetchAll(): Promise<void> {
-    isLoading.value = true
-    try {
+    return wrap(async () => {
       await Promise.all([
         fetchDashboard(),
         fetchServices(),
@@ -429,9 +429,7 @@ export function usePrometheusMetrics(
         fetchNPUDetails()
       ])
       lastUpdate.value = new Date()
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function refresh(): Promise<void> {
@@ -531,20 +529,19 @@ export function useSystemMetrics(pollInterval = 10000) {
   const api = useApi()
 
   const metrics = ref<SystemMetrics | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function fetch() {
-    isLoading.value = true
-    try {
-      const data = await api.get<{ metrics?: { system?: SystemMetrics } }>(`${getApiBase()}/monitoring/metrics/current`)
-      metrics.value = data.metrics?.system || null
-      error.value = null
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch metrics'
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await api.get<{ metrics?: { system?: SystemMetrics } }>(`${getApiBase()}/monitoring/metrics/current`)
+        metrics.value = data.metrics?.system || null
+        error.value = null
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to fetch metrics'
+      }
+    })
   }
 
   const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
@@ -577,28 +574,27 @@ export function useServiceHealth(pollInterval = 15000) {
 
   const services = ref<ServiceHealth[]>([])
   const summary = ref<Pick<ServicesSummary, 'total_services' | 'healthy_services' | 'degraded_services' | 'critical_services' | 'overall_status' | 'health_percentage'> | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function fetch() {
-    isLoading.value = true
-    try {
-      const data = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
-      services.value = data.services || []
-      summary.value = {
-        total_services: data.total_services,
-        healthy_services: data.healthy_services,
-        degraded_services: data.degraded_services,
-        critical_services: data.critical_services,
-        overall_status: data.overall_status,
-        health_percentage: data.health_percentage
+    return wrap(async () => {
+      try {
+        const data = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
+        services.value = data.services || []
+        summary.value = {
+          total_services: data.total_services,
+          healthy_services: data.healthy_services,
+          degraded_services: data.degraded_services,
+          critical_services: data.critical_services,
+          overall_status: data.overall_status,
+          health_percentage: data.health_percentage
+        }
+        error.value = null
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to fetch services'
       }
-      error.value = null
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch services'
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   const healthyCount = computed(() => summary.value?.healthy_services ?? 0)
@@ -647,7 +643,7 @@ export function useAlerts(pollInterval = 30000) {
   const warningCount = ref(0)
   const highCount = ref(0)  // Issue #474: Added for AlertManager 'high' severity
   const totalCount = ref(0)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
   // Issue #474: Track alert sources
   const sources = ref<{ alertmanager: number; autobot_monitor: number }>({
@@ -656,24 +652,23 @@ export function useAlerts(pollInterval = 30000) {
   })
 
   async function fetch() {
-    isLoading.value = true
-    try {
-      const data = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
-      alerts.value = data.alerts || []
-      criticalCount.value = data.critical_count
-      warningCount.value = data.warning_count
-      highCount.value = data.high_count || 0  // Issue #474
-      totalCount.value = data.total_count
-      // Issue #474: Track sources
-      if (data.sources) {
-        sources.value = data.sources
+    return wrap(async () => {
+      try {
+        const data = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
+        alerts.value = data.alerts || []
+        criticalCount.value = data.critical_count
+        warningCount.value = data.warning_count
+        highCount.value = data.high_count || 0  // Issue #474
+        totalCount.value = data.total_count
+        // Issue #474: Track sources
+        if (data.sources) {
+          sources.value = data.sources
+        }
+        error.value = null
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to fetch alerts'
       }
-      error.value = null
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch alerts'
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   const hasCritical = computed(() => criticalCount.value > 0)
