@@ -205,6 +205,7 @@ When spawning multiple agents for batch work with `/batch-implement`:
 
 After agents complete:
 
+0. **Gate 0 — Squash-duplicate check:** For each PR branch, run the squash-duplicate detection command (see `docs/developer/CLAUDE_WORKFLOW.md` "Gate 0") to verify no commits are already in `Dev_new_gui`. If all commits are duplicates, close the issue without merging.
 1. **Enumerate ALL open PRs:** `gh pr list --state open` to count expected PRs before starting review.
 2. **Track in checklist:** One line per PR to verify nothing is skipped.
 3. **Review each PR:**
@@ -279,6 +280,7 @@ Sub-agents without Bash permissions cannot complete git operations and will stal
 
 **Use `/pre-merge-validate <PR>` before merging any code:**
 
+0. **Squash-Duplicate Detection:** Run Gate 0 (see `docs/developer/CLAUDE_WORKFLOW.md`) to detect commits already squash-merged to `Dev_new_gui` — avoids wasted merge work on already-landed changes.
 1. **Syntax + Imports:** Catches SyntaxError, ImportError
 2. **Call-Site Impact:** Finds removed functions with live callers (prevents `_init_redis()` incidents)
 3. **Function Signatures:** Detects signature changes with existing callers
