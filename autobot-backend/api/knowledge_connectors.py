@@ -50,7 +50,7 @@ from knowledge.schemas.connectors import (
     CreateConnectorRequest,
     UpdateConnectorRequest,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

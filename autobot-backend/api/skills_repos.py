@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_middleware import check_admin_permission
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

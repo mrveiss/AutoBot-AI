@@ -18,7 +18,7 @@ from pydantic import BaseModel, field_validator
 
 from auth_middleware import check_admin_permission
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])

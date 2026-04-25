@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 

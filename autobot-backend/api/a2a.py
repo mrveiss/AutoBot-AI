@@ -42,7 +42,7 @@ from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.types import Task
 from auth_middleware import check_admin_permission
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

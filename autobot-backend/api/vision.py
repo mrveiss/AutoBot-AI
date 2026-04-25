@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 _screen_analyzer: Optional[ScreenAnalyzer] = None
 _screen_analyzer_lock = threading.Lock()

@@ -25,7 +25,7 @@ from auth_middleware import auth_middleware, check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

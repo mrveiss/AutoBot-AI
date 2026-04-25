@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

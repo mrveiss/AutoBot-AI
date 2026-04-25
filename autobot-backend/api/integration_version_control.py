@@ -16,7 +16,7 @@ from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

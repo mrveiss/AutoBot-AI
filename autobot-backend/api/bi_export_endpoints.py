@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.saved_reports_service import get_saved_reports_service
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter(tags=["bi-reports"])
 

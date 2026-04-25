@@ -27,7 +27,7 @@ from services.workflow_permission_service import (
     WorkflowPermissionService,
 )
 from services.workflow_rbac import require_workflow_permission
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

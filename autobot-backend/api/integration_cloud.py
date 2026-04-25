@@ -22,7 +22,7 @@ from integrations.cloud_integration import (
     AzureIntegration,
     GCPIntegration,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter(
     tags=["integrations-cloud"],

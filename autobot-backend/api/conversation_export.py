@@ -32,7 +32,7 @@ from services.conversation_export import (
 )
 from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

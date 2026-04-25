@@ -59,7 +59,7 @@ from utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

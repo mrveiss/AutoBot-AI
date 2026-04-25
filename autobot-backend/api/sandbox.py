@@ -27,7 +27,7 @@ from utils.response_builder import (
     service_unavailable_response,
     success_response,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

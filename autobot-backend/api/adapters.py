@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import get_current_user
 from llm_interface_pkg.adapters.registry import get_adapter_registry
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

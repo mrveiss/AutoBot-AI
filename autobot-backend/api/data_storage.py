@@ -24,7 +24,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = logging.getLogger(__name__)

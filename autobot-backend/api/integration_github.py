@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.github_integration import GitHubIntegration
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

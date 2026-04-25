@@ -21,7 +21,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
