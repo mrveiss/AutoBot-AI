@@ -10,6 +10,7 @@ including AI Stack integration, database connections, and external service clien
 Issue #640: Added NPU worker client for compute offload.
 """
 
+from .tool_output_filter import ToolOutputFilter, get_tool_output_filter
 from .ai_stack_client import (
     AIStackClient,
     AIStackError,
@@ -27,6 +28,9 @@ from .npu_client import (
 )
 
 __all__ = [
+    # ToolOutputFilter (Issue #5893)
+    "ToolOutputFilter",
+    "get_tool_output_filter",
     # AI Stack
     "AIStackClient",
     "AIStackError",

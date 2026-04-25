@@ -457,3 +457,8 @@ class ToolOutputFilter:
             return rule.get("on_empty", "")
 
         return text
+
+
+from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+
+get_tool_output_filter = lazy_singleton(ToolOutputFilter)

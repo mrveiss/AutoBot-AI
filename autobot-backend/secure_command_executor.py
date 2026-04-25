@@ -24,7 +24,7 @@ from security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
-from services.tool_output_filter import ToolOutputFilter
+from services.tool_output_filter import get_tool_output_filter
 from utils.command_utils import execute_shell_command
 
 # Permission system imports (lazy to avoid circular imports)
@@ -33,8 +33,6 @@ if TYPE_CHECKING:
     from services.permission_matcher import PermissionMatcher
 
 logger = logging.getLogger(__name__)
-
-_output_filter = ToolOutputFilter()
 
 # Issue #765: Path constants now imported from security.command_patterns
 
@@ -875,14 +873,14 @@ class SecureCommandExecutor:
         Returns:
             Execution result dictionary
         """
-        prepared_command = _output_filter.prepare_command(command)
+        prepared_command = get_tool_output_filter().prepare_command(command)
         actual_command = self._prepare_command_for_execution(prepared_command, risk)
 
         try:
             result = await execute_shell_command(actual_command)
             log_entry["executed"] = True
             log_entry["return_code"] = result["return_code"]
-            result["stdout"] = _output_filter.filter(
+            result["stdout"] = get_tool_output_filter().filter(
                 prepared_command,
                 result.get("stdout", ""),
                 exit_code=result["return_code"],
