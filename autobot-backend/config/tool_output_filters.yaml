@@ -15,6 +15,7 @@ filters:
   git_write:
     match_command: "^git (add|push|pull|commit|fetch|merge|rebase|stash)"
     strip_ansi: true
+    filter_type: git
     match_output:
       - pattern: "Everything up-to-date"
         message: "ok (already up-to-date)"

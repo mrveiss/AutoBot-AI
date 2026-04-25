@@ -172,7 +172,9 @@ def filter_ruff_json(stdout: str) -> str:
         lines.append(f"{rule} ({len(entries)} occurrence{plural}):")
         lines.extend(entries[:10])
         if len(entries) > 10:
-            lines.append(f"  … and {len(entries) - 10} more")
+            # Show which files the extra occurrences are in via join_with_overflow.
+            extra_files = [e.strip().split("  ")[0] for e in entries[10:]]
+            lines.append("  … " + join_with_overflow(extra_files, 3, "more occurrences"))
     return "\n".join(lines)
 
 
@@ -387,6 +389,13 @@ class ToolOutputFilter:
         rule = self._match_rule(command)
         if rule is None:
             return output
+
+        # filter_type: git — precise no-op detection for git write subcommands.
+        if rule.get("filter_type") == "git":
+            subcmd = " ".join(command.strip().split()[1:]) if command.strip() else ""
+            git_result = short_circuit_git(subcmd, output, stderr, exit_code)
+            if git_result is not None:
+                return git_result
 
         filtered = self._apply(rule, output, exit_code)
 

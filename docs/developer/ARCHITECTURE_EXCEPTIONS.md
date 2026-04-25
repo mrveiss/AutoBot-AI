@@ -127,3 +127,29 @@ silently swallowed. Narrowing the catch would add fragility without improving
 observability.
 
 **Grep check:** `grep -n "except Exception" autobot-backend/api/skills_governance.py`
+
+---
+
+## `services/tool_output_filter.py` — `filter_by_blocks` + `BlockHandler` are stubs
+
+**File:** `autobot-backend/services/tool_output_filter.py`
+**Issue:** #5894
+
+**Pattern bypassed:** All filter pipeline functions should be reachable via `_apply()` dispatch.
+
+**Reason:** `filter_by_blocks(output, handler, exit_code)` requires a concrete
+`BlockHandler` implementation that knows how to identify block boundaries for a
+specific tool (e.g. ESLint, mypy, docker build). No such implementation exists yet
+in the codebase. Adding a `filter_type: blocks` dispatch case without a handler
+would raise `NotImplementedError` at runtime and provide no value.
+
+`BlockHandler` is defined as a `@runtime_checkable` `Protocol` — it is the correct
+abstraction. Once a tool-specific handler is implemented (e.g. `MypyBlockHandler`,
+`EslintBlockHandler`), the dispatch case and a corresponding YAML rule should be
+added together in the same PR.
+
+**How to complete:** Implement a concrete `BlockHandler` subclass for the target
+tool, add `filter_type: blocks` to `_apply()` with a handler lookup, and add a YAML
+rule with `filter_type: blocks` for the matching command pattern.
+
+**Grep check:** `grep -n "filter_by_blocks\|BlockHandler" autobot-backend/services/tool_output_filter.py`
