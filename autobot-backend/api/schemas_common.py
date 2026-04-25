@@ -3503,3 +3503,249 @@ class NPUPoolReloadResponse(BaseModel):
     message: str
 
 
+
+
+# ---------------------------------------------------------------------------
+# wake_word.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class WakeWordListResponse(BaseModel):
+    """Response for GET /words."""
+
+    wake_words: List[str]
+    total: int
+
+
+class WakeWordMutateResponse(BaseModel):
+    """Response for POST /words and DELETE /words/{wake_word}."""
+
+    success: bool
+    message: str
+    wake_words: List[str]
+
+
+class WakeWordConfigUpdateResponse(BaseModel):
+    """Response for PUT /config."""
+
+    success: bool
+    message: str
+    config: Dict[str, Any]
+
+
+class WakeWordStatsResetResponse(BaseModel):
+    """Response for POST /stats/reset."""
+
+    success: bool
+    message: str
+    stats: Dict[str, Any]
+
+
+class WakeWordFeedbackResponse(BaseModel):
+    """Response for POST /feedback."""
+
+    success: bool
+    message: str
+    stats: Dict[str, Any]
+
+
+class WakeWordToggleResponse(BaseModel):
+    """Response for POST /enable and POST /disable."""
+
+    success: bool
+    message: str
+    config: Dict[str, Any]
+
+
+class WakeWordListeningToggleResponse(BaseModel):
+    """Response for POST /listening/start and POST /listening/stop."""
+
+    success: bool
+    message: str
+    status: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# analytics_cost.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class CostModelEntry(BaseModel):
+    model: str
+    cost_usd: float
+    input_tokens: int
+    output_tokens: int
+    call_count: int
+    avg_cost_per_call: float
+
+
+class CostByModelResponse(BaseModel):
+    """Response for GET /cost/by-model."""
+
+    timestamp: str
+    models: List[CostModelEntry]
+    total_models: int
+
+
+class CostForecastPeriod(BaseModel):
+    start: str
+    days: int
+
+
+class CostForecastBaseline(BaseModel):
+    avg_daily_cost: float
+    trend: str
+    growth_rate_percent: float
+
+
+class CostForecastValues(BaseModel):
+    total_estimated_usd: float
+    daily_estimates: Dict[str, Any]
+
+
+class CostForecastResponse(BaseModel):
+    """Response for GET /cost/forecast."""
+
+    forecast_period: CostForecastPeriod
+    baseline: CostForecastBaseline
+    forecast: CostForecastValues
+    confidence: str
+
+
+class RecentUsageResponse(BaseModel):
+    """Response for GET /cost/usage/recent."""
+
+    count: int
+    records: List[Any]
+
+
+class ModelPricingEntry(BaseModel):
+    model: str
+    provider: str
+    input_price_per_1m: float
+    output_price_per_1m: float
+    is_free: bool
+
+
+class ModelPricingResponse(BaseModel):
+    """Response for GET /cost/pricing."""
+
+    pricing_date: str
+    currency: str
+    models: List[ModelPricingEntry]
+    total_models: int
+
+
+class CostEstimateResponse(BaseModel):
+    """Response for GET /cost/estimate."""
+
+    model: str
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: float
+    total_tokens: int
+
+
+class BudgetAlertCreateResponse(BaseModel):
+    """Response for POST /cost/budget-alert."""
+
+    status: str
+    alert: Dict[str, Any]
+
+
+class BudgetAlertsListResponse(BaseModel):
+    """Response for GET /cost/budget-alerts."""
+
+    alerts: List[Any]
+    count: int
+
+
+class BudgetStatusResponse(BaseModel):
+    """Response for GET /cost/budget-status."""
+
+    timestamp: str
+    current_costs: Dict[str, Any]
+    budget_statuses: List[Any]
+
+
+class AllAgentCostsResponse(BaseModel):
+    """Response for GET /cost/by-agent."""
+
+    timestamp: str
+    agents: List[Any]
+    total_agents: int
+
+
+# ---------------------------------------------------------------------------
+# files.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class FileSandboxViewResponse(BaseModel):
+    """Response for GET /files/view/{path}."""
+
+    file_info: Any
+    content: Optional[str] = None
+    is_text: bool
+
+
+class FileSandboxRenameResponse(BaseModel):
+    """Response for POST /files/rename."""
+
+    message: str
+    item_info: Any
+
+
+class FileSandboxPreviewResponse(BaseModel):
+    """Response for GET /files/preview."""
+
+    type: str
+    url: str
+    content: Optional[str] = None
+    mime_type: Optional[str] = None
+    size: int
+    name: str
+
+
+class FileSandboxDeleteResponse(BaseModel):
+    """Response for DELETE /files/delete."""
+
+    message: str
+
+
+class FileSandboxCreateDirResponse(BaseModel):
+    """Response for POST /files/create_directory."""
+
+    message: str
+    directory_info: Any
+
+
+class FileSandboxTreeResponse(BaseModel):
+    """Response for GET /files/tree."""
+
+    path: str
+    tree: List[Any]
+
+
+class FileSandboxStatsResponse(BaseModel):
+    """Response for GET /files/stats."""
+
+    sandbox_root: str
+    total_files: int
+    total_directories: int
+    total_size: int
+    total_size_mb: float
+    max_file_size_mb: int
+    allowed_extensions: List[str]
+
+
+class AdminFileListResponse(BaseModel):
+    """Response for GET /files (admin list directory)."""
+
+    files: List[Any]
+
+
+class AdminFileReadResponse(BaseModel):
+    """Response for GET /files/read (admin read file)."""
+
+    content: str

@@ -16,6 +16,16 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
 
+from .schemas_common import (
+    WakeWordConfigUpdateResponse,
+    WakeWordFeedbackResponse,
+    WakeWordListResponse,
+    WakeWordListeningToggleResponse,
+    WakeWordMutateResponse,
+    WakeWordStatsResetResponse,
+    WakeWordToggleResponse,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
 
@@ -98,7 +108,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     operation="get_wake_words",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/words")
+@router.get("/words", response_model=WakeWordListResponse)
 async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
     detector = get_wake_word_detector()
@@ -113,7 +123,7 @@ async def get_wake_words() -> Metadata:
     operation="add_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/words")
+@router.post("/words", response_model=WakeWordMutateResponse)
 async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     """Add a new wake word to the detection list"""
     detector = get_wake_word_detector()
@@ -138,7 +148,7 @@ async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     operation="remove_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.delete("/words/{wake_word}")
+@router.delete("/words/{wake_word}", response_model=WakeWordMutateResponse)
 async def remove_wake_word(wake_word: str) -> Metadata:
     """Remove a wake word from the detection list"""
     detector = get_wake_word_detector()
@@ -167,7 +177,7 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     operation="get_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/config")
+@router.get("/config", response_model=None)
 async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
     detector = get_wake_word_detector()
@@ -179,7 +189,7 @@ async def get_wake_word_config() -> Metadata:
     operation="update_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.put("/config")
+@router.put("/config", response_model=WakeWordConfigUpdateResponse)
 async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     """Update wake word detection configuration"""
     detector = get_wake_word_detector()
@@ -215,7 +225,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     operation="get_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/stats")
+@router.get("/stats", response_model=None)
 async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
     detector = get_wake_word_detector()
@@ -227,7 +237,7 @@ async def get_wake_word_stats() -> Metadata:
     operation="reset_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/stats/reset")
+@router.post("/stats/reset", response_model=WakeWordStatsResetResponse)
 async def reset_wake_word_stats() -> Metadata:
     """Reset wake word detection statistics"""
     detector = get_wake_word_detector()
@@ -244,7 +254,7 @@ async def reset_wake_word_stats() -> Metadata:
     operation="report_detection_feedback",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/feedback")
+@router.post("/feedback", response_model=WakeWordFeedbackResponse)
 async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
     """
     Report feedback on the last wake word detection.
@@ -270,7 +280,7 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
     operation="enable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/enable")
+@router.post("/enable", response_model=WakeWordToggleResponse)
 async def enable_wake_word() -> Metadata:
     """Enable wake word detection"""
     detector = get_wake_word_detector()
@@ -287,7 +297,7 @@ async def enable_wake_word() -> Metadata:
     operation="disable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/disable")
+@router.post("/disable", response_model=WakeWordToggleResponse)
 async def disable_wake_word() -> Metadata:
     """Disable wake word detection"""
     detector = get_wake_word_detector()
@@ -309,7 +319,7 @@ async def disable_wake_word() -> Metadata:
     operation="start_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/start")
+@router.post("/listening/start", response_model=WakeWordListeningToggleResponse)
 async def start_listening() -> Metadata:
     """
     Start the always-on background listening loop.
@@ -331,7 +341,7 @@ async def start_listening() -> Metadata:
     operation="stop_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/stop")
+@router.post("/listening/stop", response_model=WakeWordListeningToggleResponse)
 async def stop_listening() -> Metadata:
     """Stop the always-on background listening loop."""
     detector: WakeWordDetector = get_wake_word_detector()
@@ -348,7 +358,7 @@ async def stop_listening() -> Metadata:
     operation="get_listening_status",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/listening/status")
+@router.get("/listening/status", response_model=None)
 async def get_listening_status() -> Metadata:
     """
     Get background listening status including real-time CPU metrics.

@@ -650,7 +650,7 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     operation="download_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/download/{file_id}")
+@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Download a specific file from a conversation.
@@ -836,7 +836,7 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     operation="delete_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.delete("/conversation/{session_id}/files/{file_id}")
+@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Delete a specific file from a conversation.
@@ -939,7 +939,7 @@ async def transfer_conversation_files(
     operation="create_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/files/create")
+@router.post("/conversation/{session_id}/files/create", response_model=None)
 async def create_conversation_file(
     request: Request, session_id: str, body: CreateFileRequest
 ):
@@ -982,7 +982,7 @@ async def create_conversation_file(
     operation="rename_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.put("/conversation/{session_id}/files/{file_id}/rename")
+@router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=None)
 async def rename_conversation_file(
     request: Request, session_id: str, file_id: str, body: RenameFileRequest
 ):
@@ -1022,7 +1022,7 @@ async def rename_conversation_file(
     operation="get_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/files/{file_id}/content")
+@router.get("/conversation/{session_id}/files/{file_id}/content", response_model=None)
 async def get_file_content(request: Request, session_id: str, file_id: str):
     """Get the text content of a file (Issue #70)."""
     try:
@@ -1051,7 +1051,7 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
     operation="update_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.put("/conversation/{session_id}/files/{file_id}/content")
+@router.put("/conversation/{session_id}/files/{file_id}/content", response_model=None)
 async def update_file_content(
     request: Request, session_id: str, file_id: str, body: UpdateFileContentRequest
 ):
@@ -1090,7 +1090,7 @@ async def update_file_content(
     operation="copy_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/files/{file_id}/copy")
+@router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=None)
 async def copy_conversation_file(
     request: Request, session_id: str, file_id: str, body: CopyFileRequest
 ):
@@ -1130,7 +1130,7 @@ async def copy_conversation_file(
     operation="search_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/files/search")
+@router.get("/conversation/{session_id}/files/search", response_model=None)
 async def search_conversation_files(request: Request, session_id: str, q: str = ""):
     """Search files by name within a conversation session (Issue #70)."""
     try:
@@ -1155,7 +1155,7 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
     operation="agent_generate_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/generate")
+@router.post("/conversation/{session_id}/generate", response_model=None)
 async def agent_generate_file(
     request: Request, session_id: str, body: AgentGenerateFileRequest
 ):
@@ -1280,7 +1280,7 @@ class MCPToolCallRequest(BaseModel):
     operation="session_mcp_tools",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/mcp/tools")
+@router.get("/conversation/{session_id}/mcp/tools", response_model=None)
 async def get_session_mcp_tools(request: Request, session_id: str):
     """Return MCP tool definitions scoped to this session (Issue #70)."""
     await _authorize_file_operation(request, session_id, "view")
@@ -1344,7 +1344,7 @@ async def _dispatch_mcp_tool(
     operation="session_mcp_call_tool",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/mcp/call")
+@router.post("/conversation/{session_id}/mcp/call", response_model=None)
 async def session_mcp_call_tool(
     request: Request, session_id: str, body: MCPToolCallRequest
 ):
