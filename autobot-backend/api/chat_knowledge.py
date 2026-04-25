@@ -55,6 +55,8 @@ from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from type_defs.common import Metadata
 
+from api.schemas_common import DataResponse
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
@@ -544,7 +546,7 @@ class CreateContextRequest(BaseModel):
     operation="create_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/context/create", response_model=None)
+@router.post("/context/create", response_model=DataResponse)
 async def create_chat_context(request_data: CreateContextRequest, request: Request):
     """Create or update knowledge context for a chat (Issue #688: added user_id)."""
     try:
@@ -585,7 +587,7 @@ class AssociateFileRequest(BaseModel):
     operation="associate_file_with_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/associate", response_model=None)
+@router.post("/files/associate", response_model=DataResponse)
 async def associate_file_with_chat(
     request_data: AssociateFileRequest, request: Request
 ):
@@ -619,7 +621,7 @@ async def associate_file_with_chat(
     operation="upload_file_to_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/upload/{chat_id}", response_model=None)
+@router.post("/files/upload/{chat_id}", response_model=DataResponse)
 async def upload_file_to_chat(
     chat_id: str,
     file: UploadFile = File(...),
@@ -672,7 +674,7 @@ class AddKnowledgeRequest(BaseModel):
     operation="add_temporary_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/add_temporary", response_model=None)
+@router.post("/knowledge/add_temporary", response_model=DataResponse)
 async def add_temporary_knowledge(request: AddKnowledgeRequest):
     """Add temporary knowledge to chat context"""
     try:
@@ -692,7 +694,7 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
     operation="get_pending_knowledge_decisions",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/knowledge/pending/{chat_id}", response_model=None)
+@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
 async def get_pending_knowledge_decisions(chat_id: str):
     """Get knowledge items pending user decision"""
     try:
@@ -720,7 +722,7 @@ class KnowledgeDecisionRequest(BaseModel):
     operation="apply_knowledge_decision",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/decide", response_model=None)
+@router.post("/knowledge/decide", response_model=DataResponse)
 async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
     """Apply user decision for temporary knowledge"""
     try:
@@ -751,7 +753,7 @@ class CompileChatRequest(BaseModel):
     operation="compile_chat_to_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/compile", response_model=None)
+@router.post("/compile", response_model=DataResponse)
 async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: Request):
     """Compile entire chat conversation to knowledge base"""
     try:
@@ -780,7 +782,7 @@ class SearchRequest(BaseModel):
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/search", response_model=None)
+@router.post("/search", response_model=DataResponse)
 async def search_chat_knowledge(request: SearchRequest):
     """Search knowledge across chats or within specific chat"""
     try:
@@ -802,7 +804,7 @@ async def search_chat_knowledge(request: SearchRequest):
     operation="get_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/context/{chat_id}", response_model=None)
+@router.get("/context/{chat_id}", response_model=DataResponse)
 async def get_chat_context(chat_id: str):
     """Get complete knowledge context for a chat"""
     try:
@@ -846,7 +848,7 @@ async def get_chat_context(chat_id: str):
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DataResponse)
 async def health_check():
     """Health check endpoint for chat knowledge system"""
     try:
@@ -873,7 +875,7 @@ class MarkFactsPreservedRequest(BaseModel):
     preserve: bool = True
 
 
-@router.get("/chat/sessions/{session_id}/facts", response_model=None)
+@router.get("/chat/sessions/{session_id}/facts", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_facts",
@@ -998,7 +1000,7 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     return updated_count, failed_count, errors
 
 
-@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=None)
+@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preserve_session_facts",
