@@ -26,7 +26,7 @@ from integrations.project_management_integration import (
     JiraIntegration,
     TrelloIntegration,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

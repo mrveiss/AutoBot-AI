@@ -18,7 +18,7 @@ import aiohttp
 from fastapi import APIRouter
 
 from autobot_shared.ssot_config import config as _ssot
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

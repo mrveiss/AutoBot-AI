@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)

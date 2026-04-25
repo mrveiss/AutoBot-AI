@@ -34,7 +34,7 @@ from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 # LLM Interface for real code generation
 try:

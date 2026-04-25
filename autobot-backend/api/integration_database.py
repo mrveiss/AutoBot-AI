@@ -22,7 +22,7 @@ from integrations.database_integration import (
     MySQLIntegration,
     PostgreSQLIntegration,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

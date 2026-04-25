@@ -27,7 +27,7 @@ from services.causal_inference_engine import (
     CausalAnalysisReport,
     CausalInferenceEngine,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_middleware import get_current_user
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

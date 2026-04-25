@@ -30,7 +30,7 @@ from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

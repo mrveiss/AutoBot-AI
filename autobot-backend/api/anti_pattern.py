@@ -106,7 +106,7 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
 
 # Lazy initialization for detector (thread-safe)
 import asyncio
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 _detector_instance = None
 _detector_lock = asyncio.Lock()

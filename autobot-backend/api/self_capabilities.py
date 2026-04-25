@@ -24,7 +24,7 @@ from fastapi.openapi.utils import get_openapi
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.ttl_constants import TTL_5_MINUTES
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

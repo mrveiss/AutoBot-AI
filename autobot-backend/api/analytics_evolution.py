@@ -30,7 +30,7 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

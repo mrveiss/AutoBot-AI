@@ -22,7 +22,7 @@ from enhanced_memory_manager_async import TaskPriority
 from takeover_manager import TakeoverTrigger, takeover_manager
 from task_execution_tracker import task_tracker
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])

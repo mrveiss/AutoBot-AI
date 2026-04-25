@@ -17,7 +17,7 @@ from integrations.cicd_integration import (
     GitLabCIIntegration,
     JenkinsIntegration,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

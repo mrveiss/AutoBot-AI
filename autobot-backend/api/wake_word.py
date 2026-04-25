@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])

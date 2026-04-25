@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from monitoring.prometheus_metrics import get_metrics_manager
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 

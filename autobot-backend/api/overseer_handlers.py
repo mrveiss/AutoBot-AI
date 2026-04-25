@@ -26,7 +26,7 @@ from agents.overseer.types import (
 )
 from auth_middleware import get_current_user
 from chat_history import ChatHistoryManager
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

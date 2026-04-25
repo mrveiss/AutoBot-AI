@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from services.nl_database_service import get_nl_database_service
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

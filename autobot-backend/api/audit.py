@@ -33,7 +33,7 @@ from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = logging.getLogger(__name__)

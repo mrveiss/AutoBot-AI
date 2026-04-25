@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

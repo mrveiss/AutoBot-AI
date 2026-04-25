@@ -26,7 +26,7 @@ from services.trigger_service import (
     TriggerService,
     TriggerType,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 

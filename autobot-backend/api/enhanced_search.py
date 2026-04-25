@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_llm_logger
 # Import NPU semantic search components
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = get_llm_logger("enhanced_search_api")
 

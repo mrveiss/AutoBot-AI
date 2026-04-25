@@ -38,7 +38,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
