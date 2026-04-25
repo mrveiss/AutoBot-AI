@@ -47,7 +47,10 @@ from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import QueryDefaults
+from services.tool_output_filter import ToolOutputFilter
 from type_defs.common import JSONObject, Metadata
+
+_output_filter = ToolOutputFilter()
 
 logger = logging.getLogger(__name__)
 
@@ -298,9 +301,10 @@ async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Meta
     stdout_str = stdout.decode("utf-8", errors="replace")
     stderr_str = stderr.decode("utf-8", errors="replace")
 
-    # Check output size
+    # Check output size, then apply semantic filter
     if len(stdout_str) > MAX_OUTPUT_SIZE:
-        stdout_str = stdout_str[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
+        stdout_str = stdout_str[:MAX_OUTPUT_SIZE]
+    stdout_str = _output_filter.filter(" ".join(cmd[:3]), stdout_str)
 
     return {
         "success": process.returncode == 0,

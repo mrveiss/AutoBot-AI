@@ -1,0 +1,67 @@
+# Tool output filter rules for ToolOutputFilter service.
+# Each key under `filters:` is a named rule; first match on match_command wins.
+#
+# Pipeline stages (applied in order when present):
+#   strip_ansi           — remove ANSI/VT100 escape codes
+#   match_output         — if output matches pattern, replace with short message
+#   strip_lines_matching — drop lines matching any regex
+#   keep_lines_matching  — keep only lines matching any regex
+#   dedup_consecutive    — collapse repeated consecutive lines into "line [×N]"
+#   max_lines            — keep last N lines
+#   on_empty             — message returned when filtered result is empty
+
+filters:
+  git_write:
+    match_command: "^git (add|push|pull|commit|fetch|merge|rebase|stash)"
+    strip_ansi: true
+    match_output:
+      - pattern: "Everything up-to-date"
+        message: "ok (already up-to-date)"
+      - pattern: "nothing to commit"
+        message: "ok (nothing to commit)"
+    max_lines: 15
+
+  pytest:
+    match_command: "^pytest"
+    strip_ansi: true
+    strip_lines_matching:
+      - "^test_.* PASSED"
+      - "^\\."
+      - "^s$"
+      - "^platform "
+      - "^rootdir:"
+      - "^plugins:"
+      - "^collecting \\.\\.\\."
+    max_lines: 150
+    on_empty: "All tests passed"
+
+  npm_test:
+    match_command: "^npm (test|run test|run lint|run build|run type-check)"
+    strip_ansi: true
+    strip_lines_matching:
+      - "^  ✓ "
+      - "^  ✔ "
+      - "^  pass "
+    max_lines: 150
+
+  ruff_eslint:
+    match_command: "^(ruff|eslint|flake8|mypy|black)"
+    strip_ansi: true
+    max_lines: 100
+
+  docker_logs:
+    match_command: "^docker (logs|compose logs)"
+    strip_ansi: true
+    dedup_consecutive: true
+    max_lines: 60
+
+  pip_install:
+    match_command: "^pip(3)? install"
+    strip_ansi: true
+    strip_lines_matching:
+      - "^Requirement already satisfied"
+      - "^Collecting "
+      - "^  Downloading "
+      - "^  Using cached "
+    max_lines: 20
+    on_empty: "ok (all requirements already satisfied)"
