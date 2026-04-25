@@ -33,11 +33,20 @@ Endpoints:
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from .schemas_common import (
+    NPUPoolReloadResponse,
+    NPUPoolWorkersResponse,
+    NPUStatusResponse,
+    NPUWorkerHeartbeatResponse,
+    NPUWorkerPairResponse,
+    NPUWorkerRepairResponse,
+    NPUWorkerUnpairResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -231,7 +240,7 @@ async def update_worker(
     operation="remove_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def remove_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -364,7 +373,7 @@ async def get_worker_metrics(
     operation="get_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/workers/{worker_id}/logging")
+@router.get("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 async def get_worker_log_level(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -429,7 +438,7 @@ async def _send_log_level_to_worker(
     operation="set_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
-@router.put("/npu/workers/{worker_id}/logging")
+@router.put("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 async def set_worker_log_level(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -557,7 +566,7 @@ async def update_load_balancing_config(
     operation="get_npu_status",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/status")
+@router.get("/npu/status", response_model=NPUStatusResponse)
 async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get overall NPU worker pool status.
@@ -607,7 +616,7 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
     operation="proxy_npu_health",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/health")
+@router.get("/npu/health", response_model=None)
 async def proxy_npu_health():
     """
     Proxy NPU worker health check to avoid CORS/mixed content.
@@ -650,7 +659,7 @@ async def proxy_npu_health():
     operation="unpair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/{worker_id}/unpair")
+@router.post("/npu/workers/{worker_id}/unpair", response_model=NPUWorkerUnpairResponse)
 async def unpair_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -788,7 +797,7 @@ async def _resolve_repair_worker_info(
     operation="repair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/{worker_id}/repair")
+@router.post("/npu/workers/{worker_id}/repair", response_model=NPUWorkerRepairResponse)
 async def repair_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -1064,7 +1073,7 @@ async def _execute_worker_pairing(
     operation="pair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/pair")
+@router.post("/npu/workers/pair", response_model=NPUWorkerPairResponse)
 async def pair_worker(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -1162,7 +1171,7 @@ def _reject_unpaired_heartbeat(heartbeat: WorkerHeartbeat) -> None:
     )
 
 
-@router.post("/npu/workers/heartbeat")
+@router.post("/npu/workers/heartbeat", response_model=NPUWorkerHeartbeatResponse)
 async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     """
     Receive heartbeat/telemetry from NPU worker.
@@ -1337,7 +1346,7 @@ def _build_bootstrap_response(
     operation="worker_bootstrap",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/bootstrap")
+@router.post("/npu/workers/bootstrap", response_model=Dict[str, Any])
 async def worker_bootstrap(request: dict):
     """
     Bootstrap configuration endpoint for NPU workers.
@@ -1386,7 +1395,7 @@ async def worker_bootstrap(request: dict):
     operation="get_pool_stats",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/pool/stats")
+@router.get("/npu/pool/stats", response_model=Dict[str, Any])
 async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get NPU worker pool statistics (Issue #168).
@@ -1419,7 +1428,7 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
     operation="get_pool_workers",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/pool/workers")
+@router.get("/npu/pool/workers", response_model=NPUPoolWorkersResponse)
 async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
     """
     Get per-worker health states from the pool (Issue #168).
@@ -1471,7 +1480,7 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
     operation="reload_pool_config",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/pool/reload")
+@router.post("/npu/pool/reload", response_model=NPUPoolReloadResponse)
 async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)):
     """
     Hot-reload worker pool configuration (Issue #168).
