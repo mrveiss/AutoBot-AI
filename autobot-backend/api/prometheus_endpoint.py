@@ -17,7 +17,7 @@ from api.schemas_common import DataResponse, SuccessResponse
 router = APIRouter()
 
 
-@router.get("", response_model=DataResponse)
+@router.get("", response_model=None)
 async def metrics_endpoint():
     """
     Expose Prometheus metrics in text/plain format for scraping
