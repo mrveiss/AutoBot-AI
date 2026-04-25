@@ -3296,3 +3296,210 @@ class StructuredThinkingSessionsResponse(BaseModel):
     sessions: List[Any]
 
 
+# ---------------------------------------------------------------------------
+# advanced_control.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class AdvancedControlStreamingTerminateResponse(BaseModel):
+    """Response for DELETE /streaming/{session_id}."""
+
+    success: bool
+    session_id: str
+
+
+class AdvancedControlStreamingSessionsResponse(BaseModel):
+    """Response for GET /streaming/sessions."""
+
+    sessions: List[Any]
+    count: int
+
+
+class AdvancedControlTakeoverRequestResponse(BaseModel):
+    """Response for POST /takeover/request."""
+
+    success: bool
+    request_id: str
+
+
+class AdvancedControlTakeoverApproveResponse(BaseModel):
+    """Response for POST /takeover/{request_id}/approve."""
+
+    success: bool
+    session_id: str
+
+
+class AdvancedControlTakeoverActionResponse(BaseModel):
+    """Response for POST /takeover/sessions/{session_id}/action."""
+
+    success: bool
+    result: Any
+
+
+class AdvancedControlTakeoverSessionStatusResponse(BaseModel):
+    """Response for pause/resume/complete takeover session endpoints."""
+
+    success: bool
+    session_id: str
+    status: str
+
+
+class AdvancedControlPendingTakeoversResponse(BaseModel):
+    """Response for GET /takeover/pending."""
+
+    pending_requests: List[Any]
+    count: int
+
+
+class AdvancedControlActiveTakeoversResponse(BaseModel):
+    """Response for GET /takeover/active."""
+
+    active_sessions: List[Any]
+    count: int
+
+
+class AdvancedControlEmergencyStopResponse(BaseModel):
+    """Response for POST /system/emergency-stop."""
+
+    success: bool
+    message: str
+    takeover_request_id: str
+
+
+class AdvancedControlSystemHealthResponse(BaseModel):
+    """Response for GET /system/health."""
+
+    status: str
+    desktop_streaming_available: bool
+    novnc_available: bool
+    active_streaming_sessions: int
+    pending_takeovers: int
+    active_takeovers: int
+    paused_tasks: int
+
+
+class AdvancedControlInfoResponse(BaseModel):
+    """Response for GET /."""
+
+    name: str
+    version: str
+    features: List[str]
+    endpoints: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# analytics.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsTrackEventResponse(BaseModel):
+    """Response for POST /events/track."""
+
+    status: str
+    event_id: str
+    broadcast_count: int
+
+
+class AnalyticsCollectionStartResponse(BaseModel):
+    """Response for POST /collection/start."""
+
+    status: str
+    message: str
+    session_id: str
+    metrics_collection: bool
+
+
+class AnalyticsCollectionStopResponse(BaseModel):
+    """Response for POST /collection/stop."""
+
+    status: str
+    message: str
+    session_duration: str
+
+
+class AnalyticsDashboardAnalyzeResponse(BaseModel):
+    """Response for POST /dashboard/overview/analyze."""
+
+    task_id: str
+    status: str
+
+
+class AnalyticsClearStuckTasksResponse(BaseModel):
+    """Response for POST /dashboard/overview/tasks/clear-stuck."""
+
+    cleared_count: int
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# npu_workers.py schemas  (Issue #5317)
+# ---------------------------------------------------------------------------
+
+
+class NPUStatusResponse(BaseModel):
+    """Response for GET /npu/status."""
+
+    status: str
+    total_workers: int
+    online_workers: int
+    offline_workers: int
+    total_capacity: int
+    current_load: int
+    utilization_percent: float
+    load_balancing_strategy: str
+
+
+class NPUWorkerUnpairResponse(BaseModel):
+    """Response for POST /npu/workers/{worker_id}/unpair."""
+
+    success: bool
+    worker_id: str
+    message: str
+
+
+class NPUWorkerRepairResponse(BaseModel):
+    """Response for POST /npu/workers/{worker_id}/repair."""
+
+    success: bool
+    old_worker_id: str
+    new_worker_id: str
+    config: Dict[str, Any]
+    server_timestamp: str
+    message: str
+
+
+class NPUWorkerPairResponse(BaseModel):
+    """Response for POST /npu/workers/pair."""
+
+    success: bool
+    worker_id: str
+    url: str
+    platform: str
+    device_info: Dict[str, Any]
+    paired_at: str
+    message: str
+
+
+class NPUWorkerHeartbeatResponse(BaseModel):
+    """Response for POST /npu/workers/heartbeat."""
+
+    acknowledged: bool
+    worker_id: str
+    server_timestamp: str
+    message: str
+
+
+class NPUPoolWorkersResponse(BaseModel):
+    """Response for GET /npu/pool/workers."""
+
+    workers: List[Any]
+
+
+class NPUPoolReloadResponse(BaseModel):
+    """Response for POST /npu/pool/reload."""
+
+    success: bool
+    workers_loaded: int
+    message: str
+
+
