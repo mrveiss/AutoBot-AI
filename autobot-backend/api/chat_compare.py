@@ -19,7 +19,7 @@ SSE event shapes:
 import asyncio
 import json
 import logging
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -30,6 +30,27 @@ from auth_middleware import get_current_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
+
+# ---------------------------------------------------------------------------
+# Module-level singleton — initialized once, no lazy-init race (#5023)
+# ---------------------------------------------------------------------------
+
+_init_lock: asyncio.Lock = asyncio.Lock()
+_compare_interface: Optional[object] = None
+
+
+async def _get_compare_interface() -> object:
+    """Return the process-level LLMInterface singleton, initializing it once (#5023)."""
+    global _compare_interface
+    if _compare_interface is not None:
+        return _compare_interface
+    async with _init_lock:
+        if _compare_interface is None:
+            from llm_interface_pkg.interface import LLMInterface
+
+            _compare_interface = LLMInterface()
+    return _compare_interface
+
 
 # ---------------------------------------------------------------------------
 # Request model
@@ -61,39 +82,45 @@ def _parse_provider_model(spec: str) -> tuple[str, str]:
 
 
 async def _stream_single_model(
-    llm_interface: Any,
     model_spec: str,
     messages: List[Dict],
 ) -> AsyncIterator[str]:
     """
-    Yield SSE data lines for a single model.
+    Yield SSE data lines for a single model using real provider streaming (#5013).
 
-    Uses chat_completion (non-streaming) and emits the content in one delta
-    plus a done event.  This avoids the complexity of per-provider streaming
-    while keeping the SSE protocol consistent for the frontend.
+    Resolves the provider via ProviderRegistry and calls stream_completion() so
+    chunks arrive from the LLM as they are generated, not as a post-hoc slice.
     """
-    provider, model_name = _parse_provider_model(model_spec)
-    try:
-        kwargs: Dict[str, Any] = {"provider": provider}
-        if model_name:
-            kwargs["model_name"] = model_name
+    from llm_interface_pkg.models import LLMRequest
+    from llm_providers.provider_registry import get_provider_registry
 
-        response = await llm_interface.chat_completion(
+    provider_name, model_name = _parse_provider_model(model_spec)
+    try:
+        registry = get_provider_registry()
+        llm_request = LLMRequest(
             messages=messages,
             llm_type="chat",
-            **kwargs,
+            provider=provider_name or None,
+            model_name=model_name or None,
+            stream=True,
         )
-
-        if response.error:
-            yield _sse({"model": model_spec, "error": response.error, "done": True})
+        provider = await registry.get_provider_for_request(
+            provider_name=provider_name or None,
+            request=llm_request,
+        )
+        if provider is None:
+            yield _sse(
+                {
+                    "model": model_spec,
+                    "error": f"No provider available for {model_spec!r}",
+                    "done": True,
+                }
+            )
             return
 
-        content: str = response.content or ""
-        # Stream in reasonably-sized chunks so the UI can start rendering early
-        chunk_size = 64
-        for i in range(0, max(1, len(content)), chunk_size):
-            yield _sse({"model": model_spec, "delta": content[i : i + chunk_size], "done": False})
-            await asyncio.sleep(0)  # yield event-loop slot
+        async for chunk in provider.stream_completion(llm_request):
+            if chunk:
+                yield _sse({"model": model_spec, "delta": chunk, "done": False})
 
         yield _sse({"model": model_spec, "done": True})
 
@@ -107,7 +134,6 @@ def _sse(payload: Dict) -> str:
 
 
 async def _fan_out_stream(
-    llm_interface: Any,
     model_specs: List[str],
     messages: List[Dict],
 ) -> AsyncIterator[str]:
@@ -129,7 +155,7 @@ async def _fan_out_stream(
 
     # Launch all model streams concurrently
     tasks = [
-        asyncio.create_task(_drain(_stream_single_model(llm_interface, spec, messages)))
+        asyncio.create_task(_drain(_stream_single_model(spec, messages)))
         for spec in model_specs
     ]
 
@@ -165,12 +191,8 @@ async def compare_models(
       {"model": "provider/model", "done": true}
       {"model": "provider/model", "error": "message", "done": true}
     """
-    from llm_interface_pkg.interface import LLMInterface
-
-    llm_interface = getattr(request.app.state, "_compare_llm_interface", None)
-    if llm_interface is None:
-        llm_interface = LLMInterface()
-        request.app.state._compare_llm_interface = llm_interface
+    # Ensure LLMInterface singleton is initialized (used for future non-registry paths).
+    await _get_compare_interface()
 
     user_content = body.prompt
     if body.context:
@@ -179,7 +201,7 @@ async def compare_models(
     messages = [{"role": "user", "content": user_content}]
 
     return StreamingResponse(
-        _fan_out_stream(llm_interface, body.models, messages),
+        _fan_out_stream(body.models, messages),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
