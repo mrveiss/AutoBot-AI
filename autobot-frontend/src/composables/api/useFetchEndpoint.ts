@@ -216,7 +216,7 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
   //
   // fallbackData is handled by catching inside the fetcher and returning the
   // fallback value rather than re-throwing, so useApiResource sees a success.
-  const resource = useApiResource<TOut | null>(async () => {
+  const resource = useApiResource<TOut | null>(async (signal?: AbortSignal) => {
     const ctx = pendingCtx
     const queryExtras = pendingExtras
 
@@ -233,6 +233,7 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      signal, // forward the AbortSignal so fetchWithAuth cancels the network request
     }
     if (method !== 'GET' && opts.body) {
       init.body = JSON.stringify(opts.body())
@@ -290,11 +291,10 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
   }
 
   const reset = (): void => {
+    resource.abort() // cancel any in-flight request and clear isLoading atomically
     resource.data.value = null
     resource.error.value = null
-    // isLoading is cleared by useApiResource after refresh resolves;
-    // force it to false on reset() since no in-flight request remains.
-    resource.isLoading.value = false
+    // isLoading is now managed by resource.abort() — do NOT set it directly here
   }
 
   // Map useApiResource's shape to useFetchEndpoint's public API:

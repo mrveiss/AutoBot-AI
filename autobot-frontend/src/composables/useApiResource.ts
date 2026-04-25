@@ -60,6 +60,13 @@ export interface UseApiResourceReturn<T> {
   isLoading: Ref<boolean>
   /** Invoke the fetcher. Resolves after state has been updated. */
   refresh: () => Promise<void>
+  /**
+   * Abort the current in-flight request (if any) and immediately clear
+   * `isLoading`. Safe to call when no request is in flight. Advances the
+   * internal call-ID counter so the in-flight finally block exits early
+   * without touching the refs.
+   */
+  abort: () => void
 }
 
 /**
@@ -145,6 +152,17 @@ export function useApiResource<T>(
     }
   }
 
+  const abort = (): void => {
+    if (currentController !== null) {
+      currentController.abort()
+      currentController = null
+    }
+    // Advance the call ID so the in-flight finally block sees a stale ID and
+    // exits without touching isLoading or data.
+    latestCallId++
+    isLoading.value = false
+  }
+
   // Only register the disposer if called inside an effect scope (e.g. a Vue
   // component setup). Calling onScopeDispose outside a scope emits a warning
   // and does nothing — guarding here keeps unit tests quiet and the callsite
@@ -165,5 +183,5 @@ export function useApiResource<T>(
     refresh()
   }
 
-  return { data, error, isLoading, refresh }
+  return { data, error, isLoading, refresh, abort }
 }
