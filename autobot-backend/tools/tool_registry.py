@@ -624,3 +624,8 @@ class ToolRegistry:
         # (#4557)
         from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
         return registry_tools + sorted(BROWSER_TOOL_NAMES)
+
+
+from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+
+get_tool_registry = lazy_singleton(ToolRegistry)

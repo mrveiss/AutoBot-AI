@@ -1403,6 +1403,28 @@ class LLMInterface:
 
         from agent_tier_classifier import get_base_prompt_for_agent
         from prompt_manager import get_optimized_prompt
+        from tools import get_tool_registry
+
+        tool_descriptions: dict | None = None
+        if available_tools:
+            try:
+                registry = get_tool_registry()
+                raw_descs = {
+                    name: desc
+                    for name, desc in (
+                        await registry.get_compressed_descriptions()
+                    ).items()
+                    if name in available_tools
+                }
+                before_bytes = sum(len(d) for d in raw_descs.values())
+                tool_descriptions = raw_descs
+                logger.debug(
+                    "[#5827] Compressed tool descriptions: %d tools, %d bytes",
+                    len(tool_descriptions),
+                    before_bytes,
+                )
+            except Exception:
+                logger.warning("[#5827] compress_description failed; falling back to tool names only", exc_info=True)
 
         system_prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),
@@ -1412,6 +1434,7 @@ class LLMInterface:
             available_tools=available_tools,
             recent_context=recent_context,
             additional_params=additional_params,
+            tool_descriptions=tool_descriptions,
         )
 
         request_id = llm_params.pop("request_id", str(uuid.uuid4()))
