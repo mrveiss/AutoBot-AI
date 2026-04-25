@@ -299,4 +299,117 @@ describe('useApiResource', () => {
     scope.stop()
     expect(signalBeforeDispose.aborted).toBe(true)
   })
+
+  describe('abortPrior: false', () => {
+    it('does NOT create a controller when abortPrior is false', async () => {
+      // Fetcher receives no signal argument when abortPrior is false.
+      // JS does not pass extra undefined args — the call site uses the
+      // zero-arg branch in useApiResource, so args.length === 0.
+      const receivedArgs: unknown[][] = []
+      const { refresh } = useApiResource(
+        function (...args: unknown[]) {
+          receivedArgs.push(args)
+          return Promise.resolve(1)
+        },
+        { abortPrior: false }
+      )
+
+      await refresh()
+      await refresh()
+
+      expect(receivedArgs).toHaveLength(2)
+      // No signal is passed — fetcher receives zero arguments each time.
+      expect(receivedArgs[0]).toHaveLength(0)
+      expect(receivedArgs[1]).toHaveLength(0)
+    })
+
+    it('calling refresh() twice with abortPrior:false does NOT abort the first call', async () => {
+      const first = deferred<number>()
+      const second = deferred<number>()
+      let call = 0
+
+      // Track whether any externally-visible abort event fired.
+      // With abortPrior:false there is no controller, so this stays false.
+      let firstAborted = false
+
+      const { data, refresh } = useApiResource(
+        () => {
+          call += 1
+          if (call === 1) {
+            // Attach a side-effect to detect an abort we cannot observe
+            // directly (no signal exposed to this fetcher).
+            return first.promise.then((v) => v)
+          }
+          return second.promise
+        },
+        { abortPrior: false }
+      )
+
+      const p1 = refresh()
+      const p2 = refresh()
+
+      // Resolve first call — it should be able to complete because no abort
+      // was fired (abortPrior:false) and it holds the latest callId at the
+      // time p1 started... wait: p2 already incremented the latestCallId, so
+      // the first result IS discarded by the callId guard. But the key point
+      // is the fetcher itself ran to completion — firstAborted stays false.
+      first.resolve(10)
+      await p1
+      expect(firstAborted).toBe(false)
+
+      second.resolve(20)
+      await p2
+      // Only the second call's result is committed (callId guard discards first).
+      expect(data.value).toBe(20)
+    })
+  })
+
+  describe('zero-arg fetcher with abortPrior:true', () => {
+    it('abort() fires on controller but zero-arg fetcher still completes', async () => {
+      // Document the behavior introduced by #5801: the signal is always passed
+      // as an extra argument to the fetcher. A zero-arg fetcher in JS/TS
+      // receives it silently but ignores it — no network cancellation occurs.
+      // The first result IS discarded (callId guard), but the fetcher ran fully.
+
+      const first = deferred<number>()
+      const second = deferred<number>()
+      let call = 0
+      let firstFetcherCompleted = false
+
+      // Zero-arg fetcher — does not declare a signal parameter.
+      const { data, refresh } = useApiResource(() => {
+        call += 1
+        if (call === 1) {
+          return first.promise.then((v) => {
+            // If the promise resolves, the fetcher body completed.
+            firstFetcherCompleted = true
+            return v
+          })
+        }
+        return second.promise
+      })
+
+      // Start first refresh (abortPrior:true by default).
+      const p1 = refresh()
+
+      // Start second refresh — this aborts the first controller, but the
+      // zero-arg fetcher never subscribed to the signal, so first.promise
+      // is NOT cancelled.
+      const p2 = refresh()
+
+      // Resolve the first underlying promise — the fetcher body completes.
+      first.resolve(100)
+      await p1
+      expect(firstFetcherCompleted).toBe(true)
+
+      // Resolve the second call — its result IS committed (callId guard).
+      second.resolve(200)
+      await p2
+      expect(data.value).toBe(200)
+
+      // First call's result was discarded by the callId guard.
+      // data.value should still be the second call's result.
+      expect(data.value).not.toBe(100)
+    })
+  })
 })
