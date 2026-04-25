@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from knowledge.backends import BaseClient
+from knowledge.backends import BaseClient, BaseCollection
 from utils.async_initializable import AsyncInitializable
 
 # FAISS import with graceful fallback
@@ -800,12 +800,17 @@ class HybridVectorSearch(AsyncInitializable):
         # Add to ChromaDB for storage and metadata
         if self.chromadb is not None and documents:
             try:
-                collection = self.chromadb.get_or_create_collection(collection_name)
-                collection.add(
+                collection: BaseCollection = await asyncio.to_thread(
+                    self.chromadb.get_or_create_collection, collection_name
+                )
+                emb_list = embeddings.tolist()
+                metadatas_val = metadatas or [{} for _ in doc_ids]
+                await asyncio.to_thread(
+                    collection.add,
                     ids=doc_ids,
-                    embeddings=embeddings.tolist(),
+                    embeddings=emb_list,
                     documents=documents,
-                    metadatas=metadatas or [{} for _ in doc_ids],
+                    metadatas=metadatas_val,
                 )
                 if added == 0:
                     added = len(doc_ids)
@@ -885,10 +890,14 @@ class HybridVectorSearch(AsyncInitializable):
     ) -> List[SearchResult]:
         """Fetch document content and metadata from ChromaDB."""
         try:
-            collection = self.chromadb.get_collection(collection_name)
+            collection: BaseCollection = await asyncio.to_thread(
+                self.chromadb.get_collection, collection_name
+            )
             doc_ids = [r.doc_id for r in results]
 
-            chromadb_results = collection.get(ids=doc_ids, include=["documents", "metadatas"])
+            chromadb_results = await asyncio.to_thread(
+                collection.get, ids=doc_ids, include=["documents", "metadatas"]
+            )
             doc_lookup = self._build_doc_lookup(chromadb_results)
 
             enriched = []
@@ -968,10 +977,13 @@ class HybridVectorSearch(AsyncInitializable):
         start_time = time.perf_counter()
 
         try:
-            collection = self.chromadb.get_collection(collection_name)
+            collection: BaseCollection = await asyncio.to_thread(
+                self.chromadb.get_collection, collection_name
+            )
             where = metadata_filter if metadata_filter else None
 
-            chromadb_results = collection.query(
+            chromadb_results = await asyncio.to_thread(
+                collection.query,
                 query_embeddings=[query_embedding.tolist()],
                 n_results=top_k,
                 where=where,
@@ -981,10 +993,11 @@ class HybridVectorSearch(AsyncInitializable):
             # Issue #620: Use helper for result conversion
             results = self._convert_chromadb_results(chromadb_results)
             query_time = (time.perf_counter() - start_time) * 1000
+            total_vectors_searched = await asyncio.to_thread(collection.count)
 
             metrics = SearchMetrics(
                 query_time_ms=query_time,
-                total_vectors_searched=collection.count(),
+                total_vectors_searched=total_vectors_searched,
                 results_returned=len(results),
                 backend_used=SearchBackend.CHROMADB,
                 gpu_utilized=False,
@@ -1017,10 +1030,12 @@ class HybridVectorSearch(AsyncInitializable):
             return 0
 
         try:
-            collection = self.chromadb.get_collection(collection_name)
+            collection: BaseCollection = await asyncio.to_thread(
+                self.chromadb.get_collection, collection_name
+            )
 
             # Get all embeddings from ChromaDB
-            all_data = collection.get(include=["embeddings"])
+            all_data = await asyncio.to_thread(collection.get, include=["embeddings"])
 
             if not all_data["ids"] or not all_data["embeddings"]:
                 logger.info("No data in ChromaDB collection to sync")
