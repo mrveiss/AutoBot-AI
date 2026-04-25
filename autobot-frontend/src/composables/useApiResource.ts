@@ -44,9 +44,9 @@ export interface UseApiResourceOptions {
   keepPreviousData?: boolean
   /**
    * Abort the prior in-flight request when `refresh()` is called again.
-   * Default: true. The signal is passed to the fetcher only when the fetcher
-   * declares at least one parameter (`fetcher.length >= 1`), preserving full
-   * backward compatibility with zero-arg fetchers.
+   * Default: true. The signal is always passed to the fetcher as the first
+   * argument — JS allows passing extra arguments to functions that do not
+   * declare them, so zero-arg fetchers remain fully backward compatible.
    */
   abortPrior?: boolean
 }
@@ -114,12 +114,14 @@ export function useApiResource<T>(
     }
 
     try {
-      // Pass the signal only when the fetcher declares a parameter — this
-      // preserves backward compatibility with zero-arg fetchers that do not
-      // accept (or need) an AbortSignal.
+      // Always pass the signal when we have a controller. JS allows passing
+      // extra arguments to functions that do not declare them — zero-arg
+      // fetchers remain fully backward compatible (#5801: drop fetcher.length
+      // check which was broken for optional-parameter fetchers because
+      // Function.prototype.length counts only REQUIRED parameters).
       const result =
-        controller !== null && fetcher.length >= 1
-          ? await (fetcher as (signal: AbortSignal) => Promise<T>)(
+        controller !== null
+          ? await (fetcher as (signal?: AbortSignal) => Promise<T>)(
               controller.signal
             )
           : await (fetcher as () => Promise<T>)()
