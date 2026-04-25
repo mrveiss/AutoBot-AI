@@ -605,7 +605,7 @@ async def export_grafana_dashboard(
     operation="get_export_formats",
     error_code_prefix="EXPORT",
 )
-@router.get("/formats", response_model=DataResponse)
+@router.get("/formats", response_model=None)
 async def get_export_formats(
     admin_check: bool = Depends(check_admin_permission),
 ):

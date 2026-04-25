@@ -81,7 +81,7 @@ BROWSER_VM_URL = (
     operation="get_playwright_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=None)
 async def get_playwright_status():
     """Get Playwright service status and capabilities"""
     try:
@@ -104,7 +104,7 @@ async def get_playwright_status():
     operation="health_check",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint for Playwright service"""
     try:
@@ -283,7 +283,7 @@ async def capture_screenshot(request: ScreenshotRequest):
     operation="quick_automation_test",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/automation/quick-test", response_model=DataResponse)
+@router.post("/automation/quick-test", response_model=None)
 async def quick_automation_test(background_tasks: BackgroundTasks):
     """
     Quick automation test to verify all Playwright functionality
@@ -518,7 +518,7 @@ async def go_forward():
     operation="worker_status",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/worker-status", response_model=DataResponse)
+@router.get("/worker-status", response_model=None)
 async def get_worker_status():
     """
     Get browser worker connectivity status from Browser VM (#1130)
@@ -640,7 +640,7 @@ async def interact_with_page(request: InteractRequest):
     operation="get_capabilities",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.get("/capabilities", response_model=DataResponse)
+@router.get("/capabilities", response_model=None)
 async def get_capabilities():
     """Get Playwright service capabilities and features"""
     return {

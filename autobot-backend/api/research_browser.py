@@ -70,7 +70,7 @@ def _require_browser():
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint for research browser service"""
     if not _BROWSER_AVAILABLE:

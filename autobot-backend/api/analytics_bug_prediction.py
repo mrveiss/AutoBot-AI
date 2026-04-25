@@ -1042,7 +1042,7 @@ async def get_cached_bug_prediction():
     return _no_data_response("No cached bug prediction available")
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=None)
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
@@ -1072,7 +1072,7 @@ async def get_bug_prediction_status(
     return task
 
 
-@router.post("/tasks/clear-stuck", response_model=DataResponse)
+@router.post("/tasks/clear-stuck", response_model=None)
 async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1472,7 +1472,7 @@ async def get_prediction_summary(
         return _no_data_response("Summary generation failed")
 
 
-@router.get("/factors", response_model=DataResponse)
+@router.get("/factors", response_model=None)
 async def get_risk_factors(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -1519,7 +1519,7 @@ def _get_factor_description(factor: RiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug", response_model=DataResponse)
+@router.post("/record-bug", response_model=None)
 async def record_bug(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,

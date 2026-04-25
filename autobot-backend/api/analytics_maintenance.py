@@ -109,7 +109,7 @@ class CustomReportRequest(BaseModel):
     operation="get_maintenance_recommendations",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance", response_model=DataResponse)
+@router.get("/maintenance", response_model=None)
 async def get_maintenance_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -150,7 +150,7 @@ async def get_maintenance_recommendations(
     operation="get_maintenance_by_category",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance/category/{category}", response_model=DataResponse)
+@router.get("/maintenance/category/{category}", response_model=None)
 async def get_maintenance_by_category(
     category: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -179,7 +179,7 @@ async def get_maintenance_by_category(
     operation="get_maintenance_summary",
     error_code_prefix="MAINT",
 )
-@router.get("/maintenance/summary", response_model=DataResponse)
+@router.get("/maintenance/summary", response_model=None)
 async def get_maintenance_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -245,7 +245,7 @@ async def get_maintenance_summary(
     operation="get_resource_optimizations",
     error_code_prefix="OPT",
 )
-@router.get("/optimization", response_model=DataResponse)
+@router.get("/optimization", response_model=None)
 async def get_resource_optimizations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -287,7 +287,7 @@ async def get_resource_optimizations(
     operation="get_optimization_by_type",
     error_code_prefix="OPT",
 )
-@router.get("/optimization/type/{resource_type}", response_model=DataResponse)
+@router.get("/optimization/type/{resource_type}", response_model=None)
 async def get_optimization_by_type(
     resource_type: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -316,7 +316,7 @@ async def get_optimization_by_type(
     operation="get_quick_wins",
     error_code_prefix="OPT",
 )
-@router.get("/optimization/quick-wins", response_model=DataResponse)
+@router.get("/optimization/quick-wins", response_model=None)
 async def get_quick_wins(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -381,7 +381,7 @@ async def get_unified_dashboard(
     operation="get_health_status",
     error_code_prefix="HEALTH",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def get_health_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -492,7 +492,7 @@ async def get_executive_summary(
     operation="get_insights",
     error_code_prefix="INSIGHT",
 )
-@router.get("/insights", response_model=DataResponse)
+@router.get("/insights", response_model=None)
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -560,7 +560,7 @@ async def get_insights(
     operation="get_trends_analysis",
     error_code_prefix="TREND",
 )
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=None)
 async def get_trends_analysis(
     days: int = Query(default=30, ge=7, le=90, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),

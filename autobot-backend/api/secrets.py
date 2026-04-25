@@ -793,7 +793,7 @@ async def get_secret_types(
     operation="get_secrets_status",
     error_code_prefix="SECRETS",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=None)
 async def get_secrets_status(
     admin_check: bool = Depends(check_admin_permission),
 ):

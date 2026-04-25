@@ -531,7 +531,7 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     operation="get_structured_session",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.get("/sessions/{session_id}", response_model=DataResponse)
+@router.get("/sessions/{session_id}", response_model=None)
 async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     async with _structured_sessions_lock:

@@ -202,7 +202,7 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     summary="Submit A2A task",
     tags=["a2a"],
     status_code=202,
-    response_model=DataResponse,
+    response_model=None,
 )
 async def submit_task(
     body: TaskSendRequest,
@@ -403,7 +403,7 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
     "/tasks/{task_id}/trace",
     summary="Get A2A task audit trace",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_task_trace(task_id: str) -> Dict[str, Any]:
     """
@@ -429,7 +429,7 @@ async def get_task_trace(task_id: str) -> Dict[str, Any]:
     "/tasks/{task_id}",
     summary="Cancel A2A task",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def cancel_task(task_id: str) -> Dict[str, str]:
     """Cancel a pending or in-progress task."""
@@ -449,7 +449,7 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
     "/stats",
     summary="A2A task statistics",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def task_stats() -> Dict[str, Any]:
     """Return task counts broken down by state."""
