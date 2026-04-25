@@ -10,6 +10,7 @@
 import { ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useVncControls')
 
@@ -44,140 +45,83 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 export function useVncControls() {
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function mouseClick(params: MouseClickParams): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/click', params)
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/click', params))
     } catch (err: unknown) {
       logger.error('Mouse click failed:', err)
       error.value = extractErrorMessage(err, 'Mouse click failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Mouse click failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Mouse click failed' }
     }
   }
 
   async function keyboardType(text: string): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/type', { text })
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/type', { text }))
     } catch (err: unknown) {
       logger.error('Keyboard type failed:', err)
       error.value = extractErrorMessage(err, 'Keyboard type failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Keyboard type failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Keyboard type failed' }
     }
   }
 
   async function specialKey(key: string): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/key', { key })
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/key', { key }))
     } catch (err: unknown) {
       logger.error('Special key failed:', err)
       error.value = extractErrorMessage(err, 'Special key failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Special key failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Special key failed' }
     }
   }
 
   async function mouseScroll(params: MouseScrollParams): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/scroll', params)
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/scroll', params))
     } catch (err: unknown) {
       logger.error('Mouse scroll failed:', err)
       error.value = extractErrorMessage(err, 'Mouse scroll failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Mouse scroll failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Mouse scroll failed' }
     }
   }
 
   async function mouseDrag(params: MouseDragParams): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/drag', params)
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/drag', params))
     } catch (err: unknown) {
       logger.error('Mouse drag failed:', err)
       error.value = extractErrorMessage(err, 'Mouse drag failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Mouse drag failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Mouse drag failed' }
     }
   }
 
   async function captureScreenshot(): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.get<VncActionResponse>('/vnc/screenshot')
-      return response
+      return await wrap(() => ApiClient.get<VncActionResponse>('/vnc/screenshot'))
     } catch (err: unknown) {
       logger.error('Screenshot capture failed:', err)
       error.value = extractErrorMessage(err, 'Screenshot capture failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Screenshot capture failed',
-        image_data: ''
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Screenshot capture failed', image_data: '' }
     }
   }
 
   async function syncClipboard(content: string): Promise<VncActionResponse> {
-    loading.value = true
     error.value = null
-
     try {
-      const response = await ApiClient.post<VncActionResponse>('/vnc/clipboard', { content })
-      return response
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/clipboard', { content }))
     } catch (err: unknown) {
       logger.error('Clipboard sync failed:', err)
       error.value = extractErrorMessage(err, 'Clipboard sync failed')
-      return {
-        status: 'error',
-        message: error.value ?? 'Clipboard sync failed'
-      }
-    } finally {
-      loading.value = false
+      return { status: 'error', message: error.value ?? 'Clipboard sync failed' }
     }
   }
 

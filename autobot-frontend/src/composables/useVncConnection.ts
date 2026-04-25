@@ -10,6 +10,7 @@
 import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useVncConnection')
 
@@ -36,7 +37,7 @@ export interface ConnectionMetrics {
 }
 
 export function useVncConnection(sessionId: string = 'default') {
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -45,30 +46,23 @@ export function useVncConnection(sessionId: string = 'default') {
   const metrics = ref<ConnectionMetrics | null>(null)
 
   async function loadSettings(): Promise<void> {
-    loading.value = true
     errors.value = []
-
     try {
-      const data = await ApiClient.get<ConnectionSettings>(
-        `/vnc/connection/settings?session_id=${sessionId}`
+      const data = await wrap(() =>
+        ApiClient.get<ConnectionSettings>(`/vnc/connection/settings?session_id=${sessionId}`)
       )
       settings.value = data
     } catch (err: unknown) {
       logger.error('Failed to load connection settings:', err)
       errors.value = [...errors.value, 'Failed to load connection settings']
-    } finally {
-      loading.value = false
     }
   }
 
   async function updateSettings(newSettings: ConnectionSettings): Promise<boolean> {
-    loading.value = true
     errors.value = []
-
     try {
-      await ApiClient.post(
-        `/vnc/connection/settings?session_id=${sessionId}`,
-        newSettings
+      await wrap(() =>
+        ApiClient.post(`/vnc/connection/settings?session_id=${sessionId}`, newSettings)
       )
       settings.value = newSettings
       return true
@@ -76,8 +70,6 @@ export function useVncConnection(sessionId: string = 'default') {
       logger.error('Failed to update connection settings:', err)
       errors.value = [...errors.value, 'Failed to update connection settings']
       return false
-    } finally {
-      loading.value = false
     }
   }
 

@@ -13,6 +13,7 @@ import { ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('usePlugins')
 
@@ -49,36 +50,30 @@ export interface DiscoveredPlugin {
 export function usePlugins() {
   const plugins = ref<PluginInfo[]>([])
   const discovered = ref<PluginManifest[]>([])
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function listPlugins(): Promise<void> {
-    loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get(`${getApiBase()}/plugins`)
+      const data = await wrap(() => ApiClient.get(`${getApiBase()}/plugins`))
       plugins.value = data.plugins ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list plugins'
       error.value = msg
       logger.error('listPlugins error: %s', msg)
-    } finally {
-      loading.value = false
     }
   }
 
   async function discoverPlugins(): Promise<void> {
-    loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get(`${getApiBase()}/plugins/discover`)
+      const data = await wrap(() => ApiClient.get(`${getApiBase()}/plugins/discover`))
       discovered.value = data.discovered ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to discover plugins'
       error.value = msg
       logger.error('discoverPlugins error: %s', msg)
-    } finally {
-      loading.value = false
     }
   }
 
