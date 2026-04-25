@@ -516,6 +516,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
 # =============================================================================
 
 import threading
+from api.schemas_common import DataResponse, SuccessResponse
 
 _embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None
 _embedding_analyzer_lock = threading.Lock()
@@ -536,7 +537,7 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 # =============================================================================
 
 
-@router.post("/record", response_model=None)
+@router.post("/record", response_model=DataResponse)
 async def record_embedding_usage(
     request: EmbeddingUsageRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -557,7 +558,7 @@ async def record_embedding_usage(
     )
 
 
-@router.get("/stats", response_model=None)
+@router.get("/stats", response_model=DataResponse)
 async def get_embedding_stats(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     model: Optional[str] = Query(None, description="Filter by model"),
@@ -579,7 +580,7 @@ async def get_embedding_stats(
     )
 
 
-@router.get("/model-comparison", response_model=None)
+@router.get("/model-comparison", response_model=DataResponse)
 async def get_model_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -599,7 +600,7 @@ async def get_model_comparison(
     )
 
 
-@router.get("/optimization-recommendations", response_model=None)
+@router.get("/optimization-recommendations", response_model=DataResponse)
 async def get_optimization_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -619,7 +620,7 @@ async def get_optimization_recommendations(
     )
 
 
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DataResponse)
 async def embedding_analytics_health(
     admin_check: bool = Depends(check_admin_permission),
 ):

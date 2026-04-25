@@ -366,7 +366,7 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     operation="process_thought_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/process_thought", response_model=None)
+@router.post("/mcp/process_thought", response_model=DataResponse)
 async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     Process and record a thought within the structured cognitive framework.
@@ -437,7 +437,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     operation="generate_summary_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/generate_summary", response_model=None)
+@router.post("/mcp/generate_summary", response_model=DataResponse)
 async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
     Generate a comprehensive summary of the thinking process.
@@ -531,7 +531,7 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     operation="get_structured_session",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.get("/sessions/{session_id}", response_model=None)
+@router.get("/sessions/{session_id}", response_model=DataResponse)
 async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     async with _structured_sessions_lock:

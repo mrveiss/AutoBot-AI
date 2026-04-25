@@ -240,7 +240,7 @@ async def update_worker(
     operation="remove_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=DataResponse)
 async def remove_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -867,6 +867,7 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 import httpx
+from api.schemas_common import DataResponse, SuccessResponse
 
 
 @dataclass

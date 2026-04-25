@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -1058,7 +1059,7 @@ async def get_learning_engine() -> PatternLearningEngine:
 # =============================================================================
 
 
-@router.post("/feedback", response_model=None, summary="Submit pattern feedback")
+@router.post("/feedback", response_model=DataResponse, summary="Submit pattern feedback")
 async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
     """
     Submit developer feedback for a pattern match.
@@ -1069,7 +1070,7 @@ async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
     return await engine.submit_feedback(feedback)
 
 
-@router.get("/confidence", response_model=None, summary="Get pattern confidence scores")
+@router.get("/confidence", response_model=DataResponse, summary="Get pattern confidence scores")
 async def get_pattern_confidence(
     pattern_ids: Optional[str] = Query(None, description="Comma-separated pattern IDs"),
 ) -> Dict[str, Any]:
@@ -1092,7 +1093,7 @@ async def get_learning_metrics() -> LearningMetrics:
     return await engine.get_learning_metrics()
 
 
-@router.get("/active-learning", response_model=None, summary="Get active learning queries")
+@router.get("/active-learning", response_model=DataResponse, summary="Get active learning queries")
 async def get_active_learning_queries(
     limit: int = Query(10, ge=1, le=50, description="Maximum queries to return"),
 ) -> Dict[str, Any]:
@@ -1111,14 +1112,14 @@ async def get_active_learning_queries(
     }
 
 
-@router.post("/patterns", response_model=None, summary="Register a new pattern")
+@router.post("/patterns", response_model=DataResponse, summary="Register a new pattern")
 async def register_pattern(pattern: PatternDefinition) -> Dict[str, Any]:
     """Register a new pattern for learning."""
     engine = await get_learning_engine()
     return await engine.register_pattern(pattern)
 
 
-@router.get("/patterns/{pattern_id}/history", response_model=None, summary="Get pattern feedback history")
+@router.get("/patterns/{pattern_id}/history", response_model=DataResponse, summary="Get pattern feedback history")
 async def get_pattern_history(
     pattern_id: str,
     limit: int = Query(50, ge=1, le=200, description="Maximum records to return"),
@@ -1137,7 +1138,7 @@ async def get_pattern_history(
     }
 
 
-@router.post("/learn", response_model=None, summary="Run learning cycle")
+@router.post("/learn", response_model=DataResponse, summary="Run learning cycle")
 async def run_learning_cycle() -> Dict[str, Any]:
     """
     Trigger a learning cycle to analyze feedback and update patterns.
@@ -1151,7 +1152,7 @@ async def run_learning_cycle() -> Dict[str, Any]:
     return await engine.run_learning_cycle()
 
 
-@router.get("/health", response_model=None, summary="Health check")
+@router.get("/health", response_model=DataResponse, summary="Health check")
 async def health_check() -> Dict[str, Any]:
     """Check the health of the pattern learning system."""
     try:

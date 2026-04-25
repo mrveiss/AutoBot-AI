@@ -768,7 +768,7 @@ class QuickScanRequest(BaseModel):
     operation="analyze_codebase",
     error_code_prefix="CODE_INTEL",
 )
-@router.post("/analyze", response_model=None)
+@router.post("/analyze", response_model=DataResponse)
 async def analyze_codebase(
     request: AnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -918,7 +918,7 @@ async def get_code_suggestions(
     operation="quick_scan",
     error_code_prefix="CODE_INTEL",
 )
-@router.post("/scan-file", response_model=None)
+@router.post("/scan-file", response_model=DataResponse)
 async def quick_scan_file(
     request: QuickScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -967,7 +967,7 @@ async def quick_scan_file(
     operation="get_health_score",
     error_code_prefix="CODE_INTEL",
 )
-@router.get("/health-score", response_model=None)
+@router.get("/health-score", response_model=DataResponse)
 async def get_codebase_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1018,7 +1018,7 @@ async def get_codebase_health_score(
     operation="get_pattern_types",
     error_code_prefix="CODE_INTEL",
 )
-@router.get("/pattern-types", response_model=None)
+@router.get("/pattern-types", response_model=DataResponse)
 async def get_supported_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1076,7 +1076,7 @@ class RedisFileScanRequest(BaseModel):
     operation="analyze_redis_usage",
     error_code_prefix="CODE_INTEL",
 )
-@router.post("/redis/analyze", response_model=None)
+@router.post("/redis/analyze", response_model=DataResponse)
 async def analyze_redis_usage_endpoint(
     request: RedisAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1122,7 +1122,7 @@ async def analyze_redis_usage_endpoint(
     operation="scan_redis_file",
     error_code_prefix="CODE_INTEL",
 )
-@router.post("/redis/scan-file", response_model=None)
+@router.post("/redis/scan-file", response_model=DataResponse)
 async def scan_redis_file(
     request: RedisFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1171,7 +1171,7 @@ async def scan_redis_file(
     operation="get_redis_optimization_types",
     error_code_prefix="CODE_INTEL",
 )
-@router.get("/redis/optimization-types", response_model=None)
+@router.get("/redis/optimization-types", response_model=DataResponse)
 async def get_redis_optimization_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1207,7 +1207,7 @@ _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
     operation="get_redis_health",
     error_code_prefix="CODE_INTEL",
 )
-@router.get("/redis/health-score", response_model=None)
+@router.get("/redis/health-score", response_model=DataResponse)
 async def get_redis_usage_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1317,7 +1317,7 @@ class SecurityFileScanRequest(BaseModel):
     operation="security_analyze",
     error_code_prefix="SECURITY",
 )
-@router.post("/security/analyze", response_model=None)
+@router.post("/security/analyze", response_model=DataResponse)
 async def security_analyze(
     request: SecurityAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1370,7 +1370,7 @@ async def security_analyze(
     operation="security_scan_file",
     error_code_prefix="SECURITY",
 )
-@router.post("/security/scan-file", response_model=None)
+@router.post("/security/scan-file", response_model=DataResponse)
 async def security_scan_file(
     request: SecurityFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1427,7 +1427,7 @@ async def security_scan_file(
     operation="get_vulnerability_types",
     error_code_prefix="SECURITY",
 )
-@router.get("/security/vulnerability-types", response_model=None)
+@router.get("/security/vulnerability-types", response_model=DataResponse)
 async def list_vulnerability_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1466,7 +1466,7 @@ async def list_vulnerability_types(
     operation="security_score",
     error_code_prefix="SECURITY",
 )
-@router.get("/security/score", response_model=None)
+@router.get("/security/score", response_model=DataResponse)
 async def get_security_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1523,7 +1523,7 @@ async def get_security_score(
     operation="security_report",
     error_code_prefix="SECURITY",
 )
-@router.get("/security/report", response_model=None)
+@router.get("/security/report", response_model=DataResponse)
 async def get_security_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1584,7 +1584,7 @@ class PerformanceFileScanRequest(BaseModel):
     operation="performance_analyze",
     error_code_prefix="PERFORMANCE",
 )
-@router.post("/performance/analyze", response_model=None)
+@router.post("/performance/analyze", response_model=DataResponse)
 async def performance_analyze(
     request: PerformanceAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1636,7 +1636,7 @@ async def performance_analyze(
     operation="performance_scan_file",
     error_code_prefix="PERFORMANCE",
 )
-@router.post("/performance/scan-file", response_model=None)
+@router.post("/performance/scan-file", response_model=DataResponse)
 async def performance_scan_file(
     request: PerformanceFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1693,7 +1693,7 @@ async def performance_scan_file(
     operation="get_performance_issue_types",
     error_code_prefix="PERFORMANCE",
 )
-@router.get("/performance/issue-types", response_model=None)
+@router.get("/performance/issue-types", response_model=DataResponse)
 async def list_performance_issue_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1732,7 +1732,7 @@ async def list_performance_issue_types(
     operation="performance_score",
     error_code_prefix="PERFORMANCE",
 )
-@router.get("/performance/score", response_model=None)
+@router.get("/performance/score", response_model=DataResponse)
 async def get_performance_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1798,7 +1798,7 @@ async def get_performance_score(
     operation="performance_report",
     error_code_prefix="PERFORMANCE",
 )
-@router.get("/performance/report", response_model=None)
+@router.get("/performance/report", response_model=DataResponse)
 async def get_performance_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1829,6 +1829,7 @@ async def get_performance_report(
 # Issue #243: Code Evolution Mining Endpoints
 
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
+from api.schemas_common import DataResponse, SuccessResponse
 
 
 @with_error_handling(
@@ -1836,7 +1837,7 @@ from code_intelligence.code_evolution_miner import CodeEvolutionMiner
     operation="analyze_evolution",
     error_code_prefix="EVOLUTION",
 )
-@router.post("/evolution/analyze", response_model=None)
+@router.post("/evolution/analyze", response_model=DataResponse)
 async def analyze_code_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -1892,7 +1893,7 @@ async def analyze_code_evolution(
     operation="get_pattern_evolution",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/evolution/patterns", response_model=None)
+@router.get("/evolution/patterns", response_model=DataResponse)
 async def get_pattern_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
@@ -1948,7 +1949,7 @@ async def get_pattern_evolution(
     operation="detect_refactorings",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/evolution/refactorings", response_model=None)
+@router.get("/evolution/refactorings", response_model=DataResponse)
 async def detect_refactorings(
     path: str = Query(..., description="Repository path to analyze"),
     limit: int = Query(
@@ -2004,7 +2005,7 @@ async def detect_refactorings(
     operation="get_timeline",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/evolution/timeline", response_model=None)
+@router.get("/evolution/timeline", response_model=DataResponse)
 async def get_evolution_timeline(
     path: str = Query(..., description="Repository path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -2072,7 +2073,7 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     operation="get_evolution_report",
     error_code_prefix="EVOLUTION",
 )
-@router.get("/evolution/report", response_model=None)
+@router.get("/evolution/report", response_model=DataResponse)
 async def get_full_evolution_report(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),

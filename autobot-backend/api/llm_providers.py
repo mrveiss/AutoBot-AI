@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission, get_current_user
 from utils.advanced_cache_manager import cache_response
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def _get_llm_interface():
     return LLMInterface()
 
 
-@router.post("/switch", response_model=None)
+@router.post("/switch", response_model=DataResponse)
 async def switch_llm_provider(
     switch_data: dict,
     admin_check: bool = Depends(check_admin_permission),
@@ -51,7 +52,7 @@ async def switch_llm_provider(
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/providers", response_model=None)
+@router.get("/providers", response_model=DataResponse)
 @cache_response(cache_key="llm_providers_list", ttl=30)
 async def list_llm_providers(
     current_user: dict = Depends(get_current_user),
@@ -65,7 +66,7 @@ async def list_llm_providers(
     )
 
 
-@router.post("/providers/{provider_name}/test", response_model=None)
+@router.post("/providers/{provider_name}/test", response_model=DataResponse)
 async def test_llm_provider(
     provider_name: str,
     current_user: dict = Depends(get_current_user),

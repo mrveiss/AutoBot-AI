@@ -515,7 +515,7 @@ async def get_recent_logs(
     operation="list_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/list", response_model=None)
+@router.get("/list", response_model=DataResponse)
 async def list_logs(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Metadata]:
