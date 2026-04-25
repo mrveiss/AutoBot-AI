@@ -145,6 +145,9 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   const trends = ref<AnalysisTrend[]>([])
   const securityScoreCached = ref<SecurityScoreCached | null>(null)
   const isLoading = ref(false)
+  // Counter-based concurrency: isLoading clears only when all concurrent analysis
+  // operations finish. useLoadingState.wrap() does not support this — it clears
+  // loading per-call, not per-set. Skip migrating this composable (#5880).
   const loadingCount = ref(0)
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
