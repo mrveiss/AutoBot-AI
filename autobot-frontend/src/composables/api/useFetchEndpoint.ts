@@ -260,6 +260,11 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
       opts.onSuccess?.(picked, raw, ctx)
       return picked
     } catch (err: unknown) {
+      // AbortError fires on reset()/disposal/rapid reload — not a real failure
+      if (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err as Error)?.name === 'AbortError'
+      ) return
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to load ${label}:`, err)
       opts.onError?.(message, err, ctx)
