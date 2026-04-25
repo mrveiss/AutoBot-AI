@@ -7,9 +7,8 @@ reaches the LLM.  Replaces naive byte-slice truncation at scattered sites.
 
 Usage::
 
-    from services.tool_output_filter import ToolOutputFilter
-    _filter = ToolOutputFilter()
-    clean = _filter.filter("pytest tests/", raw_output, exit_code=exit_code)
+    from services.tool_output_filter import get_tool_output_filter
+    clean = get_tool_output_filter().prepare_and_filter("pytest tests/", raw, exit_code)
 """
 from __future__ import annotations
 
@@ -40,6 +39,7 @@ _BADGE_RE = re.compile(r"^\[!\[.*?\]\(.*?\)\]\(.*?\)\s*$")
 _IMAGE_ONLY_RE = re.compile(r"^!\[.*?\]\(.*?\)\s*$")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _HR_RE = re.compile(r"^[-*_]{3,}\s*$")
+_SHORT_SUMMARY_RE = re.compile(r"^=+ short test summary info =+", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -105,11 +105,14 @@ def apply_no_op_detection(command: str, stdout: str, exit_code: int) -> str | No
 
 def filter_pytest(output: str, exit_code: int = 0) -> str:
     """
-    4-state machine that extracts only failures + summary from pytest output.
+    5-state machine that extracts only failures + summary from pytest output.
 
-    States: HEADER → PROGRESS → FAILURES → SUMMARY
+    States: HEADER → PROGRESS → FAILURES → SUMMARY_INFO → SUMMARY
+
+    SUMMARY_INFO handles the ``=== short test summary info ===`` section that
+    pytest emits with ``-q``, which would otherwise be silently dropped.
     """
-    HEADER, PROGRESS, FAILURES, SUMMARY = range(4)
+    HEADER, PROGRESS, FAILURES, SUMMARY_INFO, SUMMARY = range(5)
     state = HEADER
     result: list[str] = []
     failure_block: list[str] = []
@@ -125,17 +128,29 @@ def filter_pytest(output: str, exit_code: int = 0) -> str:
             if re.match(r"^(=+ FAILURES =+|=+ ERRORS =+|_+ \S)", line):
                 state = FAILURES
                 failure_block.append(line)
+            elif _SHORT_SUMMARY_RE.match(line):
+                state = SUMMARY_INFO
+                result.append(line)
             elif re.match(r"^=+ \d+ (passed|failed|error)", line):
                 state = SUMMARY
                 result.append(line)
         elif state == FAILURES:
-            if re.match(r"^=+ \d+ (passed|failed|error)", line):
+            if _SHORT_SUMMARY_RE.match(line):
+                state = SUMMARY_INFO
+                result.extend(failure_block)
+                failure_block = []
+                result.append(line)
+            elif re.match(r"^=+ \d+ (passed|failed|error)", line):
                 state = SUMMARY
                 result.extend(failure_block)
                 failure_block = []
                 result.append(line)
             else:
                 failure_block.append(line)
+        elif state == SUMMARY_INFO:
+            result.append(line)
+            if re.match(r"^=+ \d+ (passed|failed|error)", line):
+                state = SUMMARY
         elif state == SUMMARY:
             result.append(line)
 
@@ -167,6 +182,9 @@ def filter_ruff_json(stdout: str) -> str:
         by_rule.setdefault(code, []).append(f"  {filename}:{row}  {msg}")
 
     lines: list[str] = []
+    if len(by_rule) > 1:
+        rule_names = sorted(by_rule.keys())
+        lines.append(f"ruff violations: {join_with_overflow(rule_names, 5, 'more rules')}")
     for rule, entries in sorted(by_rule.items()):
         plural = "s" if len(entries) != 1 else ""
         lines.append(f"{rule} ({len(entries)} occurrence{plural}):")
@@ -179,6 +197,9 @@ def filter_ruff_json(stdout: str) -> str:
 def short_circuit_git(subcmd: str, stdout: str, stderr: str, exit_code: int) -> str | None:
     """
     Return a short message for git write operations with known no-op exit codes.
+
+    Complements ``apply_no_op_detection`` by also checking *stderr*, which git
+    uses for progress/status messages (e.g. ``Everything up-to-date`` on push).
     Returns None when the output should be processed normally.
     """
     if exit_code != 0:
@@ -378,19 +399,39 @@ class ToolOutputFilter:
         """Inject compact-output flags before execution."""
         return inject_compact_flags(command)
 
+    def prepare_and_filter(
+        self, command: str, output: str, exit_code: int = 0, stderr: str = ""
+    ) -> str:
+        """Inject compact flags and filter output in a single call.
+
+        Use this at sites that do not execute the command themselves (e.g. sites
+        that receive pre-run output).  Sites that *execute* the command should call
+        ``prepare_command()`` before execution and ``filter()`` after.
+        """
+        return self.filter(self.prepare_command(command), output, exit_code, stderr)
+
     def filter(self, command: str, output: str, exit_code: int = 0, stderr: str = "") -> str:
         """Return filtered *output* for *command*.  Passthrough if no rule matches."""
         no_op = apply_no_op_detection(command, output, exit_code)
         if no_op is not None:
             return no_op
 
+        # Git-specific: also check stderr for no-op signals (git writes to stderr)
+        if stderr and re.match(r"^git\s+", command.strip()):
+            parts = command.strip().split()
+            subcmd = parts[1] if len(parts) > 1 else ""
+            git_sc = short_circuit_git(subcmd, output, stderr, exit_code)
+            if git_sc is not None:
+                return git_sc
+
         rule = self._match_rule(command)
         if rule is None:
             return output
 
         filtered = self._apply(rule, output, exit_code)
+        pre_hint_filtered = filtered  # snapshot before tee hint for accurate savings
 
-        savings = len(output) - len(filtered)
+        savings = len(output) - len(pre_hint_filtered)
         if savings > 200:
             hint = tee_and_hint(output, command.strip().split()[0], exit_code)
             if hint and filtered:
@@ -398,12 +439,16 @@ class ToolOutputFilter:
 
         try:
             asyncio.get_running_loop().create_task(
-                record_filter_savings(command, output, filtered)
+                record_filter_savings(command, output, pre_hint_filtered)
             )
         except RuntimeError:
             pass
 
         return filtered
+
+    def filter_blocks(self, output: str, handler: BlockHandler, exit_code: int = 0) -> str:
+        """Filter structured block output using *handler* (ESLint, mypy, docker build, etc.)."""
+        return filter_by_blocks(output, handler, exit_code)
 
     def _match_rule(self, command: str) -> dict[str, Any] | None:
         cmd = command.strip()
@@ -457,3 +502,8 @@ class ToolOutputFilter:
             return rule.get("on_empty", "")
 
         return text
+
+
+# Singleton accessor — use this instead of ToolOutputFilter() at call sites.
+from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402
+get_tool_output_filter = lazy_singleton(ToolOutputFilter)

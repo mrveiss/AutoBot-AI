@@ -19,6 +19,7 @@ from services.tool_output_filter import (
     filter_markdown_body,
     filter_pytest,
     filter_ruff_json,
+    get_tool_output_filter,
     inject_compact_flags,
     join_with_overflow,
     short_circuit_git,
@@ -520,3 +521,190 @@ def test_prepare_command_injects_flags():
     f = ToolOutputFilter()
     result = f.prepare_command("pytest tests/")
     assert "--tb=short" in result
+
+
+# ---------------------------------------------------------------------------
+# filter_pytest — SUMMARY_INFO state (#5892)
+# ---------------------------------------------------------------------------
+
+_PYTEST_Q_FAIL_OUTPUT = (
+    ".F.\n"
+    "=========================== short test summary info ===========================\n"
+    "FAILED tests/test_foo.py::test_bar - AssertionError: expected 1\n"
+    "=========================== 1 failed, 2 passed in 0.5s ==========================="
+)
+
+_PYTEST_Q_FAIL_WITH_DETAILS = (
+    ".F.\n"
+    "=========================== FAILURES ===========================\n"
+    "___ test_bar ___\n"
+    "AssertionError: expected 1\n"
+    "=========================== short test summary info ===========================\n"
+    "FAILED tests/test_foo.py::test_bar - AssertionError\n"
+    "=========================== 1 failed in 0.5s ==========================="
+)
+
+
+def test_filter_pytest_preserves_short_summary_info_section():
+    result = filter_pytest(_PYTEST_Q_FAIL_OUTPUT, exit_code=1)
+    assert "FAILED tests/test_foo.py::test_bar" in result
+    assert "1 failed" in result
+
+
+def test_filter_pytest_summary_info_header_preserved():
+    result = filter_pytest(_PYTEST_Q_FAIL_OUTPUT, exit_code=1)
+    assert "short test summary info" in result
+
+
+def test_filter_pytest_summary_info_after_failures_block():
+    result = filter_pytest(_PYTEST_Q_FAIL_WITH_DETAILS, exit_code=1)
+    assert "AssertionError" in result
+    assert "FAILED tests/test_foo.py::test_bar" in result
+
+
+def test_filter_pytest_summary_info_final_line_preserved():
+    result = filter_pytest(_PYTEST_Q_FAIL_OUTPUT, exit_code=1)
+    assert "1 failed" in result
+    assert "2 passed" in result
+
+
+# ---------------------------------------------------------------------------
+# filter_ruff_json — join_with_overflow header (#5894)
+# ---------------------------------------------------------------------------
+
+def test_filter_ruff_json_multi_rule_summary_header():
+    data = (
+        '[{"code":"F401","filename":"a.py","location":{"row":1},"message":"unused"},'
+        '{"code":"E501","filename":"b.py","location":{"row":2},"message":"long"}]'
+    )
+    result = filter_ruff_json(data)
+    assert "ruff violations:" in result
+    assert "E501" in result
+    assert "F401" in result
+
+
+def test_filter_ruff_json_single_rule_no_summary_header():
+    result = filter_ruff_json(_RUFF_JSON)
+    assert "ruff violations:" not in result
+    assert "E501" in result
+
+
+# ---------------------------------------------------------------------------
+# short_circuit_git wired in filter() (#5894)
+# ---------------------------------------------------------------------------
+
+def test_filter_short_circuit_git_via_stderr():
+    f = ToolOutputFilter()
+    # exit_code=0, stderr contains no-op phrase; apply_no_op_detection won't
+    # catch it (only checks stdout), but short_circuit_git will check stderr
+    result = f.filter("git push origin main", "", exit_code=0, stderr="Everything up-to-date")
+    assert "up-to-date" in result.lower() or "up to date" in result.lower()
+
+
+def test_filter_short_circuit_git_not_triggered_when_no_stderr():
+    f = ToolOutputFilter()
+    # With empty stderr and stdout that has no no-op pattern, short_circuit_git
+    # and apply_no_op_detection both return None → passthrough to rule pipeline.
+    result = f.filter("git push origin main", "branch pushed successfully", exit_code=0)
+    assert result  # non-empty, processed normally
+
+
+# ---------------------------------------------------------------------------
+# prepare_and_filter (#5891)
+# ---------------------------------------------------------------------------
+
+def test_prepare_and_filter_injects_and_filters():
+    f = ToolOutputFilter()
+    # ruff check without --output-format=json: prepare_and_filter injects it,
+    # but filter_ruff_json gets non-JSON and falls back to raw.
+    # The key check: command is rewritten before rule matching.
+    result = f.prepare_and_filter("ruff check .", "ok: no issues")
+    assert result  # passes through (non-JSON, no rule match → raw)
+
+
+def test_prepare_and_filter_injects_pytest_flags():
+    f = ToolOutputFilter()
+    # The prepared command "pytest --tb=short -q ..." still matches the pytest rule
+    result = f.prepare_and_filter("pytest tests/", _PYTEST_PASS_OUTPUT, exit_code=0)
+    assert result  # non-empty
+
+
+# ---------------------------------------------------------------------------
+# filter_blocks instance method (#5894)
+# ---------------------------------------------------------------------------
+
+class _MockBlockHandler:
+    """Concrete BlockHandler for testing."""
+    def __init__(self):
+        self._in_error = False
+
+    def start_block(self, line: str) -> bool:
+        self._in_error = "ERROR:" in line
+        return "BLOCK_START:" in line
+
+    def end_block(self, line: str) -> bool:
+        return "BLOCK_END" in line
+
+    def is_error_block(self) -> bool:
+        return self._in_error
+
+
+def test_filter_blocks_instance_method_keeps_error_blocks():
+    f = ToolOutputFilter()
+    output = (
+        "preamble\n"
+        "BLOCK_START: ERROR: bad thing\n"
+        "detail line\n"
+        "BLOCK_END\n"
+        "footer"
+    )
+    result = f.filter_blocks(output, _MockBlockHandler())
+    assert "detail line" in result
+
+
+# ---------------------------------------------------------------------------
+# get_tool_output_filter singleton (#5893)
+# ---------------------------------------------------------------------------
+
+def test_get_tool_output_filter_returns_instance():
+    instance = get_tool_output_filter()
+    assert isinstance(instance, ToolOutputFilter)
+
+
+def test_get_tool_output_filter_same_object_on_repeated_calls():
+    assert get_tool_output_filter() is get_tool_output_filter()
+
+
+# ---------------------------------------------------------------------------
+# record_filter_savings uses pre-hint bytes (#5895)
+# ---------------------------------------------------------------------------
+
+def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
+    import services.tool_output_filter as mod
+    # Override tee dir to tmp so tee_and_hint actually writes
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    saved_args: list = []
+
+    import asyncio
+
+    async def _capture(command, original, filtered):
+        saved_args.append((len(original), len(filtered)))
+
+    monkeypatch.setattr(mod, "record_filter_savings", _capture)
+
+    f = ToolOutputFilter()
+    # Build output that will trigger savings > 200 so tee_and_hint fires.
+    # Use a rule with max_lines=1 to compress heavily.
+    big_output = "\n".join(["x" * 40] * 30)  # ~1200 bytes
+    rule_cfg = {"r": {"match_command": "^cmd", "max_lines": 1}}
+    f2 = _make_filter(rule_cfg)
+
+    async def _run():
+        return f2.filter("cmd", big_output)
+
+    result = asyncio.get_event_loop().run_until_complete(_run())
+    # If savings were tracked, verify filtered length does NOT include tee hint
+    if saved_args:
+        orig_len, filt_len = saved_args[0]
+        # filt_len must NOT include "[full output saved: ...]" line
+        assert "[full output saved:" not in result[:filt_len] or filt_len < len(result)
