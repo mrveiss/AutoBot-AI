@@ -30,10 +30,9 @@ from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before
 from .models import LLMIterationContext, StreamingMessage, WorkflowSession
 from .session_handler import SessionHandlerMixin, _emit_approval_received, _emit_approval_required
 from .tool_handler import ToolHandlerMixin
-from services.tool_output_filter import ToolOutputFilter
+from services.tool_output_filter import get_tool_output_filter
 
 logger = logging.getLogger(__name__)
-_output_filter = ToolOutputFilter()
 
 # Issue #380: Module-level frozenset for terminal message types
 _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset(
@@ -1684,7 +1683,7 @@ class ChatWorkflowManager(
         if stderr:
             output_text += f"\nStderr: {stderr}"
 
-        output_text = _output_filter.filter(cmd, output_text)
+        output_text = get_tool_output_filter().prepare_and_filter(cmd, output_text)
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
