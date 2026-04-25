@@ -21,6 +21,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class EmbeddingUpdate(BaseModel):
     operation="get_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/settings")
+@router.get("/settings", response_model=DataResponse)
 async def get_embedding_settings(
     current_user: dict = Depends(get_current_user),
 ):
@@ -104,7 +105,7 @@ async def get_embedding_settings(
     operation="update_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.put("/settings")
+@router.put("/settings", response_model=DataResponse)
 async def update_embedding_settings(
     update: EmbeddingUpdate,
     admin_check: bool = Depends(check_admin_permission),
@@ -163,7 +164,7 @@ async def update_embedding_settings(
     operation="get_available_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/models")
+@router.get("/models", response_model=DataResponse)
 async def get_available_embedding_models(
     current_user: dict = Depends(get_current_user),
 ):
@@ -211,7 +212,7 @@ async def get_available_embedding_models(
     operation="refresh_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.post("/providers/{provider_name}/refresh-models")
+@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse)
 async def refresh_embedding_models(
     provider_name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -272,7 +273,7 @@ async def refresh_embedding_models(
     operation="get_embedding_status",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/status")
+@router.get("/status", response_model=DataResponse)
 async def get_embedding_status(
     current_user: dict = Depends(get_current_user),
 ):

@@ -16,6 +16,7 @@ from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -165,7 +166,7 @@ async def get_providers() -> List[ProviderInfo]:
     return providers
 
 
-@router.get("/{provider}/repositories")
+@router.get("/{provider}/repositories", response_model=DataResponse)
 async def list_repositories(
     provider: str,
     api_key: str = Query(..., description="API key or access token"),
@@ -206,7 +207,7 @@ async def list_repositories(
         raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
-@router.get("/{provider}/repositories/{repo_id}/branches")
+@router.get("/{provider}/repositories/{repo_id}/branches", response_model=DataResponse)
 async def list_branches(
     provider: str,
     repo_id: str,
@@ -273,7 +274,7 @@ def _build_pr_params(
         return "list_pull_requests", params
 
 
-@router.get("/{provider}/repositories/{repo_id}/pull-requests")
+@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=DataResponse)
 async def list_pull_requests(
     provider: str,
     repo_id: str,
@@ -296,7 +297,7 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
-@router.get("/{provider}/repositories/{repo_id}/commits")
+@router.get("/{provider}/repositories/{repo_id}/commits", response_model=DataResponse)
 async def get_commit_info(
     provider: str,
     repo_id: str,

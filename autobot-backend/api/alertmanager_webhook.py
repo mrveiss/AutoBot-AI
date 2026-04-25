@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from api.monitoring import ws_manager
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class AlertManagerWebhook(BaseModel):
     alerts: List[AlertInstance]
 
 
-@router.post("/alertmanager")
+@router.post("/alertmanager", response_model=DataResponse)
 async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
     """
     Receive alerts from Prometheus AlertManager
@@ -160,7 +161,7 @@ async def _process_alert(alert: AlertInstance, group_status: str):
         logger.error("Failed to process individual alert: %s", e, exc_info=True)
 
 
-@router.get("/alertmanager/health")
+@router.get("/alertmanager/health", response_model=DataResponse)
 async def alertmanager_webhook_health():
     """Health check endpoint for AlertManager webhook"""
     return {

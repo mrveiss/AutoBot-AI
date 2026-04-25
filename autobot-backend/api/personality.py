@@ -18,6 +18,7 @@ from pydantic import BaseModel, field_validator
 
 from auth_middleware import check_admin_permission
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
@@ -186,7 +187,7 @@ async def get_status() -> StatusResponse:
     )
 
 
-@router.get("/languages")
+@router.get("/languages", response_model=DataResponse)
 async def list_languages() -> Dict[str, str]:
     """Return the supported language codes and their display names."""
     return SUPPORTED_LANGUAGES
@@ -237,6 +238,7 @@ async def update_profile(pid: str, body: ProfileUpdate) -> ProfileDetail:
     "/profiles/{pid}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
+    response_model=DataResponse,
 )
 async def delete_profile(pid: str) -> None:
     """Delete a user-created profile. System profiles cannot be deleted."""
@@ -255,6 +257,7 @@ async def delete_profile(pid: str) -> None:
     "/profiles/{pid}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
+    response_model=DataResponse,
 )
 async def activate_profile(pid: str) -> None:
     """Set a profile as the active personality."""

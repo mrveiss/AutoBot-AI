@@ -24,6 +24,7 @@ from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
@@ -126,7 +127,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
     operation="get_pending_approvals",
     error_code_prefix="SECURITY",
 )
-@router.get("/pending-approvals")
+@router.get("/pending-approvals", response_model=DataResponse)
 async def get_pending_approvals(request: Request):
     """Get list of commands waiting for approval"""
     try:
@@ -148,7 +149,7 @@ async def get_pending_approvals(request: Request):
     operation="get_command_history",
     error_code_prefix="SECURITY",
 )
-@router.get("/command-history")
+@router.get("/command-history", response_model=DataResponse)
 async def get_command_history(request: Request, user: str = None, limit: int = 50):
     """Get command execution history from audit log"""
     try:
@@ -197,7 +198,7 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
     operation="get_audit_log",
     error_code_prefix="SECURITY",
 )
-@router.get("/audit-log")
+@router.get("/audit-log", response_model=DataResponse)
 async def get_audit_log(request: Request, limit: int = 100):
     """Get recent audit log entries"""
     try:

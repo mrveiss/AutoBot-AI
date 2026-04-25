@@ -10,6 +10,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ def _build_fallback_config() -> Dict[str, Any]:
     operation="get_frontend_config",
     error_code_prefix="FRONTEND_CONFIG",
 )
-@router.get("/frontend-config")
+@router.get("/frontend-config", response_model=DataResponse)
 async def get_frontend_config():
     """
     Get frontend-specific configuration.

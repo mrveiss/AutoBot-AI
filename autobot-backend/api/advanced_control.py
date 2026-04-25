@@ -8,24 +8,11 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from .schemas_common import (
-    AdvancedControlActiveTakeoversResponse,
-    AdvancedControlEmergencyStopResponse,
-    AdvancedControlInfoResponse,
-    AdvancedControlPendingTakeoversResponse,
-    AdvancedControlStreamingSessionsResponse,
-    AdvancedControlStreamingTerminateResponse,
-    AdvancedControlSystemHealthResponse,
-    AdvancedControlTakeoverActionResponse,
-    AdvancedControlTakeoverApproveResponse,
-    AdvancedControlTakeoverRequestResponse,
-    AdvancedControlTakeoverSessionStatusResponse,
-)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_SESSION_NOT_FOUND
@@ -35,6 +22,7 @@ from enhanced_memory_manager_async import TaskPriority
 from takeover_manager import TakeoverTrigger, takeover_manager
 from task_execution_tracker import task_tracker
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])
@@ -126,7 +114,7 @@ async def create_streaming_session(
     operation="terminate_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.delete("/streaming/{session_id}", response_model=AdvancedControlStreamingTerminateResponse)
+@router.delete("/streaming/{session_id}", response_model=DataResponse)
 async def terminate_streaming_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -149,7 +137,7 @@ async def terminate_streaming_session(
     operation="list_streaming_sessions",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/sessions", response_model=AdvancedControlStreamingSessionsResponse)
+@router.get("/streaming/sessions", response_model=DataResponse)
 async def list_streaming_sessions(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -167,7 +155,7 @@ async def list_streaming_sessions(
     operation="get_streaming_capabilities",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/capabilities", response_model=Dict[str, Any])
+@router.get("/streaming/capabilities", response_model=DataResponse)
 async def get_streaming_capabilities(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -186,7 +174,7 @@ async def get_streaming_capabilities(
     operation="request_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/request", response_model=AdvancedControlTakeoverRequestResponse)
+@router.post("/takeover/request", response_model=DataResponse)
 async def request_takeover(
     request: TakeoverRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -242,7 +230,7 @@ async def request_takeover(
     operation="approve_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/{request_id}/approve", response_model=AdvancedControlTakeoverApproveResponse)
+@router.post("/takeover/{request_id}/approve", response_model=DataResponse)
 async def approve_takeover(
     request_id: str,
     approval: TakeoverApprovalRequest,
@@ -274,7 +262,7 @@ async def approve_takeover(
     operation="execute_takeover_action",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/action", response_model=AdvancedControlTakeoverActionResponse)
+@router.post("/takeover/sessions/{session_id}/action", response_model=DataResponse)
 async def execute_takeover_action(
     session_id: str,
     action: TakeoverActionRequest,
@@ -306,7 +294,7 @@ async def execute_takeover_action(
     operation="pause_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/pause", response_model=AdvancedControlTakeoverSessionStatusResponse)
+@router.post("/takeover/sessions/{session_id}/pause", response_model=DataResponse)
 async def pause_takeover_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -328,7 +316,7 @@ async def pause_takeover_session(
     operation="resume_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/resume", response_model=AdvancedControlTakeoverSessionStatusResponse)
+@router.post("/takeover/sessions/{session_id}/resume", response_model=DataResponse)
 async def resume_takeover_session(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -352,7 +340,7 @@ async def resume_takeover_session(
     operation="complete_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/complete", response_model=AdvancedControlTakeoverSessionStatusResponse)
+@router.post("/takeover/sessions/{session_id}/complete", response_model=DataResponse)
 async def complete_takeover_session(
     session_id: str,
     completion_data: Metadata,
@@ -380,7 +368,7 @@ async def complete_takeover_session(
     operation="get_pending_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/pending", response_model=AdvancedControlPendingTakeoversResponse)
+@router.get("/takeover/pending", response_model=DataResponse)
 async def get_pending_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -398,7 +386,7 @@ async def get_pending_takeovers(
     operation="get_active_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/active", response_model=AdvancedControlActiveTakeoversResponse)
+@router.get("/takeover/active", response_model=DataResponse)
 async def get_active_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -416,7 +404,7 @@ async def get_active_takeovers(
     operation="get_takeover_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/status", response_model=Dict[str, Any])
+@router.get("/takeover/status", response_model=DataResponse)
 async def get_takeover_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -484,7 +472,7 @@ async def get_system_status(
     operation="emergency_system_stop",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/system/emergency-stop", response_model=AdvancedControlEmergencyStopResponse)
+@router.post("/system/emergency-stop", response_model=DataResponse)
 async def emergency_system_stop(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -515,7 +503,7 @@ async def emergency_system_stop(
     operation="get_system_health",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/system/health", response_model=AdvancedControlSystemHealthResponse)
+@router.get("/system/health", response_model=DataResponse)
 async def get_system_health(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -611,7 +599,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     operation="advanced_control_info",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/", response_model=AdvancedControlInfoResponse)
+@router.get("/", response_model=DataResponse)
 async def advanced_control_info(
     admin_check: bool = Depends(check_admin_permission),
 ):

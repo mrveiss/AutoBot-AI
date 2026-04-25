@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_middleware import get_current_user
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +382,7 @@ async def get_participants(
         )
 
 
-@router.post("/{session_id}/secrets/share")
+@router.post("/{session_id}/secrets/share", response_model=DataResponse)
 async def share_secret_with_session(
     session_id: str,
     share: ShareSecretRequest,
@@ -437,7 +438,7 @@ async def share_secret_with_session(
         )
 
 
-@router.get("/{session_id}/presence")
+@router.get("/{session_id}/presence", response_model=DataResponse)
 async def get_presence(
     session_id: str,
     current_user: dict = Depends(get_current_user),

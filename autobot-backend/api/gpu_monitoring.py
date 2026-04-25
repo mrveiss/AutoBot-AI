@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def _gpu_unavailable_error() -> HTTPException:
     )
 
 
-@router.get("/efficiency")
+@router.get("/efficiency", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_efficiency",
@@ -69,7 +70,7 @@ async def get_gpu_efficiency(
     return {"success": True, "efficiency": result}
 
 
-@router.get("/capabilities")
+@router.get("/capabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_capabilities",
@@ -92,7 +93,7 @@ async def get_gpu_capabilities(
     return {"success": True, "capabilities": caps}
 
 
-@router.post("/benchmark")
+@router.post("/benchmark", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_gpu_benchmark",
@@ -115,7 +116,7 @@ async def run_gpu_benchmark(
     return {"success": True, "benchmark": result}
 
 
-@router.post("/optimize")
+@router.post("/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_gpu_multimodal",
@@ -142,7 +143,7 @@ async def optimize_gpu_multimodal(
     return {"success": True, "optimization": asdict(result)}
 
 
-@router.patch("/config")
+@router.patch("/config", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_gpu_config",

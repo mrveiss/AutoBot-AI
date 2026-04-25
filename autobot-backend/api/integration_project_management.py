@@ -26,6 +26,7 @@ from integrations.project_management_integration import (
     JiraIntegration,
     TrelloIntegration,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +201,7 @@ async def list_providers() -> List[ProviderInfo]:
     return list(SUPPORTED_PROVIDERS.values())
 
 
-@router.get("/{provider}/projects")
+@router.get("/{provider}/projects", response_model=DataResponse)
 async def list_projects(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -240,7 +241,7 @@ async def list_projects(
         return await integration.execute_action("list_workspaces", {})
 
 
-@router.get("/{provider}/issues")
+@router.get("/{provider}/issues", response_model=DataResponse)
 async def list_issues(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -339,7 +340,7 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
         return "create_task", params
 
 
-@router.post("/{provider}/issues")
+@router.post("/{provider}/issues", response_model=DataResponse)
 async def create_issue(
     provider: str,
     request: IssueCreateRequest,
@@ -401,7 +402,7 @@ def _build_update_params(
         return "update_task", params
 
 
-@router.patch("/{provider}/issues/{issue_id}")
+@router.patch("/{provider}/issues/{issue_id}", response_model=DataResponse)
 async def update_issue(
     provider: str,
     issue_id: str,
@@ -428,7 +429,7 @@ async def update_issue(
     return await integration.execute_action(action, params)
 
 
-@router.get("/{provider}/search")
+@router.get("/{provider}/search", response_model=DataResponse)
 async def search_issues(
     provider: str,
     query: str = Query(..., description="Search query or JQL"),

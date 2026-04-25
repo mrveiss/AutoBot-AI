@@ -14,6 +14,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.ttl_constants import TTL_5_MINUTES
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
 
@@ -226,7 +227,7 @@ async def _collect_prompt_files(
     operation="get_prompts",
     error_code_prefix="PROMPTS",
 )
-@router.get("/")
+@router.get("/", response_model=DataResponse)
 async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
     """Get all prompts from filesystem with caching.
 
@@ -288,7 +289,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
     operation="clear_prompts_cache",
     error_code_prefix="PROMPTS",
 )
-@router.post("/cache/clear")
+@router.post("/cache/clear", response_model=DataResponse)
 async def clear_prompts_cache(admin_check: bool = Depends(check_admin_permission)):
     """Clear the prompts cache to force reload on next request.
 
@@ -330,8 +331,8 @@ def _build_prompt_save_response(
     operation="save_prompt",
     error_code_prefix="PROMPTS",
 )
-@router.post("/{prompt_id}")
-@router.put("/{prompt_id}")  # Issue #570: Support PUT for frontend compatibility
+@router.post("/{prompt_id}", response_model=DataResponse)
+@router.put("/{prompt_id}", response_model=DataResponse)  # Issue #570: Support PUT for frontend compatibility
 async def save_prompt(
     prompt_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -437,7 +438,7 @@ async def _write_prompt_from_default(
     operation="revert_prompt",
     error_code_prefix="PROMPTS",
 )
-@router.post("/{prompt_id}/revert")
+@router.post("/{prompt_id}/revert", response_model=DataResponse)
 async def revert_prompt(
     prompt_id: str, admin_check: bool = Depends(check_admin_permission)
 ):

@@ -35,6 +35,7 @@ from code_intelligence.merge_conflict_resolver import (
     ResolutionStrategy,
     analyze_repository,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +252,7 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
     operation="analyze_conflicts",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.post("/analyze")
+@router.post("/analyze", response_model=DataResponse)
 async def analyze_conflicts(
     request: ConflictAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -306,7 +307,7 @@ async def analyze_conflicts(
     operation="resolve_conflicts",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.post("/resolve")
+@router.post("/resolve", response_model=DataResponse)
 async def resolve_conflicts(
     request: ConflictResolutionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -374,7 +375,7 @@ async def resolve_conflicts(
     operation="analyze_repository",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.post("/analyze-repository")
+@router.post("/analyze-repository", response_model=DataResponse)
 async def analyze_repository_conflicts(
     request: RepositoryAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -436,7 +437,7 @@ async def analyze_repository_conflicts(
     operation="apply_resolution",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.post("/apply")
+@router.post("/apply", response_model=DataResponse)
 async def apply_resolution(
     request: ApplyResolutionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -504,7 +505,7 @@ async def apply_resolution(
     operation="get_resolution_strategies",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.get("/strategies")
+@router.get("/strategies", response_model=DataResponse)
 async def get_resolution_strategies(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -571,7 +572,7 @@ async def get_resolution_strategies(
     operation="check_file_conflicts",
     error_code_prefix="MERGE_CONFLICT",
 )
-@router.get("/check")
+@router.get("/check", response_model=DataResponse)
 async def check_file_conflicts(
     file_path: str = Query(..., description="Path to file to check"),
     admin_check: bool = Depends(check_admin_permission),

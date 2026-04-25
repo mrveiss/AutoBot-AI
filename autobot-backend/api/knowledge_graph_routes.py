@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ async def run_pipeline(
 # --- Entity Endpoints ---
 
 
-@router.get("/entities")
+@router.get("/entities", response_model=DataResponse)
 async def list_entities(
     entity_type: Optional[str] = Query(None),
     query: Optional[str] = Query(None),
@@ -127,7 +128,7 @@ async def list_entities(
         raise HTTPException(status_code=500, detail="Entity listing failed")
 
 
-@router.get("/entities/{entity_id}/relationships")
+@router.get("/entities/{entity_id}/relationships", response_model=DataResponse)
 async def get_entity_relationships(
     entity_id: str,
     relationship_type: Optional[str] = Query(None),
@@ -156,7 +157,7 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
-@router.get("/events")
+@router.get("/events", response_model=DataResponse)
 async def search_events(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -194,7 +195,7 @@ async def search_events(
         raise HTTPException(status_code=500, detail="Event search failed")
 
 
-@router.get("/events/{entity_name}/timeline")
+@router.get("/events/{entity_name}/timeline", response_model=DataResponse)
 async def get_event_timeline(
     entity_name: str,
     limit: int = Query(50, ge=1, le=200),
@@ -227,7 +228,7 @@ async def get_event_timeline(
 # --- Summary Endpoints ---
 
 
-@router.get("/summaries/search")
+@router.get("/summaries/search", response_model=DataResponse)
 async def search_summaries(
     query: str = Query(..., description="Search query"),
     level: Optional[str] = Query(
@@ -255,7 +256,7 @@ async def search_summaries(
         raise HTTPException(status_code=500, detail="Summary search failed")
 
 
-@router.get("/documents/{document_id}/overview")
+@router.get("/documents/{document_id}/overview", response_model=DataResponse)
 async def get_document_overview(
     document_id: str,
     current_user: dict = Depends(get_current_user),
@@ -276,7 +277,7 @@ async def get_document_overview(
         raise HTTPException(status_code=500, detail="Document overview failed")
 
 
-@router.get("/summaries/{summary_id}/drill-down")
+@router.get("/summaries/{summary_id}/drill-down", response_model=DataResponse)
 async def drill_down_summary(
     summary_id: str,
     current_user: dict = Depends(get_current_user),

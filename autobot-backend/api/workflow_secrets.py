@@ -30,6 +30,7 @@ from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +231,7 @@ async def update_workflow_secret(
     )
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, response_model=DataResponse)
 async def delete_workflow_secret(
     name: str,
     current_user: dict = Depends(get_current_user),

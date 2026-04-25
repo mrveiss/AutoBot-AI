@@ -59,6 +59,7 @@ from utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -1087,7 +1088,7 @@ async def update_performance_threshold(
     operation="export_metrics",
     error_code_prefix="MONITORING",
 )
-@router.get("/export/metrics")
+@router.get("/export/metrics", response_model=DataResponse)
 async def export_metrics(
     admin_check: bool = Depends(check_admin_permission),
     format: str = Query("json", pattern="^(json|csv)$"),

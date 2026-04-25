@@ -20,6 +20,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,7 +96,7 @@ async def spawn_process(
     )
 
 
-@router.get("/processes/{process_id}")
+@router.get("/processes/{process_id}", response_model=DataResponse)
 async def get_process_status(
     process_id: str,
     current_user: dict = Depends(get_current_user),
@@ -108,7 +109,7 @@ async def get_process_status(
     return JSONResponse(status_code=200, content=data)
 
 
-@router.get("/processes/{process_id}/logs")
+@router.get("/processes/{process_id}/logs", response_model=DataResponse)
 async def get_process_logs(
     process_id: str,
     current_user: dict = Depends(get_current_user),
@@ -124,7 +125,7 @@ async def get_process_logs(
     return PlainTextResponse(content=_read_log_file(log_path), status_code=200)
 
 
-@router.post("/processes/{process_id}/signal")
+@router.post("/processes/{process_id}/signal", response_model=DataResponse)
 async def signal_process(
     process_id: str,
     body: SignalRequest,
@@ -147,7 +148,7 @@ async def signal_process(
     )
 
 
-@router.get("/agents/{agent_id}/processes")
+@router.get("/agents/{agent_id}/processes", response_model=DataResponse)
 async def list_agent_processes(
     agent_id: str,
     status: Optional[str] = Query(default=None, description="Filter by status"),

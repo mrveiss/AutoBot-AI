@@ -34,6 +34,7 @@ from autobot_shared.time_utils import utc_timestamp
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
+from api.schemas_common import DataResponse, SuccessResponse
 
 # ====================================================================
 # Router Configuration
@@ -317,7 +318,7 @@ async def graph_rag_health(
     operation="graph_rag_metrics",
     error_code_prefix="GRAPH_RAG",
 )
-@router.get("/metrics")
+@router.get("/metrics", response_model=DataResponse)
 async def graph_rag_metrics(
     service: GraphRAGService = Depends(get_graph_rag_service),
     current_user: dict = Depends(get_current_user),

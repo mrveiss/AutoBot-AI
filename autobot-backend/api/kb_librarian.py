@@ -41,6 +41,7 @@ from agents.kb_librarian_agent import get_kb_librarian
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -128,7 +129,7 @@ async def query_knowledge_base(
     operation="get_kb_librarian_status",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.get("/status")
+@router.get("/status", response_model=DataResponse)
 async def get_kb_librarian_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -159,7 +160,7 @@ async def get_kb_librarian_status(
     operation="configure_kb_librarian",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.put("/configure")
+@router.put("/configure", response_model=DataResponse)
 async def configure_kb_librarian(
     enabled: Optional[bool] = None,
     similarity_threshold: Optional[float] = None,

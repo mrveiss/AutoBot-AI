@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ async def get_project_status(detailed: bool = False):
     operation="run_validation",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/validate")
+@router.post("/validate", response_model=DataResponse)
 async def run_validation():
     """Run validation on all project phases"""
     try:
@@ -154,7 +155,7 @@ async def run_validation():
     operation="get_validation_report",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/report")
+@router.get("/report", response_model=DataResponse)
 async def get_validation_report():
     """Get detailed validation report in markdown format"""
     try:
@@ -181,7 +182,7 @@ async def get_validation_report():
     operation="get_all_phases",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/phases")
+@router.get("/phases", response_model=DataResponse)
 async def get_all_phases():
     """Get detailed information about all development phases"""
     try:
@@ -237,7 +238,7 @@ async def get_all_phases():
     operation="activate_phase",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/phase/{phase_id}/activate")
+@router.post("/phase/{phase_id}/activate", response_model=DataResponse)
 async def activate_phase(phase_id: str):
     """Activate a specific development phase"""
     try:
@@ -278,7 +279,7 @@ async def activate_phase(phase_id: str):
     operation="auto_progress_phases",
     error_code_prefix="PROJECT_STATE",
 )
-@router.post("/auto-progress")
+@router.post("/auto-progress", response_model=DataResponse)
 async def auto_progress_phases():
     """Run automated phase progression logic"""
     try:
@@ -301,7 +302,7 @@ async def auto_progress_phases():
     operation="health_check",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def health_check():
     """Health check for project state API"""
     try:

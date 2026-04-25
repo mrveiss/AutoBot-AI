@@ -17,6 +17,7 @@ from integrations.cicd_integration import (
     GitLabCIIntegration,
     JenkinsIntegration,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class ProviderInfo(BaseModel):
     auth_type: str = Field(..., description="Authentication type")
 
 
-@router.post("/test-connection")
+@router.post("/test-connection", response_model=DataResponse)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a CI/CD provider.
 
@@ -84,7 +85,7 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/providers")
+@router.get("/providers", response_model=DataResponse)
 async def list_providers() -> List[ProviderInfo]:
     """List supported CI/CD providers.
 
@@ -113,7 +114,7 @@ async def list_providers() -> List[ProviderInfo]:
     ]
 
 
-@router.get("/{provider}/pipelines")
+@router.get("/{provider}/pipelines", response_model=DataResponse)
 async def list_pipelines(
     provider: CICDProvider,
     base_url: str = Query(..., description="CI/CD service base URL"),
@@ -154,7 +155,7 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/pipelines/{pipeline_id}/status")
+@router.get("/{provider}/pipelines/{pipeline_id}/status", response_model=DataResponse)
 async def get_pipeline_status(
     provider: CICDProvider,
     pipeline_id: str,
@@ -194,7 +195,7 @@ async def get_pipeline_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{provider}/pipelines/{pipeline_id}/trigger")
+@router.post("/{provider}/pipelines/{pipeline_id}/trigger", response_model=DataResponse)
 async def trigger_pipeline(
     provider: CICDProvider,
     pipeline_id: str,
@@ -237,7 +238,7 @@ async def trigger_pipeline(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/pipelines/{pipeline_id}/logs")
+@router.get("/{provider}/pipelines/{pipeline_id}/logs", response_model=DataResponse)
 async def get_pipeline_logs(
     provider: CICDProvider,
     pipeline_id: str,

@@ -35,6 +35,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_365_DAYS
 from models.document import AIDocument
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ async def _assert_ownership(doc: AIDocument, user_id: str) -> None:
 # ============================================================================
 
 
-@router.post("/documents", status_code=201)
+@router.post("/documents", status_code=201, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_ai_document",
@@ -163,7 +164,7 @@ async def create_document(
     return doc.model_dump()
 
 
-@router.get("/documents")
+@router.get("/documents", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_documents",
@@ -204,7 +205,7 @@ async def list_documents(
     return {"documents": [d.model_dump() for d in page], "total": total}
 
 
-@router.get("/documents/{doc_id}")
+@router.get("/documents/{doc_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ai_document",
@@ -224,7 +225,7 @@ async def get_document(
     return doc.model_dump()
 
 
-@router.put("/documents/{doc_id}")
+@router.put("/documents/{doc_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_ai_document",
@@ -260,7 +261,7 @@ async def update_document(
     return doc.model_dump()
 
 
-@router.delete("/documents/{doc_id}", status_code=204)
+@router.delete("/documents/{doc_id}", status_code=204, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_ai_document",
@@ -285,7 +286,7 @@ async def delete_document(
     logger.info("Deleted AI document %s for user %s", doc_id, uid)
 
 
-@router.post("/documents/{doc_id}/refine")
+@router.post("/documents/{doc_id}/refine", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refine_ai_document",

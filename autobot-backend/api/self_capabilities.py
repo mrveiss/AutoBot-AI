@@ -24,6 +24,7 @@ from fastapi.openapi.utils import get_openapi
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.ttl_constants import TTL_5_MINUTES
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +218,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
         f"{TTL_5_MINUTES // 60}-minute TTL that resets on route changes."
     ),
     tags=["self", "capabilities"],
+    response_model=DataResponse,
 )
 @with_error_handling(category=ErrorCategory.SYSTEM)
 async def get_capabilities(request: Request) -> Dict[str, Any]:

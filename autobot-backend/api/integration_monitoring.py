@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, validator
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -98,7 +99,7 @@ class MonitorCreateRequest(BaseModel):
     message: str = Field(..., description="Notification message")
 
 
-@router.post("/test-connection")
+@router.post("/test-connection", response_model=DataResponse)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
 
@@ -127,7 +128,7 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
-@router.get("/providers")
+@router.get("/providers", response_model=DataResponse)
 async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     """List supported monitoring providers.
 
@@ -150,7 +151,7 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     }
 
 
-@router.get("/{provider}/hosts")
+@router.get("/{provider}/hosts", response_model=DataResponse)
 async def list_hosts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -187,7 +188,7 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail="Failed to list hosts")
 
 
-@router.post("/{provider}/metrics")
+@router.post("/{provider}/metrics", response_model=DataResponse)
 async def query_metrics(
     provider: str,
     request: MetricsQueryRequest,
@@ -226,7 +227,7 @@ async def query_metrics(
         raise HTTPException(status_code=500, detail="Failed to query metrics")
 
 
-@router.get("/{provider}/alerts")
+@router.get("/{provider}/alerts", response_model=DataResponse)
 async def list_alerts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -263,7 +264,7 @@ async def list_alerts(
         raise HTTPException(status_code=500, detail="Failed to list alerts")
 
 
-@router.post("/{provider}/events")
+@router.post("/{provider}/events", response_model=DataResponse)
 async def get_events(
     provider: str,
     request: EventsQueryRequest,

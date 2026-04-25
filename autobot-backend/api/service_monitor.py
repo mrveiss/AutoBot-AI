@@ -18,6 +18,7 @@ import aiohttp
 from fastapi import APIRouter
 
 from autobot_shared.ssot_config import config as _ssot
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ async def _check_redis_health() -> Tuple[str, str]:
         return "offline", "Unreachable"
 
 
-@router.get("/services")
+@router.get("/services", response_model=DataResponse)
 async def get_service_statuses() -> Dict[str, Any]:
     """Return health status for each AutoBot supporting service.
 
@@ -108,7 +109,7 @@ async def get_service_statuses() -> Dict[str, Any]:
     }
 
 
-@router.get("/vms/status")
+@router.get("/vms/status", response_model=DataResponse)
 async def get_vm_statuses() -> Dict[str, Any]:
     """Return status for AutoBot VMs as a list.
 

@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ async def skip_captcha(
         )
 
 
-@router.get("/pending")
+@router.get("/pending", response_model=DataResponse)
 async def get_pending_captchas() -> JSONResponse:
     """
     Get list of CAPTCHAs currently awaiting human resolution.
@@ -186,7 +187,7 @@ async def get_pending_captchas() -> JSONResponse:
         )
 
 
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def captcha_health() -> JSONResponse:
     """
     Health check for CAPTCHA service.

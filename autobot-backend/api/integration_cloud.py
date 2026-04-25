@@ -22,6 +22,7 @@ from integrations.cloud_integration import (
     AzureIntegration,
     GCPIntegration,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter(
     tags=["integrations-cloud"],
@@ -93,7 +94,7 @@ async def list_providers():
     ]
 
 
-@router.post("/test-connection")
+@router.post("/test-connection", response_model=DataResponse)
 async def test_connection(request: ConnectionTestRequest):
     """Test connection to a cloud provider."""
     try:
@@ -122,7 +123,7 @@ async def test_connection(request: ConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/resources")
+@router.get("/{provider}/resources", response_model=DataResponse)
 async def list_resources(
     provider: str,
     api_key: Optional[str] = None,
@@ -161,7 +162,7 @@ async def list_resources(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/storage")
+@router.get("/{provider}/storage", response_model=DataResponse)
 async def list_storage(
     provider: str,
     api_key: Optional[str] = None,
@@ -199,7 +200,7 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/account")
+@router.get("/{provider}/account", response_model=DataResponse)
 async def get_account_info(
     provider: str,
     api_key: Optional[str] = None,

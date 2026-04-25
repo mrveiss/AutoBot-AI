@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ async def get_reload_status():
     operation="start_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/start")
+@router.post("/start", response_model=DataResponse)
 async def start_hot_reload():
     """
     Start the hot reload manager
@@ -188,7 +189,7 @@ async def start_hot_reload():
     operation="stop_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/stop")
+@router.post("/stop", response_model=DataResponse)
 async def stop_hot_reload():
     """
     Stop the hot reload manager
@@ -210,7 +211,7 @@ async def stop_hot_reload():
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/health")
+@router.get("/health", response_model=DataResponse)
 async def hot_reload_health():
     """
     Health check for hot reload functionality

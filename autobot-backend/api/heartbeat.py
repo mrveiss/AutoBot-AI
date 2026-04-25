@@ -29,6 +29,7 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
+from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -225,7 +226,7 @@ async def get_run(
     return _run_to_response(run)
 
 
-@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=DataResponse)
 async def request_wakeup(
     agent_id: str,
     body: WakeupRequestCreate,
@@ -257,7 +258,7 @@ async def list_wakeup_requests(
     return [_wakeup_to_response(r) for r in result.scalars().all()]
 
 
-@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=DataResponse)
 async def trigger_manual(
     agent_id: str,
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),

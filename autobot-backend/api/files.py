@@ -18,18 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from .schemas_common import (
-    AdminFileListResponse,
-    AdminFileReadResponse,
-    FileSandboxCreateDirResponse,
-    FileSandboxDeleteResponse,
-    FileSandboxPreviewResponse,
-    FileSandboxRenameResponse,
-    FileSandboxStatsResponse,
-    FileSandboxTreeResponse,
-    FileSandboxViewResponse,
-)
-
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -49,6 +37,7 @@ from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
+from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -751,7 +740,7 @@ async def upload_file(
     operation="download_file",
     error_code_prefix="FILES",
 )
-@router.get("/download/{path:path}", response_model=None)
+@router.get("/download/{path:path}", response_model=DataResponse)
 async def download_file(request: Request, path: str):
     """
     Download a file from the sandbox.
@@ -810,7 +799,7 @@ async def download_file(request: Request, path: str):
     operation="view_file",
     error_code_prefix="FILES",
 )
-@router.get("/view/{path:path}", response_model=FileSandboxViewResponse)
+@router.get("/view/{path:path}", response_model=DataResponse)
 async def view_file(request: Request, path: str):
     """
     View file content (for text files) or get file info.
@@ -934,7 +923,7 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-@router.post("/rename", response_model=FileSandboxRenameResponse)
+@router.post("/rename", response_model=DataResponse)
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
 ):
@@ -1024,7 +1013,7 @@ async def _read_text_content(target_file: Path) -> tuple:
     operation="preview_file",
     error_code_prefix="FILES",
 )
-@router.get("/preview", response_model=FileSandboxPreviewResponse)
+@router.get("/preview", response_model=DataResponse)
 async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
@@ -1072,7 +1061,7 @@ async def preview_file(request: Request, path: str):
     operation="delete_file",
     error_code_prefix="FILES",
 )
-@router.delete("/delete", response_model=FileSandboxDeleteResponse)
+@router.delete("/delete", response_model=DataResponse)
 async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
@@ -1147,7 +1136,7 @@ def _log_directory_create_audit(
     operation="create_directory",
     error_code_prefix="FILES",
 )
-@router.post("/create_directory", response_model=FileSandboxCreateDirResponse)
+@router.post("/create_directory", response_model=DataResponse)
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
 ):
@@ -1191,7 +1180,7 @@ async def create_directory(
     operation="get_directory_tree",
     error_code_prefix="FILES",
 )
-@router.get("/tree", response_model=FileSandboxTreeResponse)
+@router.get("/tree", response_model=DataResponse)
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -1259,7 +1248,7 @@ async def get_directory_tree(request: Request, path: str = ""):
     operation="get_file_stats",
     error_code_prefix="FILES",
 )
-@router.get("/stats", response_model=FileSandboxStatsResponse)
+@router.get("/stats", response_model=DataResponse)
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -1355,7 +1344,7 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
-@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
+@router.get("", summary="List directory for SLM admin file browser", response_model=DataResponse)
 async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
     """List directory contents at an absolute path.
 
@@ -1376,7 +1365,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
+@router.get("/read", summary="Read file content for SLM admin file browser", response_model=DataResponse)
 async def admin_read_file(path: str) -> dict:
     """Return text content of a file at an absolute path.
 
