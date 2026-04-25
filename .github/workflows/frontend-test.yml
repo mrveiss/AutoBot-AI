@@ -70,6 +70,10 @@ jobs:
         working-directory: autobot-frontend
         run: npm run check:i18n
 
+
+      - name: Check locale completeness
+        working-directory: autobot-frontend
+        run: npm run check:locales
       - name: Run unit tests
         working-directory: autobot-frontend
         run: npm run test:unit
