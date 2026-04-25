@@ -16,6 +16,7 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -569,6 +570,7 @@ class SecureSandboxExecutor:
         # In production, would parse the stream headers properly
         try:
             log_text = logs.decode("utf-8", errors="replace")
+            log_text = _strip_ansi(_dedup_consecutive(log_text))
             return log_text, ""
         except Exception:
             return "", "Failed to parse logs"

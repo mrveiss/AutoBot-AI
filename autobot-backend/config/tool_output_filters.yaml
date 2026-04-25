@@ -3,11 +3,12 @@
 #
 # Pipeline stages (applied in order when present):
 #   strip_ansi           — remove ANSI/VT100 escape codes
+#   filter_type          — specialized handler: pytest, ruff_json, diff, markdown
 #   match_output         — if output matches pattern, replace with short message
 #   strip_lines_matching — drop lines matching any regex
 #   keep_lines_matching  — keep only lines matching any regex
 #   dedup_consecutive    — collapse repeated consecutive lines into "line [×N]"
-#   max_lines            — keep last N lines
+#   max_lines            — keep last N lines (tail, with omission notice)
 #   on_empty             — message returned when filtered result is empty
 
 filters:
@@ -21,19 +22,15 @@ filters:
         message: "ok (nothing to commit)"
     max_lines: 15
 
-  pytest:
-    match_command: "^pytest"
+  git_diff:
+    match_command: "^git (diff|show|log.*-p)"
     strip_ansi: true
-    strip_lines_matching:
-      - "^test_.* PASSED"
-      - "^\\."
-      - "^s$"
-      - "^platform "
-      - "^rootdir:"
-      - "^plugins:"
-      - "^collecting \\.\\.\\."
-    max_lines: 150
-    on_empty: "All tests passed"
+    filter_type: diff
+
+  pytest:
+    match_command: "^(python -m )?pytest"
+    strip_ansi: true
+    filter_type: pytest
 
   npm_test:
     match_command: "^npm (test|run test|run lint|run build|run type-check)"
@@ -44,8 +41,13 @@ filters:
       - "^  pass "
     max_lines: 150
 
-  ruff_eslint:
-    match_command: "^(ruff|eslint|flake8|mypy|black)"
+  ruff:
+    match_command: "^ruff check"
+    strip_ansi: true
+    filter_type: ruff_json
+
+  linters:
+    match_command: "^(eslint|flake8|mypy|black)"
     strip_ansi: true
     max_lines: 100
 
@@ -65,3 +67,8 @@ filters:
       - "^  Using cached "
     max_lines: 20
     on_empty: "ok (all requirements already satisfied)"
+
+  gh_body:
+    match_command: "^gh (issue|pr) (view|body)"
+    strip_ansi: true
+    filter_type: markdown
