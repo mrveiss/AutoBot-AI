@@ -1210,6 +1210,7 @@ def _build_dynamic_context(
     available_tools: Optional[List[str]],
     recent_context: Optional[str],
     additional_params: Optional[Dict],
+    tool_descriptions: Optional[Dict] = None,
 ) -> str:
     """
     Build dynamic context section for optimized prompts.
@@ -1224,6 +1225,7 @@ def _build_dynamic_context(
         available_tools: List of available tool names
         recent_context: Recent conversation context or task history
         additional_params: Additional dynamic parameters
+        tool_descriptions: Optional mapping of tool_name -> compressed description (Issue #5827)
 
     Returns:
         Rendered dynamic context string
@@ -1240,6 +1242,7 @@ def _build_dynamic_context(
             available_tools=available_tools or [],
             recent_context=recent_context or "",
             additional_params=additional_params or {},
+            tool_descriptions=tool_descriptions,
         )
     except KeyError:
         logger.warning(
@@ -1259,6 +1262,7 @@ def get_optimized_prompt(
     available_tools: Optional[List[str]] = None,
     recent_context: Optional[str] = None,
     additional_params: Optional[Dict] = None,
+    tool_descriptions: Optional[Dict] = None,
 ) -> str:
     """
     Get a prompt optimized for vLLM prefix caching.
@@ -1275,6 +1279,7 @@ def get_optimized_prompt(
         available_tools: List of available tool names
         recent_context: Recent conversation context or task history
         additional_params: Additional dynamic parameters
+        tool_descriptions: Optional mapping of tool_name -> compressed description (Issue #5827)
 
     Returns:
         Combined prompt with static prefix + dynamic suffix
@@ -1290,6 +1295,7 @@ def get_optimized_prompt(
         available_tools,
         recent_context,
         additional_params,
+        tool_descriptions,
     )
 
     # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
