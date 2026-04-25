@@ -12,6 +12,7 @@ import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useBrowserAutomation')
 
@@ -77,7 +78,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   const sessions = ref<BrowserSession[]>([])
   const currentSession = ref<BrowserSession | null>(null)
   const screenshots = ref<ScreenshotResult[]>([])
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   // ===== API Methods =====
@@ -95,28 +96,24 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   }
 
   async function launchSession(url?: string): Promise<BrowserSession | null> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await ApiClient.post<{ session: BrowserSession }>(`${getApiBase()}/browser/launch`, { url: url || 'about:blank' })
       sessions.value.push(data.session)
       currentSession.value = data.session
       logger.debug('Launched browser session:', data.session)
       return data.session
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to launch session'
       logger.error('Failed to launch session:', err)
       error.value = message
       return null
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function closeSession(sessionId: string): Promise<boolean> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       await ApiClient.post(`${getApiBase()}/browser/close`, { session_id: sessionId })
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       if (currentSession.value?.id === sessionId) {
@@ -124,14 +121,12 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
       }
       logger.debug('Closed session:', sessionId)
       return true
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to close session'
       logger.error('Failed to close session:', err)
       error.value = message
       return false
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function fetchSessions(): Promise<void> {
@@ -161,125 +156,104 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   }
 
   async function navigate(sessionId: string, url: string): Promise<boolean> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       await ApiClient.post(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
       logger.debug('Navigated to:', url)
       await fetchSessions()
       return true
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to navigate'
       logger.error('Failed to navigate:', err)
       error.value = message
       return false
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function click(sessionId: string, selector: string): Promise<boolean> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       await ApiClient.post(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
       logger.debug('Clicked element:', selector)
       return true
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to click'
       logger.error('Failed to click:', err)
       error.value = message
       return false
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function type(sessionId: string, selector: string, text: string): Promise<boolean> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       await ApiClient.post(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
       logger.debug('Typed text into:', selector)
       return true
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to type'
       logger.error('Failed to type:', err)
       error.value = message
       return false
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function takeScreenshot(sessionId: string): Promise<ScreenshotResult | null> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await ApiClient.post<ScreenshotResult>(`${getApiBase()}/browser/screenshot`, { session_id: sessionId })
       screenshots.value.unshift(data)
       logger.debug('Captured screenshot')
       return data
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to take screenshot'
       logger.error('Failed to take screenshot:', err)
       error.value = message
       return null
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function executeScript(sessionId: string, script: string): Promise<unknown> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await ApiClient.post<{ result: unknown }>(`${getApiBase()}/browser/execute`, { session_id: sessionId, script })
       logger.debug('Executed script, result:', data.result)
       return data.result
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to execute script'
       logger.error('Failed to execute script:', err)
       error.value = message
       return null
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function runAutomationScript(script: string): Promise<unknown> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await ApiClient.post<{ result: unknown }>(`${getApiBase()}/browser/automation/run`, { script })
       logger.debug('Automation script completed:', data)
       return data.result
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to run automation'
       logger.error('Failed to run automation:', err)
       error.value = message
       return null
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   async function deleteSession(sessionId: string): Promise<boolean> {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       await ApiClient.delete(`${getApiBase()}/browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       logger.debug('Deleted session:', sessionId)
       return true
-    } catch (err) {
+    }).catch((err) => {
       const message = err instanceof Error ? err.message : 'Failed to delete session'
       logger.error('Failed to delete session:', err)
       error.value = message
       return false
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   // ===== Polling Methods =====
