@@ -1405,26 +1405,29 @@ class LLMInterface:
         from prompt_manager import get_optimized_prompt
         from tools import get_tool_registry
 
+        # Issue #5870: default to full registry when caller omits available_tools
+        if available_tools is None:
+            available_tools = get_tool_registry().get_available_tools()
+
         tool_descriptions: dict | None = None
-        if available_tools:
-            try:
-                registry = get_tool_registry()
-                raw_descs = {
-                    name: desc
-                    for name, desc in (
-                        await registry.get_compressed_descriptions()
-                    ).items()
-                    if name in available_tools
-                }
-                before_bytes = sum(len(d) for d in raw_descs.values())
-                tool_descriptions = raw_descs
-                logger.debug(
-                    "[#5827] Compressed tool descriptions: %d tools, %d bytes",
-                    len(tool_descriptions),
-                    before_bytes,
-                )
-            except Exception:
-                logger.warning("[#5827] compress_description failed; falling back to tool names only", exc_info=True)
+        try:
+            registry = get_tool_registry()
+            tool_set = set(available_tools)
+            uncompressed = {n: d for n, d in registry.get_raw_descriptions().items() if n in tool_set}
+            compressed_map = await registry.get_compressed_descriptions()
+            tool_descriptions = {n: d for n, d in compressed_map.items() if n in tool_set}
+            uncompressed_bytes = sum(len(d) for d in uncompressed.values())
+            compressed_bytes = sum(len(d) for d in tool_descriptions.values())
+            saving_pct = (1 - compressed_bytes / uncompressed_bytes) * 100 if uncompressed_bytes else 0
+            logger.debug(
+                "[#5827] Tool desc savings: %d tools, %d → %d bytes (%.0f%% reduction)",
+                len(tool_descriptions),
+                uncompressed_bytes,
+                compressed_bytes,
+                saving_pct,
+            )
+        except Exception:
+            logger.warning("[#5827] compress_description failed; falling back to tool names only", exc_info=True)
 
         system_prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),
