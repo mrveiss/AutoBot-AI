@@ -168,6 +168,16 @@ def _is_binary_content(content: str) -> bool:
     return "\x00" in content
 
 
+def _is_cjk(ch: str) -> bool:
+    """Return True if *ch* is a CJK ideograph (each character is its own word)."""
+    cp = ord(ch)
+    return (
+        0x3000 <= cp <= 0x9FFF  # CJK Unified Ideographs + CJK Symbols/Punctuation
+        or 0xF900 <= cp <= 0xFAFF  # CJK Compatibility Ideographs
+        or 0x20000 <= cp <= 0x2FA1F  # CJK Extension B–F + Compatibility Supplement
+    )
+
+
 def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) -> int:
     """
     Snap a string slice position to a Unicode-safe word boundary.
@@ -176,6 +186,10 @@ def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) 
     splits possible), but this helper snaps the cut to the nearest whitespace so
     truncation does not break mid-word for multi-byte characters (emoji 4-byte,
     CJK 3-byte, accented 2-byte).
+
+    Issue #4436: CJK text has no spaces between characters — each codepoint is its
+    own word, so whitespace snapping is unnecessary. When the character at *pos* is
+    CJK, return *pos* immediately instead of scanning and falling back anyway.
 
     Args:
         content: The full string being sliced.
@@ -189,6 +203,9 @@ def _snap_to_char_boundary(content: str, pos: int, search_forward: bool = True) 
     limit = 100  # Maximum chars to search for a boundary
     length = len(content)
     pos = max(0, min(pos, length))
+
+    if pos < length and _is_cjk(content[pos]):
+        return pos
 
     if search_forward:
         end = min(pos + limit, length)
