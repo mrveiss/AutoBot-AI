@@ -140,6 +140,8 @@ No `console.*` or `print()` — pre-commit blocks these.
 
 Wait for user confirmation before writing code.
 
+**Architecture exceptions:** When deviating from a standard pattern intentionally, document it in [`docs/developer/ARCHITECTURE_EXCEPTIONS.md`](ARCHITECTURE_EXCEPTIONS.md) with rationale and a grep check.
+
 **No Temporary Fixes (ZERO TOLERANCE):**
 - No quick fixes, workarounds, or disabling functionality
 - No hardcoding to bypass issues, try/catch hiding errors
