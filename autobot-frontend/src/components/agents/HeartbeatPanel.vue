@@ -244,7 +244,7 @@ function _onLiveEvent(event: LiveEvent): void {
 
 watch(agentId, (newId: string, oldId: string) => {
   if (oldId) {
-    const oldChannel = `agent:${oldId}`
+    const oldChannel = `heartbeat:${oldId}`
     if (_liveUnsub) {
       _liveUnsub()
       _liveUnsub = null
@@ -252,7 +252,7 @@ watch(agentId, (newId: string, oldId: string) => {
     unsubscribe(oldChannel, _onLiveEvent)
   }
   if (newId) {
-    _liveUnsub = subscribe(`agent:${newId}`, _onLiveEvent)
+    _liveUnsub = subscribe(`heartbeat:${newId}`, _onLiveEvent)
     logger.debug('Subscribed to live events for agent', { agentId: newId })
   }
 }, { immediate: true })
