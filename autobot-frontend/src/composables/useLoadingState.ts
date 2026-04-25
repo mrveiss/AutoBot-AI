@@ -20,14 +20,15 @@ export function useLoadingState(initial = false): {
   isLoading: Ref<boolean>
   wrap: <T>(fn: () => Promise<T>) => Promise<T>
 } {
+  let _pending = 0
   const isLoading = ref(initial)
 
   async function wrap<T>(fn: () => Promise<T>): Promise<T> {
-    isLoading.value = true
+    if (++_pending === 1) isLoading.value = true
     try {
       return await fn()
     } finally {
-      isLoading.value = false
+      if (--_pending === 0) isLoading.value = false
     }
   }
 
