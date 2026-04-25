@@ -14,6 +14,7 @@
 import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '../useLoadingState'
 import type {
   MachineKnowledgeResponse,
   SystemKnowledgeResponse,
@@ -106,31 +107,25 @@ export interface UseMachineKnowledgeReturn {
 export function useMachineKnowledge(): UseMachineKnowledgeReturn {
   const profiles = ref<MachineProfile[]>([])
   const profile = ref<MachineProfile | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<Error | null>(null)
 
   const refreshProfiles = async (): Promise<MachineProfile[]> => {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await fetchMachineProfiles()
       profiles.value = data
       return data
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   const refreshProfile = async (machineId: string): Promise<MachineProfile | null> => {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await fetchMachineProfile(machineId)
       profile.value = data
       return data
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   return {

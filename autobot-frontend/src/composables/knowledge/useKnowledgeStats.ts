@@ -14,6 +14,7 @@
 import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '../useLoadingState'
 import type { KnowledgeStats } from '@/types/knowledgeBase'
 
 // ==================== Bare imperative API ====================
@@ -60,34 +61,30 @@ export interface UseKnowledgeStatsReturn {
 export function useKnowledgeStats(): UseKnowledgeStatsReturn {
   const stats = ref<KnowledgeStats | null>(null)
   const basicStats = ref<KnowledgeStats | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<Error | null>(null)
 
   const refresh = async (): Promise<KnowledgeStats | null> => {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await fetchStats()
-      stats.value = data
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await fetchStats()
+        stats.value = data
+        return data
+      } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err))
+        throw err
+      }
+    })
   }
 
   const refreshBasic = async (): Promise<KnowledgeStats | null> => {
-    isLoading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const data = await fetchBasicStats()
       basicStats.value = data
       return data
-    } finally {
-      isLoading.value = false
-    }
+    })
   }
 
   return {

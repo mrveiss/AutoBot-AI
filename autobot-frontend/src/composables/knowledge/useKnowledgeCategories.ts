@@ -19,6 +19,7 @@ import apiClient from '@/utils/ApiClient'
 import { formatCategoryName as formatCategoryHelper } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '../useLoadingState'
 import type {
   CategoryResponse,
   CategoriesListResponse,
@@ -182,40 +183,38 @@ export interface UseKnowledgeCategoriesReturn {
 export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
   const categories = ref<KnowledgeCategoryItem[]>([])
   const categorizedFacts = ref<CategorizedFactsResponse | null>(null)
-  const isLoading = ref(false)
+  const { isLoading, wrap } = useLoadingState()
   const error = ref<Error | null>(null)
 
   const refresh = async (): Promise<KnowledgeCategoryItem[]> => {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await fetchCategories()
-      categories.value = data
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await fetchCategories()
+        categories.value = data
+        return data
+      } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err))
+        throw err
+      }
+    })
   }
 
   const refreshCategorizedFacts = async (
     category: string | null = null,
     limit: number = 100
   ): Promise<CategorizedFactsResponse> => {
-    isLoading.value = true
     error.value = null
-    try {
-      const data = await getCategorizedFacts(category, limit)
-      categorizedFacts.value = data
-      return data
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+    return wrap(async () => {
+      try {
+        const data = await getCategorizedFacts(category, limit)
+        categorizedFacts.value = data
+        return data
+      } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err))
+        throw err
+      }
+    })
   }
 
   return {
