@@ -33,6 +33,7 @@ from api.schemas_code import (
     PlaywrightWorkerStatusResponse,
     PlaywrightCapabilitiesResponse,
 )
+from api.schemas_system import PlaywrightEmbeddedResultResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ async def health_check():
     operation="web_search",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/search", response_model=None)
+@router.post("/search", response_model=PlaywrightEmbeddedResultResponse)
 async def web_search(request: SearchRequest):
     """
     Perform web search using embedded Playwright
@@ -200,7 +201,7 @@ async def web_search(request: SearchRequest):
     operation="test_frontend",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/test-frontend", response_model=None)
+@router.post("/test-frontend", response_model=PlaywrightEmbeddedResultResponse)
 async def test_frontend(request: FrontendTestRequest):
     """
     Test frontend functionality using embedded Playwright
@@ -239,7 +240,7 @@ async def test_frontend(request: FrontendTestRequest):
     operation="send_test_message",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/send-test-message", response_model=None)
+@router.post("/send-test-message", response_model=PlaywrightEmbeddedResultResponse)
 async def send_test_message(request: TestMessageRequest):
     """
     Send test message through frontend using embedded Playwright
@@ -282,7 +283,7 @@ async def send_test_message(request: TestMessageRequest):
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/screenshot", response_model=None)
+@router.post("/screenshot", response_model=PlaywrightEmbeddedResultResponse)
 async def capture_screenshot(request: ScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright

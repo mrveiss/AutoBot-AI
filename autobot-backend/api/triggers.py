@@ -26,7 +26,7 @@ from services.trigger_service import (
     TriggerService,
     TriggerType,
 )
-from api.schemas_common import DataResponse
+from api.schemas_agent import WebhookAcceptedResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ async def delete_trigger(
     "/triggers/webhook/{trigger_id}",
     status_code=status.HTTP_200_OK,
     summary="Receive an external webhook event",
-    response_model=None,
+    response_model=WebhookAcceptedResponse,
 )
 async def receive_webhook(
     trigger_id: str,

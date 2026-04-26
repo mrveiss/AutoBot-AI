@@ -27,6 +27,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.saved_reports_service import get_saved_reports_service
 from api.schemas_common import DataResponse
+from api.schemas_agent import SavedReportResponse, SavedReportsListResponse
 
 router = APIRouter(tags=["bi-reports"])
 
@@ -47,7 +48,7 @@ class SavedReportRequest(BaseModel):
     operation="save_report",
     error_code_prefix="BI_EXPORT_ENDPOINTS",
 )
-@router.post("/reports/save", response_model=None)
+@router.post("/reports/save", response_model=SavedReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_report",
@@ -77,7 +78,7 @@ async def save_report(
     operation="list_saved_reports",
     error_code_prefix="BI_EXPORT_ENDPOINTS",
 )
-@router.get("/reports/saved", response_model=None)
+@router.get("/reports/saved", response_model=SavedReportsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_saved_reports",

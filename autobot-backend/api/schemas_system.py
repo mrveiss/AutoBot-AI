@@ -616,11 +616,117 @@ class ServicesHealthDeprecatedResponse(BaseModel):
 
 
 class ServicesHealthAggregateResponse(BaseModel):
-    """Response for GET /services/health in services.py.
+    """Response for GET /services/health in services.py."""
 
-    Shape is either from monitoring (opaque) or the fallback dict built
-    from ServicesResponse. Extra fields allowed for monitoring pass-through.
-    """
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# vision.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+class VisionElementItem(BaseModel):
+    """Single UI element entry in VisionDetectElementsResponse."""
+
+    element_id: str
+    element_type: str
+    bbox: Any
+    center_point: List[float]
+    confidence: float
+    text_content: Optional[str] = None
+    possible_interactions: List[str]
+
+
+
+class VisionDetectElementsResponse(BaseModel):
+    """Response for POST /vision/elements."""
+
+    total_detected: int
+    filtered_count: int
+    elements: List[VisionElementItem]
+    filter_applied: Dict[str, Any]
+
+
+
+class VisionOCRResponse(BaseModel):
+    """Response for POST /vision/ocr."""
+
+    region_specified: bool
+    text_regions: List[Any]
+    total_text_regions: int
+    region: Optional[Dict[str, Any]] = None
+
+
+
+class VisionAutomationOpportunitiesResponse(BaseModel):
+    """Response for GET /vision/automation-opportunities."""
+
+    opportunities: List[Any]
+    total_opportunities: int
+    context: Any
+    confidence: float
+
+
+
+class VisionElementTypeItem(BaseModel):
+    """Single element-type descriptor."""
+
+    value: str
+    name: str
+    description: str
+
+
+
+class VisionElementTypesResponse(BaseModel):
+    """Response for GET /vision/element-types."""
+
+    element_types: List[VisionElementTypeItem]
+    total_types: int
+
+
+
+class VisionInteractionTypeItem(BaseModel):
+    """Single interaction-type descriptor."""
+
+    value: str
+    name: str
+    description: str
+
+
+
+class VisionInteractionTypesResponse(BaseModel):
+    """Response for GET /vision/interaction-types."""
+
+    interaction_types: List[VisionInteractionTypeItem]
+    total_types: int
+
+
+
+class VisionLayoutResponse(BaseModel):
+    """Response for GET /vision/layout."""
+
+    layout_structure: Any
+    dominant_colors: Any
+    timestamp: Any
+
+
+
+class VisionStatusFeaturesResponse(BaseModel):
+    """Nested features dict in VisionStatusResponse."""
+
+    screen_analysis: bool
+    element_detection: bool
+    ocr_extraction: bool
+    template_matching: bool
+    multimodal_processing: bool
+
+
+
+class VisionStatusResponse(BaseModel):
+    """Response for GET /vision/status.
+
+    Error path returns only service+status+error — extra fields allowed.    """
 
     model_config = {"extra": "allow"}
 
@@ -905,3 +1011,39 @@ class ProjectStateHealthResponse(BaseModel):
     current_phase: str
     overall_completion: float
     timestamp: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# playwright.py embedded endpoints schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class PlaywrightEmbeddedResultResponse(BaseModel):
+    """Response for POST /playwright/search, /test-frontend, /send-test-message,
+    and /screenshot.
+
+    Shape comes from embedded Playwright service helpers and is opaque;
+    extra fields allowed through.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+# ---------------------------------------------------------------------------
+# multimodal.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class MultimodalHealthResponse(BaseModel):
+    """Response for GET /multimodal/health."""
+
+    status: str
+    timestamp: float
+    gpu_available: bool
+    processor_ready: bool
+    performance_monitoring: bool
+    mixed_precision_enabled: bool

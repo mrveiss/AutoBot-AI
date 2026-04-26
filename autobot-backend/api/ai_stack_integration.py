@@ -806,7 +806,7 @@ async def multi_agent_query(
     operation="legacy_rag_search",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/rag-search", response_model=None)
+@router.post("/legacy/rag-search", response_model=DataResponse)
 async def legacy_rag_search(
     query: str,
     max_results: int = 10,
@@ -831,7 +831,7 @@ async def legacy_rag_search(
     operation="legacy_enhanced_chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/enhanced-chat", response_model=None)
+@router.post("/legacy/enhanced-chat", response_model=DataResponse)
 async def legacy_enhanced_chat(
     message: str,
     context: Optional[str] = None,

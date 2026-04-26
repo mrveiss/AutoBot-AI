@@ -19,6 +19,11 @@ from pydantic import BaseModel, Field
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    MarketplaceCategoriesResponse,
+    MarketplaceInstalledResponse,
+    MarketplacePluginActionResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -274,7 +279,7 @@ async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     operation="list_categories",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/categories", response_model=None)
+@router.get("/categories", response_model=MarketplaceCategoriesResponse)
 async def list_categories() -> dict[str, list[str]]:
     """
     List valid plugin categories and sort options.
@@ -314,7 +319,7 @@ async def _get_installed() -> set[str]:
     operation="list_installed",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/installed", response_model=None)
+@router.get("/installed", response_model=MarketplaceInstalledResponse)
 async def list_installed() -> dict[str, list[str]]:
     """
     List names of installed marketplace plugins.
@@ -330,7 +335,7 @@ async def list_installed() -> dict[str, list[str]]:
     operation="install_plugin",
     error_code_prefix="MARKETPLACE",
 )
-@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=None)
+@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=MarketplacePluginActionResponse)
 async def install_plugin(body: InstallRequest) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
@@ -375,7 +380,7 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     operation="uninstall_plugin",
     error_code_prefix="MARKETPLACE",
 )
-@router.delete("/install/{plugin_name}", response_model=None)
+@router.delete("/install/{plugin_name}", response_model=MarketplacePluginActionResponse)
 async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
     """
     Remove a marketplace plugin from the installed set.

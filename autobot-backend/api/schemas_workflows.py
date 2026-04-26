@@ -1195,3 +1195,31 @@ class SessionShareSecretResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# marketplace.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class MarketplaceCategoriesResponse(BaseModel):
+    """Response for GET /marketplace/categories."""
+
+    categories: List[str]
+    sort_options: List[str]
+
+
+
+class MarketplaceInstalledResponse(BaseModel):
+    """Response for GET /marketplace/installed."""
+
+    installed: List[str]
+
+
+
+class MarketplacePluginActionResponse(BaseModel):
+    """Response for POST /marketplace/install and DELETE /marketplace/install/{plugin_name}."""
+
+    status: str
+    plugin: str

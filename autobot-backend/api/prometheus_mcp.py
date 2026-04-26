@@ -22,7 +22,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
+from api.schemas_code import PrometheusMCPExecuteResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -161,7 +161,7 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
     operation="get_prometheus_mcp_tools",
     error_code_prefix="PROMETHEUS_MCP",
 )
-@router.get("/mcp/tools", response_model=None)
+@router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_prometheus_mcp_tools() -> List[MCPTool]:
     """
     Get available MCP tools for Prometheus metrics.
@@ -426,7 +426,7 @@ TOOL_HANDLERS = {
     operation="execute_prometheus_tool",
     error_code_prefix="PROMETHEUS_MCP",
 )
-@router.post("/mcp/{tool_name}", response_model=None)
+@router.post("/mcp/{tool_name}", response_model=PrometheusMCPExecuteResponse)
 async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata:
     """
     Execute a Prometheus MCP tool

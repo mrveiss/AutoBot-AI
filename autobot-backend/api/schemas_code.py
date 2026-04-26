@@ -1154,19 +1154,51 @@ class CodeSearchGetResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# prometheus_mcp.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+class PrometheusMCPToolItem(BaseModel):
+    """Single MCP tool descriptor returned by GET /prometheus/mcp/tools."""
+
+    model_config = {"extra": "allow"}
+
+    name: str
+    description: str
+    input_schema: Any
+
+
+
+class PrometheusMCPExecuteResponse(BaseModel):
+    """Response for POST /prometheus/mcp/{tool_name}.
+
+    Shape varies by tool and includes dynamic metrics data; extra fields allowed.    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
 # skills.py schemas  (Issue #5987)
 # ---------------------------------------------------------------------------
 
 
 class SkillToggleResponse(BaseModel):
-    """Response for POST /skills/{name}/enable and /skills/{name}/disable.
-
-    Registry returns {success, name, enabled, ...}; extra fields allowed.
-    """
+    """Response for POST /skills/{name}/enable and /skills/{name}/disable."""
 
     model_config = {"extra": "allow"}
 
     success: bool
+
+
+# ---------------------------------------------------------------------------
+# manual_mcp.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+class ManualMCPToolItem(BaseModel):
+    """Single MCP tool descriptor returned by GET /manual/mcp/tools."""
+
+    model_config = {"extra": "allow"}
 
 
 class SkillConfigUpdateResponse(BaseModel):
@@ -1228,4 +1260,5 @@ class SkillRepoBrowseResponse(BaseModel):
 
 # permissions.py schemas are defined in schemas_system.py (PermissionRuleMutateResponse,
 # PermissionClearApprovalsResponse, PermissionStoreApprovalResponse,
-# PermissionMemoryStatsResponse) — already wired in permissions.py.
+# PermissionMemoryStatsResponse) — already wired in permissions.py.    name: str
+    description: str
