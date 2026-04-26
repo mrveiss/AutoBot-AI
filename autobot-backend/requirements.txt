@@ -1,4 +1,4 @@
--e ../autobot-shared
+-e ../autobot_shared
 
 # Core
 fastapi>=0.135.2                # SECURITY UPDATE - requires starlette >=0.52.1
