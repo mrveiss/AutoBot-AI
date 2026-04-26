@@ -78,11 +78,11 @@ Each `useLoadingState()` call is independent. Concurrent calls through the *same
 
 ## Long-term consolidation path
 
-The split is deliberate and low-risk today. `ApiClient` is well-tested for mutations; `useFetchEndpoint` is the right abstraction for reads. The gap tracked in issue #5884 is:
+The split is deliberate and low-risk today. `ApiClient` is well-tested for mutations; `useFetchEndpoint` is the right abstraction for reads.
 
 1. **`ApiClient` does not expose an `AbortSignal` externally.** Until it does, mutation composables cannot participate in lifecycle teardown. For short-lived one-shot POSTs this is not a problem in practice — the call completes before the component unmounts in the normal case.
 
-2. **Reads on `ApiClient`** (there are a few — `useAvailableModels`, `useCodeIntelligence`, `useDocumentChanges`) could migrate to `useFetchEndpoint` for abort + race safety. Each migration is independent and low-risk. File a follow-up issue when you encounter one.
+2. **Reads on `ApiClient`** (there are a few — `useAvailableModels`, `useDocumentChanges`) could migrate to `useFetchEndpoint` for abort + race safety. Each migration is independent and low-risk. File a follow-up issue when you encounter one rather than doing it inline.
 
 3. **No forced migration.** Do not rewrite working mutation composables to `useFetchEndpoint` unless the composable also needs reactive `data`, abort safety, or `fallbackData`. The ergonomics of `wrap()` are intentionally better for mutations.
 
@@ -105,6 +105,9 @@ The split is deliberate and low-risk today. `ApiClient` is well-tested for mutat
 | `useMachineKnowledge` | GET facts, inline result |
 | `useManPages` | GET man page, inline result |
 | `useKnowledgeCategories` | GET categories, inline result |
+| `useVncControls` | 7 desktop-control commands — click, type, key, scroll, drag, screenshot, clipboard |
+| `useVncConnection` | Load/update connection settings; `loadMetrics` has no loading flag |
+| `usePlugins` | Load and discover plugins; lifecycle mutations call `listPlugins()` after |
 | `useCodeIntelligence` | Counter-based `loadingCount` — not migrated; see #5880 |
 
 ### Pattern B — `useFetchEndpoint` / `useApiResource`
