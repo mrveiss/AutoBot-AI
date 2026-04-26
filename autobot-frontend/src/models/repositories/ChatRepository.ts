@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import type { ChatMessage } from '@/types/api'
 
 // Create scoped logger for ChatRepository
@@ -227,12 +228,9 @@ export class ChatRepository {
 
       // Use native fetch API for proper SSE streaming support
       const url = `${this.baseURL}${getApiBase()}/chats/${chatId}/message`
-      const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-      const authToken = this._getAuthToken()
-      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
-        headers: fetchHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: message,
           context: metadata

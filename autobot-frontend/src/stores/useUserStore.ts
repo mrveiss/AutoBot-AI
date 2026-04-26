@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('useUserStore')
 
@@ -319,11 +320,11 @@ export const useUserStore = defineStore('user', () => {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout
 
-      const response = await fetch(`${getApiBase()}/auth/me`, {
+      const response = await fetchWithAuth(`${getApiBase()}/auth/me`, {
         signal: controller.signal,
         headers: {
-          'Accept': 'application/json'
-        }
+          'Accept': 'application/json',
+        },
       })
       clearTimeout(timeoutId)
 
@@ -374,18 +375,9 @@ export const useUserStore = defineStore('user', () => {
     newPassword: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-
-      // Add authorization header if we have a token
-      if (authState.value.token && authState.value.token !== 'single_user_mode') {
-        headers['Authorization'] = `Bearer ${authState.value.token}`
-      }
-
-      const response = await fetch(`${getApiBase()}/auth/change-password`, {
+      const response = await fetchWithAuth(`${getApiBase()}/auth/change-password`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword

@@ -13,7 +13,7 @@
 
 import { ref, onUnmounted, type Ref } from 'vue'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
-import { getAuthToken } from '@/utils/fetchWithAuth'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useMultiModelCompare')
@@ -109,15 +109,12 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
     responses.value = initial
 
     const url = `${getBackendUrl()}${getApiBase()}/chat/compare`
-    const token = getAuthToken()
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
 
     let fetchResponse: Response
     try {
-      fetchResponse = await fetch(url, {
+      fetchResponse = await fetchWithAuth(url, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, models: targetModels }),
         signal,
       })

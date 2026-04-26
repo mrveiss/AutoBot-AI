@@ -180,8 +180,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
-import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('AdminUsersView')
 
@@ -202,7 +202,6 @@ interface NewUserForm {
   display_name: string
 }
 
-const userStore = useUserStore()
 
 const users = ref<UserRecord[]>([])
 const total = ref(0)
@@ -221,15 +220,6 @@ const deleteTarget = ref<UserRecord | null>(null)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = userStore.authState.token
-  if (token && token !== 'single_user_mode') {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  return headers
-}
-
 function primaryRole(user: UserRecord): string {
   if (user.is_platform_admin) return 'admin'
   const sysRole = user.roles.find(r => r.is_system)
@@ -247,9 +237,7 @@ async function loadUsers(): Promise<void> {
     if (searchQuery.value.trim()) {
       params.set('search', searchQuery.value.trim())
     }
-    const res = await fetch(`${getBackendUrl()}/user-management/users?${params}`, {
-      headers: authHeaders(),
-    })
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
@@ -281,9 +269,9 @@ function changePage(delta: number): void {
 
 async function onRoleChange(user: UserRecord, role: string): Promise<void> {
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${user.id}/role`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${user.id}/role`, {
       method: 'PUT',
-      headers: authHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
     })
     if (!res.ok) {
@@ -300,9 +288,8 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
   const action = activate ? 'activate' : 'deactivate'
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${user.id}/${action}`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${user.id}/${action}`, {
       method: 'POST',
-      headers: authHeaders(),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -322,9 +309,8 @@ function confirmDelete(user: UserRecord): void {
 async function deleteUser(): Promise<void> {
   if (!deleteTarget.value) return
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users/${deleteTarget.value.id}`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users/${deleteTarget.value.id}`, {
       method: 'DELETE',
-      headers: authHeaders(),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -343,9 +329,9 @@ async function createUser(): Promise<void> {
   creating.value = true
   createError.value = null
   try {
-    const res = await fetch(`${getBackendUrl()}/user-management/users`, {
+    const res = await fetchWithAuth(`${getBackendUrl()}/user-management/users`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: newUser.value.email,
         username: newUser.value.username,

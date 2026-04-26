@@ -153,6 +153,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useLiveEvents } from '@/composables/useLiveEvents'
 import { useExpansion } from '@/composables/useExpansion'
@@ -271,11 +272,9 @@ function apiBase(): string {
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
-  const token = localStorage.getItem('access_token')
-  const resp = await fetch(`${apiBase()}${path}`, {
+  const resp = await fetchWithAuth(`${apiBase()}${path}`, {
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...init,
   })
