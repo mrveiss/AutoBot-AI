@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
+from api.schemas_workflows import (
     WorkflowExportResponse,
     WorkflowImportResponse,
     WorkflowListSharesResponse,

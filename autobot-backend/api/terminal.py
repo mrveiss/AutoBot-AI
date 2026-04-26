@@ -121,7 +121,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 # Response schemas for OpenAPI documentation and response validation
-from api.schemas_common import (
+from api.schemas_terminal import (
     AdminExecuteResponse,
     CommandAssessResponse,
     SSHKeyAgentResponse,
@@ -133,13 +133,13 @@ from api.schemas_common import (
     TerminalFeaturesResponse,
     TerminalHealthResponse,
     TerminalInfoResponse,
+    TerminalInputResponse,
     TerminalSecurityPoliciesResponse,
     TerminalSessionCreateResponse,
     TerminalSessionDeleteResponse,
     TerminalSessionDetailResponse,
     TerminalSessionListResponse,
     TerminalSignalResponse,
-    TerminalInputResponse,
     TerminalStatsResponse,
     TerminalSystemStatusResponse,
 )

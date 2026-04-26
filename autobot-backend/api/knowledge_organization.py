@@ -13,11 +13,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
-    KnowledgeOrganizationCleanupResponse,
-    KnowledgeOrganizationPolicyResponse,
-    KnowledgeOrganizationStatsResponse,
-)
+from api.schemas_knowledge import KnowledgeOrganizationCleanupResponse, KnowledgeOrganizationPolicyResponse, KnowledgeOrganizationStatsResponse
 from auth_middleware import get_current_user
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base

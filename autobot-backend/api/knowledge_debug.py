@@ -11,11 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
-from api.schemas_common import (
-    KnowledgeDebugRedisResponse,
-    KnowledgeFreshStatsResponse,
-    KnowledgeRebuildIndexResponse,
-)
+from api.schemas_knowledge import KnowledgeDebugRedisResponse, KnowledgeFreshStatsResponse, KnowledgeRebuildIndexResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING

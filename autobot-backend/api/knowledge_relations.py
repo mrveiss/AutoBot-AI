@@ -19,10 +19,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
-    KnowledgeRelationResultResponse,
-    KnowledgeRelationTypesResponse,
-)
+from api.schemas_knowledge import KnowledgeRelationResultResponse, KnowledgeRelationTypesResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base

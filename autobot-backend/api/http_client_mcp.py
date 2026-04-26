@@ -43,7 +43,7 @@ from constants.network_constants import NetworkConstants
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
-from .schemas_common import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
+from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

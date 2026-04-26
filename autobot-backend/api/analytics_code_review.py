@@ -26,7 +26,7 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
     resolve_source_or_404 as _resolve_source_or_404,
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
-from api.schemas_common import (
+from api.schemas_code import (
     CodeReviewAnalyzeResponse,
     CodeReviewFeedbackResponse,
     CodeReviewFileResponse,

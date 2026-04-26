@@ -39,7 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc
 from type_defs.common import JSONObject, Metadata
 
-from .schemas_common import (
+from .schemas_code import (
     DatabaseDescribeSchemaResponse,
     DatabaseExecuteResponse,
     DatabaseListDatabasesResponse,

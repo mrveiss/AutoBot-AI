@@ -29,15 +29,15 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
+from api.schemas_agent import (
+    LLMPatternsAnalyzeResponse,
     LLMPatternsCacheOpportunitiesResponse,
     LLMPatternsCategoryDistributionResponse,
     LLMPatternsCostBreakdownResponse,
     LLMPatternsHealthResponse,
-    LLMPatternsAnalyzeResponse,
     LLMPatternsModelComparisonResponse,
-    LLMPatternsRecordResponse,
     LLMPatternsRecommendationsResponse,
+    LLMPatternsRecordResponse,
     LLMPatternsStatsResponse,
 )
 from redis.exceptions import RedisError

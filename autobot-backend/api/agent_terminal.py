@@ -238,19 +238,19 @@ from autobot_shared.redis_client import get_redis_client
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
-from api.schemas_common import (
-    AgentTerminalSessionCreateResponse,
-    AgentTerminalSessionListResponse,
-    AgentTerminalSessionDetailResponse,
-    AgentTerminalSessionDeleteResponse,
+from api.schemas_terminal import (
     AgentTerminalCommandStateResponse,
-    AgentTerminalInfoResponse,
-    AgentTerminalToolApprovalResponse,
-    AgentTerminalHostSelectionRequestResponse,
-    AgentTerminalHostSelectionGetResponse,
-    AgentTerminalHostSelectionSubmitResponse,
     AgentTerminalHostSelectionCancelResponse,
+    AgentTerminalHostSelectionGetResponse,
+    AgentTerminalHostSelectionRequestResponse,
+    AgentTerminalHostSelectionSubmitResponse,
+    AgentTerminalInfoResponse,
     AgentTerminalPendingSelectionsResponse,
+    AgentTerminalSessionCreateResponse,
+    AgentTerminalSessionDeleteResponse,
+    AgentTerminalSessionDetailResponse,
+    AgentTerminalSessionListResponse,
+    AgentTerminalToolApprovalResponse,
 )
 
 logger = logging.getLogger(__name__)

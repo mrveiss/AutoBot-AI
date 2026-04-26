@@ -34,7 +34,7 @@ from api.knowledge_models import (
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeCategoryAncestorsResponse,
     KnowledgeCategoryChildrenResponse,
     KnowledgeCategoryCreateResponse,

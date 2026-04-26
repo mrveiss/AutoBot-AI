@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
     LLMAwarenessHealthResponse,
     LLMAwarenessMetricsResponse,

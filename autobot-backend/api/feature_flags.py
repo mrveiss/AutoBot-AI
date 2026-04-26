@@ -29,11 +29,13 @@ from services.access_control_metrics import AccessControlMetrics, get_metrics_se
 from services.audit_logger import audit_log
 from services.feature_flags import EnforcementMode, FeatureFlags, get_feature_flags
 
-from .schemas_common import (
+from .schemas_code import (
     AccessControlCleanupResponse,
     AccessControlEndpointMetricsResponse,
     AccessControlMetricsResponse,
     AccessControlUserMetricsResponse,
+)
+from .schemas_system import (
     FeatureFlagEndpointRemoveResponse,
     FeatureFlagEndpointSetResponse,
     FeatureFlagEnforcementModeResponse,

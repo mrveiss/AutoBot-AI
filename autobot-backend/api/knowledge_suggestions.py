@@ -29,7 +29,7 @@ from api.knowledge_models import (
     SuggestCategoriesRequest,
     SuggestTagsRequest,
 )
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeAutoApplySuggestionsResponse,
     KnowledgeSuggestionsAllResponse,
     KnowledgeSuggestionsCategoriesResponse,

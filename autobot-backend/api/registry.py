@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter
 
-from api.schemas_common import (
+from api.schemas_workflows import (
     RegistryEndpointsResponse,
     RegistryHealthResponse,
     RegistryRouterDetailResponse,

@@ -30,10 +30,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
-    StructuredThinkingClearResponse,
-    StructuredThinkingSessionsResponse,
-)
+from api.schemas_workflows import StructuredThinkingClearResponse, StructuredThinkingSessionsResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
