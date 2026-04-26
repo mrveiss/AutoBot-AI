@@ -839,8 +839,14 @@ class CostTrackingRecordResponse(BaseModel):
     output_tokens: int
     cost_usd: float
     timestamp: str
-    session_id: Optional[str]
-    success: bool
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    endpoint: Optional[str] = None
+    latency_ms: Optional[float] = None
+    success: bool = True
+    error_message: Optional[str] = None
+    metadata: Dict[str, Any] = {}
 
 
 
