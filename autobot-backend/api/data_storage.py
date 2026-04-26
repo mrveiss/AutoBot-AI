@@ -24,7 +24,13 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
-from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    DataStorageCategoryDetailResponse,
+    DataStorageConversationsSummaryResponse,
+    DataStorageDatabasesResponse,
+    DataStorageDeleteConversationResponse,
+    DataStorageOldBackupsResponse,
+)
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = logging.getLogger(__name__)
@@ -337,7 +343,7 @@ async def get_storage_stats():
     operation="get_database_files_endpoint",
     error_code_prefix="DATA_STORAGE",
 )
-@router.get("/databases", response_model=None)
+@router.get("/databases", response_model=DataStorageDatabasesResponse)
 async def get_database_files_endpoint():
     """Get information about database files in the data directory."""
     try:
@@ -366,7 +372,7 @@ async def get_database_files_endpoint():
     operation="get_category_details",
     error_code_prefix="DATA_STORAGE",
 )
-@router.get("/category/{category_path}", response_model=None)
+@router.get("/category/{category_path}", response_model=DataStorageCategoryDetailResponse)
 async def get_category_details(
     category_path: str,
     limit: int = Query(default=100, le=1000),
@@ -523,7 +529,7 @@ async def cleanup_category(
     operation="cleanup_old_backups",
     error_code_prefix="DATA_STORAGE",
 )
-@router.post("/cleanup/old-backups", response_model=None)
+@router.post("/cleanup/old-backups", response_model=DataStorageOldBackupsResponse)
 async def cleanup_old_backups(
     dry_run: bool = Query(default=True),
     _: None = Depends(check_admin_permission),
@@ -579,7 +585,7 @@ async def cleanup_old_backups(
     operation="delete_conversation",
     error_code_prefix="DATA_STORAGE",
 )
-@router.delete("/conversations/{conversation_id}", response_model=DataResponse)
+@router.delete("/conversations/{conversation_id}", response_model=DataStorageDeleteConversationResponse)
 async def delete_conversation(
     conversation_id: str,
     _: None = Depends(check_admin_permission),
@@ -643,7 +649,7 @@ async def delete_conversation(
     operation="get_conversations_summary",
     error_code_prefix="DATA_STORAGE",
 )
-@router.get("/conversations/summary", response_model=None)
+@router.get("/conversations/summary", response_model=DataStorageConversationsSummaryResponse)
 async def get_conversations_summary():
     """Get summary of stored conversations."""
     try:

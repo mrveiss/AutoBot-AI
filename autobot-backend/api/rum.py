@@ -16,12 +16,12 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     RUMClearResponse,
     RUMConfigResponse,
     RUMDisableResponse,
     RUMEventResponse,
+    RUMExportResponse,
     RUMMetricsResponse,
     RUMStatusResponse,
 )
@@ -460,7 +460,7 @@ async def clear_rum_data():
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
-@router.get("/export", response_model=None)
+@router.get("/export", response_model=RUMExportResponse)
 async def export_rum_data():
     """Export RUM data for analysis"""
 

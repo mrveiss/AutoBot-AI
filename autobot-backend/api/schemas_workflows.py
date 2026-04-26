@@ -698,5 +698,500 @@ class StructuredThinkingSessionDetailResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# batch_jobs.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class BatchJobDeleteResponse(BaseModel):
+    """Response for DELETE /{job_id} — cancel and delete a batch job."""
+
+    status: str
+    job_id: str
+    message: str
+
+
+class BatchTemplateDeleteResponse(BaseModel):
+    """Response for DELETE /templates/{template_id}."""
+
+    status: str
+    template_id: str
+
+
+class BatchScheduleDeleteResponse(BaseModel):
+    """Response for DELETE /schedules/{schedule_id}."""
+
+    status: str
+    schedule_id: str
+
+
+class BatchJobsHealthResponse(BaseModel):
+    """Response for GET /health — batch jobs service health."""
+
+    status: str
+    service: str
+    redis_connected: bool
+    timestamp: str
+    capabilities: List[str]
+
+
+class BatchStatusResponse(BaseModel):
+    """Response for GET /status — legacy batch processor status."""
+
+    status: str
+    service: str
+    capabilities: List[str]
+    max_batch_size: int
+    timeout: int
+    timestamp: str
+
+
+class BatchLoadResponse(BaseModel):
+    """Response for POST /load — multi-endpoint batch execution."""
+
+    responses: Any
+    errors: Any
+    timing: Any
+
+
+class BatchChatInitResponse(BaseModel):
+    """Response for GET/POST /chat-init — optimized chat initialization."""
+
+    chat_sessions: Any
+    system_health: Any
+    service_health: Any
+    settings: Any
+    timing: Any
+
+
+# ---------------------------------------------------------------------------
+# advanced_control.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class AdvancedControlStreamingSessionListResponse(BaseModel):
+    """Response for GET /streaming/sessions."""
+
+    sessions: List[Any]
+    count: int
+
+
+class AdvancedControlStreamingCapabilitiesResponse(BaseModel):
+    """Response for GET /streaming/capabilities.
+
+    Shape is opaque (from get_system_capabilities()) — extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class AdvancedControlPendingTakeoversListResponse(BaseModel):
+    """Response for GET /takeover/pending."""
+
+    pending_requests: List[Any]
+    count: int
+
+
+class AdvancedControlActiveTakeoversListResponse(BaseModel):
+    """Response for GET /takeover/active."""
+
+    active_sessions: List[Any]
+    count: int
+
+
+class AdvancedControlTakeoverSystemStatusResponse(BaseModel):
+    """Response for GET /takeover/status.
+
+    Shape is opaque (from get_system_status()) — extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class AdvancedControlHealthResponse(BaseModel):
+    """Response for GET /system/health."""
+
+    status: str
+    desktop_streaming_available: bool
+    novnc_available: bool
+    active_streaming_sessions: int
+    pending_takeovers: int
+    active_takeovers: int
+    paused_tasks: int
+
+
+class AdvancedControlInfoResponse(BaseModel):
+    """Response for GET / — advanced control capabilities info."""
+
+    name: str
+    version: str
+    features: List[str]
+    endpoints: Any
+
+
+# ---------------------------------------------------------------------------
+# long_running_operations.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class LongRunningOperationMigrateResponse(BaseModel):
+    """Response for POST /migrate/existing."""
+
+    operation_id: str
+    status: str
+
+
+class LongRunningOperationStatusResponse(BaseModel):
+    """Response for GET /{operation_id} — opaque shape from _convert_operation_to_response."""
+
+    model_config = {"extra": "allow"}
+
+
+class LongRunningOperationListResponse(BaseModel):
+    """Response for GET / — list operations."""
+
+    operations: List[Any]
+    total_count: int
+    active_count: int
+    completed_count: int
+    failed_count: int
+
+
+class LongRunningOperationCancelResponse(BaseModel):
+    """Response for POST /{operation_id}/cancel."""
+
+    status: str
+    operation_id: str
+
+
+class LongRunningOperationResumeResponse(BaseModel):
+    """Response for POST /{operation_id}/resume."""
+
+    status: str
+    new_operation_id: str
+    resumed_from: str
+    original_operation_id: str
+
+
+class LongRunningOperationHealthResponse(BaseModel):
+    """Response for GET /health — long-running operations service health.
+
+    JSONResponse(503/500) paths bypass response_model; success path only.
+    """
+
+    status: str
+    active_operations: int
+    total_operations: int
+    redis_connected: bool
+    background_processor_running: bool
+
+
+# ---------------------------------------------------------------------------
+# error_resilience.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class ResilienceHealthResponse(BaseModel):
+    """Response for GET /health — system resilience health."""
+
+    status: str
+    circuit_breakers: Any
+    error_budgets: Any
+    fallback_chains: Any
+
+
+class CircuitBreakerStatusResponse(BaseModel):
+    """Response for GET /circuit-breakers — opaque shape from manager.get_status()."""
+
+    model_config = {"extra": "allow"}
+
+
+class ErrorBudgetStatusResponse(BaseModel):
+    """Response for GET /error-budgets — opaque shape from tracker.get_status()."""
+
+    model_config = {"extra": "allow"}
+
+
+class CircuitBreakerResetResponse(BaseModel):
+    """Response for POST /circuit-breakers/{service_name}/reset."""
+
+    message: str
+
+
+class ErrorBudgetResetResponse(BaseModel):
+    """Response for POST /error-budgets/{component}/reset."""
+
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# system_validation.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class SystemValidationHealthResponse(BaseModel):
+    """Response for GET /health — validation system health."""
+
+    status: str
+    message: str
+    validator_initialized: bool
+    timestamp: Optional[str] = None
+
+
+class SystemValidationQuickResponse(BaseModel):
+    """Response for GET /validate/quick."""
+
+    status: str
+    overall_score: float
+    components: Any
+    timestamp: str
+
+
+class SystemValidationComponentResponse(BaseModel):
+    """Response for GET /validate/component/{component_name}."""
+
+    component: str
+    status: str
+    score: float
+    details: Any
+    timestamp: str
+
+
+class SystemValidationRecommendationsResponse(BaseModel):
+    """Response for GET /validate/recommendations."""
+
+    total_recommendations: int
+    recommendations: List[Any]
+    timestamp: str
+
+
+class SystemValidationStatusResponse(BaseModel):
+    """Response for GET /validate/status."""
+
+    validation_system: str
+    available_validations: List[str]
+    last_validation: Optional[Any] = None
+    system_health: str
+    timestamp: str
+
+
+class SystemValidationBenchmarkResponse(BaseModel):
+    """Response for POST /validate/benchmark."""
+
+    benchmark_status: str
+    benchmarks: Any
+    overall_performance_score: float
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# sequential_thinking_mcp.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class SequentialThinkingMCPToolsResponse(BaseModel):
+    """Response for GET /mcp/tools — list of MCP tools (each has name/description/input_schema)."""
+
+    model_config = {"extra": "allow"}
+
+
+class SequentialThinkingResponse(BaseModel):
+    """Response for POST /mcp/sequential_thinking."""
+
+    success: bool
+    session_id: str
+    thought_number: int
+    total_thoughts: int
+    progress_percentage: float
+    thinking_complete: bool
+    session_thought_count: int
+    message: str
+    revision_info: Optional[Any] = None
+    branch_info: Optional[Any] = None
+    summary: Optional[Any] = None
+
+
+class SequentialThinkingSessionResponse(BaseModel):
+    """Response for GET /sessions/{session_id}."""
+
+    session_id: str
+    thought_count: int
+    thoughts: List[Any]
+    revisions: List[Any]
+    branches: List[Any]
+    started_at: Optional[str] = None
+    last_thought_at: Optional[str] = None
+
+
+class SequentialThinkingSessionListResponse(BaseModel):
+    """Response for GET /sessions — list all thinking sessions."""
+
+    session_count: int
+    sessions: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# structured_thinking_mcp.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class StructuredThinkingProcessThoughtResponse(BaseModel):
+    """Response for POST /mcp/process_thought."""
+
+    success: bool
+    session_id: str
+    thought_number: int
+    total_thoughts: int
+    progress_percentage: float
+    current_stage: str
+    thinking_complete: bool
+    stage_distribution: Any
+    session_thought_count: int
+    message: str
+    related_thoughts: Optional[List[Any]] = None
+    completion_summary: Optional[Any] = None
+
+
+# ---------------------------------------------------------------------------
+# prompts.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class PromptsListResponse(BaseModel):
+    """Response for GET / — list all prompts with defaults."""
+
+    prompts: List[Any]
+    defaults: Any
+
+
+class PromptsCacheClearResponse(BaseModel):
+    """Response for POST /cache/clear."""
+
+    status: str
+    message: str
+
+
+class PromptSaveResponse(BaseModel):
+    """Response for POST/{PUT /{prompt_id} — save or update prompt."""
+
+    id: str
+    name: str
+    type: str
+    path: str
+    content: str
+
+
+class PromptRevertResponse(BaseModel):
+    """Response for POST /{prompt_id}/revert."""
+
+    id: str
+    name: str
+    type: str
+    path: str
+    content: str
+
+
+# ---------------------------------------------------------------------------
+# registry.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class RegistryRoutersResponse(BaseModel):
+    """Response for GET /routers — all registered routers with full config.
+
+    Keyed by router name; each value is a router config dict.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# rum.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class RUMExportResponse(BaseModel):
+    """Response for GET /export — export RUM data for analysis."""
+
+    status: str
+    data: Any
+
+
+# ---------------------------------------------------------------------------
+# data_storage.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class DataStorageDeleteConversationResponse(BaseModel):
+    """Response for DELETE /conversations/{conversation_id}."""
+
+    conversation_id: str
+    files_deleted: List[str]
+    errors: List[str]
+    success: bool
+
+
+class DataStorageDatabasesResponse(BaseModel):
+    """Response for GET /databases — database files in data directory."""
+
+    databases: List[Any]
+    total_count: int
+    total_size_bytes: int
+    total_size_human: str
+
+
+class DataStorageCategoryDetailResponse(BaseModel):
+    """Response for GET /category/{category_path}."""
+
+    category: str
+    total_size_bytes: int
+    total_size_human: str
+    total_files: int
+    files: List[Any]
+    showing: int
+
+
+class DataStorageOldBackupsResponse(BaseModel):
+    """Response for POST /cleanup/old-backups."""
+
+    directories_found: List[Any]
+    total_count: int
+    bytes_freed: int
+    bytes_freed_human: str
+    dry_run: bool
+    message: str
+
+
+class DataStorageConversationsSummaryResponse(BaseModel):
+    """Response for GET /conversations/summary."""
+
+    unique_conversations: int
+    transcripts: Any
+    chats: Any
+    total_size_bytes: int
+    total_size_human: str
+
+
+# ---------------------------------------------------------------------------
+# collaboration.py schemas  (Issue #5989)
+# ---------------------------------------------------------------------------
+
+
+class SessionPresenceResponse(BaseModel):
+    """Response for GET /{session_id}/presence."""
+
+    session_id: str
+    online_users: List[Any]
+    count: int
+
+
+class SessionShareSecretResponse(BaseModel):
+    """Response for POST /{session_id}/secrets/share."""
+
+    success: bool
+    secret_id: str
+    shared_with_count: int
+
+
+# ---------------------------------------------------------------------------
 # analytics.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------

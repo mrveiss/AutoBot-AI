@@ -16,6 +16,7 @@ from api.schemas_workflows import (
     RegistryEndpointsResponse,
     RegistryHealthResponse,
     RegistryRouterDetailResponse,
+    RegistryRoutersResponse,
     RegistryTagRoutersResponse,
     RegistryTagsResponse,
     RegistryValidateResponse,
@@ -513,7 +514,7 @@ async def list_endpoints():
     operation="list_routers",
     error_code_prefix="REGISTRY",
 )
-@router.get("/routers", response_model=None)
+@router.get("/routers", response_model=RegistryRoutersResponse)
 async def list_routers():
     """List all registered routers with full configuration"""
     routers_data = {}

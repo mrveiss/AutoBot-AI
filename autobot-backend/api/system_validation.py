@@ -16,7 +16,14 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
-from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    SystemValidationBenchmarkResponse,
+    SystemValidationComponentResponse,
+    SystemValidationHealthResponse,
+    SystemValidationQuickResponse,
+    SystemValidationRecommendationsResponse,
+    SystemValidationStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +63,7 @@ class ValidationResult(BaseModel):
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=SystemValidationHealthResponse)
 async def validation_health():
     """Health check for validation system"""
     try:
@@ -125,7 +132,7 @@ async def run_comprehensive_validation(
     operation="run_quick_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/quick", response_model=None)
+@router.get("/validate/quick", response_model=SystemValidationQuickResponse)
 async def run_quick_validation():
     """Run quick system validation check"""
     try:
@@ -197,7 +204,7 @@ async def run_quick_validation():
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/component/{component_name}", response_model=None)
+@router.get("/validate/component/{component_name}", response_model=SystemValidationComponentResponse)
 async def validate_component(component_name: str):
     """Validate specific component"""
     try:
@@ -250,7 +257,7 @@ async def validate_component(component_name: str):
     operation="get_optimization_recommendations",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/recommendations", response_model=None)
+@router.get("/validate/recommendations", response_model=SystemValidationRecommendationsResponse)
 async def get_optimization_recommendations():
     """Get system optimization recommendations"""
     try:
@@ -320,7 +327,7 @@ async def get_optimization_recommendations():
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/status", response_model=None)
+@router.get("/validate/status", response_model=SystemValidationStatusResponse)
 async def get_validation_status():
     """Get current validation system status"""
     try:
@@ -357,7 +364,7 @@ async def get_validation_status():
     operation="run_performance_benchmark",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/benchmark", response_model=None)
+@router.post("/validate/benchmark", response_model=SystemValidationBenchmarkResponse)
 async def run_performance_benchmark():
     """Run performance benchmarking tests"""
     try:

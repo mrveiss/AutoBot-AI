@@ -38,7 +38,14 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    LongRunningOperationCancelResponse,
+    LongRunningOperationHealthResponse,
+    LongRunningOperationListResponse,
+    LongRunningOperationMigrateResponse,
+    LongRunningOperationResumeResponse,
+    LongRunningOperationStatusResponse,
+)
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -442,7 +449,7 @@ async def start_security_scan(
     operation="migrate_existing_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/migrate/existing", response_model=None)
+@router.post("/migrate/existing", response_model=LongRunningOperationMigrateResponse)
 async def migrate_existing_operation(
     operation_name: str,
     timeout_seconds: int,
@@ -492,7 +499,7 @@ async def migrate_existing_operation(
     operation="get_operation_status",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/{operation_id}", response_model=None)
+@router.get("/{operation_id}", response_model=LongRunningOperationStatusResponse)
 async def get_operation_status(
     operation_id: str, manager=Depends(get_operation_manager)
 ):
@@ -518,7 +525,7 @@ async def get_operation_status(
     operation="list_operations",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/", response_model=None)
+@router.get("/", response_model=LongRunningOperationListResponse)
 async def list_operations(
     status: Optional[str] = None,
     operation_type: Optional[str] = None,
@@ -577,7 +584,7 @@ async def list_operations(
     operation="cancel_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/cancel", response_model=None)
+@router.post("/{operation_id}/cancel", response_model=LongRunningOperationCancelResponse)
 async def cancel_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Cancel a running operation"""
     try:
@@ -604,7 +611,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
     operation="resume_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/resume", response_model=None)
+@router.post("/{operation_id}/resume", response_model=LongRunningOperationResumeResponse)
 async def resume_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Resume operation from latest checkpoint"""
     try:
@@ -704,7 +711,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     operation="operations_health",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=LongRunningOperationHealthResponse)
 async def operations_health():
     """Health check for long-running operations service"""
     if operation_integration_manager is None:
