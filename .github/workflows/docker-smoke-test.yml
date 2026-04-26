@@ -23,7 +23,7 @@ jobs:
         run: cp .env.example .env
 
       - name: Start services with Docker Compose
-        run: docker compose --env-file docker/.env.docker up -d
+        run: docker compose --env-file docker/.env.docker up -d --build
 
       - name: Wait for services to be healthy
         run: |
