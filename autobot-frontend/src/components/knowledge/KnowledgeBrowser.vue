@@ -190,12 +190,15 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-
-// Create scoped logger for KnowledgeBrowser
-const logger = createLogger('KnowledgeBrowser')
+import {
+  fetchMainCategories,
+  fetchFactsByCategory,
+  fetchEntriesPage,
+  fetchFolderContents,
+  fetchFactContent,
+  type MainCategory,
+} from '@/composables/knowledge/useKnowledgeBrowser'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
@@ -212,6 +215,9 @@ import KnowledgeContentViewer from './KnowledgeContentViewer.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
+
+// Create scoped logger for KnowledgeBrowser
+const logger = createLogger('KnowledgeBrowser')
 
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
@@ -270,7 +276,7 @@ const updateDebouncedSearch = useDebounce((value: string) => {
 }, 300)
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
-const mainCategories = ref<any[]>([])
+const mainCategories = ref<MainCategory[]>([])
 // Issue #5201: track backend KB connectivity so the UI can distinguish
 // "empty KB" (all counts 0, kb_connected=true) from "broken KB"
 // (kb_connected=false). Defaults to true so we don't flash the error
@@ -302,34 +308,8 @@ const entriesCursor = ref<string>('0')
 const hasMoreEntries = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
 
-// Fetch function for cursor-based pagination
-const fetchEntries = async (cursor: string) => {
-  const params = new URLSearchParams({
-    limit: '100',
-    cursor: cursor || '0'
-  })
-  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/entries?${params}`)
-
-  // Handle both cursor-based and offset-based formats
-  if (data.next_cursor !== undefined) {
-    return {
-      items: data.entries || [],
-      nextCursor: data.next_cursor || '0',
-      hasMore: data.has_more || false
-    }
-  } else if (data.offset !== undefined) {
-    const total = data.total || 0
-    const currentOffset = data.offset || 0
-    const entries = data.entries || []
-    const hasMore = (currentOffset + entries.length) < total
-    return {
-      items: entries,
-      nextCursor: hasMore ? String(currentOffset + entries.length) : '0',
-      hasMore
-    }
-  }
-  return { items: data.entries || [], nextCursor: '0', hasMore: false }
-}
+// Fetch function for cursor-based pagination — delegates to useKnowledgeBrowser
+const fetchEntries = fetchEntriesPage
 
 // Load more entries function
 const loadMore = async () => {
@@ -570,7 +550,7 @@ const selectMainCategory = (mainCatId: string) => {
 const loadMainCategories = async () => {
   kbFetchError.value = false
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
+    const data = await fetchMainCategories()
 
     if (data && data.categories) {
       mainCategories.value = data.categories
@@ -669,7 +649,7 @@ const retryLoadKnowledgeTree = () => {
 
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
-  const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
+  const data = await fetchFactsByCategory()
 
   if (data && data.categories) {
     // Build tree structure from categories
@@ -948,12 +928,7 @@ const handleImport = () => {
 
 const loadFolderContents = async (folder: TreeNode) => {
   try {
-    // Load files for this category
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/search`, {
-      query: '',
-      category: folder.category,
-      n_results: 100
-    })
+    const data = await fetchFolderContents(folder.category || '')
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -988,7 +963,7 @@ const loadFileContent = async (file: TreeNode) => {
 
       if (factKey) {
         // Fetch full fact data from backend
-        const response = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/fact/${factKey}`)
+        const response = await fetchFactContent(factKey)
 
         if (response && response.content) {
           fileContent.value = response.content
