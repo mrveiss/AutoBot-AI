@@ -392,6 +392,7 @@ import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 import apiClient from '@/utils/ApiClient'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
@@ -453,7 +454,7 @@ interface NewEntity {
 // State
 // ============================================================================
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const isCreating = ref(false)
 const errorMessage = ref('')
 const entities = ref<Entity[]>([])
@@ -886,9 +887,8 @@ function handleCleanupComplete(): void {
  * Emits 'graph-refreshed' event on successful load with entity/relation counts
  */
 async function refreshGraph(): Promise<void> {
-  isLoading.value = true
   errorMessage.value = ''
-
+  await wrap(async () => {
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
     const unifiedData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
@@ -942,9 +942,8 @@ async function refreshGraph(): Promise<void> {
   } catch (error) {
     logger.error('Failed to fetch graph data:', error)
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load graph'
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 /**

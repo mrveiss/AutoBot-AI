@@ -20,6 +20,7 @@ import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('CategoryEditModal')
 const { t } = useI18n()
@@ -58,7 +59,7 @@ const emit = defineEmits<{
 // State
 // =============================================================================
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
@@ -174,10 +175,9 @@ async function loadFactCount(categoryId: string): Promise<void> {
 async function saveChanges(): Promise<void> {
   if (!props.category) return
 
-  isLoading.value = true
   error.value = null
   successMessage.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.put<Record<string, any>>(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
@@ -198,17 +198,15 @@ async function saveChanges(): Promise<void> {
   } catch (err) {
     logger.error('Failed to update category:', err)
     error.value = err instanceof Error ? err.message : t('knowledge.modals.categoryEdit.updateFailed')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 async function deleteCategory(): Promise<void> {
   if (!props.category) return
 
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.delete<Record<string, any>>(
       `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
@@ -232,9 +230,8 @@ async function deleteCategory(): Promise<void> {
       error.value = errorMessage || t('knowledge.modals.categoryEdit.deleteFailed')
     }
     showDeleteConfirm.value = false
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 function closeModal(): void {

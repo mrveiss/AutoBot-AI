@@ -97,6 +97,7 @@ import { useUserStore, type UserProfile } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -107,7 +108,7 @@ const credentials = reactive({
   password: ''
 })
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const showPassword = ref(false)
 const loginError = ref('')
 const lockoutMessage = ref('')
@@ -183,8 +184,7 @@ async function handleLogin() {
     return
   }
 
-  isLoading.value = true
-
+  await wrap(async () => {
   try {
     // ApiClient.post() returns parsed JSON directly (#810)
     const response = await ApiClient.post(`${getApiBase()}/auth/login`, {
@@ -252,9 +252,8 @@ async function handleLogin() {
     } else {
       loginError.value = error.message || t('auth.login.unexpectedError')
     }
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 // Check authentication status on mount
