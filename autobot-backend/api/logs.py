@@ -21,11 +21,11 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
-from api.schemas_common import (
-    AgentMessageResponse,
+from api.schemas_agent import AgentMessageResponse
+from api.schemas_code import (
     LogContainerResponse,
-    LogRecentResponse,
     LogReadResponse,
+    LogRecentResponse,
     LogSearchResponse,
     LogSourcesResponse,
     LogUnifiedResponse,

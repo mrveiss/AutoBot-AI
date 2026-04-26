@@ -14,10 +14,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
-from api.schemas_common import (
-    KnowledgeSyncQueuePruneResponse,
-    KnowledgeSyncQueueResponse,
-)
+from api.schemas_knowledge import KnowledgeSyncQueuePruneResponse, KnowledgeSyncQueueResponse
 from auth_middleware import check_admin_permission
 from services.knowledge.sync_queue import (
     SyncStatus,

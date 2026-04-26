@@ -35,11 +35,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from api.schemas_common import (
-    GitMCPInfoResponse,
-    GitMCPOperationResponse,
-    GitMCPServiceStatusResponse,
-)
+from api.schemas_code import GitMCPInfoResponse, GitMCPOperationResponse, GitMCPServiceStatusResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

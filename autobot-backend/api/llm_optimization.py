@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_agent import (
     LLMAvailableModelsResponse,
     LLMBenchmarkResponse,
     LLMInferenceMetricsResponse,

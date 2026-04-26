@@ -26,7 +26,7 @@ from api.knowledge_models import (
     UpdateMetadataTemplateRequest,
     ValidateMetadataRequest,
 )
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeFactRevertResponse,
     KnowledgeFactVersionCompareResponse,
     KnowledgeFactVersionDetailResponse,

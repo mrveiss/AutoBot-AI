@@ -33,7 +33,7 @@ from api.knowledge_models import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
 )
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeCollectionAddFactsResponse,
     KnowledgeCollectionBulkDeleteResponse,
     KnowledgeCollectionCreateResponse,

@@ -17,18 +17,18 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_code import (
     TemplateCategoriesResponse,
     TemplateCreateWorkflowResponse,
     TemplateDetailResponse,
     TemplateExecuteResponse,
     TemplateListResponse,
     TemplatePreviewResponse,
-    TemplatesRootResponse,
     TemplateSearchResponse,
     TemplateSecretsUsageResponse,
     TemplateStatsResponse,
     TemplateValidationResponse,
+    TemplatesRootResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

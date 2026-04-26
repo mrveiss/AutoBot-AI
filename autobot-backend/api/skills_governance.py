@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
+from api.schemas_code import (
     SkillsApprovalDecisionResponse,
     SkillsApprovalItem,
     SkillsDraftListItem,

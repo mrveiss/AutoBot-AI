@@ -17,21 +17,21 @@ from constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_manager, cache_response
-from api.schemas_common import (
+from api.schemas_system import (
+    SystemAdminCheckResponse,
+    SystemBackupStatusResponse,
+    SystemCacheActivityResponse,
+    SystemCacheClearResponse,
+    SystemCacheCoordinatorStatsResponse,
+    SystemCacheEvictResponse,
+    SystemCacheStatsResponse,
+    SystemDynamicImportResponse,
     SystemFrontendConfigResponse,
     SystemHealthResponse,
     SystemInfoResponse,
-    SystemReloadConfigResponse,
-    SystemPromptReloadResponse,
-    SystemAdminCheckResponse,
-    SystemDynamicImportResponse,
-    SystemCacheStatsResponse,
-    SystemCacheActivityResponse,
     SystemMetricsResponse,
-    SystemCacheCoordinatorStatsResponse,
-    SystemCacheEvictResponse,
-    SystemCacheClearResponse,
-    SystemBackupStatusResponse,
+    SystemPromptReloadResponse,
+    SystemReloadConfigResponse,
 )
 
 config = get_config_manager()

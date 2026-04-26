@@ -15,11 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
-    KnowledgeAuditEventsResponse,
-    KnowledgeComplianceReportResponse,
-    KnowledgePermissionChangesResponse,
-)
+from api.schemas_knowledge import KnowledgeAuditEventsResponse, KnowledgeComplianceReportResponse, KnowledgePermissionChangesResponse
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.audit_log import AuditEventType, KnowledgeAuditLog

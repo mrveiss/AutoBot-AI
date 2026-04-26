@@ -16,7 +16,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_agent import (
     MemoryActiveTasksResponse,
     MemoryCleanupResponse,
     MemoryDocumentReferencesResponse,

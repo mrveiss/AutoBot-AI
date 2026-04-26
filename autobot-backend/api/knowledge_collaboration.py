@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeAccessInfoResponse,
     KnowledgePermissionsUpdateResponse,
     KnowledgeScopedFactsResponse,

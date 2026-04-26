@@ -28,7 +28,7 @@ from api.knowledge_models import (
     VerificationConfig,
     VerificationRequest,
 )
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeVerificationApproveResponse,
     KnowledgeVerificationConfigResponse,
     KnowledgeVerificationPendingResponse,

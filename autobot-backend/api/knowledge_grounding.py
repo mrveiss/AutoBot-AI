@@ -29,10 +29,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from api.knowledge_models import SearchRequest
-from api.schemas_common import (
+from api.schemas_knowledge import (
     KnowledgeConflictsListResponse,
-    KnowledgeGroundingStatsResponse,
     KnowledgeGroundResponseResponse,
+    KnowledgeGroundingStatsResponse,
     KnowledgeResolveConflictResponse,
     KnowledgeVerifyClaimResponse,
 )

@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_workflows import (
     StateTrackingChangeResponse,
     StateTrackingChangesResponse,
     StateTrackingExportResponse,

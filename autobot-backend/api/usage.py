@@ -23,11 +23,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from api.schemas_common import (
-    UsageByUserAllResponse,
-    UsageRecordResponse,
-    UsageSummaryResponse,
-)
+from api.schemas_common import UsageRecordResponse
+from api.schemas_analytics import UsageByUserAllResponse, UsageSummaryResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp

@@ -46,7 +46,7 @@ from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
-from .schemas_common import (
+from .schemas_code import (
     MCPRegistryBridgesResponse,
     MCPRegistryCacheInvalidateResponse,
     MCPRegistryCacheStatsResponse,

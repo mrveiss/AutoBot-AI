@@ -9,7 +9,7 @@ import tempfile
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
-from api.schemas_common import (
+from api.schemas_code import (
     VoiceDeleteResponse,
     VoiceListenResponse,
     VoiceSpeakResponse,

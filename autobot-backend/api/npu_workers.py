@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from .schemas_common import (
+from .schemas_system import (
     NPUPoolReloadResponse,
     NPUPoolWorkersResponse,
     NPUStatusResponse,

@@ -16,10 +16,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from api.schemas_common import (
-    KnowledgeCognitionSeedResponse,
-    KnowledgeCognitionStatusResponse,
-)
+from api.schemas_knowledge import KnowledgeCognitionSeedResponse, KnowledgeCognitionStatusResponse
 from auth_middleware import check_admin_permission
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder

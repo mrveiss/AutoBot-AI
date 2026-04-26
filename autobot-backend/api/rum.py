@@ -16,8 +16,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from api.schemas_common import (
-    DataResponse,
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
     RUMClearResponse,
     RUMConfigResponse,
     RUMDisableResponse,

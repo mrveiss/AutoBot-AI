@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.schemas_common import (
+from api.schemas_agent import (
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
     AgentConfigOverviewResponse,

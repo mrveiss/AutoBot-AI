@@ -16,14 +16,14 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.schemas_common import (
+from api.schemas_common import SuccessResponse
+from api.schemas_workflows import (
     ElevationAuthorizeResponse,
     ElevationExecuteResponse,
     ElevationHealthResponse,
     ElevationPendingResponse,
     ElevationRequestResponse,
     ElevationStatusResponse,
-    SuccessResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

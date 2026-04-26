@@ -29,11 +29,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
-from api.schemas_common import (
-    KnowledgeBoardCreateResponse,
-    KnowledgeBoardDeleteResponse,
-    KnowledgeBoardsListResponse,
-)
+from api.schemas_knowledge import KnowledgeBoardCreateResponse, KnowledgeBoardDeleteResponse, KnowledgeBoardsListResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base

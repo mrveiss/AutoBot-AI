@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 # Prometheus query helpers shared from monitoring module (Issue #1283)
 from api.monitoring import _query_prometheus_range
-from api.schemas_common import (
+from api.schemas_analytics import (
     MetricsDashboardResponse,
     MetricsExportResponse,
     MetricsMonitoringStartResponse,

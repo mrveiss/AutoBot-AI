@@ -13,10 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.schemas_common import (
-    KnowledgeAccessibleScopesResponse,
-    KnowledgeScopedSearchResponse,
-)
+from api.schemas_knowledge import KnowledgeAccessibleScopesResponse, KnowledgeScopedSearchResponse
 from auth_middleware import get_current_user
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
