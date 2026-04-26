@@ -62,6 +62,36 @@ export async function fetchSourceSecrets(): Promise<RegistrySecret[]> {
   return (data.secrets ?? []) as RegistrySecret[]
 }
 
+/** Payload shape for POST /api/analytics/codebase/sources/:id/share */
+export interface SourceSharePayload {
+  access: 'private' | 'shared' | 'public'
+  user_ids: string[]
+}
+
+/**
+ * Update access control for a code source.
+ * Extracted from ShareSourceModal.vue (#6070).
+ */
+export async function shareCodeSource(
+  sourceId: string,
+  payload: SourceSharePayload,
+): Promise<CodeSource> {
+  const backendUrl = await _getBackendUrl()
+  const response = await fetchWithAuth(
+    `${backendUrl}/api/analytics/codebase/sources/${sourceId}/share`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`HTTP ${response.status}: ${text}`)
+  }
+  return (await response.json()) as CodeSource
+}
+
 /**
  * Create or update a code source entry in the registry.
  * Uses POST for new entries, PUT for existing ones (when `id` is provided).
