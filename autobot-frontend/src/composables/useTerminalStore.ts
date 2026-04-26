@@ -5,6 +5,8 @@ import type { BackendConfig } from '@/types/app-config'
 // FIXED: Import NetworkConstants for default host IPs
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for TerminalStore
 const logger = createLogger('TerminalStore')
@@ -328,6 +330,48 @@ export const useTerminalStore = defineStore('terminal', () => {
     activeSessionId.value = null
   }
 
+  /**
+   * Fetch existing agent-terminal sessions for a given conversation ID.
+   * Extracted from Terminal.vue (issue #6080) — previously inline fetchWithAuth GET.
+   * Returns the sessions array from the backend response.
+   */
+  const fetchAgentTerminalSessions = async (conversationId: string): Promise<Record<string, unknown>[]> => {
+    const sessionsUrl = await appConfig.getApiUrl(
+      `${getApiBase()}/agent-terminal/sessions?conversation_id=${conversationId}`
+    )
+    const response = await fetchWithAuth(sessionsUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`)
+    }
+    const data = await response.json() as { sessions?: Record<string, unknown>[] }
+    return data.sessions ?? []
+  }
+
+  /**
+   * Create a new agent-terminal session for a chat conversation.
+   * Extracted from Terminal.vue (issue #6080) — previously inline fetchWithAuth POST.
+   * Returns the newly-created session_id string.
+   */
+  const createAgentTerminalSession = async (params: {
+    agent_id: string
+    agent_role: string
+    conversation_id: string
+    host: string
+    metadata: Record<string, unknown>
+  }): Promise<string> => {
+    const createUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions`)
+    const createResponse = await fetchWithAuth(createUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
+    if (!createResponse.ok) {
+      throw new Error(`Failed to create session: ${createResponse.status} ${createResponse.statusText}`)
+    }
+    const createData = await createResponse.json() as { session_id: string }
+    return createData.session_id
+  }
+
   return {
     // State
     sessions,
@@ -363,7 +407,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     disableAgentControl,
     requestUserTakeover,
     requestAgentControl,
-    cleanup
+    cleanup,
+    fetchAgentTerminalSessions,
+    createAgentTerminalSession
   }
 }, {
   persist: {

@@ -85,18 +85,20 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
-import { getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 import { useTabCompletion } from '@/composables/useTabCompletion'
 import CompletionSuggestions from './CompletionSuggestions.vue'
 import TerminalStatusBar from './TerminalStatusBar.vue'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { useTerminalStore } from '@/composables/useTerminalStore'
 
 const { t } = useI18n()
 
 const logger = createLogger('Terminal')
+
+// Terminal store — provides fetchAgentTerminalSessions / createAgentTerminalSession (issue #6080)
+const terminalStore = useTerminalStore()
 
 // Issue #608: Activity logger for session tracking
 const { logTerminalActivity } = useSessionActivityLogger()
@@ -220,42 +222,22 @@ const initializeSession = async (): Promise<string> => {
   try {
     if (props.chatSessionId) {
       // Chat terminal - check if session already exists
+      const sessions = await terminalStore.fetchAgentTerminalSessions(props.chatSessionId)
 
-      const sessionsUrl = await appConfig.getApiUrl(
-        `${getApiBase()}/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
-      )
-      const response = await fetchWithAuth(sessionsUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`)
-      }
-      const data = await response.json()
-
-      if (data.sessions && data.sessions.length > 0) {
+      if (sessions.length > 0) {
         // Use existing session
-        const existingSession = data.sessions[0]
+        const existingSession = sessions[0] as { session_id: string }
         sessionId.value = existingSession.session_id
         addTerminalLine('system', `Connected to existing terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'info')
       } else {
         // Create new session via AgentTerminalService
-
-        const createUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions`)
-        const createResponse = await fetchWithAuth(createUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent_id: `chat_agent_${props.chatSessionId}`,
-            agent_role: 'chat_agent',
-            conversation_id: props.chatSessionId,
-            host: 'main',
-            metadata: { created_by: 'frontend_terminal' }
-          })
+        sessionId.value = await terminalStore.createAgentTerminalSession({
+          agent_id: `chat_agent_${props.chatSessionId}`,
+          agent_role: 'chat_agent',
+          conversation_id: props.chatSessionId,
+          host: 'main',
+          metadata: { created_by: 'frontend_terminal' }
         })
-
-        if (!createResponse.ok) {
-          throw new Error(`Failed to create session: ${createResponse.status} ${createResponse.statusText}`)
-        }
-        const createData = await createResponse.json()
-        sessionId.value = createData.session_id
         addTerminalLine('system', `Created new terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'success')
       }
     } else {
