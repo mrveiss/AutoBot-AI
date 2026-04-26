@@ -23,6 +23,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('KnowledgePromptEditor')
 
@@ -54,8 +55,8 @@ interface PromptVersion {
 // State
 // =============================================================================
 
-const isLoading = ref(false)
-const isSaving = ref(false)
+const { isLoading, wrap } = useLoadingState()
+const { isLoading: isSaving, wrap: wrapSaving } = useLoadingState()
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
@@ -143,9 +144,8 @@ const categoryLabels = computed<Record<string, string>>(() => ({
 // =============================================================================
 
 async function loadPrompts(): Promise<void> {
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/prompts`)
 
@@ -155,9 +155,8 @@ async function loadPrompts(): Promise<void> {
   } catch (err) {
     logger.error('Failed to load prompts:', err)
     error.value = t('knowledge.promptEditor.errorLoadPrompts')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 function selectPrompt(prompt: Prompt): void {
@@ -176,10 +175,9 @@ function selectPrompt(prompt: Prompt): void {
 async function savePrompt(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  isSaving.value = true
   error.value = null
   successMessage.value = null
-
+  await wrapSaving(async () => {
   try {
     const data = await apiClient.put<Record<string, any>>(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
@@ -202,9 +200,8 @@ async function savePrompt(): Promise<void> {
   } catch (err) {
     logger.error('Failed to save prompt:', err)
     error.value = t('knowledge.promptEditor.errorSavePrompt')
-  } finally {
-    isSaving.value = false
   }
+  })
 }
 
 function revertChanges(): void {
@@ -241,8 +238,7 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
     return
   }
 
-  isSaving.value = true
-
+  await wrapSaving(async () => {
   try {
     const data = await apiClient.post<Record<string, any>>(
       `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
@@ -258,9 +254,8 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
   } catch (err) {
     logger.error('Failed to revert:', err)
     error.value = t('knowledge.promptEditor.errorRevert')
-  } finally {
-    isSaving.value = false
   }
+  })
 }
 
 function getCategoryIcon(category: string): string {

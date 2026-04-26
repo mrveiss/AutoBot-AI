@@ -20,6 +20,7 @@ import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -63,7 +64,7 @@ interface DocCategory {
 
 const route = useRoute()
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const categories = ref<DocCategory[]>([])
@@ -103,9 +104,8 @@ const docWordCount = computed(() => {
 // =============================================================================
 
 async function loadDocCategories(): Promise<void> {
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/system-docs/categories`)
 
@@ -119,15 +119,13 @@ async function loadDocCategories(): Promise<void> {
   } catch (err) {
     logger.error('Failed to load doc categories:', err)
     error.value = t('knowledge.systemDocs.errorLoadCategories')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 async function loadCategoryDocs(category: DocCategory): Promise<void> {
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
@@ -139,9 +137,8 @@ async function loadCategoryDocs(category: DocCategory): Promise<void> {
   } catch (err) {
     logger.error('Failed to load category docs:', err)
     error.value = t('knowledge.systemDocs.errorLoadDocs')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 async function loadDocContent(doc: SystemDoc): Promise<void> {
@@ -150,9 +147,8 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
     return
   }
 
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     const data = await apiClient.get<Record<string, any>>(
       `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
@@ -165,9 +161,8 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
   } catch (err) {
     logger.error('Failed to load doc content:', err)
     error.value = t('knowledge.systemDocs.errorLoadContent')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 function selectCategory(category: DocCategory): void {

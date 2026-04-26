@@ -265,6 +265,7 @@ import { ref, onMounted, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('ConversationFlowDashboard')
 
@@ -320,7 +321,7 @@ interface AnalysisResult {
 
 // State
 const timeRange = ref(24)
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const analysisResult = ref<AnalysisResult | null>(null)
 const selectedIntent = ref<IntentPattern | null>(null)
 
@@ -332,7 +333,7 @@ const maxHourlyCount = computed(() => {
 
 // Methods
 const runAnalysis = async () => {
-  isLoading.value = true
+  await wrap(async () => {
   try {
     const response = await fetchWithAuth(`${getApiBase()}/conversation-flow/analyze?hours=${timeRange.value}`)
     if (response.ok) {
@@ -340,9 +341,8 @@ const runAnalysis = async () => {
     }
   } catch (error) {
     logger.error('Failed to analyze conversations:', error)
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 const formatIntentName = (intentId: string): string => {

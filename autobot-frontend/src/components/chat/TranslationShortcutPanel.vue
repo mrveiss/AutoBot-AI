@@ -96,6 +96,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const { t } = useI18n()
 const logger = createLogger('TranslationShortcutPanel')
@@ -117,7 +118,7 @@ const props = defineProps<{
 // State
 const textToTranslate = ref(props.initialText || '')
 const targetLanguage = ref('Latvian')
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const detectedLanguage = ref('')
 const translationError = ref('')
 
@@ -154,9 +155,8 @@ const canTranslate = computed(() => {
 const translateText = async () => {
   if (!canTranslate.value) return
 
-  isLoading.value = true
   translationError.value = ''
-
+  await wrap(async () => {
   try {
     const result = await apiClient.post(`${getApiBase()}/translate`, {
       text: textToTranslate.value.trim(),
@@ -175,18 +175,16 @@ const translateText = async () => {
   } catch (error) {
     logger.error('Translation failed:', error)
     translationError.value = t('chat.translate.error')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 const detectLanguage = async () => {
   if (!textToTranslate.value.trim()) return
 
-  isLoading.value = true
   detectedLanguage.value = ''
   translationError.value = ''
-
+  await wrap(async () => {
   try {
     const result = await apiClient.post(`${getApiBase()}/detect-language`, {
       text: textToTranslate.value.trim(),
@@ -200,9 +198,8 @@ const detectLanguage = async () => {
   } catch (error) {
     logger.error('Language detection failed:', error)
     translationError.value = t('chat.translate.error')
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 </script>
 
