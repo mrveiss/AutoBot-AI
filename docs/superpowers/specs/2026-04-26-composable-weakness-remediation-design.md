@@ -65,7 +65,7 @@ Child issues (one per component):
 
 ---
 
-## Wave 2: fetchWithAuth Migration in Composables (11 issues)
+## Wave 2: fetchWithAuth Migration in Composables (12 issues)
 
 One issue per composable. Migration target determined by HTTP method:
 
@@ -82,8 +82,11 @@ One issue per composable. Migration target determined by HTTP method:
 | `useVoiceOutput.ts` | POST synthesize | `ApiClient` via `useLoadingState.wrap()` |
 | `useVoiceConversation.ts` | POST transcribe | `ApiClient` via `useLoadingState.wrap()` |
 | `useCommandApproval.ts` | SSE GET + POST approve | SSE stays `fetchWithAuth`; POST → `ApiClient` |
+| `useBackgroundTask.ts` | POST clear-stuck, POST analyze, GET status | `ApiClient` (POST/GET helpers); supersedes #5944 for this file |
 
 **Rule:** SSE streaming calls are exempt from `fetchWithAuth` removal — they are a legitimate use case for raw fetch.
+
+**Out of scope:** `useMultiModelCompare.ts` uses raw `fetch()` (not `fetchWithAuth`) — tracked in #5945 (29 raw fetch() locations).
 
 ---
 
@@ -251,7 +254,7 @@ Paired with a `ConfirmDialog.vue` base component registered globally or imported
 | Wave | Trackers | Children | Standalone | Total |
 |---|---|---|---|---|
 | Wave 1 | 1 | 5 | 2 | 8 |
-| Wave 2 | — | — | 11 | 11 |
+| Wave 2 | — | — | 12 | 12 |
 | Wave 3 | 3 | 44 | — | 47 |
 | Wave 4 | — | — | 1 | 1 |
-| **Total** | **4** | **49** | **14** | **67** |
+| **Total** | **4** | **49** | **15** | **68** |
