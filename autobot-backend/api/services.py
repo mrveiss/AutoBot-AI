@@ -184,6 +184,11 @@ class ServicesResponse(BaseModel):
     operation="get_services",
     error_code_prefix="SERVICES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services",
+    error_code_prefix="SERVICES",
+)
 @router.get("/services", response_model=ServicesResponse)
 async def get_services(admin_check: bool = Depends(check_admin_permission)):
     """Get list of all available services with their status.
@@ -226,6 +231,11 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
     operation="get_health",
     error_code_prefix="SERVICES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health",
+    error_code_prefix="SERVICES",
+)
 @router.get("/health", response_model=None)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Simple health check endpoint.
@@ -247,6 +257,11 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services_health",
+    error_code_prefix="SERVICES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
@@ -348,6 +363,11 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     operation="get_vms_status",
     error_code_prefix="SERVICES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vms_status",
+    error_code_prefix="SERVICES",
+)
 @router.get("/vms/status", response_model=None)
 async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -377,6 +397,11 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get VM status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_version",
+    error_code_prefix="SERVICES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_version",

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from constants.threshold_constants import QueryDefaults
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1104,6 +1105,11 @@ def _convert_suggestions_to_dicts(suggestions: list) -> list:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="natural_language_search",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.post("/search", response_model=NLSearchResponse)
 async def natural_language_search(request: NLSearchRequest):
     """
@@ -1159,6 +1165,11 @@ async def natural_language_search(request: NLSearchRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="parse_query",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.post("/parse", response_model=ParsedQueryResponse)
 async def parse_query(query: str):
     """
@@ -1185,6 +1196,11 @@ async def parse_query(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_query_suggestions",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.get("/suggestions", response_model=None)
 async def get_query_suggestions(query: str):
     """
@@ -1214,6 +1230,11 @@ async def get_query_suggestions(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="explain_code_snippet",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.post("/explain", response_model=None)
 async def explain_code_snippet(
     code: str, file_path: str = "<unknown>", line_number: int = 0
@@ -1241,6 +1262,11 @@ async def explain_code_snippet(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_supported_intents",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.get("/intents", response_model=None)
 async def list_supported_intents():
     """List all supported query intents with examples."""
@@ -1282,6 +1308,11 @@ async def list_supported_intents():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_supported_domains",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.get("/domains", response_model=None)
 async def list_supported_domains():
     """List all supported query domains with keywords."""
@@ -1293,6 +1324,11 @@ async def list_supported_domains():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
+)
 @router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint.

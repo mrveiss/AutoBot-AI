@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import get_current_user
 from services.nl_database_service import get_nl_database_service
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,11 @@ def _extract_user_id(request: Request) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="nl_query",
+    error_code_prefix="NL_DATABASE",
+)
 @router.post(
     "/query",
     response_model=NLQueryResponse,
@@ -210,6 +216,11 @@ async def nl_query(
     return NLQueryResponse(**result)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_schema",
+    error_code_prefix="NL_DATABASE",
+)
 @router.get(
     "/schema",
     summary="Get trained database schema information",
@@ -225,6 +236,11 @@ async def get_schema(
     return await service.get_schema_info()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="train_on_db",
+    error_code_prefix="NL_DATABASE",
+)
 @router.post(
     "/train",
     response_model=TrainResponse,
@@ -258,6 +274,11 @@ async def train_on_db(
     return TrainResponse(**result)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="NL_DATABASE",
+)
 @router.get(
     "/history",
     summary="Get query history",

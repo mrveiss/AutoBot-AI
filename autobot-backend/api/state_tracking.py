@@ -60,6 +60,11 @@ class ExportRequest(BaseModel):
     operation="get_state_tracking_status",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_state_tracking_status",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/status", response_model=StateTrackingStatusResponse)
 async def get_state_tracking_status():
     """Get overall state tracking system status"""
@@ -97,6 +102,11 @@ async def get_state_tracking_status():
     operation="get_state_summary",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_state_summary",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/summary", response_model=StateTrackingSummaryResponse)
 async def get_state_summary():
     """Get comprehensive state summary"""
@@ -121,6 +131,11 @@ async def get_state_summary():
     category=ErrorCategory.SERVER_ERROR,
     operation="capture_state_snapshot",
     error_code_prefix="STATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="capture_state_snapshot",
+    error_code_prefix="STATE_TRACKING",
 )
 @router.post("/snapshot", response_model=StateTrackingSnapshotResponse)
 async def capture_state_snapshot(background_tasks: BackgroundTasks):
@@ -153,6 +168,11 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
     category=ErrorCategory.SERVER_ERROR,
     operation="record_state_change",
     error_code_prefix="STATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_state_change",
+    error_code_prefix="STATE_TRACKING",
 )
 @router.post("/change", response_model=StateTrackingChangeResponse)
 async def record_state_change(request: StateChangeRequest):
@@ -205,6 +225,11 @@ async def record_state_change(request: StateChangeRequest):
     operation="get_milestones",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_milestones",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/milestones", response_model=StateTrackingMilestonesResponse)
 async def get_milestones():
     """Get project milestone status"""
@@ -233,6 +258,11 @@ async def get_milestones():
     category=ErrorCategory.SERVER_ERROR,
     operation="get_metric_trends",
     error_code_prefix="STATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metric_trends",
+    error_code_prefix="STATE_TRACKING",
 )
 @router.get("/trends/{metric}", response_model=StateTrackingTrendsResponse)
 async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
@@ -293,6 +323,11 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
     operation="get_recent_changes",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_changes",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/changes", response_model=StateTrackingChangesResponse)
 async def get_recent_changes(
     limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None
@@ -350,6 +385,11 @@ async def get_recent_changes(
     operation="generate_state_report",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_state_report",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/report", response_model=StateTrackingReportResponse)
 async def generate_state_report():
     """Generate comprehensive state tracking report"""
@@ -380,6 +420,11 @@ async def generate_state_report():
     category=ErrorCategory.SERVER_ERROR,
     operation="export_state_data",
     error_code_prefix="STATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_state_data",
+    error_code_prefix="STATE_TRACKING",
 )
 @router.post("/export", response_model=StateTrackingExportResponse)
 async def export_state_data(request: ExportRequest):
@@ -436,6 +481,11 @@ async def export_state_data(request: ExportRequest):
     operation="get_all_metrics",
     error_code_prefix="STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_metrics",
+    error_code_prefix="STATE_TRACKING",
+)
 @router.get("/metrics/all", response_model=StateTrackingMetricsAllResponse)
 async def get_all_metrics():
     """Get current values for all tracking metrics"""
@@ -463,6 +513,11 @@ async def get_all_metrics():
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase_history",
     error_code_prefix="STATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase_history",
+    error_code_prefix="STATE_TRACKING",
 )
 @router.get("/phase-history/{phase_name}", response_model=StateTrackingPhaseHistoryResponse)
 async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)):

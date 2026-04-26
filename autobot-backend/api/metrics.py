@@ -39,6 +39,11 @@ router = APIRouter()
     operation="get_workflow_metrics",
     error_code_prefix="METRICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/workflow/{workflow_id}", response_model=MetricsWorkflowResponse)
 async def get_workflow_metrics(workflow_id: str):
     """Get metrics for a specific workflow"""
@@ -53,6 +58,11 @@ async def get_workflow_metrics(workflow_id: str):
         raise HTTPException(status_code=500, detail="Failed to get workflow metrics")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_summary",
+    error_code_prefix="METRICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
@@ -74,6 +84,11 @@ async def get_performance_summary(
         raise HTTPException(status_code=500, detail="Failed to get performance summary")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_system_metrics",
+    error_code_prefix="METRICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_system_metrics",
@@ -102,6 +117,11 @@ _HISTORY_DURATION_MAP = {
 }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_metrics_history",
+    error_code_prefix="METRICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_metrics_history",
@@ -144,6 +164,11 @@ async def get_system_metrics_history(
     operation="get_system_summary",
     error_code_prefix="METRICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_summary",
+    error_code_prefix="METRICS",
+)
 @router.get("/system/summary", response_model=MetricsSystemSummaryResponse)
 async def get_system_summary(
     minutes: int = Query(
@@ -170,6 +195,11 @@ async def get_system_summary(
     operation="export_workflow_metrics",
     error_code_prefix="METRICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_workflow_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/export/workflow", response_model=MetricsExportResponse)
 async def export_workflow_metrics(
     format: str = Query(default="json", description="Export format")
@@ -189,6 +219,11 @@ async def export_workflow_metrics(
     operation="export_system_metrics",
     error_code_prefix="METRICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_system_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/export/system", response_model=MetricsExportResponse)
 async def export_system_metrics(
     format: str = Query(default="json", description="Export format")
@@ -203,6 +238,11 @@ async def export_system_metrics(
         raise HTTPException(status_code=500, detail="Failed to export system data")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_system_monitoring",
+    error_code_prefix="METRICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_system_monitoring",
@@ -229,6 +269,11 @@ async def start_system_monitoring():
     operation="stop_system_monitoring",
     error_code_prefix="METRICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_system_monitoring",
+    error_code_prefix="METRICS",
+)
 @router.post("/system/monitoring/stop", response_model=MetricsMonitoringStopResponse)
 async def stop_system_monitoring():
     """Stop continuous system monitoring"""
@@ -241,6 +286,11 @@ async def stop_system_monitoring():
         raise HTTPException(status_code=500, detail="Failed to stop monitoring")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metrics_dashboard",
+    error_code_prefix="METRICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_metrics_dashboard",

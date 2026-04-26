@@ -93,6 +93,11 @@ api_registry = APIRegistry()
     operation="get_api_endpoints",
     error_code_prefix="DEVELOPER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_api_endpoints",
+    error_code_prefix="DEVELOPER",
+)
 @router.get("/endpoints", response_model=None)
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
@@ -104,6 +109,11 @@ async def get_api_endpoints():
     return api_registry.get_all_endpoints()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_developer_config",
+    error_code_prefix="DEVELOPER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_developer_config",
@@ -126,6 +136,11 @@ async def get_developer_config():
     operation="update_developer_config",
     error_code_prefix="DEVELOPER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_developer_config",
+    error_code_prefix="DEVELOPER",
+)
 @router.post("/config", response_model=None)
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
@@ -142,6 +157,11 @@ async def update_developer_config(config: dict):
     return {"status": "success", "config": current_config}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_info",
+    error_code_prefix="DEVELOPER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",

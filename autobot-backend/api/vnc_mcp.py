@@ -310,6 +310,11 @@ class DesktopObserveStateMcpResponse(BaseModel):
     operation="get_vnc_mcp_tools",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vnc_mcp_tools",
+    error_code_prefix="VNC_MCP",
+)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_vnc_mcp_tools() -> List[MCPTool]:
     """
@@ -329,6 +334,11 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_vnc_status_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_vnc_status_mcp",
@@ -389,6 +399,11 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     operation="observe_vnc_activity_mcp",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="observe_vnc_activity_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @router.post("/mcp/observe_vnc_activity", response_model=VncObservationMcpResponse)
 async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     """
@@ -431,6 +446,11 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_vnc_context_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_vnc_context_mcp",
@@ -506,6 +526,11 @@ async def get_browser_vnc_context_mcp() -> Metadata:
     operation="record_vnc_observation",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_vnc_observation",
+    error_code_prefix="VNC_MCP",
+)
 @router.post("/observations/{vnc_type}", response_model=VncRecordObservationResponse)
 async def record_vnc_observation(vnc_type: str, observation: Metadata):
     """
@@ -571,6 +596,11 @@ class DesktopObserveStateRequest(BaseModel):
     operation="desktop_mouse_click_mcp",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_mouse_click_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @router.post("/mcp/desktop_mouse_click", response_model=DesktopClickMcpResponse)
 async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata:
     """
@@ -600,6 +630,11 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     operation="desktop_keyboard_type_mcp",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_keyboard_type_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @router.post("/mcp/desktop_keyboard_type", response_model=DesktopKeyboardTypeMcpResponse)
 async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Metadata:
     """
@@ -623,6 +658,11 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     operation="desktop_special_key_mcp",
     error_code_prefix="VNC_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_special_key_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @router.post("/mcp/desktop_special_key", response_model=DesktopSpecialKeyMcpResponse)
 async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata:
     """
@@ -641,6 +681,11 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_screenshot_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_screenshot_mcp",
@@ -711,6 +756,11 @@ async def desktop_screenshot_mcp() -> Metadata:
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_observe_state_mcp",
+    error_code_prefix="VNC_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="desktop_observe_state_mcp",

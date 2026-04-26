@@ -40,6 +40,7 @@ from api.schemas_analytics import (
     AnalyticsArchitectureConsistencyResponse,
     AnalyticsArchitectureHealthResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1258,6 +1259,11 @@ async def get_analyzer() -> ArchitectureAnalyzer:
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_architecture",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
 async def analyze_architecture(
     admin_check: bool = Depends(check_admin_permission),
@@ -1278,6 +1284,11 @@ async def analyze_architecture(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pattern_types",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/patterns", response_model=AnalyticsArchitecturePatternsResponse, summary="List available pattern types")
 async def list_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
@@ -1301,6 +1312,11 @@ async def list_pattern_types(
     return {"patterns": patterns, "total": len(patterns)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="quick_scan",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/quick-scan", response_model=AnalyticsArchitectureQuickScanResponse, summary="Quick architecture scan")
 async def quick_scan(
     admin_check: bool = Depends(check_admin_permission),
@@ -1334,6 +1350,11 @@ async def quick_scan(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_layers",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/layers", response_model=AnalyticsArchitectureLayersResponse, summary="Get architecture layers")
 async def get_layers(
     admin_check: bool = Depends(check_admin_permission),
@@ -1358,6 +1379,11 @@ async def get_layers(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_diagram",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/diagram", response_model=AnalyticsArchitectureDiagramResponse, summary="Generate architecture diagram")
 async def get_diagram(
     admin_check: bool = Depends(check_admin_permission),
@@ -1383,6 +1409,11 @@ async def get_diagram(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_consistency",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/consistency", response_model=AnalyticsArchitectureConsistencyResponse, summary="Check pattern consistency")
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
@@ -1412,6 +1443,11 @@ async def check_consistency(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ANALYTICS_ARCHITECTURE",
+)
 @router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),

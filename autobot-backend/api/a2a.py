@@ -52,6 +52,7 @@ from api.schemas_agent import (
     A2AStatsResponse,
     A2ACapabilitiesResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,11 @@ def _remote_addr(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_card",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/agent-card",
     summary="A2A Agent Card",
@@ -167,6 +173,11 @@ async def get_agent_card(request: Request) -> Dict[str, Any]:
     return card.to_dict()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_signed_agent_card",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/agent-card/signed",
     summary="Signed A2A Agent Card",
@@ -206,6 +217,11 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_task",
+    error_code_prefix="A2A",
+)
 @router.post(
     "/tasks",
     summary="Submit A2A task",
@@ -267,6 +283,11 @@ async def submit_task(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_tasks",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/tasks",
     summary="List A2A tasks",
@@ -279,6 +300,11 @@ async def list_tasks() -> list:
     return [_task_response(t) for t in manager.list_tasks()]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/tasks/{task_id}",
     summary="Get A2A task",
@@ -294,6 +320,11 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     return _task_response(task)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_task_events",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/tasks/{task_id}/stream",
     summary="Stream A2A task events (SSE)",
@@ -408,6 +439,11 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task_trace",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/tasks/{task_id}/trace",
     summary="Get A2A task audit trace",
@@ -434,6 +470,11 @@ async def get_task_trace(task_id: str) -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_task",
+    error_code_prefix="A2A",
+)
 @router.delete(
     "/tasks/{task_id}",
     summary="Cancel A2A task",
@@ -454,6 +495,11 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
     return {"id": task_id, "state": "cancelled"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="task_stats",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/stats",
     summary="A2A task statistics",
@@ -476,6 +522,11 @@ async def task_stats() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="local_capabilities",
+    error_code_prefix="A2A",
+)
 @router.get(
     "/capabilities",
     summary="Verify local capability claims",
@@ -494,6 +545,11 @@ async def local_capabilities() -> Dict[str, Any]:
     return report.to_dict()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="verify_remote_capabilities",
+    error_code_prefix="A2A",
+)
 @router.post(
     "/capabilities/verify",
     summary="Verify a remote agent's capabilities",

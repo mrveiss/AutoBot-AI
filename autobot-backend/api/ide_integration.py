@@ -32,6 +32,7 @@ from autobot_shared.redis_client import get_redis_client
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1200,6 +1201,11 @@ async def get_engine() -> IDEIntegrationEngine:
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_code",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.post("/analyze", summary="Analyze code for patterns", response_model=AnalysisResponse)
 async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     """
@@ -1211,6 +1217,11 @@ async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     return await engine.analyze(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_fixes",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.post("/quickfix", summary="Get quick fix suggestions", response_model=QuickFixResponse)
 async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     """Get available quick fixes for a diagnostic."""
@@ -1218,6 +1229,11 @@ async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     return await engine.get_quick_fixes(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hover_info",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.post("/hover", summary="Get hover information", response_model=HoverResponse)
 async def get_hover_info(request: HoverRequest) -> HoverResponse:
     """Get hover information for a position."""
@@ -1225,6 +1241,11 @@ async def get_hover_info(request: HoverRequest) -> HoverResponse:
     return await engine.get_hover(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rules",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.get("/rules", summary="Get available rules", response_model=IDERulesResponse)
 async def get_rules() -> Dict[str, Any]:
     """Get list of all available analysis rules."""
@@ -1237,6 +1258,11 @@ async def get_rules() -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.put("/config", summary="Update configuration", response_model=IDEConfigUpdateResponse)
 async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     """Update IDE integration configuration."""
@@ -1245,6 +1271,11 @@ async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     return {"updated": True}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.get("/categories", summary="Get pattern categories", response_model=IDECategoriesResponse)
 async def get_categories() -> Dict[str, Any]:
     """Get available pattern categories."""
@@ -1256,6 +1287,11 @@ async def get_categories() -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_severities",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.get("/severities", summary="Get severity levels", response_model=IDESeveritiesResponse)
 async def get_severities() -> Dict[str, Any]:
     """Get available severity levels."""
@@ -1267,6 +1303,11 @@ async def get_severities() -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_analyze",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.post("/batch-analyze", summary="Analyze multiple files", response_model=IDEBatchAnalyzeResponse)
 async def batch_analyze(
     requests: List[AnalysisRequest],
@@ -1291,6 +1332,11 @@ async def batch_analyze(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_completions",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.post("/completion", summary="Get code completions", response_model=CompletionResponse)
 async def get_completions(request: CompletionRequest) -> CompletionResponse:
     """
@@ -1305,6 +1351,11 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
     return await engine.complete(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="IDE_INTEGRATION",
+)
 @router.get("/health", summary="Health check", response_model=IDEHealthResponse)
 async def health_check() -> Dict[str, Any]:
     """Check health of the IDE integration service."""

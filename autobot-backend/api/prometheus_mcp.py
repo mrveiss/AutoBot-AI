@@ -156,6 +156,11 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
     operation="get_prometheus_mcp_tools",
     error_code_prefix="PROMETHEUS_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prometheus_mcp_tools",
+    error_code_prefix="PROMETHEUS_MCP",
+)
 @router.get("/mcp/tools", response_model=None)
 async def get_prometheus_mcp_tools() -> List[MCPTool]:
     """
@@ -411,6 +416,11 @@ TOOL_HANDLERS = {
 }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_prometheus_tool",
+    error_code_prefix="PROMETHEUS_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_prometheus_tool",

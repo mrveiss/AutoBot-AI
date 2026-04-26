@@ -34,6 +34,7 @@ from api.schemas_analytics import (
     BugPredictionRiskFactorsResponse,
     BugPredictionRecordBugResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -921,6 +922,11 @@ async def _run_bug_analysis(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_codebase",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/analyze", response_model=None)
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
@@ -1035,6 +1041,11 @@ async def _run_batched_bug_analysis(
         await _bg_manager.fail_task(task_id, str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cached_bug_prediction",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/cached", response_model=None)
 async def get_cached_bug_prediction():
     """Return the latest completed bug prediction result (#1540)."""
@@ -1049,6 +1060,11 @@ async def get_cached_bug_prediction():
     return _no_data_response("No cached bug prediction available")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_bug_analysis",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,
@@ -1067,6 +1083,11 @@ async def start_bug_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_bug_prediction_status",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/status/{task_id}", response_model=BugPredictionStatusResponse)
 async def get_bug_prediction_status(
     task_id: str,
@@ -1079,6 +1100,11 @@ async def get_bug_prediction_status(
     return task
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_stuck_bug_tasks",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
 async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
@@ -1092,6 +1118,11 @@ async def clear_stuck_bug_tasks(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_high_risk_files",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/high-risk", response_model=None)
 async def get_high_risk_files(
     admin_check: bool = Depends(check_admin_permission),
@@ -1160,6 +1191,11 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_risk",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/file/{file_path:path}", response_model=None)
 async def get_file_risk(
     file_path: str,
@@ -1257,6 +1293,11 @@ def _get_flat_heatmap_data(files: list) -> list:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_risk_heatmap",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/heatmap", response_model=None)
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
@@ -1306,6 +1347,11 @@ async def get_risk_heatmap(
         return _no_data_response("Heatmap generation failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prediction_trends",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/trends", response_model=None)
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
@@ -1419,6 +1465,11 @@ def _generate_summary_recommendations(
     return recommendations[:5]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prediction_summary",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/summary", response_model=None)
 async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
@@ -1479,6 +1530,11 @@ async def get_prediction_summary(
         return _no_data_response("Summary generation failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_risk_factors",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.get("/factors", response_model=BugPredictionRiskFactorsResponse)
 async def get_risk_factors(
     admin_check: bool = Depends(check_admin_permission),
@@ -1526,6 +1582,11 @@ def _get_factor_description(factor: RiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_bug",
+    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+)
 @router.post("/record-bug", response_model=BugPredictionRecordBugResponse)
 async def record_bug(
     admin_check: bool = Depends(check_admin_permission),

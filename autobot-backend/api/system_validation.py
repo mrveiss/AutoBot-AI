@@ -51,6 +51,11 @@ class ValidationResult(BaseModel):
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validation_health",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/health", response_model=None)
 async def validation_health():
     """Health check for validation system"""
@@ -67,6 +72,11 @@ async def validation_health():
         raise_server_error("API_0003", "Health check failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_comprehensive_validation",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_comprehensive_validation",
@@ -105,6 +115,11 @@ async def run_comprehensive_validation(
         raise_server_error("API_0003", "Validation error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_quick_validation",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_quick_validation",
@@ -177,6 +192,11 @@ async def run_quick_validation():
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_component",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/component/{component_name}", response_model=None)
 async def validate_component(component_name: str):
     """Validate specific component"""
@@ -220,6 +240,11 @@ async def validate_component(component_name: str):
         raise_server_error("API_0003", "Component validation error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_recommendations",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
@@ -290,6 +315,11 @@ async def get_optimization_recommendations():
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_status",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/status", response_model=None)
 async def get_validation_status():
     """Get current validation system status"""
@@ -317,6 +347,11 @@ async def get_validation_status():
         raise_server_error("API_0003", "Status error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_performance_benchmark",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_performance_benchmark",

@@ -191,6 +191,11 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
     operation="graph_rag_search",
     error_code_prefix="GRAPH_RAG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="graph_rag_search",
+    error_code_prefix="GRAPH_RAG",
+)
 @router.post("/search", response_model=GraphRAGSearchResponse)
 async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
@@ -248,6 +253,11 @@ async def graph_rag_search(
         raise HTTPException(status_code=500, detail="Graph-RAG search failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="graph_rag_health",
+    error_code_prefix="GRAPH_RAG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_health",
@@ -313,6 +323,11 @@ async def graph_rag_health(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="graph_rag_metrics",
+    error_code_prefix="GRAPH_RAG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_metrics",

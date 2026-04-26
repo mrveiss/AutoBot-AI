@@ -72,6 +72,11 @@ class KBQueryResponse(BaseModel):
     operation="query_knowledge_base",
     error_code_prefix="KB_LIBRARIAN",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_knowledge_base",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @router.post("/query", response_model=KBQueryResponse)
 async def query_knowledge_base(
     kb_query: KBQuery,
@@ -129,6 +134,11 @@ async def query_knowledge_base(
     operation="get_kb_librarian_status",
     error_code_prefix="KB_LIBRARIAN",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_kb_librarian_status",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @router.get("/status", response_model=None)
 async def get_kb_librarian_status(
     current_user: dict = Depends(get_current_user),
@@ -155,6 +165,11 @@ async def get_kb_librarian_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="configure_kb_librarian",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_kb_librarian",

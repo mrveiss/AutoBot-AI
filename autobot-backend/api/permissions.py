@@ -35,6 +35,7 @@ from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,11 @@ class CheckCommandResponse(BaseModel):
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_status",
+    error_code_prefix="PERMISSIONS",
+)
 @router.get("/status", response_model=PermissionStatusResponse)
 async def get_permission_status(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -175,6 +181,11 @@ async def get_permission_status(admin_check: bool = Depends(check_admin_permissi
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_mode",
+    error_code_prefix="PERMISSIONS",
+)
 @router.get("/mode", response_model=PermissionModeResponse)
 async def get_permission_mode(
     admin_check: bool = Depends(check_admin_permission),
@@ -203,6 +214,11 @@ async def get_permission_mode(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_permission_mode",
+    error_code_prefix="PERMISSIONS",
+)
 @router.put("/mode", response_model=PermissionModeResponse)
 async def set_permission_mode(
     request: PermissionModeRequest,
@@ -258,6 +274,11 @@ async def set_permission_mode(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_permission_rules",
+    error_code_prefix="PERMISSIONS",
+)
 @router.get("/rules", response_model=PermissionRulesResponse)
 async def get_permission_rules(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -303,6 +324,11 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_permission_rule",
+    error_code_prefix="PERMISSIONS",
+)
 @router.post("/rules", response_model=None)
 async def add_permission_rule(
     request: AddRuleRequest,
@@ -351,6 +377,11 @@ async def add_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_permission_rule",
+    error_code_prefix="PERMISSIONS",
+)
 @router.delete("/rules", response_model=None)
 async def remove_permission_rule(
     request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
@@ -380,6 +411,11 @@ async def remove_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_command",
+    error_code_prefix="PERMISSIONS",
+)
 @router.post("/check", response_model=CheckCommandResponse)
 async def check_command(
     request: CheckCommandRequest,
@@ -407,6 +443,11 @@ async def check_command(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_approvals",
+    error_code_prefix="PERMISSIONS",
+)
 @router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
 async def get_project_approvals(
     project_path: str,
@@ -442,6 +483,11 @@ async def get_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_project_approvals",
+    error_code_prefix="PERMISSIONS",
+)
 @router.delete("/memory/{project_path:path}", response_model=None)
 async def clear_project_approvals(
     project_path: str,
@@ -478,6 +524,11 @@ async def clear_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="store_approval",
+    error_code_prefix="PERMISSIONS",
+)
 @router.post("/memory", response_model=None)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
@@ -521,6 +572,11 @@ async def store_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_stats",
+    error_code_prefix="PERMISSIONS",
+)
 @router.get("/memory/stats", response_model=None)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """

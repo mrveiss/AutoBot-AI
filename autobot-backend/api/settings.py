@@ -128,6 +128,11 @@ class RBACInitRequest(BaseModel):
     operation="get_settings",
     error_code_prefix="SETTINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/", response_model=dict)
 async def get_settings():
     """Get application settings - now uses full config from config.yaml"""
@@ -138,6 +143,11 @@ async def get_settings():
         raise_server_error("API_0003", "Error getting settings")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_settings_explicit",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_settings_explicit",
@@ -162,6 +172,11 @@ async def get_settings_explicit():
         raise_server_error("API_0003", "Error getting settings")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_settings",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_settings",
@@ -196,6 +211,11 @@ async def save_settings(
         raise_server_error("API_0003", "Error saving settings")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_settings_explicit",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_settings_explicit",
@@ -243,6 +263,11 @@ async def save_settings_explicit(
     operation="get_backend_settings",
     error_code_prefix="SETTINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_backend_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/backend", response_model=dict)
 async def get_backend_settings():
     """Get backend-specific settings"""
@@ -253,6 +278,11 @@ async def get_backend_settings():
         raise_server_error("API_0003", "Error getting backend settings")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_backend_settings",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_backend_settings",
@@ -287,6 +317,11 @@ async def save_backend_settings(
     operation="get_full_config",
     error_code_prefix="SETTINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_full_config",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/config", response_model=dict)
 async def get_full_config():
     """Get complete application configuration"""
@@ -297,6 +332,11 @@ async def get_full_config():
         raise_server_error("API_0003", "Error getting full config")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_full_config",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_full_config",
@@ -326,6 +366,11 @@ async def save_full_config(
         raise_server_error("API_0003", "Error saving full config")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_cache",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cache",
@@ -363,6 +408,11 @@ async def clear_cache():
     category=ErrorCategory.SERVER_ERROR,
     operation="initialize_rbac",
     error_code_prefix="RBAC",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="initialize_rbac_endpoint",
+    error_code_prefix="SETTINGS",
 )
 @router.post("/rbac/initialize", response_model=TaskQueuedResponse)
 async def initialize_rbac_endpoint(
@@ -413,6 +463,11 @@ async def initialize_rbac_endpoint(
     operation="get_rbac_task_status",
     error_code_prefix="RBAC",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rbac_task_status",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/rbac/status/{task_id}", response_model=TaskStatusResponse)
 async def get_rbac_task_status(
     task_id: str,
@@ -459,6 +514,11 @@ async def get_rbac_task_status(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rbac_status",
     error_code_prefix="RBAC",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rbac_status",
+    error_code_prefix="SETTINGS",
 )
 @router.get("/rbac/status", response_model=RBACStatusResponse)
 async def get_rbac_status(
@@ -515,6 +575,11 @@ class SystemUpdateRequest(BaseModel):
     category=ErrorCategory.SERVER_ERROR,
     operation="run_system_update",
     error_code_prefix="UPDATES",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_system_update_endpoint",
+    error_code_prefix="SETTINGS",
 )
 @router.post("/updates/run", response_model=TaskQueuedResponse)
 async def run_system_update_endpoint(
@@ -583,6 +648,11 @@ async def run_system_update_endpoint(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_update_task_status",
     error_code_prefix="UPDATES",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_update_task_status",
+    error_code_prefix="SETTINGS",
 )
 @router.get("/updates/status/{task_id}", response_model=TaskStatusResponse)
 async def get_update_task_status(
@@ -673,6 +743,11 @@ def _check_celery_worker_available() -> tuple[bool, str]:
     operation="check_celery_health",
     error_code_prefix="UPDATES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_celery_worker_status",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/updates/worker-status", response_model=WorkerStatusResponse)
 async def check_celery_worker_status(
     _: None = Depends(check_admin_permission),
@@ -695,6 +770,11 @@ async def check_celery_worker_status(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_available_updates",
     error_code_prefix="UPDATES",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_updates_endpoint",
+    error_code_prefix="SETTINGS",
 )
 @router.post("/updates/check", response_model=TaskQueuedResponse)
 async def check_updates_endpoint(
@@ -747,6 +827,11 @@ async def check_updates_endpoint(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_update_status",
     error_code_prefix="UPDATES",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_update_status",
+    error_code_prefix="SETTINGS",
 )
 @router.get("/updates/status", response_model=UpdateStatusResponse)
 async def get_update_status(
@@ -903,6 +988,11 @@ def _count_unchanged_keys(incoming: dict, changed: dict) -> int:
     operation="sync_config",
     error_code_prefix="SETTINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_config",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/sync", response_model=ConfigSyncResponse)
 async def sync_config(
     request: ConfigSyncRequest,
@@ -1024,6 +1114,11 @@ class HardwarePriorityResponse(BaseModel):
     changed: dict
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_hardware_priority",
+    error_code_prefix="SETTINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_hardware_priority",

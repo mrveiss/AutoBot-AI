@@ -30,6 +30,7 @@ from models.heartbeat import (
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -126,6 +127,11 @@ class HeartbeatRunResponse(BaseModel):
     events: List[RunEventResponse] = []
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_config",
+    error_code_prefix="HEARTBEAT",
+)
 @router.get("/{agent_id}/config", response_model=HeartbeatConfigResponse)
 async def get_config(
     agent_id: str,
@@ -138,6 +144,11 @@ async def get_config(
     return _state_to_response(state)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="HEARTBEAT",
+)
 @router.put("/{agent_id}/config", response_model=HeartbeatConfigResponse)
 async def update_config(
     agent_id: str,
@@ -163,6 +174,11 @@ async def update_config(
     return _state_to_response(state)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_session",
+    error_code_prefix="HEARTBEAT",
+)
 @router.patch("/{agent_id}/session", response_model=HeartbeatConfigResponse)
 async def update_session(
     agent_id: str,
@@ -183,6 +199,11 @@ async def update_session(
     return _state_to_response(state)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_runs",
+    error_code_prefix="HEARTBEAT",
+)
 @router.get("/{agent_id}/runs", response_model=List[HeartbeatRunResponse])
 async def list_runs(
     agent_id: str,
@@ -203,6 +224,11 @@ async def list_runs(
     return [_run_to_response(r) for r in result.scalars().all()]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_run",
+    error_code_prefix="HEARTBEAT",
+)
 @router.get("/{agent_id}/runs/{run_id}", response_model=HeartbeatRunResponse)
 async def get_run(
     agent_id: str,
@@ -226,6 +252,11 @@ async def get_run(
     return _run_to_response(run)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_wakeup",
+    error_code_prefix="HEARTBEAT",
+)
 @router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=None)
 async def request_wakeup(
     agent_id: str,
@@ -243,6 +274,11 @@ async def request_wakeup(
     return {"id": req_id, "agent_id": agent_id, "status": "queued"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_wakeup_requests",
+    error_code_prefix="HEARTBEAT",
+)
 @router.get("/{agent_id}/wakeup", response_model=List[WakeupRequestResponse])
 async def list_wakeup_requests(
     agent_id: str,
@@ -258,6 +294,11 @@ async def list_wakeup_requests(
     return [_wakeup_to_response(r) for r in result.scalars().all()]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_manual",
+    error_code_prefix="HEARTBEAT",
+)
 @router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=None)
 async def trigger_manual(
     agent_id: str,

@@ -399,6 +399,11 @@ def get_agent_terminal_service(
     operation="create_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/sessions", response_model=AgentTerminalSessionCreateResponse)
 async def create_agent_terminal_session(
     current_user: dict = Depends(get_current_user),
@@ -454,6 +459,11 @@ async def create_agent_terminal_session(
     operation="list_agent_terminal_sessions",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_terminal_sessions",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.get("/sessions", response_model=AgentTerminalSessionListResponse)
 async def list_agent_terminal_sessions(
     current_user: dict = Depends(get_current_user),
@@ -503,6 +513,11 @@ async def list_agent_terminal_sessions(
     operation="get_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.get("/sessions/{session_id}", response_model=AgentTerminalSessionDetailResponse)
 async def get_agent_terminal_session(
     session_id: str,
@@ -530,6 +545,11 @@ async def get_agent_terminal_session(
     operation="delete_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.delete("/sessions/{session_id}", response_model=AgentTerminalSessionDeleteResponse)
 async def delete_agent_terminal_session(
     session_id: str,
@@ -552,6 +572,11 @@ async def delete_agent_terminal_session(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_agent_command",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_agent_command",
@@ -590,6 +615,11 @@ async def execute_agent_command(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_agent_command",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_agent_command",
@@ -636,6 +666,11 @@ async def approve_agent_command(
     operation="submit_tool_approval",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_tool_approval",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/tools/approve/{approval_id}", response_model=AgentTerminalToolApprovalResponse)
 async def submit_tool_approval(
     approval_id: str,
@@ -675,6 +710,11 @@ async def submit_tool_approval(
     operation="interrupt_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="interrupt_agent_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/sessions/{session_id}/interrupt", response_model=None)
 async def interrupt_agent_session(
     session_id: str,
@@ -706,6 +746,11 @@ async def interrupt_agent_session(
     operation="resume_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_agent_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/sessions/{session_id}/resume", response_model=None)
 async def resume_agent_session(
     session_id: str,
@@ -723,6 +768,11 @@ async def resume_agent_session(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_command_state",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_state",
@@ -801,6 +851,11 @@ async def get_command_state(
     operation="agent_terminal_info",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="agent_terminal_info",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.get("/", response_model=AgentTerminalInfoResponse)
 async def agent_terminal_info(
     current_user: dict = Depends(get_current_user),
@@ -870,6 +925,11 @@ _pending_host_selections: Dict[str, Dict] = {}
     operation="request_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
 async def request_host_selection(
     current_user: dict = Depends(get_current_user),
@@ -924,6 +984,11 @@ async def request_host_selection(
     operation="get_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.get("/host-selection/{request_id}", response_model=AgentTerminalHostSelectionGetResponse)
 async def get_host_selection(
     request_id: str,
@@ -958,6 +1023,11 @@ async def get_host_selection(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_host_selection",
@@ -1033,6 +1103,11 @@ async def submit_host_selection(
     operation="cancel_host_selection",
     error_code_prefix="AGENT_TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_host_selection",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @router.post("/host-selection/{request_id}/cancel", response_model=AgentTerminalHostSelectionCancelResponse)
 async def cancel_host_selection(
     request_id: str,
@@ -1070,6 +1145,11 @@ async def cancel_host_selection(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pending_host_selections",
+    error_code_prefix="AGENT_TERMINAL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pending_host_selections",

@@ -42,6 +42,11 @@ class SavedReportRequest(BaseModel):
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_report",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.post("/reports/save", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -67,6 +72,11 @@ async def save_report(
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_saved_reports",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.get("/reports/saved", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -87,6 +97,11 @@ async def list_saved_reports(
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_saved_report",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.get("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -113,6 +128,11 @@ async def get_saved_report(
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_saved_report",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.put("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -145,6 +165,11 @@ async def update_saved_report(
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_saved_report",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.delete("/reports/saved/{report_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -171,6 +196,11 @@ async def delete_saved_report(
 # =========================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_saved_report",
+    error_code_prefix="BI_EXPORT_ENDPOINTS",
+)
 @router.post("/reports/saved/{report_id}/run", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

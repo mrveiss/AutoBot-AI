@@ -246,6 +246,11 @@ def _build_extraction_response(
     operation="entity_extraction",
     error_code_prefix="ENTITY_EXTRACT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="extract_entities",
+    error_code_prefix="ENTITY_EXTRACTION",
+)
 @router.post("/extract", response_model=EntityExtractionResponse)
 async def extract_entities(
     extraction_request: EntityExtractionRequest = Body(...),
@@ -382,6 +387,11 @@ def _process_extraction_results(
     operation="batch_entity_extraction",
     error_code_prefix="ENTITY_EXTRACT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="extract_entities_batch",
+    error_code_prefix="ENTITY_EXTRACTION",
+)
 @router.post("/extract-batch", response_model=BatchExtractionResponse)
 async def extract_entities_batch(
     batch_request: BatchExtractionRequest = Body(...),
@@ -451,6 +461,11 @@ async def extract_entities_batch(
     category=ErrorCategory.SERVER_ERROR,
     operation="entity_extraction_health",
     error_code_prefix="ENTITY_EXTRACT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="entity_extraction_health",
+    error_code_prefix="ENTITY_EXTRACTION",
 )
 @router.get("/extract/health", response_model=HealthResponse)
 async def entity_extraction_health(

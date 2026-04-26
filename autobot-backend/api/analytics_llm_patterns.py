@@ -996,6 +996,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 # =============================================================================
 
 import threading
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _analyzer: Optional[LLMPatternAnalyzer] = None
 _analyzer_lock = threading.Lock()
@@ -1017,6 +1018,11 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/health", response_model=LLMPatternsHealthResponse)
 async def get_health():
     """Get LLM pattern analyzer health status.
@@ -1045,6 +1051,11 @@ async def get_health():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_prompt",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)
 async def analyze_prompt(request: PromptAnalysisRequest):
     """
@@ -1056,6 +1067,11 @@ async def analyze_prompt(request: PromptAnalysisRequest):
     return await analyzer.analyze_prompt(request.prompt, request.model)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_usage",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.post("/record", response_model=LLMPatternsRecordResponse)
 async def record_usage(request: UsageRecordRequest):
     """
@@ -1067,6 +1083,11 @@ async def record_usage(request: UsageRecordRequest):
     return await analyzer.record_usage(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_usage_stats",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/stats", response_model=LLMPatternsStatsResponse)
 async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     """
@@ -1078,6 +1099,11 @@ async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     return await analyzer.get_usage_stats(days)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_opportunities",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/cache-opportunities", response_model=LLMPatternsCacheOpportunitiesResponse)
 async def get_cache_opportunities(
     min_occurrences: int = Query(default=3, ge=2, le=100)
@@ -1097,6 +1123,11 @@ async def get_cache_opportunities(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recommendations",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/recommendations", response_model=LLMPatternsRecommendationsResponse)
 async def get_recommendations():
     """
@@ -1108,6 +1139,11 @@ async def get_recommendations():
     return {"recommendations": await analyzer.get_optimization_recommendations()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_model_comparison",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/model-comparison", response_model=LLMPatternsModelComparisonResponse)
 async def get_model_comparison():
     """
@@ -1119,6 +1155,11 @@ async def get_model_comparison():
     return {"models": await analyzer.get_model_comparison(), "period_days": 7}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_distribution",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/category-distribution", response_model=LLMPatternsCategoryDistributionResponse)
 async def get_category_distribution():
     """
@@ -1130,6 +1171,11 @@ async def get_category_distribution():
     return await analyzer.get_category_distribution()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_breakdown",
+    error_code_prefix="ANALYTICS_LLM_PATTERNS",
+)
 @router.get("/cost-breakdown", response_model=LLMPatternsCostBreakdownResponse)
 async def get_cost_breakdown(days: int = Query(default=7, ge=1, le=30)):
     """

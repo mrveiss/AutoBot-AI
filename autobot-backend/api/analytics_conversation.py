@@ -787,6 +787,11 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     operation="analyze_conversations",
     error_code_prefix="CONVFLOW",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_conversations",
+    error_code_prefix="ANALYTICS_CONVERSATION",
+)
 @router.get("/analyze", response_model=ConversationAnalysisResult)
 async def analyze_conversations(
     hours: int = Query(
@@ -841,6 +846,11 @@ async def analyze_conversations(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_intent_stats",
     error_code_prefix="CONVFLOW",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_intent_stats",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
 @router.get("/intents", response_model=None)
 async def get_intent_stats(
@@ -904,6 +914,11 @@ async def get_intent_stats(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_flow_paths",
     error_code_prefix="CONVFLOW",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_flow_paths",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
 @router.get("/flows", response_model=None)
 async def get_flow_paths(
@@ -973,6 +988,11 @@ async def get_flow_paths(
     operation="get_bottlenecks",
     error_code_prefix="CONVFLOW",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_bottlenecks",
+    error_code_prefix="ANALYTICS_CONVERSATION",
+)
 @router.get("/bottlenecks", response_model=None)
 async def get_bottlenecks(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
@@ -1011,6 +1031,11 @@ async def get_bottlenecks(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hourly_distribution",
     error_code_prefix="CONVFLOW",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hourly_distribution",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
 @router.get("/distribution", response_model=None)
 async def get_hourly_distribution(
@@ -1055,6 +1080,11 @@ async def get_hourly_distribution(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_intent",
     error_code_prefix="CONVFLOW",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_intent",
+    error_code_prefix="ANALYTICS_CONVERSATION",
 )
 @router.post("/detect-intent", response_model=None)
 async def detect_intent(

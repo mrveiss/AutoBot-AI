@@ -220,6 +220,11 @@ class SequentialThinkingRequest(BaseModel):
     operation="get_sequential_thinking_mcp_tools",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sequential_thinking_mcp_tools",
+    error_code_prefix="SEQUENTIAL_THINKING_MCP",
+)
 @router.get("/mcp/tools", response_model=None)
 async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     """
@@ -266,6 +271,11 @@ def _calculate_session_summary(session_thoughts: list, thought_number: int) -> d
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sequential_thinking_mcp",
+    error_code_prefix="SEQUENTIAL_THINKING_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sequential_thinking_mcp",
@@ -333,6 +343,11 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
     operation="get_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_thinking_session",
+    error_code_prefix="SEQUENTIAL_THINKING_MCP",
+)
 @router.get("/sessions/{session_id}", response_model=None)
 async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
@@ -363,6 +378,11 @@ async def get_thinking_session(session_id: str) -> Metadata:
     operation="clear_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_thinking_session",
+    error_code_prefix="SEQUENTIAL_THINKING_MCP",
+)
 @router.delete("/sessions/{session_id}", response_model=DataResponse)
 async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
@@ -383,6 +403,11 @@ async def clear_thinking_session(session_id: str) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_thinking_sessions",
+    error_code_prefix="SEQUENTIAL_THINKING_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_thinking_sessions",

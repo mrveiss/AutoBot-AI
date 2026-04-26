@@ -34,6 +34,7 @@ from api.schemas_analytics import (
     PerformanceCategoriesResponse,
     PerformanceHotspotsResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +543,11 @@ def _calculate_analysis_score(
     return critical, high, medium, low, score
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_path",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/analyze", response_model=DataResponse)
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
@@ -605,6 +611,11 @@ async def analyze_path(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_content",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.post("/analyze-content", response_model=List[PerformanceAnalyzeContentResponse])
 async def analyze_content(
     content: str,
@@ -629,6 +640,11 @@ async def analyze_content(
     return issues
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_patterns",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/patterns", response_model=List[PerformancePatternsListResponse])
 async def list_patterns(
     admin_check: bool = Depends(check_admin_permission),
@@ -640,6 +656,11 @@ async def list_patterns(
     return list(PERFORMANCE_PATTERNS.values())
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/patterns/{pattern_id}", response_model=PerformancePatternDetailResponse)
 async def get_pattern(
     pattern_id: str,
@@ -654,6 +675,11 @@ async def get_pattern(
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_pattern",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.post("/patterns/{pattern_id}/toggle", response_model=PerformancePatternToggleResponse)
 async def toggle_pattern(
     pattern_id: str,
@@ -675,6 +701,11 @@ async def toggle_pattern(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/history", response_model=List[PerformanceHistoryResponse])
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
@@ -688,6 +719,11 @@ async def get_history(
         return list(_analysis_history[:limit])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_summary",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/summary", response_model=PerformanceSummaryResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
@@ -748,6 +784,11 @@ async def get_summary(
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/categories", response_model=List[PerformanceCategoriesResponse])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
@@ -789,6 +830,11 @@ async def get_categories(
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hotspots",
+    error_code_prefix="ANALYTICS_PERFORMANCE",
+)
 @router.get("/hotspots", response_model=List[PerformanceHotspotsResponse])
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=50),

@@ -159,6 +159,11 @@ class DashboardGenerateRequest(BaseModel):
     operation="get_dashboard_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_status",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @router.get("/status", response_model=DataResponse)
 async def get_dashboard_status():
     """Get validation dashboard service status"""
@@ -189,6 +194,11 @@ async def get_dashboard_status():
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_report",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_report",
@@ -242,6 +252,11 @@ async def get_validation_report():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_html",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_html",
@@ -305,6 +320,11 @@ async def get_dashboard_html():
     operation="get_dashboard_file",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_file",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @router.get("/dashboard/file", response_model=None)
 async def get_dashboard_file():
     """Get dashboard HTML file for download"""
@@ -333,6 +353,11 @@ async def get_dashboard_file():
         raise_server_error("API_0003", "File system error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_dashboard",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_dashboard",
@@ -400,6 +425,11 @@ async def generate_dashboard(
     operation="get_dashboard_metrics",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_metrics",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @router.get("/metrics", response_model=ValidationDashboardMetricsResponse)
 async def get_dashboard_metrics():
     """Get dashboard-specific metrics"""
@@ -461,6 +491,11 @@ async def get_dashboard_metrics():
     operation="get_trend_data",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trend_data",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @router.get("/trends", response_model=ValidationDashboardTrendsResponse)
 async def get_trend_data():
     """Get trend data for charts"""
@@ -486,6 +521,11 @@ async def get_trend_data():
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_alerts",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_alerts",
@@ -525,6 +565,11 @@ async def get_system_alerts():
         raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_recommendations",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_recommendations",
@@ -573,6 +618,11 @@ async def get_system_recommendations():
 # Use /api/system/health?detailed=true for comprehensive status
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="judge_workflow_step",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="judge_workflow_step",
@@ -635,6 +685,11 @@ async def judge_workflow_step(request: dict):
     operation="judge_agent_response",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="judge_agent_response",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @router.post("/judge_agent_response", response_model=ValidationJudgmentResponse)
 async def judge_agent_response(request: dict):
     """Use LLM judges to evaluate an agent response"""
@@ -690,6 +745,11 @@ async def judge_agent_response(request: dict):
         raise_validation_error("API_0001", "Invalid agent response data")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_judge_status",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_judge_status",

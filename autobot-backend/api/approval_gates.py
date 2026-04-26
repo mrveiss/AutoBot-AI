@@ -22,6 +22,7 @@ from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -177,6 +178,11 @@ def _to_response(approval) -> ApprovalResponse:
 # -- Endpoints ---------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_approval",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates",
     response_model=ApprovalResponse,
@@ -202,6 +208,11 @@ async def create_approval(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_approvals",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.get(
     "/approval-gates",
     response_model=List[ApprovalResponse],
@@ -228,6 +239,11 @@ async def list_approvals(
     return [_to_response(a) for a in approvals]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_approval",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.get(
     "/approval-gates/{approval_id}",
     response_model=ApprovalResponse,
@@ -248,6 +264,11 @@ async def get_approval(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/approve",
     response_model=ApprovalResponse,
@@ -275,6 +296,11 @@ async def approve(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reject",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/reject",
     response_model=ApprovalResponse,
@@ -302,6 +328,11 @@ async def reject(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_revision",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/request-revision",
     response_model=ApprovalResponse,
@@ -329,6 +360,11 @@ async def request_revision(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resubmit",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/resubmit",
     response_model=ApprovalResponse,
@@ -355,6 +391,11 @@ async def resubmit(
     return _to_response(approval)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_comment",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/comments",
     response_model=CommentResponse,
@@ -391,6 +432,11 @@ async def add_comment(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="link_task",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.post(
     "/approval-gates/{approval_id}/tasks",
     response_model=TaskApprovalLinkResponse,
@@ -423,6 +469,11 @@ async def link_task(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unlink_task",
+    error_code_prefix="APPROVAL_GATES",
+)
 @router.delete(
     "/approval-gates/{approval_id}/tasks/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,

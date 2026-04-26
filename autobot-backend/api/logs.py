@@ -409,6 +409,11 @@ async def _get_container_log_sources() -> List[Metadata]:
     error_code_prefix="LOGS",
 )
 # Issue #552: Fixed duplicate /logs prefix - router already mounted at /api/logs
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_log_sources",
+    error_code_prefix="LOGS",
+)
 @router.get("/sources", response_model=LogSourcesResponse)
 async def get_log_sources(admin_check: bool = Depends(check_admin_permission)):
     """Get all available log sources (files + Docker containers) (Issue #315 - refactored).
@@ -476,6 +481,11 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
     operation="get_recent_logs",
     error_code_prefix="LOGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/recent", response_model=LogRecentResponse)
 async def get_recent_logs(
     limit: int = 100,
@@ -515,6 +525,11 @@ async def get_recent_logs(
     operation="list_logs",
     error_code_prefix="LOGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/list", response_model=None)
 async def list_logs(
     admin_check: bool = Depends(check_admin_permission),
@@ -531,6 +546,11 @@ async def list_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_log",
+    error_code_prefix="LOGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="read_log",
@@ -657,6 +677,11 @@ def _parse_and_limit_container_output(
     operation="read_container_logs",
     error_code_prefix="LOGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_container_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/container/{service}", response_model=LogContainerResponse)
 async def read_container_logs(
     service: str,
@@ -762,6 +787,11 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     operation="get_unified_logs",
     error_code_prefix="LOGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/unified", response_model=LogUnifiedResponse)
 async def get_unified_logs(
     admin_check: bool = Depends(check_admin_permission),
@@ -838,6 +868,11 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     return parsed
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_log",
+    error_code_prefix="LOGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_log",
@@ -971,6 +1006,11 @@ async def _search_single_log_file(
     operation="search_logs",
     error_code_prefix="LOGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/search", response_model=LogSearchResponse)
 async def search_logs(
     admin_check: bool = Depends(check_admin_permission),
@@ -1023,6 +1063,11 @@ async def search_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_log",
+    error_code_prefix="LOGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_log",

@@ -46,6 +46,11 @@ class RagFeedbackRequest(BaseModel):
     user_id: Optional[str] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_rag_feedback",
+    error_code_prefix="KNOWLEDGE_RAG_FEEDBACK",
+)
 @router.post("/rag-feedback", response_model=RagFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

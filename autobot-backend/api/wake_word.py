@@ -71,6 +71,11 @@ class ReportFeedbackRequest(BaseModel):
     operation="check_wake_word",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_wake_word",
+    error_code_prefix="WAKE_WORD",
+)
 @router.post("/check", response_model=WakeWordCheckResponse)
 async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckResponse:
     """
@@ -99,6 +104,11 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     operation="get_wake_words",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_wake_words",
+    error_code_prefix="WAKE_WORD",
+)
 @router.get("/words", response_model=None)
 async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
@@ -109,6 +119,11 @@ async def get_wake_words() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_wake_word",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_wake_word",
@@ -134,6 +149,11 @@ async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_wake_word",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_wake_word",
@@ -168,6 +188,11 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     operation="get_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_wake_word_config",
+    error_code_prefix="WAKE_WORD",
+)
 @router.get("/config", response_model=None)
 async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
@@ -175,6 +200,11 @@ async def get_wake_word_config() -> Metadata:
     return detector.get_config()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_wake_word_config",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_wake_word_config",
@@ -216,6 +246,11 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     operation="get_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_wake_word_stats",
+    error_code_prefix="WAKE_WORD",
+)
 @router.get("/stats", response_model=None)
 async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
@@ -223,6 +258,11 @@ async def get_wake_word_stats() -> Metadata:
     return detector.get_stats()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_wake_word_stats",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_wake_word_stats",
@@ -240,6 +280,11 @@ async def reset_wake_word_stats() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="report_detection_feedback",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="report_detection_feedback",
@@ -271,6 +316,11 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
     operation="enable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_wake_word",
+    error_code_prefix="WAKE_WORD",
+)
 @router.post("/enable", response_model=DataResponse)
 async def enable_wake_word() -> Metadata:
     """Enable wake word detection"""
@@ -283,6 +333,11 @@ async def enable_wake_word() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_wake_word",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_wake_word",
@@ -310,6 +365,11 @@ async def disable_wake_word() -> Metadata:
     operation="start_listening",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_listening",
+    error_code_prefix="WAKE_WORD",
+)
 @router.post("/listening/start", response_model=DataResponse)
 async def start_listening() -> Metadata:
     """
@@ -332,6 +392,11 @@ async def start_listening() -> Metadata:
     operation="stop_listening",
     error_code_prefix="WAKE_WORD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_listening",
+    error_code_prefix="WAKE_WORD",
+)
 @router.post("/listening/stop", response_model=DataResponse)
 async def stop_listening() -> Metadata:
     """Stop the always-on background listening loop."""
@@ -344,6 +409,11 @@ async def stop_listening() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_listening_status",
+    error_code_prefix="WAKE_WORD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_listening_status",

@@ -137,6 +137,11 @@ class MarkdownReferenceRequest(BaseModel):
     operation="get_memory_statistics",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_statistics",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.get("/statistics", response_model=MemoryStatisticsResponse)
 async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     """Get comprehensive memory and task execution statistics.
@@ -171,6 +176,11 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_task_history",
     error_code_prefix="MEMORY",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task_history",
+    error_code_prefix="ENHANCED_MEMORY",
 )
 @router.get("/tasks/history", response_model=MemoryTaskHistoryResponse)
 async def get_task_history(
@@ -215,6 +225,11 @@ async def get_task_history(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_task",
     error_code_prefix="MEMORY",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_task",
+    error_code_prefix="ENHANCED_MEMORY",
 )
 @router.post("/tasks", response_model=MemoryTaskCreateResponse)
 async def create_task(request: TaskCreateRequest):
@@ -272,6 +287,11 @@ async def create_task(request: TaskCreateRequest):
     operation="update_task",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_task",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.put("/tasks/{task_id}", response_model=MemoryTaskUpdateResponse)
 async def update_task(task_id: str, request: TaskUpdateRequest):
     """Update task status and information.
@@ -323,6 +343,11 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
     operation="add_markdown_reference",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_markdown_reference",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.post("/tasks/{task_id}/markdown-reference", response_model=MemoryMarkdownReferenceResponse)
 async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest):
     """Add markdown file reference to a task.
@@ -369,6 +394,11 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
     operation="scan_markdown_system",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scan_markdown_system",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.get("/markdown/scan", response_model=MemoryMarkdownScanResponse)
 async def scan_markdown_system():
     """Initialize and scan markdown reference system.
@@ -392,6 +422,11 @@ async def scan_markdown_system():
     category=ErrorCategory.SERVER_ERROR,
     operation="search_markdown",
     error_code_prefix="MEMORY",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_markdown",
+    error_code_prefix="ENHANCED_MEMORY",
 )
 @router.get("/markdown/search", response_model=MemoryMarkdownSearchResponse)
 async def search_markdown(
@@ -427,6 +462,11 @@ async def search_markdown(
     operation="get_document_references",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_document_references",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.get("/markdown/{file_path:path}/references", response_model=MemoryDocumentReferencesResponse)
 async def get_document_references(file_path: str):
     """Get all references for a specific markdown document.
@@ -454,6 +494,11 @@ async def get_document_references(file_path: str):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_cache_stats",
     error_code_prefix="MEMORY",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_cache_stats",
+    error_code_prefix="ENHANCED_MEMORY",
 )
 @router.get("/embeddings/cache-stats", response_model=MemoryEmbeddingCacheStatsResponse)
 async def get_embedding_cache_stats():
@@ -484,6 +529,11 @@ async def get_embedding_cache_stats():
     operation="cleanup_old_data",
     error_code_prefix="MEMORY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_old_data",
+    error_code_prefix="ENHANCED_MEMORY",
+)
 @router.delete("/cleanup", response_model=MemoryCleanupResponse)
 async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     """Clean up old task records and cached data.
@@ -510,6 +560,11 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_tasks",
     error_code_prefix="MEMORY",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_tasks",
+    error_code_prefix="ENHANCED_MEMORY",
 )
 @router.get("/active-tasks", response_model=MemoryActiveTasksResponse)
 async def get_active_tasks():

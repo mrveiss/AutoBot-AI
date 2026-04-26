@@ -79,6 +79,11 @@ class SystemMonitoringResponse(BaseModel):
     operation="create_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_streaming_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.post("/streaming/create", response_model=StreamingSessionResponse)
 async def create_streaming_session(
     request: StreamingSessionRequest,
@@ -114,6 +119,11 @@ async def create_streaming_session(
     operation="terminate_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminate_streaming_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.delete("/streaming/{session_id}", response_model=DataResponse)
 async def terminate_streaming_session(
     session_id: str,
@@ -137,6 +147,11 @@ async def terminate_streaming_session(
     operation="list_streaming_sessions",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_streaming_sessions",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.get("/streaming/sessions", response_model=None)
 async def list_streaming_sessions(
     admin_check: bool = Depends(check_admin_permission),
@@ -150,6 +165,11 @@ async def list_streaming_sessions(
     return {"sessions": sessions, "count": len(sessions)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_streaming_capabilities",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_streaming_capabilities",
@@ -169,6 +189,11 @@ async def get_streaming_capabilities(
 
 
 # Takeover Management Endpoints
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_takeover",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_takeover",
@@ -230,6 +255,11 @@ async def request_takeover(
     operation="approve_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_takeover",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.post("/takeover/{request_id}/approve", response_model=DataResponse)
 async def approve_takeover(
     request_id: str,
@@ -257,6 +287,11 @@ async def approve_takeover(
         raise HTTPException(status_code=409, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_takeover_action",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_takeover_action",
@@ -294,6 +329,11 @@ async def execute_takeover_action(
     operation="pause_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="pause_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.post("/takeover/sessions/{session_id}/pause", response_model=DataResponse)
 async def pause_takeover_session(
     session_id: str,
@@ -311,6 +351,11 @@ async def pause_takeover_session(
         raise HTTPException(status_code=404, detail="Session not found or not pausable")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_takeover_session",
@@ -335,6 +380,11 @@ async def resume_takeover_session(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="complete_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="complete_takeover_session",
@@ -368,6 +418,11 @@ async def complete_takeover_session(
     operation="get_pending_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_takeovers",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.get("/takeover/pending", response_model=None)
 async def get_pending_takeovers(
     admin_check: bool = Depends(check_admin_permission),
@@ -381,6 +436,11 @@ async def get_pending_takeovers(
     return {"pending_requests": pending, "count": len(pending)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_takeovers",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_takeovers",
@@ -404,6 +464,11 @@ async def get_active_takeovers(
     operation="get_takeover_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_takeover_status",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.get("/takeover/status", response_model=None)
 async def get_takeover_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -418,6 +483,11 @@ async def get_takeover_status(
 
 
 # System Monitoring and Control
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_status",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_status",
@@ -472,6 +542,11 @@ async def get_system_status(
     operation="emergency_system_stop",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="emergency_system_stop",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.post("/system/emergency-stop", response_model=DataResponse)
 async def emergency_system_stop(
     admin_check: bool = Depends(check_admin_permission),
@@ -498,6 +573,11 @@ async def emergency_system_stop(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_health",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
@@ -533,6 +613,11 @@ async def get_system_health(
 
 
 # WebSocket endpoint for real-time monitoring
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="monitoring_websocket",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.websocket("/ws/monitoring")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -575,6 +660,11 @@ async def monitoring_websocket(websocket: WebSocket):
 
 
 # WebSocket handler for desktop streaming
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_streaming_websocket",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @router.websocket("/ws/desktop/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -594,6 +684,11 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         logger.info("Desktop streaming WebSocket client disconnected: %s", session_id)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="advanced_control_info",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_control_info",

@@ -709,6 +709,11 @@ def _get_database_schema_tools() -> List[MCPTool]:
     operation="get_database_mcp_tools",
     error_code_prefix="DB_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_mcp_tools",
+    error_code_prefix="DATABASE_MCP",
+)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_database_mcp_tools() -> List[MCPTool]:
     """
@@ -726,6 +731,11 @@ async def get_database_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_query_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_query_mcp",
@@ -802,6 +812,11 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     operation="database_execute_mcp",
     error_code_prefix="DATABASE_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_execute_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @router.post("/mcp/execute", response_model=DatabaseExecuteResponse)
 async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
@@ -868,6 +883,11 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     operation="database_list_tables_mcp",
     error_code_prefix="DATABASE_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_list_tables_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @router.post("/mcp/list_tables", response_model=DatabaseListTablesResponse)
 async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     """
@@ -916,6 +936,11 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error listing tables")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_describe_schema_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_describe_schema_mcp",
@@ -978,6 +1003,11 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     operation="database_list_databases_mcp",
     error_code_prefix="DATABASE_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_list_databases_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @router.get("/mcp/list_databases", response_model=DatabaseListDatabasesResponse)
 async def database_list_databases_mcp() -> Metadata:
     """
@@ -1019,6 +1049,11 @@ async def database_list_databases_mcp() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="database_statistics_mcp",
+    error_code_prefix="DATABASE_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="database_statistics_mcp",
@@ -1078,6 +1113,11 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     category=ErrorCategory.SERVER_ERROR,
     operation="get_database_mcp_status",
     error_code_prefix="DB_MCP",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_mcp_status",
+    error_code_prefix="DATABASE_MCP",
 )
 @router.get("/mcp/status", response_model=DatabaseMCPStatusResponse)
 async def get_database_mcp_status() -> Metadata:

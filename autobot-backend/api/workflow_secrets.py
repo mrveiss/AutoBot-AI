@@ -31,6 +31,7 @@ from services.workflow_secret_service import (
     get_workflow_secret_service,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,11 @@ def _to_metadata(row: dict) -> WorkflowSecretMetadata:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 @router.post("", status_code=201, response_model=WorkflowSecretMetadata)
 async def create_workflow_secret(
     request: WorkflowSecretCreateRequest,
@@ -161,6 +167,11 @@ async def create_workflow_secret(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_secrets",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 @router.get("", response_model=List[WorkflowSecretMetadata])
 async def list_workflow_secrets(
     workflow_id: Optional[str] = Query(default=None, max_length=128),
@@ -184,6 +195,11 @@ async def list_workflow_secrets(
     return [_to_metadata(row) for row in rows]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 @router.put("/{name}", response_model=WorkflowSecretMetadata)
 async def update_workflow_secret(
     name: str,
@@ -231,6 +247,11 @@ async def update_workflow_secret(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_workflow_secret",
+    error_code_prefix="WORKFLOW_SECRETS",
+)
 @router.delete("/{name}", status_code=204, response_model=None)
 async def delete_workflow_secret(
     name: str,

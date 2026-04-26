@@ -19,6 +19,7 @@ from fastapi import APIRouter
 
 from autobot_shared.ssot_config import config as _ssot
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,11 @@ async def _check_redis_health() -> Tuple[str, str]:
         return "offline", "Unreachable"
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_service_statuses",
+    error_code_prefix="SERVICE_MONITOR",
+)
 @router.get("/services", response_model=None)
 async def get_service_statuses() -> Dict[str, Any]:
     """Return health status for each AutoBot supporting service.
@@ -109,6 +115,11 @@ async def get_service_statuses() -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vm_statuses",
+    error_code_prefix="SERVICE_MONITOR",
+)
 @router.get("/vms/status", response_model=None)
 async def get_vm_statuses() -> Dict[str, Any]:
     """Return status for AutoBot VMs as a list.

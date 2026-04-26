@@ -121,6 +121,11 @@ class CustomReportRequest(BaseModel):
     operation="get_maintenance_recommendations",
     error_code_prefix="MAINT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_maintenance_recommendations",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.get("/maintenance", response_model=MaintenanceRecommendationsResponse)
 async def get_maintenance_recommendations(
     admin_check: bool = Depends(check_admin_permission),
@@ -162,6 +167,11 @@ async def get_maintenance_recommendations(
     operation="get_maintenance_by_category",
     error_code_prefix="MAINT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_maintenance_by_category",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.get("/maintenance/category/{category}", response_model=MaintenanceByCategoryResponse)
 async def get_maintenance_by_category(
     category: str,
@@ -190,6 +200,11 @@ async def get_maintenance_by_category(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_maintenance_summary",
     error_code_prefix="MAINT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_maintenance_summary",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/maintenance/summary", response_model=MaintenanceSummaryResponse)
 async def get_maintenance_summary(
@@ -257,6 +272,11 @@ async def get_maintenance_summary(
     operation="get_resource_optimizations",
     error_code_prefix="OPT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_resource_optimizations",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.get("/optimization", response_model=OptimizationRecommendationsResponse)
 async def get_resource_optimizations(
     admin_check: bool = Depends(check_admin_permission),
@@ -299,6 +319,11 @@ async def get_resource_optimizations(
     operation="get_optimization_by_type",
     error_code_prefix="OPT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_by_type",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.get("/optimization/type/{resource_type}", response_model=OptimizationByTypeResponse)
 async def get_optimization_by_type(
     resource_type: str,
@@ -327,6 +352,11 @@ async def get_optimization_by_type(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quick_wins",
     error_code_prefix="OPT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_wins",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/optimization/quick-wins", response_model=OptimizationQuickWinsResponse)
 async def get_quick_wins(
@@ -370,6 +400,11 @@ async def get_quick_wins(
     operation="get_unified_dashboard",
     error_code_prefix="DASH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_dashboard",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.get("/dashboard", response_model=MaintenanceDashboardResponse)
 async def get_unified_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
@@ -392,6 +427,11 @@ async def get_unified_dashboard(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_status",
     error_code_prefix="HEALTH",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health_status",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/health", response_model=MaintenanceHealthStatusResponse)
 async def get_health_status(
@@ -431,6 +471,11 @@ async def get_health_status(
     operation="generate_custom_report",
     error_code_prefix="REPORT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_custom_report",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
+)
 @router.post("/report", response_model=MaintenanceCustomReportResponse)
 async def generate_custom_report(
     request: CustomReportRequest,
@@ -466,6 +511,11 @@ async def generate_custom_report(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_executive_summary",
     error_code_prefix="REPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_executive_summary",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/report/executive", response_model=MaintenanceCustomReportResponse)
 async def get_executive_summary(
@@ -503,6 +553,11 @@ async def get_executive_summary(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_insights",
     error_code_prefix="INSIGHT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_insights",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/insights", response_model=MaintenanceInsightsResponse)
 async def get_insights(
@@ -571,6 +626,11 @@ async def get_insights(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_trends_analysis",
     error_code_prefix="TREND",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trends_analysis",
+    error_code_prefix="ANALYTICS_MAINTENANCE",
 )
 @router.get("/trends", response_model=MaintenanceTrendsResponse)
 async def get_trends_analysis(

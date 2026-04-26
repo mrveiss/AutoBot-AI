@@ -40,6 +40,7 @@ from api.schemas_analytics import (
     ContinuousLearningUpdateConfigResponse,
     ContinuousLearningHealthResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1065,6 +1066,11 @@ async def get_engine() -> ContinuousLearningEngine:
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_learning",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.post("/start", summary="Start continuous learning", response_model=ContinuousLearningStartStopResponse)
 async def start_learning(
     admin_check: bool = Depends(check_admin_permission),
@@ -1079,6 +1085,11 @@ async def start_learning(
     return await engine.start()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_learning",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.post("/stop", summary="Stop continuous learning", response_model=ContinuousLearningStartStopResponse)
 async def stop_learning(
     admin_check: bool = Depends(check_admin_permission),
@@ -1092,6 +1103,11 @@ async def stop_learning(
     return await engine.stop()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/status", summary="Get learning status", response_model=ContinuousLearningStatusResponse)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -1105,6 +1121,11 @@ async def get_status(
     return engine.get_status()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metrics",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/metrics", summary="Get learning metrics", response_model=LearningMetrics)
 async def get_metrics(
     admin_check: bool = Depends(check_admin_permission),
@@ -1118,6 +1139,11 @@ async def get_metrics(
     return engine.get_metrics()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_feedback",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.post("/feedback", summary="Submit pattern feedback", response_model=ContinuousLearningFeedbackResponse)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
@@ -1134,6 +1160,11 @@ async def submit_feedback(
     return await engine.submit_feedback(pattern_id, is_correct, details)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_retrain",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.post("/retrain", summary="Trigger model retraining", response_model=ContinuousLearningRetrainResponse)
 async def trigger_retrain(
     admin_check: bool = Depends(check_admin_permission),
@@ -1148,6 +1179,11 @@ async def trigger_retrain(
     return await engine.trigger_retrain(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_insights",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/insights", summary="Get generated insights", response_model=ContinuousLearningInsightsResponse)
 async def get_insights(
     admin_check: bool = Depends(check_admin_permission),
@@ -1167,6 +1203,11 @@ async def get_insights(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_insights_now",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.post("/insights/generate", summary="Generate insights now", response_model=ContinuousLearningGenerateInsightsResponse)
 async def generate_insights_now(
     admin_check: bool = Depends(check_admin_permission),
@@ -1184,6 +1225,11 @@ async def generate_insights_now(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_monitoring_status",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/monitoring", summary="Get monitoring status", response_model=MonitoringStatus)
 async def get_monitoring_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -1197,6 +1243,11 @@ async def get_monitoring_status(
     return engine.monitor.get_status()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.put("/config", summary="Update learning config", response_model=ContinuousLearningUpdateConfigResponse)
 async def update_config(
     admin_check: bool = Depends(check_admin_permission),
@@ -1212,6 +1263,11 @@ async def update_config(
     return {"updated": True, "config": config.model_dump()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_config",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/config", summary="Get learning config", response_model=LearningConfig)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
@@ -1225,6 +1281,11 @@ async def get_config(
     return engine.config
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
+)
 @router.get("/health", summary="Health check", response_model=ContinuousLearningHealthResponse)
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),

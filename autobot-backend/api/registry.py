@@ -489,6 +489,11 @@ def get_endpoint_documentation() -> List[Dict]:
     operation="list_endpoints",
     error_code_prefix="REGISTRY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_endpoints",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/endpoints", response_model=RegistryEndpointsResponse)
 async def list_endpoints():
     """List all registered API endpoints"""
@@ -498,6 +503,11 @@ async def list_endpoints():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_routers",
+    error_code_prefix="REGISTRY",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_routers",
@@ -522,6 +532,11 @@ async def list_routers():
     return routers_data
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_router_details",
+    error_code_prefix="REGISTRY",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_router_details",
@@ -552,6 +567,11 @@ async def get_router_details(router_name: str):
     operation="list_tags",
     error_code_prefix="REGISTRY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_tags",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/tags", response_model=RegistryTagsResponse)
 async def list_tags():
     """List all unique tags across all routers"""
@@ -561,6 +581,11 @@ async def list_tags():
     return {"tags": sorted(list(all_tags))}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_routers_by_tag",
+    error_code_prefix="REGISTRY",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_routers_by_tag",
@@ -582,6 +607,11 @@ async def get_routers_by_tag(tag: str):
     operation="validate_dependencies",
     error_code_prefix="REGISTRY",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_dependencies",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/validate", response_model=RegistryValidateResponse)
 async def validate_dependencies():
     """Validate router dependencies"""
@@ -589,6 +619,11 @@ async def validate_dependencies():
     return {"valid": len(errors) == 0, "errors": errors}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="registry_health",
+    error_code_prefix="REGISTRY",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="registry_health",

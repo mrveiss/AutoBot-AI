@@ -13,10 +13,16 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from monitoring.prometheus_metrics import get_metrics_manager
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="metrics_endpoint",
+    error_code_prefix="PROMETHEUS_ENDPOINT",
+)
 @router.get("", response_model=None)
 async def metrics_endpoint():
     """

@@ -27,6 +27,7 @@ from autobot_shared.error_boundaries import (
 from config.manager import get_config_manager
 from type_defs.common import Metadata
 from utils.error_metrics import get_metrics_collector
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 config = get_config_manager()
 
@@ -99,6 +100,11 @@ class ErrorMonitoringCleanupResponse(BaseModel):
     operation="get_system_error_statistics",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_error_statistics",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/statistics", response_model=ErrorMonitoringDataResponse)
 async def get_system_error_statistics():
     """Get system-wide error statistics"""
@@ -113,6 +119,11 @@ async def get_system_error_statistics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_errors",
+    error_code_prefix="ERROR_MONITORING",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_errors",
@@ -173,6 +184,11 @@ async def get_recent_errors(limit: int = 20):
     operation="get_error_categories",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_categories",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/categories", response_model=ErrorMonitoringDataResponse)
 async def get_error_categories():
     """Get error breakdown by category"""
@@ -203,6 +219,11 @@ async def get_error_categories():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_by_component",
+    error_code_prefix="ERROR_MONITORING",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_by_component",
@@ -255,6 +276,11 @@ def _calculate_health_status(
     operation="get_error_system_health",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_system_health",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/health", response_model=ErrorMonitoringDataResponse)
 async def get_error_system_health():
     """Get error system health status"""
@@ -290,6 +316,11 @@ async def get_error_system_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_error_history",
+    error_code_prefix="ERROR_MONITORING",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_error_history",
@@ -339,6 +370,11 @@ class TestErrorRequest(BaseModel):
     message: str = "Test error for error boundary system"
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_error_system",
+    error_code_prefix="ERROR_MONITORING",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_error_system",
@@ -441,6 +477,11 @@ def _get_health_recommendations(health_status: str, stats: Metadata) -> list:
     operation="get_metrics_summary",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metrics_summary",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/metrics/summary", response_model=ErrorMonitoringDataResponse)
 async def get_metrics_summary():
     """
@@ -465,6 +506,11 @@ async def get_metrics_summary():
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_timeline",
+    error_code_prefix="ERROR_MONITORING",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_timeline_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
 @router.get("/metrics/timeline", response_model=ErrorMonitoringDataResponse)
@@ -506,6 +552,11 @@ async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] 
     operation="get_top_errors",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_top_errors_endpoint",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/metrics/top-errors", response_model=ErrorMonitoringDataResponse)
 async def get_top_errors_endpoint(limit: int = 10):
     """
@@ -535,6 +586,11 @@ async def get_top_errors_endpoint(limit: int = 10):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mark_error_resolved",
+    error_code_prefix="ERROR_MONITORING",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mark_error_resolved_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
 @router.post("/metrics/resolve/{trace_id}", response_model=ErrorMonitoringResolveResponse)
@@ -578,6 +634,11 @@ class AlertThresholdRequest(BaseModel):
     operation="set_alert_threshold",
     error_code_prefix="ERROR_MONITORING",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_alert_threshold_endpoint",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.post("/metrics/alert-threshold", response_model=ErrorMonitoringAlertThresholdResponse)
 async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
     """
@@ -613,6 +674,11 @@ async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_metrics",
+    error_code_prefix="ERROR_MONITORING",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_metrics_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
 @router.post("/metrics/cleanup", response_model=ErrorMonitoringCleanupResponse)

@@ -82,6 +82,11 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
     operation="create_category",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
+)
 @router.post("/categories", response_model=KnowledgeCategoryCreateResponse)
 async def create_category(
     request: CreateCategoryRequest,
@@ -138,6 +143,11 @@ async def create_category(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_category_tree",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_tree",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.get("/categories/tree", response_model=KnowledgeCategoryTreeResponse)
 async def get_category_tree(
@@ -200,6 +210,11 @@ async def get_category_tree(
     operation="get_category",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
+)
 @router.get("/categories/{category_id}", response_model=KnowledgeCategoryDetailResponse)
 async def get_category(
     category_id: str = Path(..., description="Category UUID"),
@@ -243,6 +258,11 @@ async def get_category(
     operation="get_category_by_path",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_by_path",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
+)
 @router.get("/categories/path/{path:path}", response_model=KnowledgeCategoryDetailResponse)
 async def get_category_by_path(
     path: str = Path(..., description="Category path (e.g., 'tech/python/async')"),
@@ -280,6 +300,11 @@ async def get_category_by_path(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_category",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.put("/categories/{category_id}", response_model=KnowledgeCategoryUpdateResponse)
 async def update_category(
@@ -345,6 +370,11 @@ async def update_category(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_category",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.delete("/categories/{category_id}", response_model=KnowledgeCategoryDeleteResponse)
 async def delete_category(
@@ -428,6 +458,11 @@ def _raise_delete_category_error(result: dict) -> None:
     operation="get_category_children",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_children",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
+)
 @router.get("/categories/{category_id}/children", response_model=KnowledgeCategoryChildrenResponse)
 async def get_category_children(
     category_id: str = Path(..., description="Parent category UUID"),
@@ -473,6 +508,11 @@ async def get_category_children(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_category_ancestors",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_ancestors",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.get("/categories/{category_id}/ancestors", response_model=KnowledgeCategoryAncestorsResponse)
 async def get_category_ancestors(
@@ -522,6 +562,11 @@ async def get_category_ancestors(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_in_category",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_facts_in_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.get("/categories/{category_id}/facts", response_model=KnowledgeCategoryFactsResponse)
 async def get_facts_in_category(
@@ -588,6 +633,11 @@ async def get_facts_in_category(
     operation="assign_fact_to_category",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="assign_fact_to_category",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
+)
 @router.post("/facts/{fact_id}/category", response_model=KnowledgeFactAssignCategoryResponse)
 async def assign_fact_to_category(
     fact_id: str = Path(..., description="Fact UUID"),
@@ -642,6 +692,11 @@ async def assign_fact_to_category(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_categories_by_path",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_categories_by_path",
+    error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 @router.post("/categories/search", response_model=KnowledgeCategorySearchResponse)
 async def search_categories_by_path(

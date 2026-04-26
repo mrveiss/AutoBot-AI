@@ -89,6 +89,11 @@ BROWSER_VM_URL = (
     operation="get_playwright_status",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_playwright_status",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.get("/status", response_model=PlaywrightStatusResponse)
 async def get_playwright_status():
     """Get Playwright service status and capabilities"""
@@ -107,6 +112,11 @@ async def get_playwright_status():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
@@ -134,6 +144,11 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Playwright service unavailable")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="web_search",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_search",
@@ -180,6 +195,11 @@ async def web_search(request: SearchRequest):
     operation="test_frontend",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_frontend",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/test-frontend", response_model=None)
 async def test_frontend(request: FrontendTestRequest):
     """
@@ -209,6 +229,11 @@ async def test_frontend(request: FrontendTestRequest):
         raise HTTPException(status_code=500, detail="Frontend test failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_test_message",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_test_message",
@@ -252,6 +277,11 @@ async def send_test_message(request: TestMessageRequest):
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="capture_screenshot",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/screenshot", response_model=None)
 async def capture_screenshot(request: ScreenshotRequest):
     """
@@ -286,6 +316,11 @@ async def capture_screenshot(request: ScreenshotRequest):
         raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="quick_automation_test",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="quick_automation_test",
@@ -354,6 +389,11 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     operation="navigate",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="navigate_to_url",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/navigate", response_model=PlaywrightBrowserActionResponse)
 async def navigate_to_url(request: NavigateRequest):
     """
@@ -399,6 +439,11 @@ async def navigate_to_url(request: NavigateRequest):
     operation="reload",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_page",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/reload", response_model=PlaywrightBrowserActionResponse)
 async def reload_page(request: ReloadRequest):
     """
@@ -435,6 +480,11 @@ async def reload_page(request: ReloadRequest):
         raise HTTPException(status_code=500, detail="Reload failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="go_back",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="go_back",
@@ -477,6 +527,11 @@ async def go_back():
         raise HTTPException(status_code=500, detail="Back navigation failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="go_forward",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="go_forward",
@@ -526,6 +581,11 @@ async def go_forward():
     operation="worker_status",
     error_code_prefix="PLAYWRIGHT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_worker_status",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.get("/worker-status", response_model=PlaywrightWorkerStatusResponse)
 async def get_worker_status():
     """
@@ -557,6 +617,11 @@ async def get_worker_status():
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="worker_screenshot",
+    error_code_prefix="PLAYWRIGHT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="take_worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/worker-screenshot", response_model=PlaywrightBrowserActionResponse)
@@ -595,6 +660,11 @@ async def take_worker_screenshot():
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="interact",
+    error_code_prefix="PLAYWRIGHT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="interact_with_page",
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/interact", response_model=PlaywrightBrowserActionResponse)
@@ -643,6 +713,11 @@ async def interact_with_page(request: InteractRequest):
         raise HTTPException(status_code=500, detail="Interaction failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capabilities",
+    error_code_prefix="PLAYWRIGHT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_capabilities",

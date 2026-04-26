@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import get_current_user
 from llm_interface_pkg.models import LLMRequest
 from llm_providers.provider_registry import get_provider_registry
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +313,11 @@ async def _stream_generator(
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="chat_completions",
+    error_code_prefix="OPENAI_COMPAT",
+)
 @router.post("/chat/completions", response_model=None)
 async def chat_completions(
     body: ChatCompletionRequest,
@@ -392,6 +398,11 @@ async def chat_completions(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_models",
+    error_code_prefix="OPENAI_COMPAT",
+)
 @router.get("/models", response_model=ModelListResponse)
 async def list_models(request: Request) -> ModelListResponse:
     """OpenAI-compatible models list endpoint (#4447).

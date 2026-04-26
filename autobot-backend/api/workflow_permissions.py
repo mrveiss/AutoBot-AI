@@ -28,6 +28,7 @@ from services.workflow_permission_service import (
 )
 from services.workflow_rbac import require_workflow_permission
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,11 @@ def _audit_to_response(entry) -> AuditLogEntry:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_permissions",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
+)
 @router.get(
     "/workflows/{workflow_id}/permissions",
     response_model=List[PermissionResponse],
@@ -130,6 +136,11 @@ async def list_workflow_permissions(
     return [_permission_to_response(r) for r in rows]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="grant_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
+)
 @router.put(
     "/workflows/{workflow_id}/permissions",
     response_model=PermissionResponse,
@@ -170,6 +181,11 @@ async def grant_workflow_permission(
     return _permission_to_response(perm)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
+)
 @router.delete(
     "/workflows/{workflow_id}/permissions/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -208,6 +224,11 @@ async def revoke_workflow_permission(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_audit_log",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
+)
 @router.get(
     "/workflows/{workflow_id}/audit",
     response_model=List[AuditLogEntry],

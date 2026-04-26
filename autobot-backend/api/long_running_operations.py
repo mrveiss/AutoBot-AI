@@ -155,6 +155,11 @@ async def get_operation_manager():
     operation="start_codebase_indexing",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_codebase_indexing",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.post("/codebase/index", response_model=Dict[str, str])
 async def start_codebase_indexing(
     request: CodebaseIndexingRequest,
@@ -228,6 +233,11 @@ async def start_codebase_indexing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_comprehensive_testing",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_comprehensive_testing",
@@ -309,6 +319,11 @@ async def start_comprehensive_testing(
     operation="start_knowledge_base_population",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_knowledge_base_population",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.post("/knowledge-base/populate", response_model=Dict[str, str])
 async def start_knowledge_base_population(
     request: KnowledgeBaseRequest,
@@ -359,6 +374,11 @@ async def start_knowledge_base_population(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_security_scan",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_security_scan",
@@ -417,6 +437,11 @@ async def start_security_scan(
     operation="migrate_existing_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="migrate_existing_operation",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.post("/migrate/existing", response_model=None)
 async def migrate_existing_operation(
     operation_name: str,
@@ -462,6 +487,11 @@ async def migrate_existing_operation(
     operation="get_operation_status",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_operation_status",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.get("/{operation_id}", response_model=None)
 async def get_operation_status(
     operation_id: str, manager=Depends(get_operation_manager)
@@ -478,6 +508,11 @@ async def get_operation_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_operations",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operations",
@@ -537,6 +572,11 @@ async def list_operations(
     operation="cancel_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_operation",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.post("/{operation_id}/cancel", response_model=None)
 async def cancel_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Cancel a running operation"""
@@ -554,6 +594,11 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_operation",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_operation",
@@ -588,6 +633,11 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_progress_updates",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @router.websocket("/{operation_id}/progress")
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
@@ -644,6 +694,11 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 
 
 # Health check endpoint
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="operations_health",
+    error_code_prefix="LONG_RUNNING_OPERATIONS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="operations_health",

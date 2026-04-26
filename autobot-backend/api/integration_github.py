@@ -34,6 +34,7 @@ from api.schemas_system import (
     GitHubRepositoryResponse,
     GitHubRepositoryTreeResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,11 @@ def _make_integration(token: str, base_url: Optional[str] = None) -> GitHubInteg
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.post("/test-connection", response_model=IntegrationHealth)
 async def test_connection(
     request: GitHubConnectionTestRequest,
@@ -122,6 +128,11 @@ async def test_connection(
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pull_requests",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/pull-requests", response_model=GitHubPullRequestsResponse)
 async def list_pull_requests(
     owner: str,
@@ -151,6 +162,11 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pull_request",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/pull-requests/{pull_number}", response_model=GitHubPullRequestResponse)
 async def get_pull_request(
     owner: str,
@@ -175,6 +191,11 @@ async def get_pull_request(
         raise HTTPException(status_code=500, detail="Failed to get pull request")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pull_request_diff",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/pull-requests/{pull_number}/diff", response_model=GitHubPullRequestDiffResponse)
 async def get_pull_request_diff(
     owner: str,
@@ -199,6 +220,11 @@ async def get_pull_request_diff(
         raise HTTPException(status_code=500, detail="Failed to get pull request diff")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pr_review_comments",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=GitHubPRCommentsResponse)
 async def list_pr_review_comments(
     owner: str,
@@ -223,6 +249,11 @@ async def list_pr_review_comments(
         raise HTTPException(status_code=500, detail="Failed to list PR comments")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="post_pr_comment",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.post("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=GitHubPRCommentResponse)
 async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
     """Post an issue-level comment to a pull request.
@@ -250,6 +281,11 @@ async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to post PR comment")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_pr_review",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.post("/{owner}/{repo}/pull-requests/{pull_number}/reviews", response_model=GitHubPRReviewResponse)
 async def submit_pr_review(request: GitHubReviewRequest) -> Dict[str, Any]:
     """Submit a formal pull request review.
@@ -287,6 +323,11 @@ async def submit_pr_review(request: GitHubReviewRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to submit PR review")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_issues",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/issues", response_model=GitHubIssuesResponse)
 async def list_issues(
     owner: str,
@@ -316,6 +357,11 @@ async def list_issues(
         raise HTTPException(status_code=500, detail="Failed to list issues")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_issue",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/issues/{issue_number}", response_model=GitHubIssueResponse)
 async def get_issue(
     owner: str,
@@ -340,6 +386,11 @@ async def get_issue(
         raise HTTPException(status_code=500, detail="Failed to get issue")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_repository",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}", response_model=GitHubRepositoryResponse)
 async def get_repository(
     owner: str,
@@ -362,6 +413,11 @@ async def get_repository(
         raise HTTPException(status_code=500, detail="Failed to get repository")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_commits",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/commits", response_model=GitHubCommitsResponse)
 async def list_commits(
     owner: str,
@@ -388,6 +444,11 @@ async def list_commits(
         raise HTTPException(status_code=500, detail="Failed to list commits")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_commit",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/commits/{ref}", response_model=GitHubCommitResponse)
 async def get_commit(
     owner: str,
@@ -411,6 +472,11 @@ async def get_commit(
         raise HTTPException(status_code=500, detail="Failed to get commit")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_repository_tree",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/tree/{tree_sha}", response_model=GitHubRepositoryTreeResponse)
 async def get_repository_tree(
     owner: str,
@@ -436,6 +502,11 @@ async def get_repository_tree(
         raise HTTPException(status_code=500, detail="Failed to get repository tree")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_contents",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/{owner}/{repo}/contents/{path:path}", response_model=GitHubFileContentsResponse)
 async def get_file_contents(
     owner: str,
@@ -461,6 +532,11 @@ async def get_file_contents(
         raise HTTPException(status_code=500, detail="Failed to get file contents")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_providers",
+    error_code_prefix="INTEGRATION_GITHUB",
+)
 @router.get("/providers", response_model=list[GitHubProviderInfo])
 async def get_providers() -> List[Dict[str, Any]]:
     """List supported GitHub integration providers.

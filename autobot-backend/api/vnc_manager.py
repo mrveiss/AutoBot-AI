@@ -33,6 +33,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +321,11 @@ def start_vnc_server() -> Dict[str, str]:
         return {"status": "error", "message": "Operation failed"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vnc_status",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/status", response_model=VncRunningResponse)
 @with_error_handling(error_code_prefix="VNC_STATUS")
 async def get_vnc_status(
@@ -336,6 +342,11 @@ async def get_vnc_status(
     return {"running": running}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ensure_vnc_running",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/ensure-running", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_ENSURE")
 async def ensure_vnc_running(
@@ -355,6 +366,11 @@ async def ensure_vnc_running(
     return start_vnc_server()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="restart_vnc_server",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/restart", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_RESTART")
 async def restart_vnc_server(
@@ -484,6 +500,11 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
         return {"status": "error", "message": "Internal server error"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_mouse_click",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
@@ -515,6 +536,11 @@ async def vnc_mouse_click(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_keyboard_type",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/type", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_TYPE")
 async def vnc_keyboard_type(
@@ -562,6 +588,11 @@ async def vnc_keyboard_type(
         return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", request.text])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_special_key",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/key", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_KEY")
 async def vnc_special_key(
@@ -581,6 +612,11 @@ async def vnc_special_key(
     return _run_xdotool_cmd(["key", request.key])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_mouse_scroll",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/scroll", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SCROLL")
 async def vnc_mouse_scroll(
@@ -608,6 +644,11 @@ async def vnc_mouse_scroll(
     return _run_xdotool_cmd(args)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_mouse_drag",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/drag", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_DRAG")
 async def vnc_mouse_drag(
@@ -648,6 +689,11 @@ async def vnc_mouse_drag(
     return _run_xdotool_cmd(["mouseup", "1"])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_screenshot",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/screenshot", response_model=VncScreenshotResponse)
 @with_error_handling(error_code_prefix="VNC_SCREENSHOT")
 async def vnc_screenshot(
@@ -712,6 +758,11 @@ async def vnc_screenshot(
         return {"status": "error", "message": "Operation failed", "image_data": ""}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_clipboard_sync",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/clipboard", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLIPBOARD")
 async def vnc_clipboard_sync(
@@ -758,6 +809,11 @@ async def vnc_clipboard_sync(
 # Connection Settings Management (Issue #74 - Area 4)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_connection_settings",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/connection/settings", response_model=ConnectionSettings)
 @with_error_handling(error_code_prefix="VNC_CONN_GET")
 async def get_connection_settings(
@@ -780,6 +836,11 @@ async def get_connection_settings(
         return _connection_settings[session_id]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_connection_settings",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/connection/settings", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CONN_SET")
 async def update_connection_settings(
@@ -811,6 +872,11 @@ async def update_connection_settings(
     return {"status": "success", "message": "Connection settings updated"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_connection_quality_metrics",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/connection/quality-metrics", response_model=VncQualityMetricsResponse)
 @with_error_handling(error_code_prefix="VNC_QUALITY")
 async def get_connection_quality_metrics(
@@ -1031,6 +1097,11 @@ def _get_process_list() -> List[Dict[str, str]]:
     return processes
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_desktop_context",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/desktop/context", response_model=VncDesktopContextResponse)
 @with_error_handling(error_code_prefix="VNC_CONTEXT")
 async def get_desktop_context(
@@ -1083,6 +1154,11 @@ _recording_session: Dict[str, MacroRecording] = {}
 _macros_lock = asyncio.Lock()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_macro_recording",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/macro/record/start", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_START")
 async def start_macro_recording(
@@ -1108,6 +1184,11 @@ async def start_macro_recording(
     return {"status": "success", "message": f"Started recording macro '{name}'"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_macro_recording",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/macro/record/stop", response_model=MacroStopResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_STOP")
 async def stop_macro_recording(
@@ -1140,6 +1221,11 @@ async def stop_macro_recording(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_macros",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/macros", response_model=MacroListResponse)
 @with_error_handling(error_code_prefix="VNC_MACROS_LIST")
 async def list_macros(
@@ -1165,6 +1251,11 @@ async def list_macros(
     return {"macros": macro_list}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="playback_macro",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/macro/playback", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_PLAY")
 async def playback_macro(
@@ -1223,6 +1314,11 @@ async def playback_macro(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_macro",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.delete("/macro/{name}", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_MACRO_DELETE")
 async def delete_macro(
@@ -1260,6 +1356,11 @@ class OCRRequest(BaseModel):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_ocr_text",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/ocr", response_model=VncOcrResponse)
 @with_error_handling(error_code_prefix="VNC_OCR")
 async def vnc_ocr_text(
@@ -1400,6 +1501,11 @@ def _build_match_result(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_find_image",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/find-image", response_model=VncFindImageResponse)
 @with_error_handling(error_code_prefix="VNC_FIND_IMAGE")
 async def vnc_find_image(
@@ -1469,6 +1575,11 @@ class WaitForTextRequest(BaseModel):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_wait_for_text",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/wait-for-text", response_model=WaitForTextResponse)
 @with_error_handling(error_code_prefix="VNC_WAIT_TEXT")
 async def vnc_wait_for_text(
@@ -1519,6 +1630,11 @@ class WaitForImageRequest(BaseModel):
     threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vnc_wait_for_image",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/wait-for-image", response_model=WaitForImageResponse)
 @with_error_handling(error_code_prefix="VNC_WAIT_IMAGE")
 async def vnc_wait_for_image(
@@ -1607,6 +1723,11 @@ _session_states: Dict[str, DesktopSessionState] = {}
 _session_lock = asyncio.Lock()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_session_desktop_state",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/session/save-state", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SAVE")
 async def save_session_desktop_state(
@@ -1654,6 +1775,11 @@ async def save_session_desktop_state(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="restore_session_desktop_state",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/session/restore-state", response_model=RestoreStateResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_RESTORE")
 async def restore_session_desktop_state(
@@ -1690,6 +1816,11 @@ async def restore_session_desktop_state(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="log_session_action",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/session/log-action", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_LOG")
 async def log_session_action(
@@ -1720,6 +1851,11 @@ async def log_session_action(
     return {"status": "success", "message": "Action logged to session"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_action_log",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/session/action-log", response_model=SessionActionLogResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_LOG_GET")
 async def get_session_action_log(
@@ -1758,6 +1894,11 @@ async def get_session_action_log(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_session_screenshot",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.post("/session/save-screenshot", response_model=SessionScreenshotSaveResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOT")
 async def save_session_screenshot(
@@ -1820,6 +1961,11 @@ async def save_session_screenshot(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_screenshots",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.get("/session/screenshots", response_model=SessionScreenshotsResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOTS")
 async def get_session_screenshots(
@@ -1858,6 +2004,11 @@ async def get_session_screenshots(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_session_state",
+    error_code_prefix="VNC_MANAGER",
+)
 @router.delete("/session/clear-state", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_SESSION_CLEAR")
 async def clear_session_state(

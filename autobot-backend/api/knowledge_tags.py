@@ -203,6 +203,11 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
     operation="add_tags_to_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_tags_to_fact",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.post("/fact/{fact_id}/tags", response_model=KnowledgeTagFactTagsResponse)
 async def add_tags_to_fact(
     fact_id: str = Path(..., description="Fact ID to add tags to"),
@@ -257,6 +262,11 @@ async def add_tags_to_fact(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_tags_from_fact",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_tags_from_fact",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.delete("/fact/{fact_id}/tags", response_model=KnowledgeTagFactTagsResponse)
 async def remove_tags_from_fact(
@@ -313,6 +323,11 @@ async def remove_tags_from_fact(
     operation="get_fact_tags",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fact_tags",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.get("/fact/{fact_id}/tags", response_model=KnowledgeTagGetFactTagsResponse)
 async def get_fact_tags(
     fact_id: str = Path(..., description="Fact ID to get tags for"),
@@ -358,6 +373,11 @@ async def get_fact_tags(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_facts_by_tags",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_facts_by_tags",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.post("/tags/search", response_model=KnowledgeTagSearchResponse)
 async def search_facts_by_tags(
@@ -418,6 +438,11 @@ async def search_facts_by_tags(
     operation="list_all_tags",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_all_tags",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.get("/tags", response_model=KnowledgeTagListResponse)
 async def list_all_tags(
     admin_check: bool = Depends(check_admin_permission),
@@ -468,6 +493,11 @@ async def list_all_tags(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_tag_facts",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="bulk_tag_facts",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.post("/tags/bulk", response_model=KnowledgeTagBulkResponse)
 async def bulk_tag_facts(
@@ -526,6 +556,11 @@ async def bulk_tag_facts(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_tag",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rename_tag",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.put("/tags/{tag_name}", response_model=KnowledgeTagRenameResponse)
 async def rename_tag(
@@ -587,6 +622,11 @@ async def rename_tag(
     operation="delete_tag_globally",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_tag_globally",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.delete("/tags/{tag_name}", response_model=KnowledgeTagDeleteResponse)
 async def delete_tag_globally(
     tag_name: str = Path(..., description="Tag name to delete"),
@@ -642,6 +682,11 @@ async def delete_tag_globally(
     category=ErrorCategory.SERVER_ERROR,
     operation="merge_tags",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="merge_tags",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.post("/tags/merge", response_model=KnowledgeTagMergeResponse)
 async def merge_tags(
@@ -700,6 +745,11 @@ async def merge_tags(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_tag",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_facts_by_tag",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.get("/tags/{tag_name}/facts", response_model=KnowledgeTagFactsByTagResponse)
 async def get_facts_by_tag(
@@ -773,6 +823,11 @@ async def get_facts_by_tag(
     operation="get_tag_info",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tag_info",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.get("/tags/{tag_name}/info", response_model=KnowledgeTagInfoResponse)
 async def get_tag_info(
     tag_name: str = Path(..., description="Tag name to get info for"),
@@ -828,6 +883,11 @@ async def get_tag_info(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_tag_style",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_tag_style",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.patch("/tags/{tag_name}/style", response_model=KnowledgeTagStyleResponse)
 async def update_tag_style(
@@ -899,6 +959,11 @@ async def update_tag_style(
     operation="get_tag_style",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tag_style",
+    error_code_prefix="KNOWLEDGE_TAGS",
+)
 @router.get("/tags/{tag_name}/style", response_model=KnowledgeTagStyleResponse)
 async def get_tag_style(
     tag_name: str = Path(..., description="Tag name to get styling for"),
@@ -959,6 +1024,11 @@ async def get_tag_style(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_tag_style",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_tag_style",
+    error_code_prefix="KNOWLEDGE_TAGS",
 )
 @router.delete("/tags/{tag_name}/style", response_model=KnowledgeTagDeleteStyleResponse)
 async def delete_tag_style(

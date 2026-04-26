@@ -21,12 +21,18 @@ from services.knowledge.sync_queue import (
     get_document_sync_queue,
     serialize_entry_for_api,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge-sync-queue"])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sync_queue",
+    error_code_prefix="KNOWLEDGE_SYNC_QUEUE",
+)
 @router.get("/sync-queue", response_model=KnowledgeSyncQueueResponse)
 async def get_sync_queue(
     limit: int = Query(100, ge=1, le=500),
@@ -52,6 +58,11 @@ async def get_sync_queue(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="prune_done_entries",
+    error_code_prefix="KNOWLEDGE_SYNC_QUEUE",
+)
 @router.post("/sync-queue/prune", response_model=KnowledgeSyncQueuePruneResponse)
 async def prune_done_entries(
     older_than_seconds: int = Query(7 * 24 * 3600, ge=60),

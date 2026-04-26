@@ -117,6 +117,11 @@ async def _get_code_analysis_status() -> Dict[str, Any]:
     operation="get_dashboard_overview",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_overview",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive dashboard overview (Issue #398: refactored)."""
@@ -218,6 +223,11 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
     operation="get_detailed_system_health",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_detailed_system_health",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/system/health-detailed", response_model=AnalyticsDetailedHealthResponse)
 async def get_detailed_system_health(current_user: Dict = Depends(get_current_user)):
     """Get detailed system health with enhanced analytics (Issue #398: refactored)."""
@@ -275,6 +285,11 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
     operation="get_performance_metrics",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_metrics",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/performance/metrics", response_model=AnalyticsPerformanceMetricsResponse)
 async def get_performance_metrics(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive performance metrics"""
@@ -316,6 +331,11 @@ async def get_performance_metrics(current_user: Dict = Depends(get_current_user)
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_communication_patterns",
+    error_code_prefix="ANALYTICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_patterns",
@@ -369,6 +389,11 @@ async def get_communication_patterns(current_user: Dict = Depends(get_current_us
     return patterns
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_usage_statistics",
+    error_code_prefix="ANALYTICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_statistics",
@@ -502,12 +527,22 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
     operation="get_realtime_metrics",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_realtime_metrics",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/realtime/metrics", response_model=AnalyticsRealtimeMetricsResponse)
 async def get_realtime_metrics(current_user: Dict = Depends(get_current_user)):
     """Get current real-time metrics snapshot"""
     return await _collect_realtime_metrics_data()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="track_analytics_event",
+    error_code_prefix="ANALYTICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_analytics_event",
@@ -618,6 +653,11 @@ def _compute_hourly_stats(historical_calls: list) -> dict:
     operation="get_historical_trends",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_historical_trends",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/trends/historical", response_model=AnalyticsHistoricalTrendsResponse)
 async def get_historical_trends(
     hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168),
@@ -705,6 +745,11 @@ async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
         return send_ok, False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_realtime_analytics",
+    error_code_prefix="ANALYTICS",
+)
 @router.websocket("/ws/realtime")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -751,6 +796,11 @@ async def websocket_realtime_analytics(websocket: WebSocket):
     operation="start_analytics_collection",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_analytics_collection",
+    error_code_prefix="ANALYTICS",
+)
 @router.post("/collection/start", response_model=AnalyticsCollectionStartResponse)
 async def start_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Start continuous analytics collection"""
@@ -772,6 +822,11 @@ async def start_analytics_collection(current_user: Dict = Depends(get_current_us
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_analytics_collection",
+    error_code_prefix="ANALYTICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_analytics_collection",
@@ -832,6 +887,11 @@ async def _check_analytics_redis_connectivity() -> Dict[str, str]:
     return connectivity
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_analytics_status",
+    error_code_prefix="ANALYTICS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analytics_status",
@@ -1140,6 +1200,11 @@ async def _live_analytics_loop_iteration(
         return send_ok, last_performance_update, last_api_update, last_health_update
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_live_analytics",
+    error_code_prefix="ANALYTICS",
+)
 @router.websocket("/ws/analytics/live")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1223,6 +1288,11 @@ async def websocket_live_analytics(websocket: WebSocket):
 # ------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_root_cause",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/root-cause/{task_id}", response_model=AnalyticsRootCauseResponse)
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
@@ -1328,6 +1398,11 @@ async def _run_dashboard_analysis(task_id: str) -> None:
         await _dash_manager.fail_task(task_id, str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_dashboard_analysis",
+    error_code_prefix="ANALYTICS",
+)
 @router.post("/dashboard/overview/analyze", response_model=AnalyticsDashboardAnalyzeResponse)
 async def start_dashboard_analysis(
     background_tasks: BackgroundTasks,
@@ -1339,6 +1414,11 @@ async def start_dashboard_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_status",
+    error_code_prefix="ANALYTICS",
+)
 @router.get("/dashboard/overview/status/{task_id}", response_model=AnalyticsDashboardStatusResponse)
 async def get_dashboard_status(task_id: str):
     """Get dashboard overview task status (#1304)."""
@@ -1348,6 +1428,11 @@ async def get_dashboard_status(task_id: str):
     return task
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_stuck_dashboard_tasks",
+    error_code_prefix="ANALYTICS",
+)
 @router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
 async def clear_stuck_dashboard_tasks(
     force: bool = Query(

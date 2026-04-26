@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,11 @@ async def _get_catalog() -> list[dict[str, Any]]:
     return _BUILTIN_CATALOG
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_catalog",
+    error_code_prefix="MARKETPLACE",
+)
 @router.get("/catalog", response_model=MarketplaceCatalogResponse)
 async def list_catalog(
     category: str = Query(default="all", description="Filter by category"),
@@ -239,6 +245,11 @@ async def list_catalog(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_catalog_entry",
+    error_code_prefix="MARKETPLACE",
+)
 @router.get("/catalog/{plugin_name}", response_model=MarketplaceEntry)
 async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     """
@@ -258,6 +269,11 @@ async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     return MarketplaceEntry(**entry)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_categories",
+    error_code_prefix="MARKETPLACE",
+)
 @router.get("/categories", response_model=None)
 async def list_categories() -> dict[str, list[str]]:
     """
@@ -293,6 +309,11 @@ async def _get_installed() -> set[str]:
         return set()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_installed",
+    error_code_prefix="MARKETPLACE",
+)
 @router.get("/installed", response_model=None)
 async def list_installed() -> dict[str, list[str]]:
     """
@@ -304,6 +325,11 @@ async def list_installed() -> dict[str, list[str]]:
     return {"installed": sorted(installed)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_plugin",
+    error_code_prefix="MARKETPLACE",
+)
 @router.post("/install", status_code=status.HTTP_201_CREATED, response_model=None)
 async def install_plugin(body: InstallRequest) -> dict[str, str]:
     """
@@ -344,6 +370,11 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     return {"status": "installed", "plugin": body.plugin_name}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="uninstall_plugin",
+    error_code_prefix="MARKETPLACE",
+)
 @router.delete("/install/{plugin_name}", response_model=None)
 async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
     """

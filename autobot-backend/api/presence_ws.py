@@ -13,12 +13,18 @@ import logging
 from fastapi import APIRouter, Query, WebSocket
 
 from websocket.presence import presence_websocket_handler
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["collaboration", "websocket"])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="session_presence",
+    error_code_prefix="PRESENCE_WS",
+)
 @router.websocket("/ws/sessions/{session_id}/presence")
 async def session_presence(
     websocket: WebSocket,

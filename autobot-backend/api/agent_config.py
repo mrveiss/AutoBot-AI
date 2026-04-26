@@ -584,6 +584,11 @@ async def _resolve_agent_effective_config(
     operation="list_agents",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agents",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.get("/agents", response_model=DataResponse)
 async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -704,6 +709,11 @@ async def _resolve_agent_entry(
     operation="get_all_agents",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_agents",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.get("/agents/all", response_model=DataResponse)
 async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -750,6 +760,11 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     operation="list_specialized_agents",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_specialized_agents",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.get("/agents/specialized", response_model=DataResponse)
 async def list_specialized_agents(
     admin_check: bool = Depends(check_admin_permission),
@@ -783,6 +798,11 @@ async def list_specialized_agents(
     operation="get_specialized_agent",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_specialized_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.get("/agents/specialized/{agent_id}", response_model=DataResponse)
 async def get_specialized_agent(
     agent_id: str,
@@ -808,6 +828,11 @@ async def get_specialized_agent(
     return JSONResponse(status_code=200, content=agent)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_usage",
+    error_code_prefix="AGENT_CONFIG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_usage",
@@ -925,6 +950,11 @@ async def get_agents_usage(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_config",
+    error_code_prefix="AGENT_CONFIG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_config",
@@ -1057,6 +1087,11 @@ async def _apply_agent_model_update(
     operation="update_agent_model",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_agent_model",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.post("/agents/{agent_id}/model", response_model=AgentConfigUpdateModelResponse)
 async def update_agent_model(
     agent_id: str,
@@ -1095,6 +1130,11 @@ async def update_agent_model(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_agent",
@@ -1146,6 +1186,11 @@ async def enable_agent(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_agent",
@@ -1239,6 +1284,11 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     operation="check_agent_health",
     error_code_prefix="AGENT_CONFIG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_agent_health",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.get("/agents/{agent_id}/health", response_model=AgentConfigHealthResponse)
 async def check_agent_health(
     agent_id: str, admin_check: bool = Depends(check_admin_permission)
@@ -1280,6 +1330,11 @@ async def check_agent_health(
     return JSONResponse(status_code=200, content=health_status)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_overview",
+    error_code_prefix="AGENT_CONFIG",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_overview",

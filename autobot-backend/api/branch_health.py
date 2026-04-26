@@ -47,6 +47,11 @@ class BranchHealthResponse(BaseModel):
     last_activity: str = Field(None, description="ISO format datetime or null")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_branch_health",
+    error_code_prefix="BRANCH_HEALTH",
+)
 @router.get("/branch-health/all", response_model=List[BranchHealthResponse])
 @with_error_handling(
     category=ErrorCategory.INFRASTRUCTURE,
@@ -76,6 +81,11 @@ async def get_all_branch_health(
     return [_metrics_to_response(m) for m in metrics]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unhealthy_branch_health",
+    error_code_prefix="BRANCH_HEALTH",
+)
 @router.get("/branch-health/unhealthy", response_model=List[BranchHealthResponse])
 @with_error_handling(
     category=ErrorCategory.INFRASTRUCTURE,
@@ -109,6 +119,11 @@ async def get_unhealthy_branch_health(
     return [_metrics_to_response(m) for m in unhealthy]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_diverged_branch_health",
+    error_code_prefix="BRANCH_HEALTH",
+)
 @router.get("/branch-health/diverged", response_model=List[BranchHealthResponse])
 @with_error_handling(
     category=ErrorCategory.INFRASTRUCTURE,
@@ -147,6 +162,11 @@ async def get_diverged_branch_health(
     return [_metrics_to_response(m) for m in diverged]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_stale_branch_health",
+    error_code_prefix="BRANCH_HEALTH",
+)
 @router.get("/branch-health/stale", response_model=List[BranchHealthResponse])
 @with_error_handling(
     category=ErrorCategory.INFRASTRUCTURE,

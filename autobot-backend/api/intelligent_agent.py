@@ -114,6 +114,11 @@ router = APIRouter(tags=["intelligent-agent"])
     operation="process_natural_language_goal",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_natural_language_goal",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 @router.post("/process", response_model=GoalResponse)
 async def process_natural_language_goal(
     request: GoalRequest,
@@ -172,6 +177,11 @@ async def process_natural_language_goal(
     operation="get_system_info",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_info",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 @router.get("/system-info", response_model=AgentSystemCapabilitiesResponse)
 async def get_system_info(
     current_user: dict = Depends(get_current_user),
@@ -207,6 +217,11 @@ async def get_system_info(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
@@ -251,6 +266,11 @@ async def health_check(
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_agent",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 @router.post("/reload", response_model=None)
 async def reload_agent(
     admin_check: bool = Depends(check_admin_permission),
@@ -269,6 +289,11 @@ async def reload_agent(
     return {"status": "reloaded", "message": "Agent reloaded successfully"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_stream",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 @router.websocket("/stream")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

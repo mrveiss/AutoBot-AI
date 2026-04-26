@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1122,6 +1123,11 @@ def _build_analysis_response(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_code",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze_code(
     request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1148,6 +1154,11 @@ async def analyze_code(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_file",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.post("/analyze-file", response_model=AnalysisResponse)
 async def analyze_file(
     request: AnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1181,6 +1192,11 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vulnerabilities",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.post("/vulnerabilities", response_model=None)
 async def get_vulnerabilities(
     request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1248,6 +1264,11 @@ def _aggregate_graph_taint_stats(
         vulns_by_severity[vsev] = vulns_by_severity.get(vsev, 0) + 1
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_taint_summary",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.post("/taint-summary", response_model=TaintSummary)
 async def get_taint_summary(
     request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
@@ -1285,6 +1306,11 @@ async def get_taint_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_taint_sources",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.get("/sources", response_model=None)
 async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -1304,6 +1330,11 @@ async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_taint_sinks",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.get("/sinks", response_model=None)
 async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -1324,6 +1355,11 @@ async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_sanitizers",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.get("/sanitizers", response_model=None)
 async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -1334,6 +1370,11 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     return {"sanitizers": sorted(SANITIZERS)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ANALYTICS_DFA",
+)
 @router.get("/health", response_model=None)
 async def health_check(admin_check: bool = Depends(check_admin_permission)):
     """

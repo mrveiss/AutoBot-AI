@@ -27,6 +27,7 @@ from integrations.project_management_integration import (
     TrelloIntegration,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,11 @@ def _validate_provider(provider: str) -> None:
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.post("/test-connection", response_model=IntegrationHealth)
 async def test_connection(
     request: ConnectionTestRequest,
@@ -192,6 +198,11 @@ async def test_connection(
     return health
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.get("/providers", response_model=List[ProviderInfo])
 async def list_providers() -> List[ProviderInfo]:
     """List all supported project management providers.
@@ -201,6 +212,11 @@ async def list_providers() -> List[ProviderInfo]:
     return list(SUPPORTED_PROVIDERS.values())
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_projects",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.get("/{provider}/projects", response_model=None)
 async def list_projects(
     provider: str,
@@ -241,6 +257,11 @@ async def list_projects(
         return await integration.execute_action("list_workspaces", {})
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_issues",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.get("/{provider}/issues", response_model=None)
 async def list_issues(
     provider: str,
@@ -340,6 +361,11 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
         return "create_task", params
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_issue",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.post("/{provider}/issues", response_model=None)
 async def create_issue(
     provider: str,
@@ -402,6 +428,11 @@ def _build_update_params(
         return "update_task", params
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_issue",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.patch("/{provider}/issues/{issue_id}", response_model=None)
 async def update_issue(
     provider: str,
@@ -429,6 +460,11 @@ async def update_issue(
     return await integration.execute_action(action, params)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_issues",
+    error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
+)
 @router.get("/{provider}/search", response_model=None)
 async def search_issues(
     provider: str,

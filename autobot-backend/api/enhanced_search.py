@@ -137,6 +137,11 @@ def _convert_metrics_to_api_format(metrics) -> dict:
     operation="enhanced_semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_semantic_search",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.post("/semantic", response_model=SearchResponse)
 async def enhanced_semantic_search(request: SearchRequest):
     """
@@ -197,6 +202,11 @@ async def enhanced_semantic_search(request: SearchRequest):
     operation="get_hardware_status",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardware_status",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.get("/hardware/status", response_model=None)
 async def get_hardware_status():
     """
@@ -221,6 +231,11 @@ async def get_hardware_status():
         raise HTTPException(status_code=500, detail="Failed to get hardware status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="benchmark_search_performance",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_search_performance",
@@ -257,6 +272,11 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="optimize_search_engine",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.post("/optimize", response_model=None)
 async def optimize_search_engine(request: OptimizationRequest):
     """
@@ -284,6 +304,11 @@ async def optimize_search_engine(request: OptimizationRequest):
         raise HTTPException(status_code=500, detail="Optimization failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_analytics",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_analytics",
@@ -332,6 +357,11 @@ async def get_performance_analytics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_npu_connectivity",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_npu_connectivity",
@@ -527,6 +557,11 @@ def _generate_system_recommendations(
 
 
 # Health check endpoint
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",

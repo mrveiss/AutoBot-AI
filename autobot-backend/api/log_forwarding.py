@@ -349,6 +349,11 @@ def _destination_to_response(dest) -> DestinationResponse:
     operation="list_destinations",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_destinations",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.get("/destinations", response_model=List[LogForwardingDestinationItem])
 async def list_destinations(
     admin_check: bool = Depends(check_admin_permission),
@@ -380,6 +385,11 @@ async def list_destinations(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_destination",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_destination",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.get("/destinations/{name}", response_model=LogForwardingDestinationItem)
 async def get_destination(
@@ -416,6 +426,11 @@ async def get_destination(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_destination",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_destination_endpoint",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.post("/destinations", response_model=LogFwdCreateUpdateResponse)
 async def create_destination_endpoint(
@@ -463,6 +478,11 @@ async def create_destination_endpoint(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_destination",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_destination",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.put("/destinations/{name}", response_model=LogFwdCreateUpdateResponse)
 async def update_destination(
@@ -515,6 +535,11 @@ async def update_destination(
     operation="delete_destination",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_destination",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.delete("/destinations/{name}", response_model=LogFwdMessageResponse)
 async def delete_destination(
     name: str,
@@ -548,6 +573,11 @@ async def delete_destination(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_destination",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_destination",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.post("/destinations/{name}/test", response_model=LogFwdTestResponse)
 async def test_destination(
@@ -593,6 +623,11 @@ async def test_destination(
     operation="test_all_destinations",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_all_destinations",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.post("/test-all", response_model=LogFwdTestAllResponse)
 async def test_all_destinations(
     admin_check: bool = Depends(check_admin_permission),
@@ -620,6 +655,11 @@ async def test_all_destinations(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_status",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.get("/status", response_model=LogFwdStatusResponse)
 async def get_status(
@@ -677,6 +717,11 @@ async def get_status(
     operation="start_forwarding",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_forwarding",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.post("/start", response_model=LogFwdMessageResponse)
 async def start_forwarding(
     admin_check: bool = Depends(check_admin_permission),
@@ -710,6 +755,11 @@ async def start_forwarding(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_forwarding",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_forwarding",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.post("/stop", response_model=LogFwdMessageResponse)
 async def stop_forwarding(
@@ -812,6 +862,11 @@ def _get_syslog_protocol_list() -> list:
     operation="get_destination_types",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_destination_types",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.get("/destination-types", response_model=LogFwdDestinationTypesResponse)
 async def get_destination_types(
     admin_check: bool = Depends(check_admin_permission),
@@ -841,6 +896,11 @@ async def get_destination_types(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_known_hosts",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_known_hosts",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.get("/known-hosts", response_model=LogFwdKnownHostsResponse)
 async def get_known_hosts(
@@ -894,6 +954,11 @@ async def get_known_hosts(
     operation="get_auto_start",
     error_code_prefix="LOGFWD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_auto_start",
+    error_code_prefix="LOG_FORWARDING",
+)
 @router.get("/auto-start", response_model=LogFwdAutoStartResponse)
 async def get_auto_start(
     admin_check: bool = Depends(check_admin_permission),
@@ -917,6 +982,11 @@ async def get_auto_start(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_auto_start",
     error_code_prefix="LOGFWD",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_auto_start",
+    error_code_prefix="LOG_FORWARDING",
 )
 @router.put("/auto-start", response_model=LogFwdAutoStartResponse)
 async def set_auto_start(

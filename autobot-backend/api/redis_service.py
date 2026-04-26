@@ -164,6 +164,11 @@ class HealthStatusResponse(BaseModel):
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_redis_service",
+    error_code_prefix="REDIS_SERVICE",
+)
 @router.post("/start", response_model=ServiceOperationResponse)
 async def start_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
@@ -202,6 +207,11 @@ async def start_redis_service(
         raise HTTPException(status_code=500, detail="Service start failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_redis_service",
+    error_code_prefix="REDIS_SERVICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_redis_service",
@@ -252,6 +262,11 @@ async def stop_redis_service(
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="restart_redis_service",
+    error_code_prefix="REDIS_SERVICE",
+)
 @router.post("/restart", response_model=ServiceOperationResponse)
 async def restart_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
@@ -295,6 +310,11 @@ async def restart_redis_service(
     operation="get_redis_status",
     error_code_prefix="REDIS_SERVICE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_status",
+    error_code_prefix="REDIS_SERVICE",
+)
 @router.get("/status", response_model=ServiceStatusResponse)
 async def get_redis_status(manager: RedisServiceManager = Depends(get_service_manager)):
     """
@@ -318,6 +338,11 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_health",
+    error_code_prefix="REDIS_SERVICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_health",

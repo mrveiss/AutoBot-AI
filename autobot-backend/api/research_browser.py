@@ -71,6 +71,11 @@ def _require_browser():
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.get("/health", response_model=ResearchBrowserHealthResponse)
 async def health_check():
     """Health check endpoint for research browser service"""
@@ -99,6 +104,11 @@ async def health_check():
     operation="research_url",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="research_url",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.post("/url", response_model=DataResponse)
 async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
@@ -110,6 +120,11 @@ async def research_url(request: ResearchRequest):
     return JSONResponse(status_code=200, content=result)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="handle_session_action",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="handle_session_action",
@@ -165,6 +180,11 @@ async def handle_session_action(request: SessionAction):
     operation="get_session_status",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_status",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.get("/session/{session_id}/status", response_model=DataResponse)
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
@@ -189,6 +209,11 @@ async def get_session_status(session_id: str):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="download_mhtml",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_mhtml",
@@ -240,6 +265,11 @@ async def download_mhtml(session_id: str, filename: str):
     operation="cleanup_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.delete("/session/{session_id}", response_model=DataResponse)
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
@@ -252,6 +282,11 @@ async def cleanup_session(session_id: str):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_sessions",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
@@ -291,6 +326,11 @@ class NavigationRequest(BaseModel):
     operation="navigate_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="navigate_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.post("/session/{session_id}/navigate", response_model=DataResponse)
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
@@ -305,6 +345,11 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_info",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_info",
@@ -419,6 +464,11 @@ class CreateChatBrowserRequest(BaseModel):
     operation="get_or_create_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_or_create_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.post("/chat-session", response_model=DataResponse)
 async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
@@ -487,6 +537,11 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     operation="get_chat_browser_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @router.get("/chat-session/{conversation_id}", response_model=DataResponse)
 async def get_chat_browser_session(conversation_id: str):
     """
@@ -533,6 +588,11 @@ async def get_chat_browser_session(conversation_id: str):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_chat_browser_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_browser_session",
