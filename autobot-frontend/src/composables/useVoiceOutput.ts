@@ -42,6 +42,10 @@ let _ttsWsConnecting: Promise<WebSocket> | null = null
 let _ttsWsIdleTimer: ReturnType<typeof setTimeout> | null = null
 const _TTS_WS_IDLE_TIMEOUT = 30_000
 
+// AbortController for the current in-flight speak() HTTP request.
+// Module-level so a new speak() call can abort the previous one.
+let _speakController: AbortController | null = null
+
 function _getOrCreateContext(): AudioContext {
   if (!_audioContext) {
     _audioContext = new AudioContext()
@@ -247,6 +251,10 @@ export function useVoiceOutput() {
     if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
     if (isSpeaking.value) _stopCurrentAudio()
 
+    _speakController?.abort()
+    _speakController = new AbortController()
+    const signal = _speakController.signal
+
     try {
       const { effectiveVoiceId } = useVoiceProfiles()
       const { language: prefLang } = usePreferences()
@@ -262,6 +270,7 @@ export function useVoiceOutput() {
       const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, {
         method: 'POST',
         body: formData,
+        signal,
       })
       if (!response.ok) {
         logger.warn('TTS synthesize failed:', response.status)
@@ -273,6 +282,7 @@ export function useVoiceOutput() {
       // Issue #1146: clear isSpeaking so watch(isSpeaking) in useVoiceConversation fires
       isSpeaking.value = false
     } catch (e) {
+      if (e instanceof DOMException && (e as DOMException).name === 'AbortError') return
       logger.error('speak() error:', e)
       isSpeaking.value = false
     }

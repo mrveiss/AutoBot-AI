@@ -50,11 +50,22 @@ const effectiveVoiceId = computed<string>(() => {
   return selectedVoiceId.value
 })
 
+// Module-level controllers — singleton state shared across all instances.
+// Each controller is replaced (aborting the previous) before a new call.
+// No onUnmounted is used because the singleton outlives individual components.
+let _fetchVoicesController: AbortController | null = null
+let _createVoiceController: AbortController | null = null
+let _deleteVoiceController: AbortController | null = null
+let _fetchPersonalityController: AbortController | null = null
+
 export function useVoiceProfiles() {
   async function fetchVoices(): Promise<void> {
     error.value = null
+    _fetchVoicesController?.abort()
+    _fetchVoicesController = new AbortController()
+    const signal = _fetchVoicesController.signal
     await wrap(async () => {
-      const res = await fetchWithAuth(`${getApiBase()}/voice/voices`)
+      const res = await fetchWithAuth(`${getApiBase()}/voice/voices`, { signal })
       if (!res.ok) {
         error.value = `Failed to fetch voices: ${res.status}`
         return
@@ -62,6 +73,7 @@ export function useVoiceProfiles() {
       const data = await res.json()
       voices.value = Array.isArray(data) ? data : (data.voices || [])
     }).catch((e) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       logger.error('fetchVoices error:', e)
       error.value = String(e)
     })
@@ -79,6 +91,9 @@ export function useVoiceProfiles() {
     filename: string,
   ): Promise<boolean> {
     error.value = null
+    _createVoiceController?.abort()
+    _createVoiceController = new AbortController()
+    const signal = _createVoiceController.signal
     return wrap(async () => {
       const formData = new FormData()
       formData.append('name', name)
@@ -86,6 +101,7 @@ export function useVoiceProfiles() {
       const res = await fetchWithAuth(`${getApiBase()}/voice/voices/create`, {
         method: 'POST',
         body: formData,
+        signal,
       })
       if (!res.ok) {
         const body = await res.text()
@@ -95,6 +111,7 @@ export function useVoiceProfiles() {
       await fetchVoices()
       return true
     }).catch((e) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return false
       logger.error('createVoice error:', e)
       error.value = String(e)
       return false
@@ -103,9 +120,13 @@ export function useVoiceProfiles() {
 
   async function deleteVoice(voiceId: string): Promise<boolean> {
     error.value = null
+    _deleteVoiceController?.abort()
+    _deleteVoiceController = new AbortController()
+    const signal = _deleteVoiceController.signal
     return wrap(async () => {
       const res = await fetchWithAuth(`${getApiBase()}/voice/voices/${voiceId}`, {
         method: 'DELETE',
+        signal,
       })
       if (!res.ok) {
         error.value = `Delete voice failed: ${res.status}`
@@ -117,6 +138,7 @@ export function useVoiceProfiles() {
       await fetchVoices()
       return true
     }).catch((e) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return false
       logger.error('deleteVoice error:', e)
       error.value = String(e)
       return false
@@ -129,8 +151,11 @@ export function useVoiceProfiles() {
   }
 
   async function fetchPersonalityVoice(): Promise<void> {
+    _fetchPersonalityController?.abort()
+    _fetchPersonalityController = new AbortController()
+    const signal = _fetchPersonalityController.signal
     try {
-      const res = await fetchWithAuth(`${getApiBase()}/personality/active`)
+      const res = await fetchWithAuth(`${getApiBase()}/personality/active`, { signal })
       if (res.ok) {
         const profile = await res.json()
         personalityVoiceId.value = profile?.voice_id ?? ''
@@ -139,7 +164,8 @@ export function useVoiceProfiles() {
         personalityVoiceId.value = ''
         personalityVoiceIds.value = {}
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && (e as DOMException).name === 'AbortError') return
       personalityVoiceId.value = ''
       personalityVoiceIds.value = {}
     }
