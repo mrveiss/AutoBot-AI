@@ -387,8 +387,7 @@ import { useKnowledgeController } from '@/models/controllers/index'
 // ManPageManager removed - consolidated to Manage → Advanced (Issue #678)
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
+import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import {
   formatFileSize,
   formatTimeAgo,
@@ -463,13 +462,15 @@ try {
   }
 }
 
+// Composable: knowledge stats fetching (category facts extraction #6052)
+const { categoryFactCounts, refreshCategoryFacts } = useKnowledgeStats()
+
 // State
 const isRefreshing = ref<boolean>(false)
 const detailedStats = ref<DetailedStats | null>(null)
 const recentActivities = ref<Activity[]>([])
 const vectorStats = ref<VectorStats | null>(null)
 const isRefreshingVectorStats = ref<boolean>(false)
-const categoryFactCounts = ref<Record<string, number>>({})
 const errorMessage = ref<string>('')
 
 // Computed statistics
@@ -783,19 +784,10 @@ const refreshVectorStats = async () => {
       embedding_dimensions: 768  // From detailed stats
     }
 
-    // Fetch category fact counts (secondary API call - only when needed)
-    try {
-      const factsData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
-
-      if (factsData && factsData.categories) {
-        const counts: Record<string, number> = {}
-        Object.keys(factsData.categories).forEach((category: string) => {
-          counts[category] = factsData.categories[category].length
-        })
-        categoryFactCounts.value = counts
-      }
-    } catch (factsError) {
-      logger.warn('Failed to fetch category facts, continuing with basic stats:', factsError)
+    // Fetch category fact counts via composable (extracted #6052)
+    const factsResult = await refreshCategoryFacts()
+    if (factsResult === null) {
+      logger.warn('Failed to fetch category facts, continuing with basic stats')
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
