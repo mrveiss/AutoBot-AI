@@ -988,5 +988,66 @@ class KnowledgeSyncQueuePruneResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# memory.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class MemoryEntityListResponse(BaseModel):
+    """Response for GET /memory/entities/all — JSONResponse shape from helper."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryOrphanScanResponse(BaseModel):
+    """Response for GET /memory/entities/orphans — JSONResponse shape from helper."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryOrphanCleanupResponse(BaseModel):
+    """Response for DELETE /memory/entities/orphans — JSONResponse shape from helper."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryDeleteEntityResponse(BaseModel):
+    """Response for DELETE /memory/entities/{entity_id} — JSONResponse shape from helper."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryRelatedEntitiesResponse(BaseModel):
+    """Response for GET /memory/entities/{entity_id}/relations — JSONResponse shape."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryDeleteRelationResponse(BaseModel):
+    """Response for DELETE /memory/relations — JSONResponse shape from helper."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryEntityInvalidateResponse(BaseModel):
+    """Response for PATCH /memory/entities/{entity_id}/invalidate — JSONResponse shape."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class MemoryRelationInvalidateResponse(BaseModel):
+    """Response for PATCH /memory/relations/invalidate — JSONResponse shape."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
 # workflow_export.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------

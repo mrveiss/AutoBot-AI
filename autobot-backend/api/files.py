@@ -38,6 +38,17 @@ from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
 from api.schemas_common import DataResponse
+from api.schemas_system import (
+    AdminFileListResponse,
+    AdminFileReadResponse,
+    DirectoryCreateResponse,
+    DirectoryTreeResponse,
+    FileDeleteResponse,
+    FilePreviewResponse,
+    FileRenameResponse,
+    FileStatsResponse,
+    FileViewResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -799,7 +810,7 @@ async def download_file(request: Request, path: str):
     operation="view_file",
     error_code_prefix="FILES",
 )
-@router.get("/view/{path:path}", response_model=None)
+@router.get("/view/{path:path}", response_model=FileViewResponse)
 async def view_file(request: Request, path: str):
     """
     View file content (for text files) or get file info.
@@ -923,7 +934,7 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-@router.post("/rename", response_model=None)
+@router.post("/rename", response_model=FileRenameResponse)
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
 ):
@@ -1013,7 +1024,7 @@ async def _read_text_content(target_file: Path) -> tuple:
     operation="preview_file",
     error_code_prefix="FILES",
 )
-@router.get("/preview", response_model=None)
+@router.get("/preview", response_model=FilePreviewResponse)
 async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
@@ -1061,7 +1072,7 @@ async def preview_file(request: Request, path: str):
     operation="delete_file",
     error_code_prefix="FILES",
 )
-@router.delete("/delete", response_model=None)
+@router.delete("/delete", response_model=FileDeleteResponse)
 async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
@@ -1136,7 +1147,7 @@ def _log_directory_create_audit(
     operation="create_directory",
     error_code_prefix="FILES",
 )
-@router.post("/create_directory", response_model=None)
+@router.post("/create_directory", response_model=DirectoryCreateResponse)
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
 ):
@@ -1180,7 +1191,7 @@ async def create_directory(
     operation="get_directory_tree",
     error_code_prefix="FILES",
 )
-@router.get("/tree", response_model=None)
+@router.get("/tree", response_model=DirectoryTreeResponse)
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -1248,7 +1259,7 @@ async def get_directory_tree(request: Request, path: str = ""):
     operation="get_file_stats",
     error_code_prefix="FILES",
 )
-@router.get("/stats", response_model=None)
+@router.get("/stats", response_model=FileStatsResponse)
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -1344,7 +1355,7 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
-@router.get("", summary="List directory for SLM admin file browser", response_model=None)
+@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
 async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
     """List directory contents at an absolute path.
 
@@ -1365,7 +1376,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-@router.get("/read", summary="Read file content for SLM admin file browser", response_model=None)
+@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
 async def admin_read_file(path: str) -> dict:
     """Return text content of a file at an absolute path.
 

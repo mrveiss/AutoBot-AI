@@ -27,7 +27,20 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 from api.schemas_common import DataResponse
-from api.schemas_analytics import UsageRecentResponse
+from api.schemas_analytics import (
+    AgentBudgetSetResponse,
+    AgentBudgetStatusResponse,
+    AllAgentCostsResponse,
+    BudgetAlertCreateResponse,
+    BudgetAlertsListResponse,
+    BudgetStatusResponse,
+    CostByModelResponse,
+    CostEstimateResponse,
+    CostForecastResponse,
+    ModelPricingResponse,
+    SingleAgentCostResponse,
+    UsageRecentResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
@@ -137,7 +150,7 @@ async def get_cost_summary(
     operation="get_cost_by_model",
     error_code_prefix="COST",
 )
-@router.get("/by-model", response_model=None)
+@router.get("/by-model", response_model=CostByModelResponse)
 async def get_cost_by_model(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -252,7 +265,7 @@ async def get_cost_trends(
     operation="get_cost_forecast",
     error_code_prefix="COST",
 )
-@router.get("/forecast", response_model=None)
+@router.get("/forecast", response_model=CostForecastResponse)
 async def get_cost_forecast(
     days_to_forecast: int = Query(
         default=30, ge=1, le=90, description="Days to forecast"
@@ -348,7 +361,7 @@ async def get_recent_usage(
     operation="get_model_pricing",
     error_code_prefix="COST",
 )
-@router.get("/pricing", response_model=None)
+@router.get("/pricing", response_model=ModelPricingResponse)
 async def get_model_pricing(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -400,7 +413,7 @@ async def get_model_pricing(
     operation="calculate_cost_estimate",
     error_code_prefix="COST",
 )
-@router.get("/estimate", response_model=None)
+@router.get("/estimate", response_model=CostEstimateResponse)
 async def calculate_cost_estimate(
     model: str = Query(..., description="Model name"),
     input_tokens: int = Query(..., ge=0, description="Number of input tokens"),
@@ -436,7 +449,7 @@ async def calculate_cost_estimate(
     operation="set_budget_alert",
     error_code_prefix="COST",
 )
-@router.post("/budget-alert", response_model=None)
+@router.post("/budget-alert", response_model=BudgetAlertCreateResponse)
 async def set_budget_alert(
     alert: BudgetAlertRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -473,7 +486,7 @@ async def set_budget_alert(
     operation="get_budget_alerts",
     error_code_prefix="COST",
 )
-@router.get("/budget-alerts", response_model=None)
+@router.get("/budget-alerts", response_model=BudgetAlertsListResponse)
 async def get_budget_alerts(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -567,7 +580,7 @@ async def _get_current_costs(tracker, today: datetime) -> dict:
     operation="get_budget_status",
     error_code_prefix="COST",
 )
-@router.get("/budget-status", response_model=None)
+@router.get("/budget-status", response_model=BudgetStatusResponse)
 async def get_budget_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -624,7 +637,7 @@ class AgentCostResponse(BaseModel):
     operation="get_cost_by_agent_all",
     error_code_prefix="COST",
 )
-@router.get("/by-agent", response_model=None)
+@router.get("/by-agent", response_model=AllAgentCostsResponse)
 async def get_cost_by_agent_all(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -669,7 +682,7 @@ async def get_cost_by_agent_all(
     operation="get_cost_by_agent_single",
     error_code_prefix="COST",
 )
-@router.get("/by-agent/{agent_id}", response_model=None)
+@router.get("/by-agent/{agent_id}", response_model=SingleAgentCostResponse)
 async def get_cost_by_agent_single(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -694,7 +707,7 @@ async def get_cost_by_agent_single(
     operation="set_agent_budget",
     error_code_prefix="COST",
 )
-@router.put("/by-agent/{agent_id}/budget", response_model=None)
+@router.put("/by-agent/{agent_id}/budget", response_model=AgentBudgetSetResponse)
 async def set_agent_budget(
     agent_id: str,
     request: AgentBudgetRequest,
@@ -715,7 +728,7 @@ async def set_agent_budget(
     operation="get_agent_budget_status",
     error_code_prefix="COST",
 )
-@router.get("/by-agent/{agent_id}/budget", response_model=None)
+@router.get("/by-agent/{agent_id}/budget", response_model=AgentBudgetStatusResponse)
 async def get_agent_budget_status(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
