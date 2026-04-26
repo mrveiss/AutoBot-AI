@@ -212,8 +212,8 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { fetchSourceSecrets, saveCodeSource } from '@/composables/analytics/useSourceRegistry'
+import type { RegistrySecret } from '@/composables/analytics/useSourceRegistry'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AddSourceModal')
@@ -222,13 +222,6 @@ const { t } = useI18n()
 // ---- Types ----------------------------------------------------------------
 
 import type { CodeSource } from '@/types/analytics'
-
-interface Secret {
-  id: string
-  name: string
-  type: string
-  scope: string
-}
 
 interface FormErrors {
   name?: string
@@ -298,7 +291,7 @@ const errors = ref<FormErrors>({})
 const submitError = ref<string | null>(null)
 const submitting = ref(false)
 
-const secrets = ref<Secret[]>([])
+const secrets = ref<RegistrySecret[]>([])
 const secretsLoadError = ref<string | null>(null)
 
 // ---- Computed -------------------------------------------------------------
@@ -311,19 +304,9 @@ const filteredSecrets = computed(() =>
 
 // ---- API ------------------------------------------------------------------
 
-async function getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
-}
-
 async function loadSecrets() {
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/secrets`)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    const data = await response.json()
-    secrets.value = data.secrets ?? []
+    secrets.value = await fetchSourceSecrets()
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.warn('Failed to load secrets:', msg)
@@ -379,39 +362,19 @@ async function handleSubmit() {
   submitting.value = true
   submitError.value = null
 
-  const payload: Record<string, unknown> = {
+  const payload = {
     name: form.value.name.trim(),
     source_type: form.value.source_type,
+    repo: form.value.source_type === 'github'
+      ? form.value.repo.trim()
+      : form.value.local_path.trim(),
     branch: form.value.branch.trim() || 'main',
     access: form.value.access,
     credential_id: form.value.credential_id || null
   }
 
-  if (form.value.source_type === 'github') {
-    payload.repo = form.value.repo.trim()
-  } else {
-    payload.repo = form.value.local_path.trim()
-  }
-
   try {
-    const backendUrl = await getBackendUrl()
-    const url = isEditMode.value
-      ? `${backendUrl}/api/analytics/codebase/sources/${props.source!.id}`
-      : `${backendUrl}/api/analytics/codebase/sources`
-    const method = isEditMode.value ? 'PUT' : 'POST'
-
-    const response = await fetchWithAuth(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
-
-    const saved: CodeSource = await response.json()
+    const saved = await saveCodeSource(payload, props.source?.id)
     logger.info(isEditMode.value ? 'Source updated:' : 'Source created:', saved.name)
     emit('saved', saved)
   } catch (err: unknown) {
