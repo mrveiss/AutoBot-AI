@@ -23,6 +23,7 @@ import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   WorkflowTemplateSummary,
   WorkflowTemplateDetail,
@@ -98,6 +99,9 @@ export function useWorkflowTemplates() {
     onError: () => { /* logger.error already fired inside endpoint */ },
   })
 
+  // Loading state for POST mutations
+  const { isLoading: mutationLoading, wrap: wrapMutation } = useLoadingState()
+
   // Bridge per-endpoint loading flags into the composable-level `loading` ref
   // so the public API (consumers reading `loading.value`) is preserved.
   // Endpoints that only set state (templates/categories/stats) AND on-demand
@@ -110,6 +114,7 @@ export function useWorkflowTemplates() {
       categoriesEndpoint.loading,
       statsEndpoint.loading,
       ondemandLoading,
+      mutationLoading,
     ],
     (flags: boolean[]) => {
       loading.value = flags.some(Boolean)
@@ -215,9 +220,8 @@ export function useWorkflowTemplates() {
     templateId: string,
     variables?: Record<string, string>
   ): Promise<CreateWorkflowResponse | null> {
-    loading.value = true
     error.value = null
-    try {
+    return wrapMutation(async () => {
       const backendUrl = await getBackendUrl()
       const response = await fetchWithAuth(
         `${backendUrl}/api/templates/templates/${templateId}/create-workflow`,
@@ -233,13 +237,11 @@ export function useWorkflowTemplates() {
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return await response.json()
-    } catch (e) {
+    }).catch((e) => {
       error.value = `Failed to create workflow: ${e}`
       logger.error('createWorkflowFromTemplate failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function executeTemplate(
@@ -247,9 +249,8 @@ export function useWorkflowTemplates() {
     variables?: Record<string, string>,
     autoApprove = false
   ): Promise<CreateWorkflowResponse | null> {
-    loading.value = true
     error.value = null
-    try {
+    return wrapMutation(async () => {
       const backendUrl = await getBackendUrl()
       const response = await fetchWithAuth(
         `${backendUrl}/api/templates/templates/${templateId}/execute`,
@@ -265,13 +266,11 @@ export function useWorkflowTemplates() {
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return await response.json()
-    } catch (e) {
+    }).catch((e) => {
       error.value = `Failed to execute template: ${e}`
       logger.error('executeTemplate failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function initializeTemplates(): Promise<void> {

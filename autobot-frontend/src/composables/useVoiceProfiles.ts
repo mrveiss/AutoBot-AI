@@ -12,6 +12,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('useVoiceProfiles')
 
@@ -29,7 +30,8 @@ const voices = ref<VoiceProfile[]>([])
 const selectedVoiceId = ref<string>(
   localStorage.getItem(STORAGE_KEY) || ''
 )
-const loading = ref(false)
+// loading and wrap are module-level to preserve the singleton pattern
+const { isLoading: loading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 // Personality-assigned voice — overrides user selection when set (#1135)
 const personalityVoiceId = ref<string>('')
@@ -50,9 +52,8 @@ const effectiveVoiceId = computed<string>(() => {
 
 export function useVoiceProfiles() {
   async function fetchVoices(): Promise<void> {
-    loading.value = true
     error.value = null
-    try {
+    await wrap(async () => {
       const res = await fetchWithAuth(`${getApiBase()}/voice/voices`)
       if (!res.ok) {
         error.value = `Failed to fetch voices: ${res.status}`
@@ -60,12 +61,10 @@ export function useVoiceProfiles() {
       }
       const data = await res.json()
       voices.value = Array.isArray(data) ? data : (data.voices || [])
-    } catch (e) {
+    }).catch((e) => {
       logger.error('fetchVoices error:', e)
       error.value = String(e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   function selectVoice(voiceId: string): void {
@@ -79,9 +78,8 @@ export function useVoiceProfiles() {
     audioBlob: Blob,
     filename: string,
   ): Promise<boolean> {
-    loading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const formData = new FormData()
       formData.append('name', name)
       formData.append('audio', audioBlob, filename)
@@ -96,19 +94,16 @@ export function useVoiceProfiles() {
       }
       await fetchVoices()
       return true
-    } catch (e) {
+    }).catch((e) => {
       logger.error('createVoice error:', e)
       error.value = String(e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function deleteVoice(voiceId: string): Promise<boolean> {
-    loading.value = true
     error.value = null
-    try {
+    return wrap(async () => {
       const res = await fetchWithAuth(`${getApiBase()}/voice/voices/${voiceId}`, {
         method: 'DELETE',
       })
@@ -121,13 +116,11 @@ export function useVoiceProfiles() {
       }
       await fetchVoices()
       return true
-    } catch (e) {
+    }).catch((e) => {
       logger.error('deleteVoice error:', e)
       error.value = String(e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   function setPersonalityVoice(voiceId: string): void {
