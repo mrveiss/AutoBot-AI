@@ -40,7 +40,7 @@ from scripts.logging.log_forwarder import (
     LogForwarder,
     SyslogProtocol,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_system import LogForwardingDestinationItem
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +349,7 @@ def _destination_to_response(dest) -> DestinationResponse:
     operation="list_destinations",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations", response_model=None)
+@router.get("/destinations", response_model=List[LogForwardingDestinationItem])
 async def list_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Dict[str, Any]]:
@@ -381,7 +381,7 @@ async def list_destinations(
     operation="get_destination",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations/{name}", response_model=None)
+@router.get("/destinations/{name}", response_model=LogForwardingDestinationItem)
 async def get_destination(
     name: str,
     admin_check: bool = Depends(check_admin_permission),

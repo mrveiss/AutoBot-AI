@@ -24,7 +24,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.schemas_common import UsageRecordResponse
-from api.schemas_analytics import UsageByUserAllResponse, UsageSummaryResponse
+from api.schemas_analytics import (
+    UsageByUserAllResponse,
+    UsageSummaryResponse,
+    UsageByUserSingleResponse,
+    UsageMyUsageResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -131,7 +136,7 @@ async def get_usage_by_user_all(
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user/{user_id}", response_model=None)
+@router.get("/by-user/{user_id}", response_model=UsageByUserSingleResponse)
 async def get_usage_by_user_single(
     user_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -150,7 +155,7 @@ async def get_usage_by_user_single(
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
-@router.get("/me", response_model=None)
+@router.get("/me", response_model=UsageMyUsageResponse)
 async def get_my_usage(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:

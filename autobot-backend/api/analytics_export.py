@@ -29,7 +29,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
+from api.schemas_analytics import ExportFormatsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
@@ -605,7 +606,7 @@ async def export_grafana_dashboard(
     operation="get_export_formats",
     error_code_prefix="EXPORT",
 )
-@router.get("/formats", response_model=None)
+@router.get("/formats", response_model=ExportFormatsResponse)
 async def get_export_formats(
     admin_check: bool = Depends(check_admin_permission),
 ):

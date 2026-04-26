@@ -23,7 +23,8 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.network_constants import NetworkConstants
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
+from api.schemas_code import ResearchBrowserHealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def _require_browser():
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=ResearchBrowserHealthResponse)
 async def health_check():
     """Health check endpoint for research browser service"""
     if not _BROWSER_AVAILABLE:

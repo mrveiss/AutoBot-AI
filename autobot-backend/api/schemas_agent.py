@@ -212,6 +212,78 @@ class AgentConfigOverviewResponse(BaseModel):
     timestamp: str
 
 # ---------------------------------------------------------------------------
+# a2a.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class A2AAgentCardResponse(BaseModel):
+    """Response for GET /a2a/agent-card — AgentCard.to_dict() shape."""
+
+    model_config = {"extra": "allow"}
+
+
+class A2ASignedAgentCardResponse(BaseModel):
+    """Response for GET /a2a/agent-card/signed — {card, issued_at, signature}."""
+
+    card: Dict[str, Any]
+    issued_at: int
+    signature: str
+
+
+class A2ASubmitTaskResponse(BaseModel):
+    """Response for POST /a2a/tasks — {id, state, traceId}."""
+
+    id: str
+    state: str
+    traceId: str
+
+
+class A2ATaskResponse(BaseModel):
+    """Response for GET /a2a/tasks/{id} and GET /a2a/tasks list items.
+
+    Shape comes from _task_response() which returns the full task dict.
+    Extra fields allowed because the shape includes dynamic artifacts.
+    """
+
+    model_config = {"extra": "allow"}
+
+    id: str
+    state: str
+
+
+class A2ATaskTraceResponse(BaseModel):
+    """Response for GET /a2a/tasks/{id}/trace."""
+
+    task_id: str
+    trace: Optional[Dict[str, Any]] = None
+    events: List[Any]
+
+
+class A2ACancelTaskResponse(BaseModel):
+    """Response for DELETE /a2a/tasks/{id}."""
+
+    id: str
+    state: str
+
+
+class A2AStatsResponse(BaseModel):
+    """Response for GET /a2a/stats."""
+
+    counts: Dict[str, int]
+    total: int
+
+
+class A2ACapabilitiesResponse(BaseModel):
+    """Response for GET /a2a/capabilities and POST /a2a/capabilities/verify.
+
+    Shape from CapabilityVerificationReport.to_dict() — opaque; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
 # LLM schemas  (llm.py)
 # ---------------------------------------------------------------------------
 
