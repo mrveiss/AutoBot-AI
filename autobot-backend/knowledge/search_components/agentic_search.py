@@ -27,7 +27,7 @@ against ssot_config.ollama_url with a configurable timeout.
 
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple
 
 from services.context_sufficiency import (
@@ -61,6 +61,21 @@ Reply with ONLY the rewritten query — no explanation, no quotes, no prefix.
 _SUFFICIENCY_THRESHOLD = 0.5  # hybrid_score floor to consider a result useful
 
 
+def _get_default_agentic_model() -> str:
+    """Return the configured default LLM model, falling back to llama3.2:latest.
+
+    Reads AUTOBOT_DEFAULT_LLM_MODEL via ssot_config so that the model used for
+    query rewriting honours the centrally configured model rather than a
+    hardcoded string (Issue #5958).
+    """
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().llm.default_model
+    except Exception:
+        return "llama3.2:latest"
+
+
 @dataclass
 class AgenticSearchConfig:
     """Configuration knobs for the agentic search layer.
@@ -84,7 +99,9 @@ class AgenticSearchConfig:
     enable_agentic_search: bool = True
     rewrite_enabled: bool = True
     max_search_iterations: int = 3
-    model: str = "llama3.2:latest"
+    model: str = field(
+        default_factory=lambda: _get_default_agentic_model()
+    )
     temperature: float = 0.2
     timeout_ms: int = 8000
     max_rewrite_tokens: int = 128
