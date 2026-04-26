@@ -131,8 +131,7 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { shareCodeSource } from '@/composables/analytics/useSourceRegistry'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ShareSourceModal')
@@ -208,12 +207,6 @@ const parsedUserIds = computed<string[]>(() =>
     .filter(s => s.length > 0)
 )
 
-// ---- API ------------------------------------------------------------------
-
-async function getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
-}
-
 // ---- Actions --------------------------------------------------------------
 
 async function handleSubmit() {
@@ -221,28 +214,11 @@ async function handleSubmit() {
   submitting.value = true
   submitError.value = null
 
-  const payload = {
-    user_ids: parsedUserIds.value,
-    access: form.value.access
-  }
-
   try {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${props.source.id}/share`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }
-    )
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
-
-    const saved: CodeSource = await response.json()
+    const saved = await shareCodeSource(props.source.id, {
+      access: form.value.access,
+      user_ids: parsedUserIds.value
+    })
     logger.info('Access updated for source:', saved.name)
     emit('saved', saved)
   } catch (err: unknown) {
