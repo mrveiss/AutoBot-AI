@@ -1099,6 +1099,7 @@ class PathConfig(BaseSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+    code_source_dir: str = Field(default="code_source", alias="AUTOBOT_CODE_SOURCE")
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1131,6 +1132,11 @@ class PathConfig(BaseSettings):
     def docs_path(self) -> Path:
         """Absolute path to the docs directory."""
         return self.resolve(self.docs_dir)
+
+    @property
+    def code_source_path(self) -> Path:
+        """Absolute path to the code source directory (git repo root on deployment)."""
+        return self.resolve(self.code_source_dir)
 
 
 class FeatureConfig(BaseSettings):
