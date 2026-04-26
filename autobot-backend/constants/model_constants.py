@@ -31,7 +31,6 @@ Usage:
     model_name = ConfigRegistry.get("llm.default_model", DEFAULT_LLM_MODEL)
 """
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional
@@ -339,12 +338,15 @@ class ModelConstants:
 
     @staticmethod
     def get_lm_studio_url() -> str:
-        """Get LM Studio service URL from environment or default"""
-        from constants.network_constants import NetworkConstants
+        """Get LM Studio service URL from config.llm.lmstudio_host (LMSTUDIO_HOST env var).
 
-        host = os.getenv("AUTOBOT_LM_STUDIO_HOST", NetworkConstants.LOCALHOST_IP)
-        port = os.getenv("AUTOBOT_LM_STUDIO_PORT", "1234")
-        return f"http://{host}:{port}"
+        Issue #6125: Consolidated from ad-hoc AUTOBOT_LM_STUDIO_HOST / AUTOBOT_LM_STUDIO_PORT
+        env reads to the canonical config.llm.lmstudio_host field (alias LMSTUDIO_HOST)
+        added in #6000.
+        """
+        from autobot_shared.ssot_config import config
+
+        return config.llm.lmstudio_host
 
 
 @dataclass(frozen=True)
