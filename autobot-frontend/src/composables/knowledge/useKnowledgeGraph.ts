@@ -155,11 +155,14 @@ export function useKnowledgeGraph(): UseKnowledgeGraphReturn {
           ),
         ])
 
+        const unifiedBody = (unifiedData as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+        const memoryBody = (memoryData as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+
         const unifiedEntities: GraphEntity[] =
-          (unifiedData as Record<string, unknown>)?.data?.entities as GraphEntity[] ?? []
+          (unifiedBody?.entities as GraphEntity[] | undefined) ?? []
         const memoryEntities: GraphEntity[] =
-          (memoryData as Record<string, unknown>)?.data?.entities as GraphEntity[]
-          ?? (memoryData as Record<string, unknown>)?.entities as GraphEntity[]
+          (memoryBody?.entities as GraphEntity[] | undefined)
+          ?? ((memoryData as Record<string, unknown>)?.entities as GraphEntity[] | undefined)
           ?? []
 
         // Merge entities, avoiding duplicates by ID
@@ -172,8 +175,7 @@ export function useKnowledgeGraph(): UseKnowledgeGraphReturn {
         entities.value = Array.from(entityMap.values())
 
         // Seed relations from the unified endpoint
-        relations.value =
-          (unifiedData as Record<string, unknown>)?.data?.relations as GraphRelation[] ?? []
+        relations.value = (unifiedBody?.relations as GraphRelation[] | undefined) ?? []
 
         // Augment with per-entity memory relations when memory has entries
         if (memoryEntities.length > 0) {
