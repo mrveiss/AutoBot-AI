@@ -187,7 +187,7 @@ async def get_entity_relationships(
     operation="search_events",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/events", response_model=None)
+@router.get("/events", response_model=KnowledgeGraphEventsResponse)
 async def search_events(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -230,7 +230,7 @@ async def search_events(
     operation="get_event_timeline",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/events/{entity_name}/timeline", response_model=None)
+@router.get("/events/{entity_name}/timeline", response_model=KnowledgeGraphEventTimelineResponse)
 async def get_event_timeline(
     entity_name: str,
     limit: int = Query(50, ge=1, le=200),
@@ -268,7 +268,7 @@ async def get_event_timeline(
     operation="search_summaries",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/summaries/search", response_model=None)
+@router.get("/summaries/search", response_model=KnowledgeGraphSummariesResponse)
 async def search_summaries(
     query: str = Query(..., description="Search query"),
     level: Optional[str] = Query(
@@ -301,7 +301,7 @@ async def search_summaries(
     operation="get_document_overview",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/documents/{document_id}/overview", response_model=None)
+@router.get("/documents/{document_id}/overview", response_model=KnowledgeGraphDocumentOverviewResponse)
 async def get_document_overview(
     document_id: str,
     current_user: dict = Depends(get_current_user),
@@ -327,7 +327,7 @@ async def get_document_overview(
     operation="drill_down_summary",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/summaries/{summary_id}/drill-down", response_model=None)
+@router.get("/summaries/{summary_id}/drill-down", response_model=KnowledgeGraphDrillDownResponse)
 async def drill_down_summary(
     summary_id: str,
     current_user: dict = Depends(get_current_user),
