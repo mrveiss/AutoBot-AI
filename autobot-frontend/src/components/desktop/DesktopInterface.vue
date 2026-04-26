@@ -11,9 +11,10 @@
 
     <div class="desktop-container">
       <UnifiedLoadingView
-        loading-key="desktop-vnc"
+        :is-loading="loading"
+        :error="error"
         :has-content="!loading && !error"
-        :auto-timeout-ms="15000"
+        :timeout-ms="15000"
         @loading-complete="handleDesktopConnected"
         @loading-error="handleDesktopError"
         @loading-timeout="handleDesktopTimeout"

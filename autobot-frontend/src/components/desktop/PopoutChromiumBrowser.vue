@@ -161,9 +161,9 @@
         <!-- API Connection Status Overlay -->
         <UnifiedLoadingView
           v-if="browserStatus === 'connecting'"
-          loading-key="playwright-connecting"
+          :is-loading="true"
           :has-content="false"
-          :auto-timeout-ms="10000"
+          :timeout-ms="10000"
           @loading-complete="handlePlaywrightConnected"
           @loading-error="handlePlaywrightError"
           @loading-timeout="handlePlaywrightTimeout"
@@ -288,9 +288,9 @@
       <!-- Session Loading -->
       <UnifiedLoadingView
         v-else-if="loading"
-        loading-key="browser-session-init"
+        :is-loading="true"
         :has-content="false"
-        :auto-timeout-ms="15000"
+        :timeout-ms="15000"
         @loading-complete="handleSessionInitialized"
         @loading-error="handleSessionError"
         @loading-timeout="handleSessionTimeout"

@@ -1,5 +1,5 @@
 <template>
-  <div class="unified-loading-view" :data-loading-key="loadingKey">
+  <div class="unified-loading-view">
     <!-- Error State -->
     <div v-if="error && !isLoading" class="error-container" role="alert">
       <div class="error-content">
@@ -50,10 +50,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 import Icon from './Icon.vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 
@@ -61,16 +60,22 @@ const logger = createLogger('UnifiedLoadingView')
 const { t } = useI18n()
 
 interface Props {
-  loadingKey?: string
+  isLoading?: boolean
+  error?: string | null
+  message?: string
+  hasTimedOut?: boolean
   hasContent?: boolean
   onRetry?: () => void
-  autoTimeoutMs?: number
+  timeoutMs?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  loadingKey: 'default',
+  isLoading: false,
+  error: null,
+  message: '',
+  hasTimedOut: false,
   hasContent: false,
-  autoTimeoutMs: 10000
+  timeoutMs: 10000
 })
 
 const emit = defineEmits<{
@@ -79,40 +84,43 @@ const emit = defineEmits<{
   'loading-timeout': []
 }>()
 
-const { isLoading, error, message, hasTimedOut, stopLoading, setError } = useUnifiedLoading(props.loadingKey)
+let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-// Auto-stop loading after timeout if still loading
-onMounted(() => {
-  const timeoutId = setTimeout(() => {
-    if (isLoading.value) {
-      logger.warn(`Auto-stopping loading for key: ${props.loadingKey}`)
-      stopLoading()
-      emit('loading-timeout')
-    }
-  }, props.autoTimeoutMs)
-
-  // Cleanup on unmount
-  onUnmounted(() => {
+function clearTimer() {
+  if (timeoutId !== null) {
     clearTimeout(timeoutId)
-  })
-})
-
-const retry = () => {
-  setError(null)
-  if (props.onRetry) {
-    props.onRetry()
+    timeoutId = null
   }
 }
 
+watch(() => props.isLoading, (loading: boolean) => {
+  clearTimer()
+  if (loading && props.timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      logger.warn(`Loading timed out after ${props.timeoutMs}ms`)
+      emit('loading-timeout')
+    }, props.timeoutMs)
+  } else if (!loading) {
+    emit('loading-complete')
+  }
+})
+
+watch(() => props.error, (err: string | null | undefined) => {
+  if (err) emit('loading-error', err)
+})
+
+onUnmounted(clearTimer)
+
+const retry = () => {
+  if (props.onRetry) props.onRetry()
+}
+
 const dismiss = () => {
-  setError(null)
-  stopLoading()
   emit('loading-complete')
 }
 
 const cancelLoading = () => {
-  stopLoading()
-  emit('loading-complete')
+  emit('loading-timeout')
 }
 </script>
 

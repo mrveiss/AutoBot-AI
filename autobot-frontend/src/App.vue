@@ -384,10 +384,10 @@
     <main id="main-content" class="flex-1 min-h-0 overflow-hidden" role="main">
       <!-- Unified Loading System -->
       <UnifiedLoadingView
-        loading-key="app-main"
+        :is-loading="isLoading"
         :has-content="!isLoading && !hasErrors"
         :on-retry="clearAllCaches"
-        :auto-timeout-ms="15000"
+        :timeout-ms="15000"
         @loading-complete="handleLoadingComplete"
         @loading-error="handleLoadingError"
         @loading-timeout="handleLoadingTimeout"

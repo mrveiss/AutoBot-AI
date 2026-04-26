@@ -13,9 +13,8 @@
       <!-- Chat Sidebar with Unified Loading -->
       <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
       <UnifiedLoadingView
-        loading-key="chat-sidebar"
         :has-content="store.sessions.length > 0"
-        :auto-timeout-ms="10000"
+        :timeout-ms="10000"
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
@@ -111,9 +110,8 @@
 
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
         <UnifiedLoadingView
-          loading-key="chat-content"
           :has-content="store.currentMessages.length > 0"
-          :auto-timeout-ms="15000"
+          :timeout-ms="15000"
           @loading-complete="handleContentLoadingComplete"
           @loading-error="handleContentLoadingError"
           @loading-timeout="handleContentLoadingTimeout"
