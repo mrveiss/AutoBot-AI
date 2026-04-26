@@ -185,6 +185,7 @@
  * with graph traversal for contextual results.
  *
  * @see Issue #586 - Entity Extraction & Graph RAG Manager GUI
+ * @see Issue #6050 - Extract inline fetching to useKnowledgeGraphRAG
  *
  * @author mrveiss
  * @copyright (c) 2025 mrveiss
@@ -196,49 +197,26 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeGraphRAG } from '@/composables/knowledge/useKnowledgeGraphRAG'
 
-const logger = createLogger('GraphRAGQuery')
 const { t } = useI18n()
 
 // ============================================================================
-// Types
+// Composable
 // ============================================================================
 
-interface SearchResult {
-  content: string
-  metadata?: Record<string, unknown>
-  semantic_score?: number
-  keyword_score?: number
-  hybrid_score?: number
-  relevance_rank?: number
-  source_path?: string
-}
-
-interface SearchMetrics {
-  total_time?: number
-  graph_traversal_time?: number
-  semantic_search_time?: number
-  reranking_time?: number
-}
-
-interface SearchResponse {
-  success: boolean
-  results: SearchResult[]
-  metrics: SearchMetrics
-  request_id: string
-}
-
-interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy'
-  components: Record<string, string>
-  timestamp: string
-}
+const {
+  searchResults,
+  healthStatus,
+  isSearching,
+  isCheckingHealth,
+  errorMessage,
+  searchGraph,
+  checkHealth,
+} = useKnowledgeGraphRAG()
 
 // ============================================================================
-// State
+// Local UI state
 // ============================================================================
 
 const queryText = ref('')
@@ -246,11 +224,6 @@ const startEntity = ref('')
 const maxDepth = ref(2)
 const maxResults = ref(10)
 const enableReranking = ref(true)
-const isSearching = ref(false)
-const isCheckingHealth = ref(false)
-const errorMessage = ref('')
-const searchResults = ref<SearchResponse | null>(null)
-const healthStatus = ref<HealthStatus | null>(null)
 
 // ============================================================================
 // Computed
@@ -276,49 +249,13 @@ async function executeSearch(): Promise<void> {
     return
   }
 
-  isSearching.value = true
-  errorMessage.value = ''
-  searchResults.value = null
-
-  try {
-    logger.info(`Executing Graph-RAG search: "${queryText.value.substring(0, 50)}..."`)
-
-    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/graph-rag/search`, {
-      query: queryText.value.trim(),
-      start_entity: startEntity.value.trim() || null,
-      max_depth: maxDepth.value,
-      max_results: maxResults.value,
-      enable_reranking: enableReranking.value
-    })
-
-    searchResults.value = parsedResponse?.data || parsedResponse
-
-    logger.info(`Search complete: ${searchResults.value?.results?.length || 0} results`)
-  } catch (error) {
-    logger.error('Graph-RAG search failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : t('knowledge.graphRAG.errorSearchFailed')
-  } finally {
-    isSearching.value = false
-  }
-}
-
-async function checkHealth(): Promise<void> {
-  isCheckingHealth.value = true
-
-  try {
-    const parsedResponse = await apiClient.get<Record<string, any>>(`${getApiBase()}/graph-rag/health`)
-    healthStatus.value = parsedResponse?.data || parsedResponse
-    logger.info(`Health check: ${healthStatus.value?.status}`)
-  } catch (error) {
-    logger.error('Health check failed:', error)
-    healthStatus.value = {
-      status: 'unhealthy',
-      components: {},
-      timestamp: new Date().toISOString()
-    }
-  } finally {
-    isCheckingHealth.value = false
-  }
+  await searchGraph({
+    query: queryText.value.trim(),
+    start_entity: startEntity.value.trim() || null,
+    max_depth: maxDepth.value,
+    max_results: maxResults.value,
+    enable_reranking: enableReranking.value,
+  })
 }
 
 function formatScore(score?: number): string {
