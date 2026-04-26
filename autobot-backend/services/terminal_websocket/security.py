@@ -10,7 +10,7 @@ Command risk assessment and security enforcement for terminal operations.
 import logging
 from typing import Set
 
-from api.terminal_models import (
+from api.schemas_terminal import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
     CommandRiskLevel,

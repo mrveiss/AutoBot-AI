@@ -145,7 +145,7 @@ from api.schemas_terminal import (
 )
 
 # Import models from dedicated module (Issue #185 - split oversized files)
-from api.terminal_models import (
+from api.schemas_terminal import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
     AdminExecuteRequest,
