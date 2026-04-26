@@ -1047,3 +1047,40 @@ class MultimodalHealthResponse(BaseModel):
     processor_ready: bool
     performance_monitoring: bool
     mixed_precision_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# permissions.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PermissionRuleMutateResponse(BaseModel):
+    """Response for POST/DELETE /permissions/rules."""
+
+    status: str
+    message: str
+
+
+class PermissionClearApprovalsResponse(BaseModel):
+    """Response for DELETE /permissions/memory/{project_path}."""
+
+    status: str
+    message: str
+
+
+class PermissionStoreApprovalResponse(BaseModel):
+    """Response for POST /permissions/memory."""
+
+    status: str
+    message: str
+
+
+class PermissionMemoryStatsResponse(BaseModel):
+    """Response for GET /permissions/memory/stats."""
+
+    enabled: bool
+    redis_available: Optional[bool] = None
+    total_project_user_combinations: Optional[int] = None
+    ttl_seconds: Optional[int] = None
+    ttl_days: Optional[int] = None
+    error: Optional[str] = None
