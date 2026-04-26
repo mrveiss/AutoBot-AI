@@ -53,10 +53,6 @@ class BranchHealthResponse(BaseModel):
     error_code_prefix="BRANCH_HEALTH",
 )
 @router.get("/branch-health/all", response_model=List[BranchHealthResponse])
-@with_error_handling(
-    category=ErrorCategory.SYSTEM,
-    context="Fetch all branch health metrics",
-)
 async def get_all_branch_health(
     repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
@@ -87,10 +83,6 @@ async def get_all_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 @router.get("/branch-health/unhealthy", response_model=List[BranchHealthResponse])
-@with_error_handling(
-    category=ErrorCategory.SYSTEM,
-    context="Fetch unhealthy branches",
-)
 async def get_unhealthy_branch_health(
     repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
@@ -125,10 +117,6 @@ async def get_unhealthy_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 @router.get("/branch-health/diverged", response_model=List[BranchHealthResponse])
-@with_error_handling(
-    category=ErrorCategory.SYSTEM,
-    context="Fetch highly diverged branches",
-)
 async def get_diverged_branch_health(
     repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
@@ -168,10 +156,6 @@ async def get_diverged_branch_health(
     error_code_prefix="BRANCH_HEALTH",
 )
 @router.get("/branch-health/stale", response_model=List[BranchHealthResponse])
-@with_error_handling(
-    category=ErrorCategory.SYSTEM,
-    context="Fetch stale branches",
-)
 async def get_stale_branch_health(
     repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
