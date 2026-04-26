@@ -16,7 +16,11 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    ServicesHealthAggregateResponse,
+    ServicesHealthDeprecatedResponse,
+    ServicesVMsStatusResponse,
+)
 
 # Import existing monitoring functionality
 try:
@@ -236,7 +240,7 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
     operation="get_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Simple health check endpoint.
 
@@ -267,7 +271,7 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     operation="get_services_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/services/health", response_model=None)
+@router.get("/services/health", response_model=ServicesHealthAggregateResponse)
 async def get_services_health(admin_check: bool = Depends(check_admin_permission)):
     """Get service health status - alias to monitoring endpoint
 
@@ -368,7 +372,7 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     operation="get_vms_status",
     error_code_prefix="SERVICES",
 )
-@router.get("/vms/status", response_model=None)
+@router.get("/vms/status", response_model=ServicesVMsStatusResponse)
 async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get VM status for distributed infrastructure.

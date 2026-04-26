@@ -20,7 +20,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import unified_config_manager
 from services.config_service import ConfigService
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    DeveloperConfigResponse,
+    DeveloperConfigUpdateResponse,
+    DeveloperEndpointsResponse,
+    DeveloperSystemInfoResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -98,7 +103,7 @@ api_registry = APIRegistry()
     operation="get_api_endpoints",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/endpoints", response_model=None)
+@router.get("/endpoints", response_model=DeveloperEndpointsResponse)
 async def get_api_endpoints():
     """Get all registered API endpoints (developer mode)"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
@@ -119,7 +124,7 @@ async def get_api_endpoints():
     operation="get_developer_config",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/config", response_model=None)
+@router.get("/config", response_model=DeveloperConfigResponse)
 async def get_developer_config():
     """Get developer mode configuration"""
     developer_config = unified_config_manager.get_nested("developer", {})
@@ -141,7 +146,7 @@ async def get_developer_config():
     operation="update_developer_config",
     error_code_prefix="DEVELOPER",
 )
-@router.post("/config", response_model=None)
+@router.post("/config", response_model=DeveloperConfigUpdateResponse)
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
@@ -167,7 +172,7 @@ async def update_developer_config(config: dict):
     operation="get_system_info",
     error_code_prefix="DEVELOPER",
 )
-@router.get("/system-info", response_model=None)
+@router.get("/system-info", response_model=DeveloperSystemInfoResponse)
 async def get_system_info():
     """Get system information for debugging"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)

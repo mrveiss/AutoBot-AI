@@ -25,6 +25,7 @@ router = APIRouter(tags=["startup", "status"])
 # Thread lock for synchronous access to startup_state
 import threading
 from api.schemas_common import DataResponse
+from api.schemas_system import StartupStatusResponse
 
 _startup_lock = threading.Lock()
 
@@ -131,7 +132,7 @@ async def broadcast_startup_message(message: StartupMessage):
     operation="get_startup_status",
     error_code_prefix="STARTUP",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=StartupStatusResponse)
 async def get_startup_status():
     """Get current startup status"""
     with _startup_lock:

@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    RedisConfigResponse,
+    RedisConnectionStatusResponse,
+    RedisHealthResponse,
+)
 
 router = APIRouter()
 
@@ -25,7 +29,7 @@ logger = logging.getLogger(__name__)
     operation="get_redis_config",
     error_code_prefix="REDIS",
 )
-@router.get("/config", response_model=None)
+@router.get("/config", response_model=RedisConfigResponse)
 async def get_redis_config():
     """Get current Redis configuration"""
     try:
@@ -45,7 +49,7 @@ async def get_redis_config():
     operation="update_redis_config",
     error_code_prefix="REDIS",
 )
-@router.post("/config", response_model=None)
+@router.post("/config", response_model=RedisConfigResponse)
 async def update_redis_config(config_data: dict):
     """Update Redis configuration"""
     try:
@@ -66,7 +70,7 @@ async def update_redis_config(config_data: dict):
     operation="get_redis_status",
     error_code_prefix="REDIS",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=RedisConnectionStatusResponse)
 async def get_redis_status():
     """Get Redis connection status"""
     try:
@@ -90,7 +94,7 @@ async def get_redis_status():
     operation="test_redis_connection",
     error_code_prefix="REDIS",
 )
-@router.post("/test_connection", response_model=None)
+@router.post("/test_connection", response_model=RedisConnectionStatusResponse)
 async def test_redis_connection():
     """Test Redis connection with current configuration"""
     try:
@@ -114,7 +118,7 @@ async def test_redis_connection():
     operation="get_redis_health",
     error_code_prefix="REDIS",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=RedisHealthResponse)
 async def get_redis_health():
     """Get Redis health status for frontend health checks"""
     try:

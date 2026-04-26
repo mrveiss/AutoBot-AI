@@ -27,6 +27,7 @@ from agents.overseer.types import (
 from auth_middleware import get_current_user
 from chat_history import ChatHistoryManager
 from api.schemas_common import DataResponse
+from api.schemas_system import OverseerStatusResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -532,7 +533,7 @@ async def submit_query(
     operation="get_status",
     error_code_prefix="OVERSEER_HANDLERS",
 )
-@router.get("/status/{session_id}", response_model=None)
+@router.get("/status/{session_id}", response_model=OverseerStatusResponse)
 async def get_status(
     session_id: str,
     current_user: dict = Depends(get_current_user),
