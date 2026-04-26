@@ -36,6 +36,7 @@ class ErrorCategory(Enum):
 
     # System-level categories
     SYSTEM = "system"
+    INFRASTRUCTURE = "infrastructure"
     NETWORK = "network"
     DATABASE = "database"
     LLM = "llm"

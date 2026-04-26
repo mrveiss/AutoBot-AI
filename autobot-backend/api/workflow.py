@@ -20,7 +20,7 @@ from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
-from event_manager import event_manager
+from event_manager import get_event_manager as _get_event_manager
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
@@ -717,7 +717,7 @@ async def approve_workflow_step(
     await _update_step_status_and_metrics(workflow_id, approval)
 
     # Publish approval event
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_approval",
         {
             "workflow_id": workflow_id,
@@ -820,7 +820,7 @@ async def _wait_for_step_approval(
         pending_approvals[approval_key] = approval_future
 
     # Publish approval request event
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_approval_required",
         {
             "workflow_id": workflow_id,
@@ -860,7 +860,7 @@ async def _publish_step_started(
         step_index: Current step index
         total_steps: Total number of steps
     """
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_step_started",
         {
             "workflow_id": workflow_id,
@@ -882,7 +882,7 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
         workflow_id: Workflow identifier
         step: Step data with result
     """
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_step_completed",
         {
             "workflow_id": workflow_id,
@@ -1022,7 +1022,7 @@ async def _finalize_workflow_completed(
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_completed",
         {
             "workflow_id": workflow_id,
@@ -1050,7 +1050,7 @@ async def _finalize_workflow_failed(
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_failed",
         {
             "workflow_id": workflow_id,
@@ -1189,7 +1189,7 @@ async def cancel_workflow(
                 if not future.done():
                     future.cancel()
 
-    await event_manager.publish(
+    await _get_event_manager().publish(
         "workflow_cancelled",
         {"workflow_id": workflow_id, "user_message": user_message},
     )
