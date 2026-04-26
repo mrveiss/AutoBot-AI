@@ -10,20 +10,18 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
-from type_defs.common import Metadata
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
-from api.schemas_agent import AgentSystemCapabilitiesResponse
+from api.schemas_agent import AgentSystemCapabilitiesResponse, GoalRequest, GoalResponse, HealthResponse
 from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
@@ -105,31 +103,6 @@ async def get_agent() -> "IntelligentAgent":
                 status_code=503,
                 detail="Intelligent agent initialization failed",
             )
-
-
-# Pydantic models for API
-class GoalRequest(BaseModel):
-    """Request model for natural language goals."""
-
-    goal: str
-    context: Metadata = {}
-
-
-class GoalResponse(BaseModel):
-    """Response model for processed goals."""
-
-    success: bool
-    result: str
-    execution_time: float
-    metadata: Metadata = {}
-
-
-class HealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str
-    components: Dict[str, str]
-    uptime: float
 
 
 # Router - no prefix needed as it's added when mounting
