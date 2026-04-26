@@ -855,6 +855,30 @@ class CacheConfig(BaseSettings):
     l2: CacheL2Config = Field(default_factory=CacheL2Config)
 
 
+class AuthConfig(BaseSettings):
+    """Authentication domain configuration.
+
+    Controls auth-level defaults that are shared across middleware and API layers.
+    Override via environment variable (e.g. AUTOBOT_AUTH_DOMAIN=corp.example.com).
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    domain: str = Field(
+        default="autobot.local",
+        alias="AUTOBOT_AUTH_DOMAIN",
+        description=(
+            "Email domain used for synthetic/fallback user accounts. "
+            "Default 'autobot.local' is used for auth-disabled, single-user, "
+            "and dev-mode synthetic accounts."
+        ),
+    )
+
+
 class PermissionMode(str, Enum):
     """
     Permission modes for command execution control.
@@ -1225,6 +1249,7 @@ class AutoBotConfig(BaseSettings):
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     path: PathConfig = Field(
         default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
     )  # Issue #3397; alias avoids collision with system PATH env var
@@ -1793,6 +1818,7 @@ __all__ = [
     "CacheL1Config",
     "CacheL2Config",
     "DatabasePoolConfig",
+    "AuthConfig",
     "FeatureConfig",
     "get_config",
     "reload_config",
