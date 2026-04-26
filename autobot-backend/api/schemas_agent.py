@@ -686,6 +686,30 @@ class AgentSystemCapabilitiesResponse(BaseModel):
     available_tools: List[str]
 
 
+class GoalRequest(BaseModel):
+    """Request body for POST /intelligent-agent/process."""
+
+    goal: str
+    context: Dict[str, Any] = {}
+
+
+class GoalResponse(BaseModel):
+    """Response for POST /intelligent-agent/process."""
+
+    success: bool
+    result: str
+    execution_time: float
+    metadata: Dict[str, Any] = {}
+
+
+class HealthResponse(BaseModel):
+    """Response for GET /intelligent-agent/health."""
+
+    status: str
+    components: Dict[str, str]
+    uptime: float
+
+
 # ---------------------------------------------------------------------------
 # voice.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
