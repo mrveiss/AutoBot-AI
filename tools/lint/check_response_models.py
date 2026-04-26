@@ -19,6 +19,12 @@ For each, at least one of the following must be true:
   2. A return statement contains a dict literal with all required keys
   3. The function returns a bypass type (JSONResponse, Response, StreamingResponse,
      FileResponse, PlainTextResponse, RedirectResponse) that skips FastAPI validation
+  4. A local variable is assigned a dict literal containing all required keys and
+     that variable is returned (single-assignment pattern — #5926)
+
+Known limitation: multi-step variable builds (e.g. result = {}; result["success"] = True)
+and pass-through returns of function-call results are not analyzed. Use
+create_success_response() for those cases to satisfy the hook.
 
 Exit codes:
   0 — clean
@@ -134,6 +140,38 @@ def _returns_bypass_type(node: _FuncNode) -> bool:
     return False
 
 
+def _var_dict_keys(node: _FuncNode) -> dict[str, set[str]]:
+    """Map local variable names to the union of keys from their dict literal assignments.
+
+    Covers the single-assignment pattern:
+        result = {"success": True, "data": ...}
+        return result
+    """
+    var_keys: dict[str, set[str]] = {}
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Assign):
+            continue
+        if not isinstance(child.value, ast.Dict):
+            continue
+        keys: set[str] = set()
+        for key in child.value.keys:
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                keys.add(key.value)
+        for target in child.targets:
+            if isinstance(target, ast.Name):
+                var_keys.setdefault(target.id, set()).update(keys)
+    return var_keys
+
+
+def _returned_var_names(node: _FuncNode) -> set[str]:
+    """Return the set of local variable names that appear in bare return statements."""
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Return) and isinstance(child.value, ast.Name):
+            names.add(child.value.id)
+    return names
+
+
 def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     """Return [(line_no, func_name)] for each DataResponse violation in *path*."""
     try:
@@ -162,6 +200,15 @@ def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
             if schema == "DataResponse" and _calls_create_success_response(func_node):
                 break
             if required_keys.issubset(_return_dict_keys(func_node)):
+                break
+            # Single-assignment variable pattern: result = {"success": ...}; return result
+            var_keys = _var_dict_keys(func_node)
+            returned_vars = _returned_var_names(func_node)
+            if any(
+                required_keys.issubset(var_keys[name])
+                for name in returned_vars
+                if name in var_keys
+            ):
                 break
             violations.append((func_node.lineno, func_node.name))
             break
