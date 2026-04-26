@@ -13,8 +13,7 @@
  */
 
 import { type Ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
@@ -67,17 +66,17 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
   const testNpuConnection = async () => {
     const startTime = Date.now()
     try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/npu/status`,
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
+      const data = await apiClient.get<{
+        available?: boolean
+        status?: string
+        workers_connected?: number
+        total_workers?: number
+      }>('/api/npu/status')
       const responseTime = Date.now() - startTime
       const available =
         data.available ||
         data.status === 'ok' ||
-        data.workers_connected > 0
+        (data.workers_connected ?? 0) > 0
       const workerCount =
         data.workers_connected ?? data.total_workers ?? 0
       notify(
@@ -111,16 +110,11 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
       'analytics.codebase.status.testingApis',
     )
     try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
       const results: string[] = []
       for (const ep of _testEndpointConfigs) {
         try {
-          const response = await fetchWithAuth(
-            `${backendUrl}${ep.path}`,
-          )
-          results.push(
-            `${ep.name}: ${response.ok ? 'OK' : 'FAIL'} (${response.status})`,
-          )
+          await apiClient.get(ep.path)
+          results.push(`${ep.name}: OK`)
         } catch (err) {
           const msg =
             err instanceof Error ? err.message : String(err)
