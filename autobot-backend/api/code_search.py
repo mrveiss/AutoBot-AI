@@ -285,7 +285,7 @@ async def search_code(request: SearchRequest):
     operation="search_code_get",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/search", response_model=DataResponse)
+@router.get("/search", response_model=None)
 async def search_code_get(
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),

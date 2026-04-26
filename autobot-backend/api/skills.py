@@ -117,7 +117,7 @@ async def get_all_health() -> Dict[str, Any]:
     return {"skills": registry.get_all_health()}
 
 
-@router.post("/initialize", summary="Initialize skills system", response_model=DataResponse)
+@router.post("/initialize", summary="Initialize skills system", response_model=None)
 async def initialize_skills() -> Dict[str, Any]:
     """Discover and load all builtin skills."""
     manager = _get_manager()
@@ -125,7 +125,7 @@ async def initialize_skills() -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}", summary="Get skill details", response_model=DataResponse)
+@router.get("/{name}", summary="Get skill details", response_model=None)
 async def get_skill(name: str) -> Dict[str, Any]:
     """Get detailed information about a specific skill."""
     registry = get_skill_registry()
@@ -187,7 +187,7 @@ async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     return result
 
 
-@router.get("/{name}/health", summary="Get skill health", response_model=DataResponse)
+@router.get("/{name}/health", summary="Get skill health", response_model=None)
 async def get_skill_health(name: str) -> Dict[str, Any]:
     """Get health status for a specific skill."""
     registry = get_skill_registry()
@@ -210,7 +210,7 @@ async def list_skill_actions(name: str) -> Dict[str, Any]:
     }
 
 
-@router.get("/{name}/metrics", summary="Get skill metrics", response_model=DataResponse)
+@router.get("/{name}/metrics", summary="Get skill metrics", response_model=None)
 async def get_skill_metrics(
     name: str,
     days: int = Query(30, description="Number of days to analyze"),
@@ -258,7 +258,7 @@ async def submit_skill_feedback(
         raise HTTPException(status_code=500, detail="Failed to log feedback")
 
 
-@router.get("/{name}/suggestions", summary="Get skill refinement suggestions", response_model=DataResponse)
+@router.get("/{name}/suggestions", summary="Get skill refinement suggestions", response_model=None)
 async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
     """Get suggestions for improving a skill (Issue #4339)."""
     try:

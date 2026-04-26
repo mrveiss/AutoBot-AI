@@ -358,7 +358,7 @@ async def get_quick_wins(
     operation="get_unified_dashboard",
     error_code_prefix="DASH",
 )
-@router.get("/dashboard", response_model=DataResponse)
+@router.get("/dashboard", response_model=None)
 async def get_unified_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -419,7 +419,7 @@ async def get_health_status(
     operation="generate_custom_report",
     error_code_prefix="REPORT",
 )
-@router.post("/report", response_model=DataResponse)
+@router.post("/report", response_model=None)
 async def generate_custom_report(
     request: CustomReportRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -455,7 +455,7 @@ async def generate_custom_report(
     operation="get_executive_summary",
     error_code_prefix="REPORT",
 )
-@router.get("/report/executive", response_model=DataResponse)
+@router.get("/report/executive", response_model=None)
 async def get_executive_summary(
     days: int = Query(default=30, ge=7, le=90, description="Days to summarize"),
     admin_check: bool = Depends(check_admin_permission),

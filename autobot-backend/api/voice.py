@@ -192,7 +192,7 @@ async def voice_clone_api(
 # ------------------------------------------------------------------
 
 
-@router.get("/voices", response_model=DataResponse)
+@router.get("/voices", response_model=None)
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
@@ -205,7 +205,7 @@ async def voice_list_api():
     operation="voice_create_api",
     error_code_prefix="VOICE",
 )
-@router.post("/voices/create", response_model=DataResponse)
+@router.post("/voices/create", response_model=None)
 async def voice_create_api(
     name: str = Form(...),
     audio: UploadFile = File(...),
