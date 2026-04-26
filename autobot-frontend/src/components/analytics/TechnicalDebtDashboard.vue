@@ -434,56 +434,32 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
 import { getCssVar } from '@/composables/useCssVars'
+import {
+  useTechnicalDebtData,
+  type DebtItem,
+  type CategoryBreakdown,
+  type TrendPoint,
+  type DebtSummary,
+} from '@/composables/analytics/useTechnicalDebtData'
 
 // Create scoped logger for TechnicalDebtDashboard
 const logger = createLogger('TechnicalDebtDashboard');
 
-// Types
-interface DebtItem {
-  id: string;
-  file_path: string;
-  line_number?: number;
-  category: string;
-  severity: string;
-  description: string;
-  estimated_hours: number;
-  impact_score: number;
-  roi_score: number;
-  suggested_fix?: string;
-  created_at: string;
-}
-
-interface CategoryBreakdown {
-  category: string;
-  count: number;
-  total_hours: number;
-  avg_severity: string;
-}
-
-interface TrendPoint {
-  date: string;
-  total_items: number;
-  total_hours: number;
-  by_category: Record<string, number>;
-}
-
-interface Summary {
-  total_items: number;
-  total_hours: number;
-  estimated_cost: number;
-  critical_count: number;
-  health_score: number;
-  trend: number;
-}
+const {
+  fetchSummary,
+  fetchCategoryBreakdown,
+  fetchRoiPriorities,
+  fetchDebtItems,
+  fetchTrends,
+  fetchReportBlob,
+} = useTechnicalDebtData()
 
 // State
 const loading = ref(false);
 const loadError = ref<string | null>(null);
-const summary = ref<Summary>({
+const summary = ref<DebtSummary>({
   total_items: 0,
   total_hours: 0,
   estimated_cost: 0,
@@ -700,117 +676,40 @@ async function refreshData(): Promise<void> {
 
 async function loadSummary(): Promise<void> {
   try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    // Backend returns {status, summary: {...}, top_files: [...], ...}
-    const response = await fetchWithAuth(`${getApiBase()}/debt/summary`);
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Extract summary from response structure
-      summary.value = result.summary || result;
-      loadError.value = null;
-    } else {
-      logger.warn('Failed to load summary: HTTP', response.status);
-      loadError.value = `Failed to load summary (HTTP ${response.status})`;
-    }
+    const { summary: data } = await fetchSummary();
+    summary.value = data;
+    loadError.value = null;
   } catch (error) {
-    logger.error('Failed to load summary:', error);
-    loadError.value = 'Failed to connect to analytics API';
+    loadError.value = error instanceof Error ? error.message : 'Failed to connect to analytics API';
   }
 }
 
 async function loadCategoryBreakdown(): Promise<void> {
-  try {
-    // Issue #552: Fixed - backend uses POST for calculate, GET for summary
-    // Backend returns {status, summary: {by_category: {...}, ...}, ...}
-    const response = await fetchWithAuth(`${getApiBase()}/debt/summary`);
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Extract by_category from nested summary structure
-      categoryBreakdown.value = result.summary?.by_category || result.by_category || [];
-    } else {
-      logger.warn('Failed to load category breakdown: HTTP', response.status);
-      categoryBreakdown.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load category breakdown:', error);
-    categoryBreakdown.value = [];
-  }
+  categoryBreakdown.value = await fetchCategoryBreakdown();
 }
 
 async function loadRoiPriorities(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    // Backend returns {status, priorities: [...], total_available: N}
-    const response = await fetchWithAuth(`${getApiBase()}/debt/roi-priorities?limit=10`);
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Extract priorities from response structure
-      roiPriorities.value = result.priorities || result;
-    } else {
-      logger.warn('Failed to load ROI priorities: HTTP', response.status);
-      roiPriorities.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load ROI priorities:', error);
-    roiPriorities.value = [];
-  }
+  roiPriorities.value = await fetchRoiPriorities(10);
 }
 
 async function loadDebtItems(): Promise<void> {
-  try {
-    // Issue #552: Fixed - backend uses POST for /api/debt/calculate
-    // Backend returns {status, data: {items, summary, ...}} structure
-    const response = await fetchWithAuth(`${getApiBase()}/debt/calculate`, { method: 'POST' });
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Access items from nested data structure
-      allDebtItems.value = result.data?.items || result.items || [];
-    } else {
-      logger.warn('Failed to load debt items: HTTP', response.status);
-      allDebtItems.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load debt items:', error);
-    allDebtItems.value = [];
-  }
+  allDebtItems.value = await fetchDebtItems();
 }
 
 async function loadTrends(): Promise<void> {
-  try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    // Backend returns {status, trends: [...], data_points: N, change: {...}, direction: "..."}
-    const response = await fetchWithAuth(`${getApiBase()}/debt/trends?period=${selectedPeriod.value}`);
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Extract trends from response structure
-      trendData.value = result.trends || result;
-    } else {
-      logger.warn('Failed to load trends: HTTP', response.status);
-      trendData.value = [];
-    }
-  } catch (error) {
-    logger.error('Failed to load trends:', error);
-    trendData.value = [];
-  }
+  trendData.value = await fetchTrends(selectedPeriod.value);
 }
 
 async function exportReport(): Promise<void> {
   try {
-    // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
-    // Backend returns {status, format, report: "markdown content"} for markdown format
-    const response = await fetchWithAuth(`${getApiBase()}/debt/report?format=markdown`);
-    if (response.ok) {
-      const result = await response.json();
-      // Issue #552: Extract markdown report from JSON response
-      const markdownContent = result.report || '';
-      const blob = new Blob([markdownContent], { type: 'text/markdown' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `technical-debt-report-${new Date().toISOString().split('T')[0]}.md`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    }
+    const markdownContent = await fetchReportBlob();
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `technical-debt-report-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   } catch (error) {
     logger.error('Failed to export report:', error);
   }
