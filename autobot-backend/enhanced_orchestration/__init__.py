@@ -24,9 +24,9 @@ from .success_criteria import (
     SuccessCriteriaEvaluator,
     SuccessCriteriaType,
 )
+from orchestration.types import AgentCapability  # canonical definition (#6192)
 from .types import (
     FALLBACK_TIERS,
-    AgentCapability,
     AgentPerformance,
     AgentTask,
     ExecutionStrategy,

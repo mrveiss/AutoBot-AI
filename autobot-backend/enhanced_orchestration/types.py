@@ -18,22 +18,10 @@ if TYPE_CHECKING:
 
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import RetryConfig, TimingConstants
+from orchestration.types import AgentCapability  # single canonical definition (#6192)
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
-
-
-class AgentCapability(Enum):
-    """Core agent capabilities"""
-
-    RESEARCH = "research"
-    ANALYSIS = "analysis"
-    EXECUTION = "execution"
-    MONITORING = "monitoring"
-    SYNTHESIS = "synthesis"
-    VALIDATION = "validation"
-    OPTIMIZATION = "optimization"
-    SECURITY = "security"
 
 
 class ExecutionStrategy(Enum):
