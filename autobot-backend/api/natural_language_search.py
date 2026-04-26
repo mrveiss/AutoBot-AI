@@ -26,6 +26,13 @@ from pydantic import BaseModel, Field
 
 from constants.threshold_constants import QueryDefaults
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    NLCodeExplanationResponse,
+    NLDomainsResponse,
+    NLIntentsResponse,
+    NLQuerySuggestionsResponse,
+    NLSearchHealthResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -1201,7 +1208,7 @@ async def parse_query(query: str):
     operation="get_query_suggestions",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/suggestions", response_model=None)
+@router.get("/suggestions", response_model=NLQuerySuggestionsResponse)
 async def get_query_suggestions(query: str):
     """
     Get query suggestions for a given query.
@@ -1235,7 +1242,7 @@ async def get_query_suggestions(query: str):
     operation="explain_code_snippet",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.post("/explain", response_model=None)
+@router.post("/explain", response_model=NLCodeExplanationResponse)
 async def explain_code_snippet(
     code: str, file_path: str = "<unknown>", line_number: int = 0
 ):
@@ -1267,7 +1274,7 @@ async def explain_code_snippet(
     operation="list_supported_intents",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/intents", response_model=None)
+@router.get("/intents", response_model=NLIntentsResponse)
 async def list_supported_intents():
     """List all supported query intents with examples."""
     return {
@@ -1313,7 +1320,7 @@ async def list_supported_intents():
     operation="list_supported_domains",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/domains", response_model=None)
+@router.get("/domains", response_model=NLDomainsResponse)
 async def list_supported_domains():
     """List all supported query domains with keywords."""
     return {
@@ -1329,7 +1336,7 @@ async def list_supported_domains():
     operation="health_check",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=NLSearchHealthResponse)
 async def health_check():
     """Health check endpoint.
 
