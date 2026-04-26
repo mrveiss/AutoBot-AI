@@ -12,6 +12,7 @@ import { ref, computed, readonly } from 'vue';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { useLoadingState } from '@/composables/useLoadingState';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 
 const logger = createLogger('useHostSelection');
 
@@ -69,7 +70,7 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
 
       // Issue #1310: Single source — only user-configured hosts from secrets.
       // Fleet/system VMs no longer included (they belong in SLM).
-      const response = await fetch(`${backendUrl}/api/infrastructure/hosts`);
+      const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`);
       const data = response.ok ? await response.json() : { hosts: [] };
 
       hosts.value = (data.hosts || []).map((h: any) => ({

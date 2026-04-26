@@ -12,6 +12,7 @@ import { ref } from 'vue';
 import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { useLoadingState } from '@/composables/useLoadingState';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 
 const logger = createLogger('NotificationConfig');
 
@@ -52,13 +53,6 @@ function emptyConfig(): NotificationConfigData {
   };
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
 
 export function useNotificationConfig() {
   const config = ref<NotificationConfigData>(emptyConfig());
@@ -71,7 +65,7 @@ export function useNotificationConfig() {
     await wrap(async () => {
       try {
         const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-        const resp = await fetch(url, { headers: getAuthHeaders() });
+        const resp = await fetchWithAuth(url);
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}`);
         }
@@ -91,9 +85,9 @@ export function useNotificationConfig() {
     return wrapSaving(async () => {
       try {
         const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-        const resp = await fetch(url, {
+        const resp = await fetchWithAuth(url, {
           method: 'PUT',
-          headers: getAuthHeaders(),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(config.value),
         });
         if (!resp.ok) {

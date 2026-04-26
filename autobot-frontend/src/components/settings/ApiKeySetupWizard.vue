@@ -151,6 +151,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('ApiKeySetupWizard')
 const { t } = useI18n()
@@ -280,7 +281,7 @@ async function saveAndClose(): Promise<void> {
 async function saveKeys(keys: KeyEntry[]): Promise<void> {
   const baseUrl = getBackendUrl()
   for (const key of keys) {
-    const response = await fetch(`${baseUrl}/api/secrets/`, {
+    const response = await fetchWithAuth(`${baseUrl}/api/secrets/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

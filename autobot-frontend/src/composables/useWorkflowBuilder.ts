@@ -15,7 +15,7 @@
 import { ref, computed, reactive } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { getAuthToken } from '@/utils/fetchWithAuth';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
@@ -259,13 +259,11 @@ class WorkflowBuilderApiClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const token = getAuthToken();
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options.headers,
         },
       });

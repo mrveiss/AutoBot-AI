@@ -1013,7 +1013,7 @@ const loadSecrets = async () => {
       secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
       secretsApiClient.getSecretsStats() as Promise<Record<string, any>>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated eventually)
-      fetch(`${backendUrl}/api/infrastructure/hosts`).then(r => r.ok ? r.json() : { hosts: [] }).catch(() => ({ hosts: [] }))
+      fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`).then(r => r.ok ? r.json() : { hosts: [] }).catch(() => ({ hosts: [] }))
     ]);
 
     // Convert legacy infrastructure hosts to secret-like format for unified display

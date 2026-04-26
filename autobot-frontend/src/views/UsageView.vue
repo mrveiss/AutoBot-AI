@@ -174,6 +174,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { useApi } from '@/composables/useApi'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('UsageView')
 const api = useApi()
@@ -250,10 +251,7 @@ async function load() {
 async function downloadCsv() {
   csvLoading.value = true
   try {
-    const token = localStorage.getItem('authToken') || ''
-    const res = await fetch(`${getApiBase()}/usage/export/csv?days=${days.value}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetchWithAuth(`${getApiBase()}/usage/export/csv?days=${days.value}`)
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)

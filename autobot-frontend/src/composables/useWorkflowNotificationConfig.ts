@@ -11,7 +11,7 @@
 import { ref } from 'vue';
 import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { getAuthToken } from '@/utils/fetchWithAuth';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('useWorkflowNotificationConfig');
@@ -82,13 +82,11 @@ async function apiRequest<T>(
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   try {
-    const token = getAuthToken();
-    const response = await fetch(url, {
+    const response = await fetchWithAuth(url, {
       ...options,
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     });
