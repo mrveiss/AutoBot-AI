@@ -1,4 +1,5 @@
-import { DefineComponent } from 'vue';
+import type { DefineComponent } from 'vue'
 
-declare const ManPageManager: DefineComponent<{}, {}, any>;
-export default ManPageManager;
+declare const ManPageManager: DefineComponent<{}, {}, unknown>
+
+export default ManPageManager

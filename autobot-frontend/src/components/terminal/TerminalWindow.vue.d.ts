@@ -1,4 +1,5 @@
-import { DefineComponent } from 'vue';
+import type { DefineComponent } from 'vue'
 
-declare const TerminalWindow: DefineComponent<{}, {}, any>;
-export default TerminalWindow;
+declare const TerminalWindow: DefineComponent<{}, {}, unknown>
+
+export default TerminalWindow
