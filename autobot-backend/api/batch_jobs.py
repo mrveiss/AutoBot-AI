@@ -27,7 +27,15 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_redis_client
-from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    BatchChatInitResponse,
+    BatchJobDeleteResponse,
+    BatchJobsHealthResponse,
+    BatchLoadResponse,
+    BatchScheduleDeleteResponse,
+    BatchStatusResponse,
+    BatchTemplateDeleteResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
@@ -330,7 +338,7 @@ async def get_batch_job(
     operation="delete_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/{job_id}", response_model=None)
+@router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
 async def delete_batch_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -548,7 +556,7 @@ async def get_batch_template(
     operation="delete_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/templates/{template_id}", response_model=None)
+@router.delete("/templates/{template_id}", response_model=BatchTemplateDeleteResponse)
 async def delete_batch_template(
     template_id: str,
     current_user: dict = Depends(get_current_user),
@@ -673,7 +681,7 @@ async def create_batch_schedule(
     operation="delete_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/schedules/{schedule_id}", response_model=None)
+@router.delete("/schedules/{schedule_id}", response_model=BatchScheduleDeleteResponse)
 async def delete_batch_schedule(
     schedule_id: str,
     current_user: dict = Depends(get_current_user),
@@ -713,7 +721,7 @@ async def delete_batch_schedule(
     operation="get_batch_jobs_health",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=BatchJobsHealthResponse)
 async def get_batch_jobs_health(
     current_user: dict = Depends(get_current_user),
 ):
@@ -811,7 +819,7 @@ class BatchResponse(BaseModel):
     operation="get_batch_status",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=BatchStatusResponse)
 async def get_batch_status():
     """Get batch processing service status"""
     return {
@@ -834,7 +842,7 @@ async def get_batch_status():
     operation="batch_load",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/load", response_model=None)
+@router.post("/load", response_model=BatchLoadResponse)
 async def batch_load(batch_request: BatchRequest):
     """Execute multiple API calls in parallel and return combined results."""
     import time
@@ -893,13 +901,13 @@ async def batch_load(batch_request: BatchRequest):
     operation="batch_chat_initialization",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/chat-init", response_model=None)
+@router.get("/chat-init", response_model=BatchChatInitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_chat_initialization",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/chat-init", response_model=None)
+@router.post("/chat-init", response_model=BatchChatInitResponse)
 async def batch_chat_initialization():
     """
     Optimized endpoint for chat interface initialization.

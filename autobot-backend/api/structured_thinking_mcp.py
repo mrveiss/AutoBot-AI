@@ -33,8 +33,9 @@ from pydantic import BaseModel, Field
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     StructuredThinkingClearResponse,
-    StructuredThinkingSessionsResponse,
+    StructuredThinkingProcessThoughtResponse,
     StructuredThinkingSessionDetailResponse,
+    StructuredThinkingSessionsResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -378,7 +379,7 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     operation="process_thought_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/process_thought", response_model=None)
+@router.post("/mcp/process_thought", response_model=StructuredThinkingProcessThoughtResponse)
 async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     Process and record a thought within the structured cognitive framework.

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth_middleware import get_current_user
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
-from api.schemas_common import DataResponse
+from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -403,7 +403,7 @@ async def get_participants(
     operation="share_secret_with_session",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/secrets/share", response_model=DataResponse)
+@router.post("/{session_id}/secrets/share", response_model=SessionShareSecretResponse)
 async def share_secret_with_session(
     session_id: str,
     share: ShareSecretRequest,
@@ -464,7 +464,7 @@ async def share_secret_with_session(
     operation="get_presence",
     error_code_prefix="COLLABORATION",
 )
-@router.get("/{session_id}/presence", response_model=None)
+@router.get("/{session_id}/presence", response_model=SessionPresenceResponse)
 async def get_presence(
     session_id: str,
     current_user: dict = Depends(get_current_user),
