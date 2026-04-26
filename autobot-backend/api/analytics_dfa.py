@@ -28,7 +28,13 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
-from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    DfaVulnerabilitiesResponse,
+    DfaSourcesResponse,
+    DfaSinksResponse,
+    DfaSanitizersResponse,
+    DfaHealthResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -1197,7 +1203,7 @@ async def analyze_file(
     operation="get_vulnerabilities",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/vulnerabilities", response_model=None)
+@router.post("/vulnerabilities", response_model=DfaVulnerabilitiesResponse)
 async def get_vulnerabilities(
     request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1311,7 +1317,7 @@ async def get_taint_summary(
     operation="list_taint_sources",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sources", response_model=None)
+@router.get("/sources", response_model=DfaSourcesResponse)
 async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized taint sources.
@@ -1335,7 +1341,7 @@ async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)
     operation="list_taint_sinks",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sinks", response_model=None)
+@router.get("/sinks", response_model=DfaSinksResponse)
 async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized security-sensitive sinks.
@@ -1360,7 +1366,7 @@ async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     operation="list_sanitizers",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sanitizers", response_model=None)
+@router.get("/sanitizers", response_model=DfaSanitizersResponse)
 async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized sanitizer functions.
@@ -1375,7 +1381,7 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     operation="health_check",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=DfaHealthResponse)
 async def health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Health check endpoint.

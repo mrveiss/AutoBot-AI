@@ -24,6 +24,15 @@ from pydantic import BaseModel, Field
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from auth_middleware import check_admin_permission
 from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_analytics import (
+    QualityHealthScoreResponse,
+    QualityMetricsResponse,
+    QualityPatternsResponse,
+    QualityComplexityResponse,
+    QualityTrendsResponse,
+    QualitySnapshotResponse,
+    QualityDrillDownResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -972,7 +981,7 @@ manager = ConnectionManager()
     operation="get_health_score",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/health-score", response_model=None)
+@router.get("/health-score", response_model=QualityHealthScoreResponse)
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1015,7 +1024,7 @@ async def get_health_score(
     operation="get_quality_metrics",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/metrics", response_model=None)
+@router.get("/metrics", response_model=QualityMetricsResponse)
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1079,7 +1088,7 @@ async def get_quality_metrics(
     operation="get_pattern_distribution",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/patterns", response_model=None)
+@router.get("/patterns", response_model=QualityPatternsResponse)
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
@@ -1137,7 +1146,7 @@ async def get_pattern_distribution(
     operation="get_complexity_metrics",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/complexity", response_model=None)
+@router.get("/complexity", response_model=QualityComplexityResponse)
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1259,7 +1268,7 @@ def _calculate_trend_statistics(scores: list) -> dict:
     operation="get_quality_trends",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/trends", response_model=None)
+@router.get("/trends", response_model=QualityTrendsResponse)
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
@@ -1299,7 +1308,7 @@ async def get_quality_trends(
     operation="get_quality_snapshot",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/snapshot", response_model=None)
+@router.get("/snapshot", response_model=QualitySnapshotResponse)
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1372,7 +1381,7 @@ async def get_quality_snapshot(
     operation="drill_down_category",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/drill-down/{category}", response_model=None)
+@router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
 async def drill_down_category(
     category: str,
     file_filter: Optional[str] = Query(None, description="Filter by file path"),

@@ -26,13 +26,19 @@ from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     BugPredictionAnalyzeResponse,
     BugPredictionStatusResponse,
     BugPredictionClearStuckResponse,
     BugPredictionRiskFactorsResponse,
     BugPredictionRecordBugResponse,
+    BugPredictionAnalysisResponse,
+    BugPredictionCachedResponse,
+    BugPredictionHighRiskResponse,
+    BugPredictionFileResponse,
+    BugPredictionHeatmapResponse,
+    BugPredictionTrendsResponse,
+    BugPredictionSummaryResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -927,7 +933,7 @@ async def _run_bug_analysis(
     operation="analyze_codebase",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/analyze", response_model=None)
+@router.get("/analyze", response_model=BugPredictionAnalysisResponse)
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
@@ -1046,7 +1052,7 @@ async def _run_batched_bug_analysis(
     operation="get_cached_bug_prediction",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/cached", response_model=None)
+@router.get("/cached", response_model=BugPredictionCachedResponse)
 async def get_cached_bug_prediction():
     """Return the latest completed bug prediction result (#1540)."""
     cached = await _bg_manager.get_latest_result()
@@ -1123,7 +1129,7 @@ async def clear_stuck_bug_tasks(
     operation="get_high_risk_files",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/high-risk", response_model=None)
+@router.get("/high-risk", response_model=BugPredictionHighRiskResponse)
 async def get_high_risk_files(
     admin_check: bool = Depends(check_admin_permission),
     threshold: float = Query(60, ge=0, le=100),
@@ -1196,7 +1202,7 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     operation="get_file_risk",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/file/{file_path:path}", response_model=None)
+@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse)
 async def get_file_risk(
     file_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1298,7 +1304,7 @@ def _get_flat_heatmap_data(files: list) -> list:
     operation="get_risk_heatmap",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/heatmap", response_model=None)
+@router.get("/heatmap", response_model=BugPredictionHeatmapResponse)
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
     grouping: str = Query("directory", pattern="^(directory|module|flat)$"),
@@ -1352,7 +1358,7 @@ async def get_risk_heatmap(
     operation="get_prediction_trends",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/trends", response_model=None)
+@router.get("/trends", response_model=BugPredictionTrendsResponse)
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -1470,7 +1476,7 @@ def _generate_summary_recommendations(
     operation="get_prediction_summary",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-@router.get("/summary", response_model=None)
+@router.get("/summary", response_model=BugPredictionSummaryResponse)
 async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
