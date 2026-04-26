@@ -444,8 +444,6 @@
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
@@ -525,6 +523,7 @@ const {
   sourceIdQuery,
   withSourceId,
   loadSources,
+  loadSourceById,
   handleSelectSource,
   handleSourceSaved,
   handleShareSaved,
@@ -621,6 +620,7 @@ const {
   codeSmellsProgressTitle,
   exportingReport,
   clearingCache,
+  clearCache: clearCache_composable,
   runCodeSmellAnalysis,
   getCodeHealthScore,
   securityScore,
@@ -853,38 +853,17 @@ const handleStop = () => {
   }
 }
 
-// Clear analysis cache
-const clearCache = async () => {
-  clearingCache.value = true
-  progressStatus.value = t('analytics.codebase.status.clearingCache')
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cache`), {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
-    }
-    const result = await response.json()
+// Clear analysis cache — delegates to useCodeIntelAnalysis.clearCache (#6068)
+const clearCache = () =>
+  clearCache_composable(withSourceId, () => {
     codebaseStats.value = null
     problemsReport.value = []
     declarationAnalysis.value = []
     duplicateAnalysis.value = []
     hardcodeAnalysis.value = []
     chartData.value = null
-    notify(t('analytics.codebase.notify.cacheCleared', { count: result.deleted_keys || 0 }), 'success')
     progressStatus.value = t('analytics.codebase.status.cacheCleared')
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Cache clear failed:', error)
-    notify(t('analytics.codebase.notify.cacheClearFailed', { error: errorMessage }), 'error')
-    progressStatus.value = t('analytics.codebase.status.cacheClearFailed')
-  } finally {
-    clearingCache.value = false
-  }
-}
+  })
 
 // Run full analysis with scan runner
 const runFullAnalysis = async () => {
@@ -943,26 +922,9 @@ onMounted(async () => {
     return
   }
 
-  // Load source metadata from backend
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const resp = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${sourceId}`,
-    )
-    if (resp.ok) {
-      const source = await resp.json()
-      selectedSource.value = source
-      rootPath.value = source.clone_path || ''
-      localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
-    } else {
-      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
-      analyticsRouter.replace({ name: 'analytics-codebase' })
-      return
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to load source metadata:', msg)
-    notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+  // Load source metadata from backend (#6068: extracted to useSourceRegistry)
+  const loaded = await loadSourceById(sourceId)
+  if (!loaded) {
     analyticsRouter.replace({ name: 'analytics-codebase' })
     return
   }

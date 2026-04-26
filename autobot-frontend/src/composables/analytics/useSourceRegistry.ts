@@ -188,6 +188,34 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     showShareSourceModal.value = true
   }
 
+  // Issue #6068: Load a single source by ID and populate selectedSource +
+  // rootPath. Returns true on success, false on failure (caller handles
+  // navigation).
+  async function loadSourceById(sourceId: string): Promise<boolean> {
+    try {
+      const endpoint = useFetchEndpoint<CodeSource, CodeSource>({
+        path: `/api/analytics/codebase/sources/${encodeURIComponent(sourceId)}`,
+        pickData: (raw) => raw,
+        label: 'Load source by ID',
+      })
+      await endpoint.load()
+      if (endpoint.error.value || !endpoint.data.value) {
+        notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+        return false
+      }
+      const source = endpoint.data.value
+      selectedSource.value = source
+      rootPath.value = source.clone_path || ''
+      localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
+      return true
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('Failed to load source metadata:', msg)
+      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+      return false
+    }
+  }
+
   // #5153 B: migrated to useFetchEndpoint with POST body factory.
   // onError surfaces the user-visible toast; onSuccess hides the opt-in
   // banner and emits the success toast.
@@ -242,6 +270,7 @@ export function useSourceRegistry(deps: UseSourceRegistryDeps) {
     // Functions
     withSourceId,
     loadSources,
+    loadSourceById,
     handleSelectSource,
     handleClearSource,
     handleSourceSaved,
