@@ -8,7 +8,7 @@
  * Author: mrveiss
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useExpansion } from '@/composables/useExpansion'
 import appConfig from '@/config/AppConfig.js'
@@ -178,6 +178,11 @@ export function usePatternAnalysis() {
   const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
   const storageStats = ref<PatternStorageStats | null>(null)
 
+  // AbortControllers — replaced (aborting previous) before each new fetch
+  let _analyzeController: AbortController | null = null
+  let _actionController: AbortController | null = null
+  let _pollController: AbortController | null = null
+
   // UI state
   type Section = 'duplicates' | 'regex' | 'complexity' | 'refactoring'
   const { isExpanded: isSectionExpanded, toggle: toggleSection } = useExpansion<Section>()
@@ -232,6 +237,10 @@ export function usePatternAnalysis() {
     error.value = null
     wasInterrupted.value = false
 
+    _analyzeController?.abort()
+    _analyzeController = new AbortController()
+    const _analyzeSignal = _analyzeController.signal
+
     try {
       const backendUrl = await getBackendUrl()
       let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
@@ -244,7 +253,8 @@ export function usePatternAnalysis() {
           enable_duplicate_detection: enableDuplicates,
           similarity_threshold: similarityThreshold,
           run_in_background: runInBackground
-        })
+        }),
+        signal: _analyzeSignal,
       })
 
       // Issue #647: Handle 409 Conflict by clearing stuck tasks and retrying
@@ -253,7 +263,8 @@ export function usePatternAnalysis() {
 
         // Try to clear stuck tasks with force=true
         const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
-          method: 'POST'
+          method: 'POST',
+          signal: _analyzeSignal,
         })
 
         if (clearResponse.ok) {
@@ -271,7 +282,8 @@ export function usePatternAnalysis() {
               enable_duplicate_detection: enableDuplicates,
               similarity_threshold: similarityThreshold,
               run_in_background: runInBackground
-            })
+            }),
+            signal: _analyzeSignal,
           })
         }
       }
@@ -302,7 +314,7 @@ export function usePatternAnalysis() {
 
           await fetchWithAuth(
             `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
-            { method: 'POST' },
+            { method: 'POST', signal: _analyzeSignal },
           )
           const retryResp = await fetchWithAuth(
             `${backendUrl}/api/analytics/codebase/patterns/analyze`,
@@ -317,6 +329,7 @@ export function usePatternAnalysis() {
                 similarity_threshold: similarityThreshold,
                 run_in_background: true,
               }),
+              signal: _analyzeSignal,
             },
           )
           if (retryResp.ok) {
@@ -341,6 +354,7 @@ export function usePatternAnalysis() {
 
       throw new Error('Unexpected response format')
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') { analyzing.value = false; return false }
       error.value = extractErrorMessage(e, 'Analysis failed')
       logger.error('Pattern analysis failed:', e)
       analyzing.value = false
@@ -376,8 +390,11 @@ export function usePatternAnalysis() {
         async () => {
           try {
             const backendUrl = await getBackendUrl()
+            _pollController?.abort()
+            _pollController = new AbortController()
             const response = await fetchWithAuth(
-              `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`
+              `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`,
+              { signal: _pollController.signal },
             )
             if (!response.ok) {
               throw new Error(`Status check failed: ${response.statusText}`)
@@ -448,6 +465,10 @@ export function usePatternAnalysis() {
 
             return { done: false, outcome: 'running' }
           } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === 'AbortError') {
+              analyzing.value = false
+              return { done: true, outcome: 'error' }
+            }
             consecutiveErrors++
             const msg = extractErrorMessage(e, 'Unknown poll error')
             logger.warn(
@@ -480,8 +501,13 @@ export function usePatternAnalysis() {
    */
   const getCachedSummary = async (): Promise<boolean> => {
     try {
+      _actionController?.abort()
+      _actionController = new AbortController()
       const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/cached-summary`)
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/cached-summary`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         return false
@@ -513,6 +539,7 @@ export function usePatternAnalysis() {
       }
       return false
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') return false
       logger.debug('Cached summary not available:', extractErrorMessage(e, 'unknown'))
       return false
     }
@@ -586,7 +613,12 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Duplicates fetch failed: ${response.statusText}`)
@@ -597,6 +629,7 @@ export function usePatternAnalysis() {
         duplicatePatterns.value = data.duplicates || []
       }
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       error.value = extractErrorMessage(e, 'Duplicates fetch failed')
       logger.error('Duplicate patterns fetch failed:', e)
     })
@@ -615,7 +648,12 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Regex opportunities fetch failed: ${response.statusText}`)
@@ -626,6 +664,7 @@ export function usePatternAnalysis() {
         regexOpportunities.value = data.opportunities || []
       }
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       error.value = extractErrorMessage(e, 'Regex opportunities fetch failed')
       logger.error('Regex opportunities fetch failed:', e)
     })
@@ -648,7 +687,12 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Complexity hotspots fetch failed: ${response.statusText}`)
@@ -659,6 +703,7 @@ export function usePatternAnalysis() {
         complexityHotspots.value = data.hotspots || []
       }
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       error.value = extractErrorMessage(e, 'Complexity hotspots fetch failed')
       logger.error('Complexity hotspots fetch failed:', e)
     })
@@ -677,7 +722,12 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Refactoring suggestions fetch failed: ${response.statusText}`)
@@ -688,6 +738,7 @@ export function usePatternAnalysis() {
         refactoringSuggestions.value = data.suggestions || []
       }
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       error.value = extractErrorMessage(e, 'Refactoring suggestions fetch failed')
       logger.error('Refactoring suggestions fetch failed:', e)
     })
@@ -699,7 +750,12 @@ export function usePatternAnalysis() {
   const getStorageStats = async (): Promise<void> => {
     await wrap(async () => {
       const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/storage/stats`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Storage stats fetch failed: ${response.statusText}`)
@@ -710,6 +766,7 @@ export function usePatternAnalysis() {
         storageStats.value = data.stats
       }
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       logger.error('Storage stats fetch failed:', e)
     })
   }
@@ -720,8 +777,11 @@ export function usePatternAnalysis() {
   const clearStorage = async (): Promise<boolean> => {
     return wrap(async () => {
       const backendUrl = await getBackendUrl()
+      _actionController?.abort()
+      _actionController = new AbortController()
       const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        signal: _actionController.signal,
       })
 
       if (!response.ok) {
@@ -735,6 +795,7 @@ export function usePatternAnalysis() {
       }
       return false
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return false
       logger.error('Clear storage failed:', e)
       return false
     })
@@ -747,7 +808,12 @@ export function usePatternAnalysis() {
     return wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/report${params}`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Report fetch failed: ${response.statusText}`)
@@ -759,6 +825,7 @@ export function usePatternAnalysis() {
       }
       return null
     }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return null
       logger.error('Report fetch failed:', e)
       return null
     })
@@ -767,6 +834,12 @@ export function usePatternAnalysis() {
   /**
    * Reset all state
    */
+  onUnmounted(() => {
+    _analyzeController?.abort()
+    _actionController?.abort()
+    _pollController?.abort()
+  })
+
   const reset = (): void => {
     analyzing.value = false
     error.value = null
@@ -822,9 +895,11 @@ export function usePatternAnalysis() {
   const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string }> => {
     try {
       const backendUrl = await getBackendUrl()
+      _actionController?.abort()
+      _actionController = new AbortController()
       const response = await fetchWithAuth(
         `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
-        { method: 'POST' }
+        { method: 'POST', signal: _actionController.signal },
       )
 
       if (!response.ok) {
@@ -835,6 +910,7 @@ export function usePatternAnalysis() {
       logger.info('Cleared stuck tasks:', result)
       return { cleared: result.cleared_count, message: result.message }
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e
       logger.error('Failed to clear stuck tasks:', e)
       throw e
     }
@@ -847,7 +923,12 @@ export function usePatternAnalysis() {
   const listTasks = async (): Promise<{ total: number; running: number; tasks: AnalysisTaskEntry[] }> => {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
+      _actionController?.abort()
+      _actionController = new AbortController()
+      const response = await fetchWithAuth(
+        `${backendUrl}/api/analytics/codebase/patterns/tasks`,
+        { signal: _actionController.signal },
+      )
 
       if (!response.ok) {
         throw new Error(`Failed to list tasks: ${response.statusText}`)
@@ -855,6 +936,7 @@ export function usePatternAnalysis() {
 
       return await response.json()
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e
       logger.error('Failed to list tasks:', e)
       throw e
     }

@@ -11,7 +11,7 @@
  *   const { responses, selectedModels, isComparing, compare, reset } = useMultiModelCompare()
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, onUnmounted, type Ref } from 'vue'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { getAuthToken } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
@@ -75,6 +75,7 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
   const responses = ref<Map<string, ModelResponse>>(new Map())
   const selectedModels = ref<string[]>(loadStoredModels())
   const isComparing = ref(false)
+  let compareController: AbortController | null = null
 
   // Persist selected models whenever they change (caller is responsible for
   // updating selectedModels; we expose a watcher-free API for simplicity)
@@ -83,6 +84,8 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
   }
 
   function reset(): void {
+    compareController?.abort()
+    compareController = null
     responses.value = new Map()
     isComparing.value = false
   }
@@ -94,6 +97,9 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
     _persistModels()
     reset()
     isComparing.value = true
+
+    compareController = new AbortController()
+    const signal = compareController.signal
 
     // Initialise placeholders so the UI can render empty cards immediately
     const initial = new Map<string, ModelResponse>()
@@ -113,8 +119,13 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
         method: 'POST',
         headers,
         body: JSON.stringify({ prompt, models: targetModels }),
+        signal,
       })
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        isComparing.value = false
+        return
+      }
       logger.error('compare fetch failed:', err)
       for (const m of targetModels) {
         responses.value.set(m, { content: '', done: true, error: String(err) })
@@ -177,12 +188,17 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
         }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       logger.error('compare stream read error:', err)
     } finally {
       reader.releaseLock()
       isComparing.value = false
     }
   }
+
+  onUnmounted(() => {
+    compareController?.abort()
+  })
 
   return { responses, selectedModels, isComparing, compare, reset }
 }

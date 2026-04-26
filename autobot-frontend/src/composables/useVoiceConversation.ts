@@ -67,6 +67,8 @@ let _sileroVad: any = null
 let _whisperFallback = false // #1329: true when browser STT unavailable (airgapped)
 let _fallbackRecorder: MediaRecorder | null = null
 let _fallbackStream: MediaStream | null = null
+// AbortController for transcription requests — aborts in-flight call when new recording starts.
+let _transcribeController: AbortController | null = null
 
 // Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD
 let _ttsCooldownTimer: ReturnType<typeof setTimeout> | null = null
@@ -347,6 +349,7 @@ async function _startWhisperFallback(): Promise<void> {
           }
         })
         .catch((err) => {
+          if (err instanceof DOMException && err.name === 'AbortError') { state.value = 'idle'; return }
           logger.error('Whisper fallback transcription error:', err)
           errorMessage.value = 'Transcription failed. Try again.'
           state.value = 'idle'
@@ -626,9 +629,12 @@ async function _transcribeAudioWithLanguage(
   form.append('audio', blob, filename)
   const lang = _getShortLanguage()
   if (lang) form.append('language', lang)
+  _transcribeController?.abort()
+  _transcribeController = new AbortController()
   const res = await fetchWithAuth(`${getApiBase()}/voice/transcribe`, {
     method: 'POST',
     body: form,
+    signal: _transcribeController.signal,
   })
   if (!res.ok) {
     logger.warn('Transcribe failed:', res.status)
@@ -722,6 +728,7 @@ function _handleVadSpeechEnd(audio: Float32Array): void {
       _dispatchTranscript(text)
     })
     .catch((err) => {
+      if (err instanceof DOMException && err.name === 'AbortError') { state.value = 'idle'; return }
       logger.error('Hands-free transcription error:', err)
       errorMessage.value = 'Transcription failed. Try again.'
       state.value = 'idle'

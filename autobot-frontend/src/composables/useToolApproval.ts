@@ -62,6 +62,7 @@ export interface UseToolApprovalReturn {
 export function useToolApproval(): UseToolApprovalReturn {
   const pendingToolApproval = ref<PendingToolApproval | null>(null)
   const submittingApproval = ref(false)
+  let submitController: AbortController | null = null
 
   // Subscribe to the global channel for APPROVAL_REQUIRED events (#4952).
   // The agent loop publishes on the global channel with EventType.APPROVAL_REQUIRED
@@ -92,6 +93,8 @@ export function useToolApproval(): UseToolApprovalReturn {
       logger.warn('submitToolApproval called with no pending approval')
       return
     }
+    submitController?.abort()
+    submitController = new AbortController()
     submittingApproval.value = true
     try {
       const url = await appConfig.getApiUrl(
@@ -106,6 +109,7 @@ export function useToolApproval(): UseToolApprovalReturn {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: submitController.signal,
       })
       if (!response.ok) {
         const text = await response.text().catch(() => '')
@@ -114,6 +118,7 @@ export function useToolApproval(): UseToolApprovalReturn {
       logger.debug('Tool approval submitted', { approval_id: approval.approval_id, approved })
       pendingToolApproval.value = null
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       logger.error('Failed to submit tool approval:', err)
       throw err
     } finally {
@@ -128,7 +133,10 @@ export function useToolApproval(): UseToolApprovalReturn {
   // Auto-cleanup on component unmount
   const instance = getCurrentInstance()
   if (instance) {
-    onUnmounted(() => unsub())
+    onUnmounted(() => {
+      unsub()
+      submitController?.abort()
+    })
   } else {
     logger.warn('useToolApproval: not inside a Vue component, cleanup must be manual')
   }
