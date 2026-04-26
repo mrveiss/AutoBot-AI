@@ -324,72 +324,36 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 import { useExpansion } from '@/composables/useExpansion'
+import {
+  useLLMPatternData,
+  type LLMPatternStats,
+  type LLMPatternRecommendation,
+  type LLMPatternModelData,
+  type LLMPatternCategoryData,
+  type LLMPatternCacheOpportunity,
+  type LLMPatternAnalysisResult
+} from '@/composables/analytics/useLLMPatternData'
 
 const logger = createLogger('LLMPatternDashboard')
 
-// Types
-interface Stats {
-  total_requests: number
-  total_cost: number
-  avg_cost_per_request: number
-  success_rate: number
-  by_date: Array<{ date: string; requests: number; cost: number; success_rate: number }>
-  by_model: Record<string, number>
-}
+// Types (aliases for component-local readability)
+type Stats = LLMPatternStats
+type Recommendation = LLMPatternRecommendation
+type ModelData = LLMPatternModelData
+type CategoryData = LLMPatternCategoryData
+type CacheOpportunity = LLMPatternCacheOpportunity
+type AnalysisResult = LLMPatternAnalysisResult
 
-interface Recommendation {
-  type: string
-  title: string
-  description: string
-  potential_savings: number
-  priority: number
-  affected_prompts: number
-  implementation_steps: string[]
-}
-
-interface ModelData {
-  model: string
-  request_count: number
-  total_tokens: number
-  total_cost: number
-  avg_cost_per_request: number
-  avg_response_time: number
-  success_rate: number
-}
-
-interface CategoryData {
-  categories: Array<{
-    category: string
-    count: number
-    percentage: number
-    cost: number
-    cost_percentage: number
-  }>
-  total_count: number
-  total_cost: number
-}
-
-interface CacheOpportunity {
-  prompt_hash: string
-  prompt_preview: string
-  occurrence_count: number
-  total_cost: number
-  potential_savings: number
-}
-
-interface AnalysisResult {
-  prompt_hash: string
-  category: string
-  estimated_tokens: number
-  estimated_cost: number
-  issues: Array<{ type: string; message: string; severity: string }>
-  recommendations: string[]
-  cache_potential: boolean
-}
+const {
+  fetchStats: fetchStatsData,
+  fetchRecommendations: fetchRecommendationsData,
+  fetchModelComparison: fetchModelComparisonData,
+  fetchCategoryDistribution,
+  fetchCacheOpportunities: fetchCacheOpportunitiesData,
+  analyzePrompt: analyzePromptData
+} = useLLMPatternData()
 
 // State
 const stats = ref<Stats>({
@@ -488,82 +452,31 @@ const toggleSteps = (type: string) => {
 
 // API Calls
 const fetchStats = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/stats?days=7`)
-    if (response.ok) {
-      stats.value = await response.json()
-    }
-  } catch (err) {
-    logger.error('Failed to fetch stats:', err)
-  }
+  const data = await fetchStatsData(7)
+  if (data) stats.value = data
 }
 
 const fetchRecommendations = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/recommendations`)
-    if (response.ok) {
-      const data = await response.json()
-      recommendations.value = data.recommendations || []
-    }
-  } catch (err) {
-    logger.error('Failed to fetch recommendations:', err)
-  }
+  recommendations.value = await fetchRecommendationsData()
 }
 
 const fetchModelComparison = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/model-comparison`)
-    if (response.ok) {
-      const data = await response.json()
-      modelComparison.value = data.models || []
-    }
-  } catch (err) {
-    logger.error('Failed to fetch model comparison:', err)
-  }
+  modelComparison.value = await fetchModelComparisonData()
 }
 
-const fetchCategoryDistribution = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/category-distribution`)
-    if (response.ok) {
-      categoryData.value = await response.json()
-    }
-  } catch (err) {
-    logger.error('Failed to fetch category distribution:', err)
-  }
+const fetchCategoryDistributionData = async () => {
+  const data = await fetchCategoryDistribution()
+  if (data) categoryData.value = data
 }
 
 const fetchCacheOpportunities = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/cache-opportunities`)
-    if (response.ok) {
-      const data = await response.json()
-      cacheOpportunities.value = data.opportunities || []
-    }
-  } catch (err) {
-    logger.error('Failed to fetch cache opportunities:', err)
-  }
+  cacheOpportunities.value = await fetchCacheOpportunitiesData()
 }
 
 const runAnalysis = async () => {
   if (!analyzePrompt.value) return
-
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/llm-patterns/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: analyzePrompt.value,
-        model: analyzeModel.value || null
-      })
-    })
-
-    if (response.ok) {
-      analysisResult.value = await response.json()
-    }
-  } catch (err) {
-    logger.error('Failed to analyze prompt:', err)
-  }
+  const result = await analyzePromptData(analyzePrompt.value, analyzeModel.value || null)
+  if (result) analysisResult.value = result
 }
 
 // Lifecycle
@@ -571,7 +484,7 @@ onMounted(() => {
   fetchStats()
   fetchRecommendations()
   fetchModelComparison()
-  fetchCategoryDistribution()
+  fetchCategoryDistributionData()
   fetchCacheOpportunities()
 })
 </script>
