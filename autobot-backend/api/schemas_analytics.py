@@ -823,3 +823,21 @@ class UsageMyUsageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # files.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
+
+
+
+class CostTrackingRecordResponse(BaseModel):
+    """Per-request cost tracking record returned by cost analytics endpoints (#5936).
+
+    Renamed from analytics_cost.UsageRecordResponse to avoid collision with
+    schemas_common.UsageRecordResponse (which is the POST /usage/record confirmation).
+    """
+
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    timestamp: str
+    session_id: Optional[str]
+    success: bool

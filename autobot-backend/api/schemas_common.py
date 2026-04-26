@@ -81,6 +81,16 @@ class UsageRecordResponse(BaseModel):
     record_id: Optional[str] = None
 
 
+class AgentMessageResponse(BaseModel):
+    """Response for /goal, /pause, /resume — plain {"message": str}.
+
+    Moved from schemas_agent.py (#5935): used by both agent.py and logs.py,
+    making it cross-domain.
+    """
+
+    message: str
+
+
 # ---------------------------------------------------------------------------
 # structured_thinking_mcp.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------

@@ -92,19 +92,6 @@ class ModelPricingInfo(BaseModel):
     provider: str
 
 
-class UsageRecordResponse(BaseModel):
-    """Usage record response model"""
-
-    provider: str
-    model: str
-    input_tokens: int
-    output_tokens: int
-    cost_usd: float
-    timestamp: str
-    session_id: Optional[str]
-    success: bool
-
-
 # ============================================================================
 # COST SUMMARY ENDPOINTS
 # ============================================================================
