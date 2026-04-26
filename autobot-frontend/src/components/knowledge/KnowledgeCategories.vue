@@ -168,10 +168,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
+import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
@@ -190,6 +189,7 @@ import '@/styles/document-feed-wrapper.css'
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { fetchBasicStats } = useKnowledgeStats()
 const { getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
+const { fetchMainCategories, fetchCategoryDocuments } = useKnowledgeCategories()
 
 // Router
 const router = useRouter()
@@ -248,8 +248,7 @@ const viewCategoryDocuments = async (category: any) => {
   selectedCategoryPath.value = category.path
 
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    categoryDocuments.value = data?.documents || []
+    categoryDocuments.value = await fetchCategoryDocuments(category.path)
     showCategoryDocuments.value = true
   } catch (error) {
     logger.error('Error loading category documents:', error)
@@ -280,17 +279,10 @@ const loadMainCategories = async () => {
   isLoadingCategories.value = true
   categoriesError.value = null
   try {
-    // apiClient.get<T> returns parsed JSON or throws on HTTP error — it
-    // never returns a Response-like object with a `status` field. The
-    // previous `if (response && 'status' in response)` guard was dead code
-    // left over from the parseApiResponse wrapper pattern (#5033); the 401 /
-    // 403 handling now lives in the catch below via the thrown error.
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/categories/main`)
-    if (!data?.categories || !Array.isArray(data.categories)) {
-      categoriesError.value = t('knowledge.categories.invalidResponse')
-      return
-    }
-    mainCategories.value = data.categories
+    // fetchMainCategories delegates to apiClient.get<T> which returns parsed
+    // JSON or throws on HTTP error — 401/403 handling lives in the catch
+    // below via the thrown error (#5033).
+    mainCategories.value = await fetchMainCategories()
   } catch (error: unknown) {
     logger.error('Failed to load main categories:', error)
     const status = (error as { status?: number; response?: { status?: number } })?.status
