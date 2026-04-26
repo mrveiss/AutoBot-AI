@@ -381,6 +381,36 @@ export function useCommandApproval() {
     return riskClasses[riskLevel] || 'text-gray-600'
   }
 
+  /**
+   * Simple approve/deny for CommandPermissionDialog (#6088).
+   * Posts to agent-terminal approve endpoint and returns the raw response data.
+   */
+  const approveCommandForDialog = async (
+    terminalSessionId: string,
+    approved: boolean,
+    userId = 'web_user'
+  ): Promise<{ status: string; error?: string; [key: string]: unknown }> => {
+    const result = await apiClient.post(
+      `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
+      { approved, user_id: userId }
+    ) as { status: string; error?: string; [key: string]: unknown }
+    return result
+  }
+
+  /**
+   * Submit a chat comment via /chat/direct (#6088).
+   */
+  const submitChatComment = async (
+    chatId: string | null | undefined,
+    message: string
+  ): Promise<unknown> => {
+    const response = await apiClient.post(`${getApiBase()}/chat/direct`, {
+      message,
+      chat_id: chatId
+    }) as { data?: unknown }
+    return response
+  }
+
   return {
     // State
     processingApproval,
@@ -404,6 +434,10 @@ export function useCommandApproval() {
     getRiskClass,
 
     // Permission v2: Project context methods
-    setProjectContext
+    setProjectContext,
+
+    // CommandPermissionDialog helpers (#6088)
+    approveCommandForDialog,
+    submitChatComment
   }
 }
