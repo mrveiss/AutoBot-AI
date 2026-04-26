@@ -22,13 +22,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
 
-class AccessControlMetrics:
+class AccessControlMetrics(AsyncRedisClientMixin):
     """
     Track and analyze access control violations for safe rollout
 
@@ -40,6 +40,8 @@ class AccessControlMetrics:
     - Time-series data for trending
     """
 
+    _redis_database = "metrics"
+
     def __init__(self, retention_days: int = 7):
         """
         Initialize metrics collection service
@@ -48,14 +50,6 @@ class AccessControlMetrics:
             retention_days: How long to keep detailed metrics (default: 7 days)
         """
         self.retention_days = retention_days
-        self._redis = None
-
-    async def _get_redis(self):
-        """Get Redis metrics database (DB 4)"""
-        if not self._redis:
-            # Get async Redis client for metrics database (returns coroutine, must await)
-            self._redis = await get_async_redis_client(database="metrics")
-        return self._redis
 
     async def record_violation(
         self,

@@ -11,10 +11,10 @@ provide refinement recommendations.
 import json
 import logging
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics, REDIS_SKILL_METRICS_PREFIX
@@ -22,21 +22,13 @@ from .skill_metrics import SkillMetrics, REDIS_SKILL_METRICS_PREFIX
 logger = logging.getLogger(__name__)
 
 
-class SkillFeedbackAnalyzer:
+class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
     """Analyzes skill feedback to identify patterns and recommend improvements."""
+
+    _redis_database = "analytics"
 
     def __init__(self) -> None:
         self._metrics = SkillMetrics()
-        self._redis: Optional[Any] = None
-
-    async def _get_redis(self) -> Optional[Any]:
-        """Get Redis client (analytics database)."""
-        if self._redis is None:
-            try:
-                self._redis = get_redis_client(RedisDatabase.ANALYTICS)
-            except Exception as e:
-                logger.error("Failed to get Redis client: %s", e)
-        return self._redis
 
     async def log_user_feedback(
         self,
@@ -68,8 +60,8 @@ class SkillFeedbackAnalyzer:
             }
 
             key = f"skill_feedback:{skill_id}:{now.strftime('%Y-%m-%d')}"
-            redis.lpush(key, json.dumps(feedback_entry, default=str))
-            redis.expire(key, 90 * 86400)  # Keep 90 days
+            await redis.lpush(key, json.dumps(feedback_entry, default=str))
+            await redis.expire(key, 90 * 86400)  # Keep 90 days
 
             logger.debug("Logged feedback for %s: rating=%d", skill_id, rating)
 
@@ -106,7 +98,7 @@ class SkillFeedbackAnalyzer:
             for i in range(days):
                 date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 key = f"skill_feedback:{skill_id}:{date}"
-                feedback_entries = redis.lrange(key, 0, -1)
+                feedback_entries = await redis.lrange(key, 0, -1)
 
                 for entry_raw in feedback_entries:
                     try:
@@ -124,9 +116,7 @@ class SkillFeedbackAnalyzer:
                         continue
 
             # Calculate statistics
-            avg_rating = (
-                (sum(ratings) / len(ratings)) if ratings else 0.0
-            )
+            avg_rating = (sum(ratings) / len(ratings)) if ratings else 0.0
 
             # Find most common failure patterns
             pattern_counter = Counter(failure_patterns)
