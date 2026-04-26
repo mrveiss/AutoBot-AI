@@ -1,3 +1,7 @@
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+
 /**
  * useHostSelection - Composable for managing host selection for agent SSH actions
  *
@@ -6,13 +10,15 @@
  * - Default host configuration
  * - Session-level host persistence
  * - API for agents to request host selection
+ *
+ * fetchWithAuth replaced with useFetchEndpoint (Pattern A) for both
+ * loadHosts and loadTerminalHosts (Issue #6089).
  */
 
 import { ref, computed, readonly } from 'vue';
-import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { useLoadingState } from '@/composables/useLoadingState';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint';
+import type { HostConfig } from '@/composables/useTerminalStore';
 
 const logger = createLogger('useHostSelection');
 
@@ -46,6 +52,10 @@ export interface HostSelectionResult {
   requestId: string;
 }
 
+interface HostsApiRaw {
+  hosts?: Record<string, unknown>[];
+}
+
 // Singleton state (shared across all component instances)
 const showDialog = ref(false);
 const pendingRequest = ref<HostSelectionRequest | null>(null);
@@ -53,48 +63,88 @@ const selectedHost = ref<InfrastructureHost | null>(null);
 const defaultHostId = ref<string | null>(null);
 const sessionHostId = ref<string | null>(null);
 const hosts = ref<InfrastructureHost[]>([]);
-const { isLoading: loading, wrap } = useLoadingState();
 const error = ref<string | null>(null);
+
+// useFetchEndpoint instance for the shared /api/infrastructure/hosts GET
+// Issue #1310: Single source — only user-configured hosts from secrets.
+// Fleet/system VMs no longer included (they belong in SLM).
+const _hostsEndpoint = useFetchEndpoint<HostsApiRaw, InfrastructureHost[]>({
+  path: '/api/infrastructure/hosts',
+  label: 'Infrastructure hosts',
+  pickData: (raw) =>
+    (raw.hosts ?? []).map((h) => ({
+      id: h.id as string,
+      name: h.name as string,
+      host: h.host as string,
+      ssh_port: (h.ssh_port as number) || 22,
+      username: (h.username as string) || 'root',
+      auth_type: (h.auth_type as 'ssh_key' | 'password') || 'password',
+      capabilities: (h.capabilities as string[]) || ['ssh'],
+      purpose: (h.purpose as string) || (h.description as string),
+      os: h.os as string | undefined,
+      metadata: h,
+      _isLegacyHost: false,
+    })),
+  onSuccess: (data) => {
+    hosts.value = data;
+    logger.info('Loaded infrastructure hosts:', { count: data.length });
+  },
+  onError: (msg) => {
+    logger.error('Failed to load infrastructure hosts:', msg);
+    error.value = 'Failed to load infrastructure hosts';
+  },
+  fallbackData: [],
+});
+
+const loading = _hostsEndpoint.loading;
+
+// Terminal-specific host list (HostConfig[] shape for useTerminalStore)
+const terminalHosts = ref<HostConfig[]>([]);
+
+const _terminalHostsEndpoint = useFetchEndpoint<HostsApiRaw, HostConfig[]>({
+  path: '/api/infrastructure/hosts',
+  label: 'Terminal infrastructure hosts',
+  pickData: (raw) =>
+    (raw.hosts ?? []).map((h) => ({
+      id: h.id as string,
+      name: h.name as string,
+      ip: h.host as string,
+      port: (h.ssh_port as number) || 22,
+      description:
+        (h.description as string) ||
+        `${(h.os as string) || 'Host'} - ${((h.capabilities as string[])?.join(', ')) || 'SSH'}`,
+    })),
+  onSuccess: (data) => {
+    terminalHosts.value = data;
+    logger.info(`Loaded ${data.length} terminal infrastructure hosts`);
+  },
+  onError: (msg) => {
+    logger.error('Failed to load terminal infrastructure hosts:', msg);
+  },
+  fallbackData: [],
+});
+
+const terminalHostsLoading = _terminalHostsEndpoint.loading;
 
 // Promise resolvers for async request handling
 let resolveHostSelection: ((result: HostSelectionResult | null) => void) | null = null;
 
 /**
- * Load infrastructure hosts from the secrets API
+ * Load infrastructure hosts from the secrets API (Issue #1310, #6089)
  */
 const loadHosts = async (): Promise<InfrastructureHost[]> => {
   error.value = null;
-  return wrap(async () => {
-    try {
-      const backendUrl = getBackendUrl();
+  await _hostsEndpoint.load();
+  return hosts.value;
+};
 
-      // Issue #1310: Single source — only user-configured hosts from secrets.
-      // Fleet/system VMs no longer included (they belong in SLM).
-      const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`);
-      const data = response.ok ? await response.json() : { hosts: [] };
-
-      hosts.value = (data.hosts || []).map((h: Record<string, unknown>) => ({
-        id: h.id,
-        name: h.name,
-        host: h.host,
-        ssh_port: h.ssh_port || 22,
-        username: h.username || 'root',
-        auth_type: h.auth_type || 'password',
-        capabilities: h.capabilities || ['ssh'],
-        purpose: h.purpose || h.description,
-        os: h.os,
-        metadata: h,
-        _isLegacyHost: false,
-      }));
-
-      logger.info('Loaded infrastructure hosts:', { count: hosts.value.length });
-      return hosts.value;
-    } catch (err) {
-      logger.error('Failed to load hosts:', err);
-      error.value = 'Failed to load infrastructure hosts';
-      return [];
-    }
-  });
+/**
+ * Load infrastructure hosts mapped to HostConfig[] format for the terminal
+ * HostSelector component (Issue #6089).
+ */
+const loadTerminalHosts = async (): Promise<HostConfig[]> => {
+  await _terminalHostsEndpoint.load();
+  return terminalHosts.value;
 };
 
 /**
@@ -297,6 +347,11 @@ export function useHostSelection() {
     hasDefaultHost: computed(() => !!defaultHostId.value),
     hasSessionHost: computed(() => !!sessionHostId.value),
     hostCount: computed(() => hosts.value.length),
+
+    // Terminal variant
+    terminalHosts: readonly(terminalHosts),
+    terminalHostsLoading: readonly(terminalHostsLoading),
+    loadTerminalHosts,
 
     // Methods
     loadHosts,
