@@ -135,7 +135,7 @@ import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useModal } from '@/composables/useModal'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { createLogger } from '@/utils/debugUtils'
@@ -163,8 +163,10 @@ const emit = defineEmits<{
 }>()
 
 const { isOpen: showDialog } = useModal('command-permission-dialog')
-const { execute: executeAllow, loading: isProcessingAllow, error: errorAllow } = useAsyncOperation()
-const { execute: executeComment, loading: isProcessingComment, error: errorComment } = useAsyncOperation()
+const { isLoading: isProcessingAllow, wrap: wrapAllow } = useLoadingState()
+const { isLoading: isProcessingComment, wrap: wrapComment } = useLoadingState()
+const errorAllow = ref<Error | null>(null)
+const errorComment = ref<Error | null>(null)
 const rememberForSession = ref(false)
 const showCommentInput = ref(false)
 const commentText = ref('')
@@ -218,7 +220,11 @@ const allowCommandFn = async () => {
 
 const handleAllow = async () => {
   if (isProcessing.value) return
-  await executeAllow(allowCommandFn).catch(err => logger.error('Command approval error:', err))
+  errorAllow.value = null
+  await wrapAllow(allowCommandFn).catch(err => {
+    errorAllow.value = err instanceof Error ? err : new Error(String(err))
+    logger.error('Command approval error:', err)
+  })
 }
 
 const handleDeny = async () => {
@@ -258,7 +264,11 @@ const submitCommentFn = async () => {
 }
 
 const submitComment = async () => {
-  await executeComment(submitCommentFn).catch(err => logger.error('Comment submission error:', err))
+  errorComment.value = null
+  await wrapComment(submitCommentFn).catch(err => {
+    errorComment.value = err instanceof Error ? err : new Error(String(err))
+    logger.error('Comment submission error:', err)
+  })
 }
 
 const cancelComment = () => {
