@@ -93,13 +93,11 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { useChatTranslation } from '@/composables/chat/useChatTranslation'
 
 const { t } = useI18n()
-const logger = createLogger('TranslationShortcutPanel')
+const { translateText: doTranslate, detectLanguage: doDetect } = useChatTranslation()
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -157,25 +155,16 @@ const translateText = async () => {
 
   translationError.value = ''
   await wrap(async () => {
-  try {
-    const result = await apiClient.post(`${getApiBase()}/translate`, {
-      text: textToTranslate.value.trim(),
-      target_language: targetLanguage.value,
-    })
-
-    if (result.status === 'success') {
+    const result = await doTranslate(textToTranslate.value.trim(), targetLanguage.value)
+    if ('translatedText' in result) {
       emit('translation-result', {
         originalText: textToTranslate.value.trim(),
-        translatedText: result.response,
+        translatedText: result.translatedText,
         targetLanguage: targetLanguage.value,
       })
     } else {
-      translationError.value = result.response || t('chat.translate.error')
+      translationError.value = result.error || t('chat.translate.error')
     }
-  } catch (error) {
-    logger.error('Translation failed:', error)
-    translationError.value = t('chat.translate.error')
-  }
   })
 }
 
@@ -185,20 +174,12 @@ const detectLanguage = async () => {
   detectedLanguage.value = ''
   translationError.value = ''
   await wrap(async () => {
-  try {
-    const result = await apiClient.post(`${getApiBase()}/detect-language`, {
-      text: textToTranslate.value.trim(),
-    })
-
-    if (result.status === 'success') {
-      detectedLanguage.value = result.response
+    const result = await doDetect(textToTranslate.value.trim())
+    if ('detectedLanguage' in result) {
+      detectedLanguage.value = result.detectedLanguage
     } else {
-      translationError.value = result.response || t('chat.translate.error')
+      translationError.value = result.error || t('chat.translate.error')
     }
-  } catch (error) {
-    logger.error('Language detection failed:', error)
-    translationError.value = t('chat.translate.error')
-  }
   })
 }
 </script>
