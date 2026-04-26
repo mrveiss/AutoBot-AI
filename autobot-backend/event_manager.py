@@ -100,7 +100,6 @@ class EventManager:
 
 
 get_event_manager = lazy_singleton(EventManager)
-event_manager = get_event_manager()
 
 if __name__ == "__main__":
 

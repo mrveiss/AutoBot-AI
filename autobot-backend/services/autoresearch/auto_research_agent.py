@@ -1136,9 +1136,9 @@ class AutoResearchAgent(AsyncRedisClientMixin):
         )
 
         try:
-            from event_manager import event_manager
+            from event_manager import get_event_manager
 
-            await event_manager.publish(
+            await get_event_manager().publish(
                 event_type="research_checkpoint_pending",
                 payload={
                     "session_id": session.id,

@@ -243,9 +243,9 @@ async def test_integration():
 
     # Test 1: Memory system integration
     print("\n1. Testing Memory System Integration...")  # noqa: print
-    from task_execution_tracker import task_tracker
+    from task_execution_tracker import get_task_tracker
 
-    async with task_tracker.track_task(
+    async with get_task_tracker().track_task(
         "Phase 8 Integration Test",
         "Testing integration between Phase 8 components",
         agent_type="phase8_test",

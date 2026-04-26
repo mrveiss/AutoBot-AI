@@ -31,7 +31,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from constants.threshold_constants import RetryConfig, TimingConstants
-from event_manager import event_manager
+from event_manager import get_event_manager
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
 
@@ -683,7 +683,7 @@ class NPULoadBalancer:
             reason: Reason for status change
         """
         try:
-            await event_manager.publish(
+            await get_event_manager().publish(
                 "npu_worker_status_change",
                 worker.to_status_event_dict(reason),
             )

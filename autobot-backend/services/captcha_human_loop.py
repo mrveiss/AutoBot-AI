@@ -50,7 +50,7 @@ from playwright.async_api import Page
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from event_manager import event_manager
+from event_manager import get_event_manager
 
 logger = logging.getLogger(__name__)
 
@@ -507,7 +507,7 @@ class CaptchaHumanLoop:
         screenshot_b64: str,
     ) -> None:
         """Send WebSocket notification that CAPTCHA was detected."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_detected",
             {
                 "captcha_id": captcha_id,
@@ -523,7 +523,7 @@ class CaptchaHumanLoop:
 
     async def _notify_captcha_timeout(self, captcha_id: str, url: str) -> None:
         """Send WebSocket notification that CAPTCHA resolution timed out."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_timeout",
             {
                 "captcha_id": captcha_id,
@@ -537,7 +537,7 @@ class CaptchaHumanLoop:
         self, captcha_id: str, url: str, status: CaptchaResolutionStatus
     ) -> None:
         """Send WebSocket notification that CAPTCHA was resolved."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "captcha_resolved",
             {
                 "captcha_id": captcha_id,

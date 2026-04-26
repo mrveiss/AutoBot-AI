@@ -347,11 +347,11 @@ class ApprovalGateService:
         event_type: str,
         approval: Approval,
     ) -> None:
-        """Publish WebSocket notification via event_manager."""
+        """Publish WebSocket notification via get_event_manager()."""
         try:
-            from event_manager import event_manager
+            from event_manager import get_event_manager
 
-            await event_manager.publish(
+            await get_event_manager().publish(
                 event_type=event_type,
                 payload={
                     "approval_id": str(approval.id),
