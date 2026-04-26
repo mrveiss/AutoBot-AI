@@ -27,6 +27,12 @@ class AgentCapability(Enum):
     DATA_PROCESSING = "data_processing"
     KNOWLEDGE_MANAGEMENT = "knowledge_management"
     WORKFLOW_COORDINATION = "workflow_coordination"
+    EXECUTION = "execution"
+    MONITORING = "monitoring"
+    SYNTHESIS = "synthesis"
+    VALIDATION = "validation"
+    OPTIMIZATION = "optimization"
+    SECURITY = "security"
 
 
 class DocumentationType(Enum):
