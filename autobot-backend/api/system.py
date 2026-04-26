@@ -4,6 +4,7 @@
 import asyncio
 import importlib
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -120,7 +121,7 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
         "lmstudio": {
             "url": config.get(
                 "backend.llm.local.providers.lmstudio.endpoint",
-                f"http://localhost:1234",
+                os.getenv("LMSTUDIO_HOST", "http://127.0.0.1:1234"),
             ),
         },
     }
