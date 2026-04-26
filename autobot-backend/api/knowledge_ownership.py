@@ -14,7 +14,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.knowledge_models import ShareFactRequest, UpdateVisibilityRequest
+from api.schemas_knowledge import ShareFactRequest, UpdateVisibilityRequest
 from api.schemas_knowledge import (
     KnowledgeMyFactsResponse,
     KnowledgeShareFactResponse,

@@ -22,7 +22,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     AutoApplySuggestionsRequest,
     ContextSuggestionsRequest,
     SuggestAllRequest,

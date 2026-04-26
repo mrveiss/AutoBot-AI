@@ -28,7 +28,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from starlette.requests import Request
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     CollectionFactsRequest,
     CreateCollectionRequest,
     UpdateCollectionRequest,

@@ -28,7 +28,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     AssignFactToCategoryRequest,
     CreateCategoryRequest,
     SearchCategoriesByPathRequest,
