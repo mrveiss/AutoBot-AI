@@ -18,6 +18,11 @@ from pydantic import BaseModel, Field
 
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
+from api.schemas_code import (
+    SkillConfigUpdateResponse,
+    SkillExecuteResponse,
+    SkillToggleResponse,
+)
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     SkillsListResponse,
@@ -177,7 +182,7 @@ async def get_skill(name: str) -> Dict[str, Any]:
     operation="enable_skill",
     error_code_prefix="SKILLS",
 )
-@router.post("/{name}/enable", summary="Enable a skill", response_model=None)
+@router.post("/{name}/enable", summary="Enable a skill", response_model=SkillToggleResponse)
 async def enable_skill(name: str) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -194,7 +199,7 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     operation="disable_skill",
     error_code_prefix="SKILLS",
 )
-@router.post("/{name}/disable", summary="Disable a skill", response_model=None)
+@router.post("/{name}/disable", summary="Disable a skill", response_model=SkillToggleResponse)
 async def disable_skill(name: str) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -211,7 +216,7 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     operation="update_config",
     error_code_prefix="SKILLS",
 )
-@router.put("/{name}/config", summary="Update skill config", response_model=None)
+@router.put("/{name}/config", summary="Update skill config", response_model=SkillConfigUpdateResponse)
 async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     """Update a skill's configuration values."""
     registry = get_skill_registry()
@@ -231,7 +236,7 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     operation="execute_skill",
     error_code_prefix="SKILLS",
 )
-@router.post("/{name}/execute", summary="Execute a skill action", response_model=None)
+@router.post("/{name}/execute", summary="Execute a skill action", response_model=SkillExecuteResponse)
 async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
     manager = _get_manager()

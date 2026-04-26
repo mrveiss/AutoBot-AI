@@ -34,7 +34,12 @@ from auth_middleware import check_admin_permission
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    PermissionRuleMutateResponse,
+    PermissionClearApprovalsResponse,
+    PermissionStoreApprovalResponse,
+    PermissionMemoryStatsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -329,7 +334,7 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
     operation="add_permission_rule",
     error_code_prefix="PERMISSIONS",
 )
-@router.post("/rules", response_model=None)
+@router.post("/rules", response_model=PermissionRuleMutateResponse)
 async def add_permission_rule(
     request: AddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -382,7 +387,7 @@ async def add_permission_rule(
     operation="remove_permission_rule",
     error_code_prefix="PERMISSIONS",
 )
-@router.delete("/rules", response_model=None)
+@router.delete("/rules", response_model=PermissionRuleMutateResponse)
 async def remove_permission_rule(
     request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -488,7 +493,7 @@ async def get_project_approvals(
     operation="clear_project_approvals",
     error_code_prefix="PERMISSIONS",
 )
-@router.delete("/memory/{project_path:path}", response_model=None)
+@router.delete("/memory/{project_path:path}", response_model=PermissionClearApprovalsResponse)
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -529,7 +534,7 @@ async def clear_project_approvals(
     operation="store_approval",
     error_code_prefix="PERMISSIONS",
 )
-@router.post("/memory", response_model=None)
+@router.post("/memory", response_model=PermissionStoreApprovalResponse)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
@@ -577,7 +582,7 @@ async def store_approval(
     operation="get_memory_stats",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/memory/stats", response_model=None)
+@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.

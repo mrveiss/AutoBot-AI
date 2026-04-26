@@ -23,7 +23,12 @@ from integrations.cloud_integration import (
     AzureIntegration,
     GCPIntegration,
 )
-from api.schemas_common import DataResponse
+from api.schemas_code import (
+    CloudAccountInfoResponse,
+    CloudConnectionTestResponse,
+    CloudResourcesResponse,
+    CloudStorageResponse,
+)
 
 router = APIRouter(
     tags=["integrations-cloud"],
@@ -115,7 +120,7 @@ async def list_providers():
     operation="test_connection",
     error_code_prefix="INTEGRATION_CLOUD",
 )
-@router.post("/test-connection", response_model=None)
+@router.post("/test-connection", response_model=CloudConnectionTestResponse)
 async def test_connection(request: ConnectionTestRequest):
     """Test connection to a cloud provider."""
     try:
@@ -154,7 +159,7 @@ async def test_connection(request: ConnectionTestRequest):
     operation="list_resources",
     error_code_prefix="INTEGRATION_CLOUD",
 )
-@router.get("/{provider}/resources", response_model=None)
+@router.get("/{provider}/resources", response_model=CloudResourcesResponse)
 async def list_resources(
     provider: str,
     api_key: Optional[str] = None,
@@ -203,7 +208,7 @@ async def list_resources(
     operation="list_storage",
     error_code_prefix="INTEGRATION_CLOUD",
 )
-@router.get("/{provider}/storage", response_model=None)
+@router.get("/{provider}/storage", response_model=CloudStorageResponse)
 async def list_storage(
     provider: str,
     api_key: Optional[str] = None,
@@ -251,7 +256,7 @@ async def list_storage(
     operation="get_account_info",
     error_code_prefix="INTEGRATION_CLOUD",
 )
-@router.get("/{provider}/account", response_model=None)
+@router.get("/{provider}/account", response_model=CloudAccountInfoResponse)
 async def get_account_info(
     provider: str,
     api_key: Optional[str] = None,

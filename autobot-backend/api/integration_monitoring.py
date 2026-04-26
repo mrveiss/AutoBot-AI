@@ -18,7 +18,14 @@ from pydantic import BaseModel, Field, validator
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
-from api.schemas_common import DataResponse
+from api.schemas_code import (
+    MonitoringConnectionTestResponse,
+    MonitoringProvidersResponse,
+    MonitoringHostsResponse,
+    MonitoringMetricsResponse,
+    MonitoringAlertsResponse,
+    MonitoringEventsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -105,7 +112,7 @@ class MonitorCreateRequest(BaseModel):
     operation="test_connection",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/test-connection", response_model=None)
+@router.post("/test-connection", response_model=MonitoringConnectionTestResponse)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
 
@@ -139,7 +146,7 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     operation="list_providers",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/providers", response_model=None)
+@router.get("/providers", response_model=MonitoringProvidersResponse)
 async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     """List supported monitoring providers.
 
@@ -167,7 +174,7 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     operation="list_hosts",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/{provider}/hosts", response_model=None)
+@router.get("/{provider}/hosts", response_model=MonitoringHostsResponse)
 async def list_hosts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -209,7 +216,7 @@ async def list_hosts(
     operation="query_metrics",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/{provider}/metrics", response_model=None)
+@router.post("/{provider}/metrics", response_model=MonitoringMetricsResponse)
 async def query_metrics(
     provider: str,
     request: MetricsQueryRequest,
@@ -253,7 +260,7 @@ async def query_metrics(
     operation="list_alerts",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/{provider}/alerts", response_model=None)
+@router.get("/{provider}/alerts", response_model=MonitoringAlertsResponse)
 async def list_alerts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -295,7 +302,7 @@ async def list_alerts(
     operation="get_events",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/{provider}/events", response_model=None)
+@router.post("/{provider}/events", response_model=MonitoringEventsResponse)
 async def get_events(
     provider: str,
     request: EventsQueryRequest,

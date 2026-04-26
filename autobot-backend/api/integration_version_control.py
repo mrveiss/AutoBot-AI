@@ -16,7 +16,12 @@ from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
-from api.schemas_common import DataResponse
+from api.schemas_code import (
+    VCSBranchesResponse,
+    VCSCommitInfoResponse,
+    VCSPullRequestsResponse,
+    VCSRepositoriesResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -182,7 +187,7 @@ async def get_providers() -> List[ProviderInfo]:
     operation="list_repositories",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories", response_model=None)
+@router.get("/{provider}/repositories", response_model=VCSRepositoriesResponse)
 async def list_repositories(
     provider: str,
     api_key: str = Query(..., description="API key or access token"),
@@ -228,7 +233,7 @@ async def list_repositories(
     operation="list_branches",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/branches", response_model=None)
+@router.get("/{provider}/repositories/{repo_id}/branches", response_model=VCSBranchesResponse)
 async def list_branches(
     provider: str,
     repo_id: str,
@@ -300,7 +305,7 @@ def _build_pr_params(
     operation="list_pull_requests",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=None)
+@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=VCSPullRequestsResponse)
 async def list_pull_requests(
     provider: str,
     repo_id: str,
@@ -328,7 +333,7 @@ async def list_pull_requests(
     operation="get_commit_info",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/commits", response_model=None)
+@router.get("/{provider}/repositories/{repo_id}/commits", response_model=VCSCommitInfoResponse)
 async def get_commit_info(
     provider: str,
     repo_id: str,

@@ -26,6 +26,7 @@ from agents.npu_code_search_agent import (
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from api.schemas_code import CodeSearchGetResponse
 from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
@@ -300,7 +301,7 @@ async def search_code(request: SearchRequest):
     operation="search_code_get",
     error_code_prefix="CODE_SEARCH",
 )
-@router.get("/search", response_model=None)
+@router.get("/search", response_model=CodeSearchGetResponse)
 async def search_code_get(
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),
