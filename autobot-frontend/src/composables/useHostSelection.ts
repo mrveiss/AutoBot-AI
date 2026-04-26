@@ -11,6 +11,7 @@
 import { ref, computed, readonly } from 'vue';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
+import { useLoadingState } from '@/composables/useLoadingState';
 
 const logger = createLogger('useHostSelection');
 
@@ -51,7 +52,7 @@ const selectedHost = ref<InfrastructureHost | null>(null);
 const defaultHostId = ref<string | null>(null);
 const sessionHostId = ref<string | null>(null);
 const hosts = ref<InfrastructureHost[]>([]);
-const loading = ref(false);
+const { isLoading: loading, wrap } = useLoadingState();
 const error = ref<string | null>(null);
 
 // Promise resolvers for async request handling
@@ -61,40 +62,38 @@ let resolveHostSelection: ((result: HostSelectionResult | null) => void) | null 
  * Load infrastructure hosts from the secrets API
  */
 const loadHosts = async (): Promise<InfrastructureHost[]> => {
-  loading.value = true;
   error.value = null;
+  return wrap(async () => {
+    try {
+      const backendUrl = getBackendUrl();
 
-  try {
-    const backendUrl = getBackendUrl();
+      // Issue #1310: Single source — only user-configured hosts from secrets.
+      // Fleet/system VMs no longer included (they belong in SLM).
+      const response = await fetch(`${backendUrl}/api/infrastructure/hosts`);
+      const data = response.ok ? await response.json() : { hosts: [] };
 
-    // Issue #1310: Single source — only user-configured hosts from secrets.
-    // Fleet/system VMs no longer included (they belong in SLM).
-    const response = await fetch(`${backendUrl}/api/infrastructure/hosts`);
-    const data = response.ok ? await response.json() : { hosts: [] };
+      hosts.value = (data.hosts || []).map((h: any) => ({
+        id: h.id,
+        name: h.name,
+        host: h.host,
+        ssh_port: h.ssh_port || 22,
+        username: h.username || 'root',
+        auth_type: h.auth_type || 'password',
+        capabilities: h.capabilities || ['ssh'],
+        purpose: h.purpose || h.description,
+        os: h.os,
+        metadata: h,
+        _isLegacyHost: false,
+      }));
 
-    hosts.value = (data.hosts || []).map((h: any) => ({
-      id: h.id,
-      name: h.name,
-      host: h.host,
-      ssh_port: h.ssh_port || 22,
-      username: h.username || 'root',
-      auth_type: h.auth_type || 'password',
-      capabilities: h.capabilities || ['ssh'],
-      purpose: h.purpose || h.description,
-      os: h.os,
-      metadata: h,
-      _isLegacyHost: false,
-    }));
-
-    logger.info('Loaded infrastructure hosts:', { count: hosts.value.length });
-    return hosts.value;
-  } catch (err) {
-    logger.error('Failed to load hosts:', err);
-    error.value = 'Failed to load infrastructure hosts';
-    return [];
-  } finally {
-    loading.value = false;
-  }
+      logger.info('Loaded infrastructure hosts:', { count: hosts.value.length });
+      return hosts.value;
+    } catch (err) {
+      logger.error('Failed to load hosts:', err);
+      error.value = 'Failed to load infrastructure hosts';
+      return [];
+    }
+  });
 };
 
 /**

@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('SecretsAuditApi')
 
@@ -48,7 +49,7 @@ interface AuditQueryResponse {
 export function useSecretsAuditApi() {
   const { api, withErrorHandling } = useApiWithState()
 
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
   const entries = ref<AuditLogEntry[]>([])
   const hasMore = ref(false)
@@ -65,7 +66,6 @@ export function useSecretsAuditApi() {
     limit?: number
     offset?: number
   }) => {
-    loading.value = true
     error.value = null
 
     const params = new URLSearchParams()
@@ -104,26 +104,28 @@ export function useSecretsAuditApi() {
     params.append('limit', String(limit))
     params.append('offset', String(offset))
 
-    return withErrorHandling(
-      async () => {
-        const data = await api.get<AuditQueryResponse>(
-          `${getApiBase()}/audit/logs?${params.toString()}`
-        )
+    return wrap(async () =>
+      withErrorHandling(
+        async () => {
+          const data = await api.get<AuditQueryResponse>(
+            `${getApiBase()}/audit/logs?${params.toString()}`
+          )
 
-        if (!data.success) {
-          throw new Error('Failed to fetch audit logs')
+          if (!data.success) {
+            throw new Error('Failed to fetch audit logs')
+          }
+
+          entries.value = data.entries
+          hasMore.value = data.has_more
+          totalCount.value = data.total_returned
+
+          return data
+        },
+        {
+          errorMessage: 'Failed to fetch audit logs',
+          showErrorToast: true
         }
-
-        entries.value = data.entries
-        hasMore.value = data.has_more
-        totalCount.value = data.total_returned
-
-        return data
-      },
-      {
-        errorMessage: 'Failed to fetch audit logs',
-        showErrorToast: true
-      }
+      )
     )
   }
 
