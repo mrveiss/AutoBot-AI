@@ -15,48 +15,25 @@
  * - Unsaved changes warning
  */
 
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useLoadingState } from '@/composables/useLoadingState'
+import { useKnowledgePrompt } from '@/composables/knowledge/useKnowledgePrompt'
+import type { Prompt, PromptVersion } from '@/composables/knowledge/useKnowledgePrompt'
 
 const logger = createLogger('KnowledgePromptEditor')
 
 const { t } = useI18n()
 
 // =============================================================================
-// Type Definitions
-// =============================================================================
-
-interface Prompt {
-  id: string
-  name: string
-  category: 'system' | 'agents' | 'templates'
-  content: string
-  description?: string
-  variables?: string[]
-  lastModified?: string
-  version?: number
-}
-
-interface PromptVersion {
-  version: number
-  content: string
-  timestamp: string
-  author?: string
-}
-
-// =============================================================================
 // State
 // =============================================================================
 
-const { isLoading, wrap } = useLoadingState()
-const { isLoading: isSaving, wrap: wrapSaving } = useLoadingState()
+const { isLoading, isSaving, isLoadingHistory, fetchPrompts, savePrompt, fetchHistory, revertPrompt } =
+  useKnowledgePrompt()
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
@@ -71,7 +48,6 @@ const selectedCategory = ref<'all' | 'system' | 'agents' | 'templates'>('all')
 const showHistoryModal = ref(false)
 const promptHistory = ref<PromptVersion[]>([])
 const selectedVersion = ref<PromptVersion | null>(null)
-const isLoadingHistory = ref(false)
 
 // Unsaved changes tracking
 const hasUnsavedChanges = computed(() => {
@@ -145,18 +121,12 @@ const categoryLabels = computed<Record<string, string>>(() => ({
 
 async function loadPrompts(): Promise<void> {
   error.value = null
-  await wrap(async () => {
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/prompts`)
-
-    if (data?.prompts) {
-      prompts.value = data.prompts
-    }
+    prompts.value = await fetchPrompts()
   } catch (err) {
     logger.error('Failed to load prompts:', err)
     error.value = t('knowledge.promptEditor.errorLoadPrompts')
   }
-  })
 }
 
 function selectPrompt(prompt: Prompt): void {
@@ -172,17 +142,13 @@ function selectPrompt(prompt: Prompt): void {
   successMessage.value = null
 }
 
-async function savePrompt(): Promise<void> {
+async function handleSavePrompt(): Promise<void> {
   if (!selectedPrompt.value) return
 
   error.value = null
   successMessage.value = null
-  await wrapSaving(async () => {
   try {
-    const data = await apiClient.put<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}`,
-      { content: editedContent.value }
-    )
+    const data = await savePrompt(selectedPrompt.value.id, editedContent.value)
 
     if (data?.status === 'success') {
       // Update local state
@@ -195,13 +161,12 @@ async function savePrompt(): Promise<void> {
         successMessage.value = null
       }, 3000)
     } else {
-      error.value = data?.message || t('knowledge.promptEditor.errorSavePrompt')
+      error.value = (data?.message as string) || t('knowledge.promptEditor.errorSavePrompt')
     }
   } catch (err) {
     logger.error('Failed to save prompt:', err)
     error.value = t('knowledge.promptEditor.errorSavePrompt')
   }
-  })
 }
 
 function revertChanges(): void {
@@ -212,23 +177,8 @@ function revertChanges(): void {
 async function loadHistory(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  isLoadingHistory.value = true
   showHistoryModal.value = true
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/history`
-    )
-
-    if (data?.versions) {
-      promptHistory.value = data.versions
-    }
-  } catch (err) {
-    logger.error('Failed to load history:', err)
-    promptHistory.value = []
-  } finally {
-    isLoadingHistory.value = false
-  }
+  promptHistory.value = await fetchHistory(selectedPrompt.value.id)
 }
 
 async function revertToVersion(version: PromptVersion): Promise<void> {
@@ -238,12 +188,8 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
     return
   }
 
-  await wrapSaving(async () => {
   try {
-    const data = await apiClient.post<Record<string, any>>(
-      `${getApiBase()}/prompts/${encodeURIComponent(selectedPrompt.value.id)}/revert`,
-      { version: version.version }
-    )
+    const data = await revertPrompt(selectedPrompt.value.id, version.version)
 
     if (data?.status === 'success') {
       selectedPrompt.value.content = version.content
@@ -255,7 +201,6 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
     logger.error('Failed to revert:', err)
     error.value = t('knowledge.promptEditor.errorRevert')
   }
-  })
 }
 
 function getCategoryIcon(category: string): string {
@@ -414,7 +359,7 @@ onBeforeUnmount(() => {
               <BaseButton
                 variant="primary"
                 size="sm"
-                @click="savePrompt"
+                @click="handleSavePrompt"
                 :disabled="!hasUnsavedChanges || isSaving"
               >
                 <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
