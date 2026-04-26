@@ -16,11 +16,14 @@
 import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLoadingState } from '@/composables/useLoadingState'
+import {
+  fetchCategoryFactCount,
+  updateCategory,
+  deleteKnowledgeCategory,
+} from '@/composables/knowledge/useKnowledgeCategories'
 
 const logger = createLogger('CategoryEditModal')
 const { t } = useI18n()
@@ -160,10 +163,7 @@ watch(() => props.category, (newCategory) => {
 async function loadFactCount(categoryId: string): Promise<void> {
   isLoadingFactCount.value = true
   try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
-    )
-    factCount.value = data?.total_count ?? 0
+    factCount.value = await fetchCategoryFactCount(categoryId)
   } catch (err) {
     logger.error('Failed to load fact count:', err)
     factCount.value = 0
@@ -178,27 +178,24 @@ async function saveChanges(): Promise<void> {
   error.value = null
   successMessage.value = null
   await wrap(async () => {
-  try {
-    const data = await apiClient.put<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
-      formData.value
-    )
+    try {
+      const data = await updateCategory(props.category!.id, formData.value)
 
-    if (data?.status === 'success') {
-      successMessage.value = t('knowledge.modals.categoryEdit.updateSuccess')
-      emit('updated', { ...props.category, ...formData.value })
+      if (data?.status === 'success') {
+        successMessage.value = t('knowledge.modals.categoryEdit.updateSuccess')
+        emit('updated', { ...props.category!, ...formData.value })
 
-      // Close modal after brief delay to show success message
-      setTimeout(() => {
-        closeModal()
-      }, 1000)
-    } else {
-      error.value = data?.message || t('knowledge.modals.categoryEdit.updateFailed')
+        // Close modal after brief delay to show success message
+        setTimeout(() => {
+          closeModal()
+        }, 1000)
+      } else {
+        error.value = (data?.message as string) || t('knowledge.modals.categoryEdit.updateFailed')
+      }
+    } catch (err) {
+      logger.error('Failed to update category:', err)
+      error.value = err instanceof Error ? err.message : t('knowledge.modals.categoryEdit.updateFailed')
     }
-  } catch (err) {
-    logger.error('Failed to update category:', err)
-    error.value = err instanceof Error ? err.message : t('knowledge.modals.categoryEdit.updateFailed')
-  }
   })
 }
 
@@ -207,30 +204,28 @@ async function deleteCategory(): Promise<void> {
 
   error.value = null
   await wrap(async () => {
-  try {
-    const data = await apiClient.delete<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
-    )
+    try {
+      const data = await deleteKnowledgeCategory(props.category!.id)
 
-    if (data?.status === 'success') {
-      emit('deleted', props.category.id)
-      closeModal()
-    } else {
-      error.value = data?.message || t('knowledge.modals.categoryEdit.deleteFailed')
+      if (data?.status === 'success') {
+        emit('deleted', props.category!.id)
+        closeModal()
+      } else {
+        error.value = (data?.message as string) || t('knowledge.modals.categoryEdit.deleteFailed')
+        showDeleteConfirm.value = false
+      }
+    } catch (err) {
+      logger.error('Failed to delete category:', err)
+
+      // Handle specific error cases
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (errorMessage.includes('has children')) {
+        error.value = t('knowledge.modals.categoryEdit.deleteHasChildren')
+      } else {
+        error.value = errorMessage || t('knowledge.modals.categoryEdit.deleteFailed')
+      }
       showDeleteConfirm.value = false
     }
-  } catch (err) {
-    logger.error('Failed to delete category:', err)
-
-    // Handle specific error cases
-    const errorMessage = err instanceof Error ? err.message : String(err)
-    if (errorMessage.includes('has children')) {
-      error.value = t('knowledge.modals.categoryEdit.deleteHasChildren')
-    } else {
-      error.value = errorMessage || t('knowledge.modals.categoryEdit.deleteFailed')
-    }
-    showDeleteConfirm.value = false
-  }
   })
 }
 
