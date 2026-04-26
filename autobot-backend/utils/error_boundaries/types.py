@@ -158,6 +158,7 @@ class APIErrorResponse:
             ErrorCategory.SERVICE_UNAVAILABLE: 503,
             # Defaults for other categories
             ErrorCategory.SYSTEM: 500,
+            ErrorCategory.INFRASTRUCTURE: 500,
             ErrorCategory.NETWORK: 503,
             ErrorCategory.DATABASE: 500,
             ErrorCategory.LLM: 500,
