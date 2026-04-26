@@ -127,7 +127,7 @@
     "prettier": "3.8.1",
     "start-server-and-test": "^3.0.2",
     "tailwindcss": "^4.2.2",
-    "typescript": "~6.0.3",
+    "typescript": "~5.8.3",
     "vite": "^8.0.9",
     "vite-plugin-vue-devtools": "^8.1.1",
     "vitest": "^4.1.4",
