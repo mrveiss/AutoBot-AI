@@ -473,3 +473,4 @@ class TaskExecutionContext:
 
 
 get_task_tracker = lazy_singleton(TaskExecutionTracker)
+task_tracker = get_task_tracker()

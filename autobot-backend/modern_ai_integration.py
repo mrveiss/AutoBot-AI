@@ -28,7 +28,9 @@ from constants.model_constants import (
     OPENAI_GPT4_VISION_PREVIEW,
 )
 from memory import EnhancedMemoryManager, TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker as _get_task_tracker
+
+task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
