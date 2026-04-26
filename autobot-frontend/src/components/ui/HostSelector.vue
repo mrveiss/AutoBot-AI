@@ -124,30 +124,13 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getApiBase } from '@/config/ssot-config'
+import { useHostSelector } from '@/composables/useHostSelector'
+import type { SelectorHost as InfrastructureHost } from '@/composables/useHostSelector'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 
 const logger = createLogger('HostSelector');
 const { t } = useI18n();
-
-/**
- * Infrastructure host type for SSH/VNC connections.
- * Issue #715: Dynamic host management via secrets.
- */
-interface InfrastructureHost {
-  id: string;
-  name: string;
-  host: string;
-  ssh_port?: number;
-  vnc_port?: number;
-  username?: string;
-  os?: string;
-  capabilities?: string[];
-  description?: string;
-  tags?: string[];
-}
 
 // Props
 const props = defineProps<{
@@ -163,10 +146,14 @@ const emit = defineEmits<{
   (e: 'open-secrets-manager'): void;
 }>();
 
+// Composable
+const { hosts, loading, loadHosts } = useHostSelector({
+  requiredCapability: props.requiredCapability,
+  chatId: props.chatId,
+});
+
 // State
 const expanded = ref(false);
-const loading = ref(false);
-const hosts = ref<InfrastructureHost[]>([]);
 const selectedHost = ref<InfrastructureHost | null>(null);
 const connectionStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected');
 const capabilityFilter = ref<string | null>(null);
@@ -199,40 +186,6 @@ const toggleExpanded = () => {
   expanded.value = !expanded.value;
   if (expanded.value && hosts.value.length === 0) {
     loadHosts();
-  }
-};
-
-const loadHosts = async () => {
-  loading.value = true;
-  try {
-    const params = new URLSearchParams();
-
-    if (props.requiredCapability) {
-      params.append('capability', props.requiredCapability);
-    }
-    if (props.chatId) {
-      params.append('chat_id', props.chatId);
-    }
-
-    // Use relative URL to go through Vite proxy in dev mode
-    // This ensures the request works regardless of browser origin
-    const response = await fetchWithAuth(
-      `${getApiBase()}/infrastructure/hosts?${params.toString()}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to load hosts: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    hosts.value = data.hosts || [];
-
-    logger.info(`Loaded ${hosts.value.length} infrastructure hosts`);
-  } catch (error) {
-    logger.error('Failed to load hosts:', error);
-    hosts.value = [];
-  } finally {
-    loading.value = false;
   }
 };
 
