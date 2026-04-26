@@ -49,8 +49,6 @@ llama-index-core>=0.14.19,<0.15.0     # Explicit core pin matching ecosystem (#2
 llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
-llama-index-vector-stores-redis>=0.8.0,<1.0.0   # Redis vector store (#2642)
-llama-index-readers-file>=0.6.0,<1.0.0          # File readers for RAG (#2642)
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
 langchain>=1.2.13,<2.0.0               # Issue #1572: Migrated to 1.x (was 0.3.x)
 langchain-core>=1.2.22,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11
