@@ -403,6 +403,9 @@
 
   <!-- Issue #729: RUM Dashboard moved to slm-admin -->
   <!-- ElevationDialog removed: feature not yet implemented (#920) -->
+
+  <!-- Global confirm dialog (#6092) -->
+  <ConfirmDialog />
 </template>
 
 <script lang="ts">
@@ -428,6 +431,7 @@ import SystemStatusNotification from '@/components/ui/SystemStatusNotification.v
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
@@ -444,6 +448,7 @@ export default {
     CaptchaNotification,
     ToastContainer,
     HostSelectionDialog,
+    ConfirmDialog,
     UnifiedLoadingView,
     ProfileModal,
     ErrorBoundary,
