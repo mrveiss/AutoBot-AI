@@ -9,12 +9,19 @@ Service, host, port, and URL configuration management.
 import logging
 import os
 from typing import Any, Dict
+from urllib.parse import urlparse
 
+from autobot_shared.ssot_config import config as ssot_config
 from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
+
+# Parse lmstudio host/port from ssot_config once at module load (#6000).
+_lmstudio_parsed = urlparse(ssot_config.llm.lmstudio_host)
+_LMSTUDIO_HOST = _lmstudio_parsed.hostname or "127.0.0.1"
+_LMSTUDIO_PORT = _lmstudio_parsed.port or 1234
 
 # Issue #380: Module-level cached maps to avoid repeated dictionary creation
 # Issue #1214: Ollama host resolved via ConfigRegistry (SLM-managed, not
@@ -32,7 +39,7 @@ _HOST_SERVICE_MAP = {
     "openai": "api.openai.com",
     "anthropic": "api.anthropic.com",
     "vllm": "localhost",
-    "lmstudio": "localhost",
+    "lmstudio": _LMSTUDIO_HOST,
 }
 
 _PORT_SERVICE_MAP = {
@@ -48,7 +55,7 @@ _PORT_SERVICE_MAP = {
     "openai": 443,
     "anthropic": 443,
     "vllm": 8000,
-    "lmstudio": 1234,
+    "lmstudio": _LMSTUDIO_PORT,
 }
 
 
