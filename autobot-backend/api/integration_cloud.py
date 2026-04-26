@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig
 from integrations.cloud_integration import (
     AWSIntegration,
@@ -65,6 +66,11 @@ class ResourceListRequest(BaseModel):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/providers", response_model=List[CloudProviderInfo])
 async def list_providers():
     """List all supported cloud providers."""
@@ -94,6 +100,11 @@ async def list_providers():
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest):
     """Test connection to a cloud provider."""
@@ -123,6 +134,11 @@ async def test_connection(request: ConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_resources",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/{provider}/resources", response_model=None)
 async def list_resources(
     provider: str,
@@ -162,6 +178,11 @@ async def list_resources(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_storage",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/{provider}/storage", response_model=None)
 async def list_storage(
     provider: str,
@@ -200,6 +221,11 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_account_info",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/{provider}/account", response_model=None)
 async def get_account_info(
     provider: str,
