@@ -187,93 +187,45 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeDeduplication } from '@/composables/knowledge/useKnowledgeDeduplication'
 
 const logger = createLogger('DeduplicationManager')
 const { t } = useI18n()
 
-// Interfaces
-interface DuplicateGroup {
-  hash: string
-  count: number
-  fact_ids: string[]
-  category?: string
-  title?: string
-  total_copies?: number
-  removed_count?: number
-  kept_fact_id?: string
-  kept_created_at?: string
-}
+const {
+  duplicateStats,
+  orphanStats,
+  isScanning,
+  isCleaning,
+  scanDuplicates,
+  scanOrphans,
+  cleanupDuplicates: apiCleanupDuplicates,
+  cleanupOrphans: apiCleanupOrphans,
+} = useKnowledgeDeduplication()
 
-interface DuplicateStats {
-  total_facts_scanned: number
-  total_duplicates: number
-  duplicate_groups_found: number
-  duplicates: DuplicateGroup[]
-}
-
-interface OrphanedFact {
-  fact_id: string
-  content?: string
-  title?: string
-  category?: string
-  file_path?: string
-}
-
-interface OrphanStats {
-  total_facts_checked: number
-  orphaned_count: number
-  orphaned_facts: OrphanedFact[]
-}
-
-// State
-const scanning = ref(false)
+// Local UI state
+const scanning = isScanning
+const cleaning = isCleaning
 const scanned = ref(false)
-const cleaning = ref(false)
 const error = ref<string | null>(null)
-
-const duplicateStats = ref<DuplicateStats>({
-  total_facts_scanned: 0,
-  total_duplicates: 0,
-  duplicate_groups_found: 0,
-  duplicates: []
-})
-
-const orphanStats = ref<OrphanStats>({
-  total_facts_checked: 0,
-  orphaned_count: 0,
-  orphaned_facts: []
-})
 
 // Scan for both duplicates and orphans
 const scanForIssues = async () => {
-  scanning.value = true
   scanned.value = false
   error.value = null
 
   try {
-    // Scan for duplicates (dry run)
-    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const dupData = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=true`)
-
-    if (dupData.status === 'success') {
-      duplicateStats.value = dupData
-    } else {
+    const dupData = await scanDuplicates()
+    if (dupData.status !== 'success') {
       throw new Error('Failed to scan for duplicates')
     }
 
-    // Scan for orphans
-    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const orphanData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/orphans`)
-
-    if (orphanData.status === 'success') {
-      orphanStats.value = orphanData
-    } else {
+    const orphanData = await scanOrphans()
+    if (orphanData.status !== 'success') {
       throw new Error('Failed to scan for orphans')
     }
 
@@ -281,8 +233,6 @@ const scanForIssues = async () => {
   } catch (err) {
     logger.error('Error scanning for issues:', err)
     error.value = `Error scanning: ${err}`
-  } finally {
-    scanning.value = false
   }
 }
 
@@ -292,16 +242,12 @@ const cleanupDuplicates = async () => {
     return
   }
 
-  cleaning.value = true
   error.value = null
 
   try {
-    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=false`)
-
+    const data = await apiCleanupDuplicates()
     if (data.status === 'success') {
       logger.info(`Successfully removed ${data.deleted_count} duplicates`)
-      // Refresh scan
       await scanForIssues()
     } else {
       error.value = `Failed to remove duplicates: ${data.message || 'Unknown error'}`
@@ -309,8 +255,6 @@ const cleanupDuplicates = async () => {
   } catch (err) {
     logger.error('Error removing duplicates:', err)
     error.value = `Error removing duplicates: ${err}`
-  } finally {
-    cleaning.value = false
   }
 }
 
@@ -320,16 +264,12 @@ const cleanupOrphans = async () => {
     return
   }
 
-  cleaning.value = true
   error.value = null
 
   try {
-    // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/orphans?dry_run=false`)
-
+    const data = await apiCleanupOrphans()
     if (data.status === 'success') {
       logger.info(`Successfully removed ${data.deleted_count} orphans`)
-      // Refresh scan
       await scanForIssues()
     } else {
       error.value = `Failed to remove orphans: ${data.message || 'Unknown error'}`
@@ -337,12 +277,8 @@ const cleanupOrphans = async () => {
   } catch (err) {
     logger.error('Error removing orphans:', err)
     error.value = `Error removing orphans: ${err}`
-  } finally {
-    cleaning.value = false
   }
 }
-
-// NOTE: formatDate removed - now using shared utility from @/utils/formatHelpers
 </script>
 
 <style scoped>
