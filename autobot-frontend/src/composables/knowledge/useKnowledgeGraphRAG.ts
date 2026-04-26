@@ -117,8 +117,7 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
         },
       )
 
-      searchResults.value = (parsed as Record<string, unknown>)?.data as GraphRAGSearchResponse
-        ?? parsed as GraphRAGSearchResponse
+      searchResults.value = ((parsed as Record<string, unknown>)?.data ?? parsed) as unknown as GraphRAGSearchResponse
 
       logger.info(`Search complete: ${searchResults.value?.results?.length ?? 0} results`)
     })
@@ -135,8 +134,7 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
         const parsed = await apiClient.get<Record<string, unknown>>(
           `${getApiBase()}/graph-rag/health`,
         )
-        healthStatus.value = (parsed as Record<string, unknown>)?.data as GraphRAGHealthStatus
-          ?? parsed as GraphRAGHealthStatus
+        healthStatus.value = ((parsed as Record<string, unknown>)?.data ?? parsed) as unknown as GraphRAGHealthStatus
         logger.info(`Health check: ${healthStatus.value?.status}`)
       } catch (error) {
         logger.error('Health check failed:', error)
