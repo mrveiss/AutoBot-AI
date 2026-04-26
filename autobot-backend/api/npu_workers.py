@@ -47,6 +47,7 @@ from .schemas_system import (
     NPUWorkerRepairResponse,
     NPUWorkerUnpairResponse,
 )
+from api.schemas_common import DataResponse, SuccessResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -942,7 +943,6 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 import httpx
-from api.schemas_common import DataResponse, SuccessResponse
 
 
 @dataclass

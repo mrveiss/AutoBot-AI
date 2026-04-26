@@ -24,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from api.schemas_common import DataResponse, SuccessResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
@@ -1924,7 +1925,6 @@ async def get_performance_report(
 # Issue #243: Code Evolution Mining Endpoints
 
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
-from api.schemas_common import DataResponse, SuccessResponse
 
 
 @with_error_handling(

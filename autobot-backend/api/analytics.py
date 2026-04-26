@@ -33,7 +33,25 @@ from api.analytics_controller import (
     get_service_address,
 )
 
-from api.schemas_analytics import AnalyticsOverview, RealTimeEvent
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    AnalyticsCollectionStartResponse,
+    AnalyticsCollectionStopResponse,
+    AnalyticsCommunicationPatternsResponse,
+    AnalyticsClearStuckTasksResponse,
+    AnalyticsDashboardAnalyzeResponse,
+    AnalyticsDashboardStatusResponse,
+    AnalyticsDetailedHealthResponse,
+    AnalyticsHistoricalTrendsResponse,
+    AnalyticsOverview,
+    AnalyticsPerformanceMetricsResponse,
+    AnalyticsRealtimeMetricsResponse,
+    AnalyticsRootCauseResponse,
+    AnalyticsStatusResponse,
+    AnalyticsTrackEventResponse,
+    AnalyticsUsageStatisticsResponse,
+    RealTimeEvent,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
@@ -426,23 +444,6 @@ from api import (
     analytics_code,
     analytics_cost,
     analytics_export,
-)
-from api.schemas_common import DataResponse
-from api.schemas_analytics import (
-    AnalyticsCollectionStartResponse,
-    AnalyticsCollectionStopResponse,
-    AnalyticsCommunicationPatternsResponse,
-    AnalyticsClearStuckTasksResponse,
-    AnalyticsDashboardAnalyzeResponse,
-    AnalyticsDashboardStatusResponse,
-    AnalyticsDetailedHealthResponse,
-    AnalyticsHistoricalTrendsResponse,
-    AnalyticsPerformanceMetricsResponse,
-    AnalyticsRealtimeMetricsResponse,
-    AnalyticsRootCauseResponse,
-    AnalyticsStatusResponse,
-    AnalyticsTrackEventResponse,
-    AnalyticsUsageStatisticsResponse,
 )
 
 # Include sub-routers
