@@ -42,6 +42,11 @@ ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset(
 )
 CORE_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"xvfb_process", "vnc_process"})
 
+# VNC password file path — override with AUTOBOT_VNC_PASSWD_FILE env var (#5956)
+VNC_PASSWD_FILE: str = os.environ.get(
+    "AUTOBOT_VNC_PASSWD_FILE", "/home/autobot/.vnc/x11vnc.passwd"
+)
+
 
 def _get_x_lock_directory() -> Path:
     """
@@ -548,7 +553,7 @@ class VNCServerManager:
             "-rfbport",
             str(vnc_port),
             "-rfbauth",
-            "/home/autobot/.vnc/x11vnc.passwd",
+            VNC_PASSWD_FILE,
             "-shared",
             "-forever",
             "-noxdamage",
