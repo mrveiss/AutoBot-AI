@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = logging.getLogger(__name__)
@@ -49,12 +50,12 @@ class BranchMetricsCollector:
 
     def __init__(
         self,
-        repo_path: str = "/opt/autobot/code_source",
+        repo_path: Optional[str] = None,
         base_branch: str = "Dev_new_gui",
         stale_threshold_days: int = 30,
     ):
         """Initialize branch metrics collector."""
-        self.repo_path = repo_path
+        self.repo_path = repo_path if repo_path is not None else str(config.path.code_source_path)
         self.base_branch = base_branch
         self.stale_threshold_days = stale_threshold_days
 
@@ -175,7 +176,7 @@ class BranchMetricsCollector:
 
 
 async def get_unhealthy_branches(
-    repo_path: str = "/opt/autobot/code_source",
+    repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
     health_threshold: float = 50.0,
 ) -> List[BranchMetrics]:
@@ -186,7 +187,7 @@ async def get_unhealthy_branches(
 
 
 async def get_highly_diverged_branches(
-    repo_path: str = "/opt/autobot/code_source",
+    repo_path: Optional[str] = None,
     base_branch: str = "Dev_new_gui",
     threshold: int = 20,
 ) -> List[BranchMetrics]:
