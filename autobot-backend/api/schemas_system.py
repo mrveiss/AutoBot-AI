@@ -374,3 +374,185 @@ class LogForwardingDestinationsListResponse(BaseModel):
     """Response for GET /log-forwarding/destinations — returns a list directly."""
 
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# files.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class FileViewResponse(BaseModel):
+    """Response for GET /files/view/{path} — file info + optional text content."""
+
+    file_info: Any
+    content: Optional[str] = None
+    is_text: bool
+
+
+
+class FileRenameResponse(BaseModel):
+    """Response for POST /files/rename."""
+
+    message: str
+    item_info: Any
+
+
+
+class FilePreviewResponse(BaseModel):
+    """Response for GET /files/preview."""
+
+    type: str
+    url: str
+    content: Optional[str] = None
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    name: Optional[str] = None
+
+
+
+class FileDeleteResponse(BaseModel):
+    """Response for DELETE /files/delete.
+
+    Returns message only; shape varies slightly between file and dir paths.
+    """
+
+    model_config = {"extra": "allow"}
+
+    message: str
+
+
+
+class DirectoryCreateResponse(BaseModel):
+    """Response for POST /files/create_directory."""
+
+    message: str
+    directory_info: Any
+
+
+
+class DirectoryTreeResponse(BaseModel):
+    """Response for GET /files/tree."""
+
+    path: str
+    tree: List[Any]
+
+
+
+class FileStatsResponse(BaseModel):
+    """Response for GET /files/stats."""
+
+    sandbox_root: str
+    total_files: int
+    total_directories: int
+    total_size: int
+    total_size_mb: float
+    max_file_size_mb: int
+    allowed_extensions: List[str]
+
+
+# ---------------------------------------------------------------------------
+# integration_github.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class GitHubPullRequestsResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/pull-requests — opaque GitHub list."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubPullRequestResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/pull-requests/{pull_number} — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubPullRequestDiffResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/pull-requests/{pull_number}/diff — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubPRCommentsResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/pull-requests/{pull_number}/comments — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubPRCommentResponse(BaseModel):
+    """Response for POST /{owner}/{repo}/pull-requests/{pull_number}/comments — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubPRReviewResponse(BaseModel):
+    """Response for POST /{owner}/{repo}/pull-requests/{pull_number}/reviews — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubIssuesResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/issues — opaque GitHub list."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubIssueResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/issues/{issue_number} — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubRepositoryResponse(BaseModel):
+    """Response for GET /{owner}/{repo} — opaque GitHub repo metadata."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubCommitsResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/commits — opaque GitHub list."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubCommitResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/commits/{ref} — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubRepositoryTreeResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/tree/{tree_sha} — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubFileContentsResponse(BaseModel):
+    """Response for GET /{owner}/{repo}/contents/{path} — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class GitHubProviderInfo(BaseModel):
+    """Single provider descriptor returned by GET /providers."""
+
+    id: str
+    name: str
+    description: str
+    required_settings: List[str]
+    optional_settings: List[str]

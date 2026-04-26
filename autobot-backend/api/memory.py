@@ -42,6 +42,16 @@ from autobot_shared.time_utils import now_utc
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
 from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_knowledge import (
+    MemoryDeleteEntityResponse,
+    MemoryDeleteRelationResponse,
+    MemoryEntityInvalidateResponse,
+    MemoryEntityListResponse,
+    MemoryOrphanCleanupResponse,
+    MemoryOrphanScanResponse,
+    MemoryRelatedEntitiesResponse,
+    MemoryRelationInvalidateResponse,
+)
 
 # ====================================================================
 # Router Configuration
@@ -541,7 +551,7 @@ async def create_entity(
     operation="list_all_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/all", response_model=None)
+@router.get("/entities/all", response_model=MemoryEntityListResponse)
 async def list_all_entities(
     admin_check: bool = Depends(check_admin_permission),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
@@ -586,7 +596,7 @@ async def list_all_entities(
     operation="find_orphaned_conversation_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/orphans", response_model=None)
+@router.get("/entities/orphans", response_model=MemoryOrphanScanResponse)
 async def find_orphaned_conversation_entities(
     admin_check: bool = Depends(check_admin_permission),
     request: Request = None,
@@ -903,7 +913,7 @@ async def _detect_orphaned_entities(
     operation="cleanup_orphaned_conversation_entities",
     error_code_prefix="MEMORY",
 )
-@router.delete("/entities/orphans", response_model=None)
+@router.delete("/entities/orphans", response_model=MemoryOrphanCleanupResponse)
 async def cleanup_orphaned_conversation_entities(
     admin_check: bool = Depends(check_admin_permission),
     request: Request = None,
@@ -1130,7 +1140,7 @@ async def add_observations(
     operation="delete_entity",
     error_code_prefix="MEMORY",
 )
-@router.delete("/entities/{entity_id}", response_model=None)
+@router.delete("/entities/{entity_id}", response_model=MemoryDeleteEntityResponse)
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1262,7 +1272,7 @@ async def create_relation(
     operation="get_related_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/{entity_id}/relations", response_model=None)
+@router.get("/entities/{entity_id}/relations", response_model=MemoryRelatedEntitiesResponse)
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1317,7 +1327,7 @@ async def get_related_entities(
     operation="delete_relation",
     error_code_prefix="MEMORY",
 )
-@router.delete("/relations", response_model=None)
+@router.delete("/relations", response_model=MemoryDeleteRelationResponse)
 async def delete_relation(
     admin_check: bool = Depends(check_admin_permission),
     from_entity: str = Query(..., description="Source entity name"),
@@ -1656,7 +1666,7 @@ def _build_invalidate_relation_response(
     operation="invalidate_entity",
     error_code_prefix="MEMORY",
 )
-@router.patch("/entities/{entity_id}/invalidate", response_model=None)
+@router.patch("/entities/{entity_id}/invalidate", response_model=MemoryEntityInvalidateResponse)
 async def invalidate_entity(
     entity_id: str = Path(..., description="UUID of the entity to invalidate"),
     body: InvalidateEntityRequest = Body(default_factory=InvalidateEntityRequest),
@@ -1720,7 +1730,7 @@ async def invalidate_entity(
     operation="invalidate_relation",
     error_code_prefix="MEMORY",
 )
-@router.patch("/relations/invalidate", response_model=None)
+@router.patch("/relations/invalidate", response_model=MemoryRelationInvalidateResponse)
 async def invalidate_relation(
     body: InvalidateRelationRequest = Body(...),
     admin_check: bool = Depends(check_admin_permission),

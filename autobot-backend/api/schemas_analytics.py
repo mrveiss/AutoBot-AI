@@ -855,3 +855,251 @@ class UsageRecentResponse(BaseModel):
 
     count: int
     records: List[CostTrackingRecordResponse]
+
+
+# ---------------------------------------------------------------------------
+# analytics_agents.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class AgentAllPerformanceResponse(BaseModel):
+    """Response for GET /agents/performance."""
+
+    agents: List[Any]
+    total_agents: int
+    summary: Dict[str, Any]
+
+
+
+class AgentHistoryResponse(BaseModel):
+    """Response for GET /agents/{agent_id}/history."""
+
+    agent_id: str
+    tasks: List[Any]
+    count: int
+
+
+
+class AgentRecentTasksResponse(BaseModel):
+    """Response for GET /agents/tasks/recent."""
+
+    tasks: List[Any]
+    count: int
+
+
+
+class AgentComparisonResponse(BaseModel):
+    """Response for GET /agents/comparison — opaque analytics.compare_agents() result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AgentRecommendationsResponse(BaseModel):
+    """Response for GET /agents/recommendations."""
+
+    recommendations: List[Any]
+    total_agents_analyzed: int
+    agents_with_issues: int
+
+
+
+class AgentPerformanceTrendsResponse(BaseModel):
+    """Response for GET /agents/trends — opaque analytics.get_performance_trends() result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AgentTypesResponse(BaseModel):
+    """Response for GET /agents/types."""
+
+    types: List[str]
+    statuses: List[str]
+
+
+
+class AgentTaskStartResponse(BaseModel):
+    """Response for POST /agents/tasks/start."""
+
+    status: str
+    task: Dict[str, Any]
+
+
+
+class AgentTaskCompleteResponse(BaseModel):
+    """Response for POST /agents/tasks/complete.
+
+    Two shapes: task found (status+task) or not found (status+message).
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+
+
+# ---------------------------------------------------------------------------
+# analytics.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class AnalyticsDetailedHealthResponse(BaseModel):
+    """Response for GET /analytics/system/health-detailed — opaque composite."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsPerformanceMetricsResponse(BaseModel):
+    """Response for GET /analytics/performance/metrics — opaque collector result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsCommunicationPatternsResponse(BaseModel):
+    """Response for GET /analytics/communication/patterns — opaque controller result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsUsageStatisticsResponse(BaseModel):
+    """Response for GET /analytics/usage/statistics — opaque controller result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsRealtimeMetricsResponse(BaseModel):
+    """Response for GET /analytics/realtime/metrics — opaque metrics snapshot."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsHistoricalTrendsResponse(BaseModel):
+    """Response for GET /analytics/trends/historical — opaque trend result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsStatusResponse(BaseModel):
+    """Response for GET /analytics/status — opaque status dict."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsRootCauseResponse(BaseModel):
+    """Response for GET /analytics/root-cause/{task_id} — opaque RootCauseReport dict."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AnalyticsDashboardStatusResponse(BaseModel):
+    """Response for GET /analytics/dashboard/overview/status/{task_id} — opaque task dict."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_behavior.py schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class BehaviorTrackEventResponse(BaseModel):
+    """Response for POST /behavior/track."""
+
+    status: str
+    event_type: str
+    feature: str
+    timestamp: str
+
+
+
+class BehaviorRecentEventsResponse(BaseModel):
+    """Response for GET /behavior/events/recent."""
+
+    count: int
+    events: List[Any]
+
+
+
+class BehaviorFeatureMetricsResponse(BaseModel):
+    """Response for GET /behavior/features — opaque analytics result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorFeatureComparisonResponse(BaseModel):
+    """Response for GET /behavior/features/comparison."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorEngagementResponse(BaseModel):
+    """Response for GET /behavior/engagement — opaque analytics result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorDailyStatsResponse(BaseModel):
+    """Response for GET /behavior/stats/daily — opaque analytics result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorHeatmapResponse(BaseModel):
+    """Response for GET /behavior/stats/heatmap — opaque analytics result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorPeakUsageResponse(BaseModel):
+    """Response for GET /behavior/stats/peak."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class BehaviorSummaryResponse(BaseModel):
+    """Response for GET /behavior/summary."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_cost.py remaining schemas  (Issue #5960)
+# ---------------------------------------------------------------------------
+
+
+
+class SingleAgentCostResponse(BaseModel):
+    """Response for GET /cost/by-agent/{agent_id} — opaque tracker result + budget."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AgentBudgetSetResponse(BaseModel):
+    """Response for PUT /cost/by-agent/{agent_id}/budget — opaque tracker result."""
+
+    model_config = {"extra": "allow"}
+
+
+
+class AgentBudgetStatusResponse(BaseModel):
+    """Response for GET /cost/by-agent/{agent_id}/budget — opaque tracker result."""
+
+    model_config = {"extra": "allow"}
