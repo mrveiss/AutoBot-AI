@@ -30,11 +30,11 @@ logger = logging.getLogger(__name__)
 
 # Issue #1009: Graceful fallback when playwright is not installed
 try:
-    from research_browser_manager import research_browser_manager
+    from research_browser_manager import get_research_browser_manager
 
     _BROWSER_AVAILABLE = True
 except ImportError:
-    research_browser_manager = None
+    get_research_browser_manager = None  # type: ignore[assignment]
     _BROWSER_AVAILABLE = False
     logger.warning("research_browser_manager unavailable (playwright not installed)")
 
@@ -113,7 +113,7 @@ async def health_check():
 async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     _require_browser()
-    result = await research_browser_manager.research_url(
+    result = await get_research_browser_manager().research_url(
         request.conversation_id, request.url, request.extract_content
     )
 
@@ -134,7 +134,7 @@ async def research_url(request: ResearchRequest):
 async def handle_session_action(request: SessionAction):
     """Handle actions on a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(request.session_id)
+    session = get_research_browser_manager().get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -189,7 +189,7 @@ async def handle_session_action(request: SessionAction):
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -223,7 +223,7 @@ async def get_session_status(session_id: str):
 async def download_mhtml(session_id: str, filename: str):
     """Download an MHTML file from a research session"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -274,7 +274,7 @@ async def download_mhtml(session_id: str, filename: str):
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
     _require_browser()
-    await research_browser_manager.cleanup_session(session_id)
+    await get_research_browser_manager().cleanup_session(session_id)
 
     return JSONResponse(
         status_code=200,
@@ -298,7 +298,7 @@ async def list_sessions():
     _require_browser()
     sessions_info = []
 
-    for session_id, session in research_browser_manager.sessions.items():
+    for session_id, session in get_research_browser_manager().sessions.items():
         sessions_info.append(
             {
                 "session_id": session_id,
@@ -335,7 +335,7 @@ class NavigationRequest(BaseModel):
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
     _require_browser()
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
@@ -383,12 +383,12 @@ async def get_browser_info(session_id: str):
 
 def _get_or_create_browser_session(session_id: str):
     """Get existing session or create default for chat-browser (Issue #665: extracted helper)."""
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
 
     # Special handling for chat-browser - create default session if needed
     if not session and session_id == "chat-browser":
         logger.info("Creating default chat-browser session for frontend integration")
-        session = research_browser_manager.create_session(
+        session = get_research_browser_manager().create_session(
             conversation_id="default-chat",
             interaction_settings={
                 "captcha": False,
@@ -481,7 +481,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     """
     _require_browser()
     # Check for existing session for this conversation
-    existing_session = research_browser_manager.get_session_by_conversation(
+    existing_session = get_research_browser_manager().get_session_by_conversation(
         request.conversation_id
     )
 
@@ -506,14 +506,14 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     logger.info(
         f"Creating new browser session for conversation {request.conversation_id}"
     )
-    session_id = await research_browser_manager.create_session(
+    session_id = await get_research_browser_manager().create_session(
         request.conversation_id, headless=request.headless
     )
 
     if not session_id:
         raise HTTPException(status_code=500, detail="Failed to create browser session")
 
-    session = research_browser_manager.get_session(session_id)
+    session = get_research_browser_manager().get_session(session_id)
 
     # Navigate to initial URL if provided
     if request.initial_url and session:
@@ -550,7 +550,7 @@ async def get_chat_browser_session(conversation_id: str):
     Issue #73: Browser sessions tied to chat like terminal
     """
     _require_browser()
-    session = research_browser_manager.get_session_by_conversation(conversation_id)
+    session = get_research_browser_manager().get_session_by_conversation(conversation_id)
 
     if not session:
         raise HTTPException(
@@ -606,7 +606,7 @@ async def delete_chat_browser_session(conversation_id: str):
     Issue #73: Browser sessions tied to chat like terminal
     """
     _require_browser()
-    session = research_browser_manager.get_session_by_conversation(conversation_id)
+    session = get_research_browser_manager().get_session_by_conversation(conversation_id)
 
     if not session:
         raise HTTPException(
@@ -615,7 +615,7 @@ async def delete_chat_browser_session(conversation_id: str):
         )
 
     session_id = session.session_id
-    await research_browser_manager.cleanup_session(session_id)
+    await get_research_browser_manager().cleanup_session(session_id)
 
     return JSONResponse(
         status_code=200,

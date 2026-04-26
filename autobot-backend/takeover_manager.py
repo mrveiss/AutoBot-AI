@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
+from autobot_shared.singleton_factory import lazy_singleton
 from memory import EnhancedMemoryManager, TaskPriority
 
 logger = logging.getLogger(__name__)
@@ -699,5 +700,4 @@ class TakeoverManager:
         }
 
 
-# Global instance
-takeover_manager = TakeoverManager()
+get_takeover_manager = lazy_singleton(TakeoverManager)

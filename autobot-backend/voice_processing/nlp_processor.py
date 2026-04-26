@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from enhanced_memory_manager_async import TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 from voice_processing.constants import (
     APP_PATTERNS_RE,
     AUTOMATION_INTENT_PATTERNS,
@@ -258,7 +258,7 @@ class NaturalLanguageProcessor:
     ) -> VoiceCommandAnalysis:
         """Analyze voice command for intent and parameters"""
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Voice Command Analysis",
             f"Analyzing command: {transcription[:50]}...",
             agent_type="voice_processing",

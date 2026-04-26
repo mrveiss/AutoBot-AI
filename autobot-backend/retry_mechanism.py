@@ -17,6 +17,7 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig as ThresholdRetryConfig
 from constants.threshold_constants import TimingConstants
 
@@ -351,8 +352,7 @@ class RetryMechanism:
             }
 
 
-# Global retry mechanism instance
-default_retry_mechanism = RetryMechanism()
+get_default_retry_mechanism = lazy_singleton(RetryMechanism)
 
 
 def retry_async(

@@ -15,7 +15,7 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from circuit_breaker import circuit_breaker_manager
+from circuit_breaker import get_circuit_breaker_manager
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def _get_circuit_breaker_states() -> Dict[str, Any]:
     """Return all registered circuit breaker states for health reporting."""
     try:
-        return circuit_breaker_manager.get_all_states()
+        return get_circuit_breaker_manager().get_all_states()
     except Exception:
         logger.debug("Could not retrieve circuit breaker states", exc_info=True)
         return {}

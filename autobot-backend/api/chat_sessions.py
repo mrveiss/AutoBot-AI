@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware, get_current_user
+from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -538,7 +538,7 @@ async def _list_scoped_sessions(
 
     Helper for list_sessions (#684).
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         (
             AutoBotError,
@@ -658,7 +658,7 @@ async def _list_shared_sessions(
 
     Helper for list_sessions.
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         return create_success_response(
             data={"sessions": [], "count": 0, "scope": "shared"},
@@ -809,7 +809,7 @@ async def create_session(session_data: SessionCreate, request: Request):
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
     # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     metadata = session_data.metadata or {}
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]

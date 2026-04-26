@@ -26,6 +26,7 @@ from typing import Any, Optional
 
 import websockets
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
@@ -1106,5 +1107,4 @@ class DesktopStreamingManager:
         }
 
 
-# Global instance
-desktop_streaming = DesktopStreamingManager()
+get_desktop_streaming = lazy_singleton(DesktopStreamingManager)

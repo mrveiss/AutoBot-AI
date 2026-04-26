@@ -12,7 +12,7 @@ import uuid
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.ssot_config import config as ssot_config
 from user_management.config import DeploymentMode, get_deployment_config
 from user_management.database import get_async_session
@@ -61,7 +61,7 @@ def get_current_user(request: Request) -> dict:
             "auth_disabled": True,
         }
 
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

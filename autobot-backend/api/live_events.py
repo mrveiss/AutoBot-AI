@@ -27,7 +27,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from live_event_manager import live_event_manager
+from live_event_manager import get_live_event_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,9 +40,9 @@ def _verify_token(token: str) -> dict | None:
     if not token:
         return None
     try:
-        from auth_middleware import auth_middleware
+        from auth_middleware import get_auth_middleware
 
-        return auth_middleware.verify_jwt_token(token)
+        return get_auth_middleware().verify_jwt_token(token)
     except Exception as exc:
         logger.warning("Token verification failed: %s", exc)
         return None
@@ -51,9 +51,9 @@ def _verify_token(token: str) -> dict | None:
 def _auth_required() -> bool:
     """Return True when JWT auth is enabled in app config."""
     try:
-        from auth_middleware import auth_middleware
+        from auth_middleware import get_auth_middleware
 
-        return auth_middleware.enable_auth
+        return get_auth_middleware().enable_auth
     except Exception:
         return True
 
@@ -78,7 +78,7 @@ async def _handle_subscribe(
         if not is_admin and claimed_id not in (user_id, username):
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
-    ok = await live_event_manager.subscribe(ws, channel)
+    ok = await get_live_event_manager().subscribe(ws, channel)
     if ok:
         await ws.send_json({"type": "subscribed", "channel": channel})
     else:
@@ -87,7 +87,7 @@ async def _handle_subscribe(
 
 async def _handle_unsubscribe(ws: WebSocket, channel: str) -> None:
     """Process an unsubscribe action from the client."""
-    await live_event_manager.unsubscribe(ws, channel)
+    await get_live_event_manager().unsubscribe(ws, channel)
     await ws.send_json({"type": "unsubscribed", "channel": channel})
 
 
@@ -176,5 +176,5 @@ async def live_events_endpoint(websocket: WebSocket):
             await keepalive_task
         except asyncio.CancelledError:
             pass
-        await live_event_manager.remove_client(websocket)
+        await get_live_event_manager().remove_client(websocket)
         logger.info("Live events WebSocket connection cleaned up")

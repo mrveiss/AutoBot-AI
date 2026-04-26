@@ -14,6 +14,8 @@ For new code, import directly from voice_processing:
     from voice_processing import VoiceProcessingSystem, VoiceCommand, AudioInput
 """
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 # Re-export everything from the refactored package
 from voice_processing import (  # Types; Models; Constants; Engines; Main system
     APP_PATTERNS_RE,
@@ -56,8 +58,7 @@ _DIRECTION_RE = DIRECTION_RE
 _APP_PATTERNS_RE = APP_PATTERNS_RE
 _match_intent_from_patterns = match_intent_from_patterns
 
-# Global instance for backward compatibility
-voice_processing_system = VoiceProcessingSystem()
+get_voice_processing_system = lazy_singleton(VoiceProcessingSystem)
 
 # Logging
 import logging
@@ -93,6 +94,6 @@ __all__ = [
     "TextToSpeechEngine",
     # Main system
     "VoiceProcessingSystem",
-    # Global instance
-    "voice_processing_system",
+    # Global instance factory
+    "get_voice_processing_system",
 ]

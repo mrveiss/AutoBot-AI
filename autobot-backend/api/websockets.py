@@ -527,9 +527,9 @@ def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
         broadcast_event: Broadcast callback function
     """
     try:
-        from event_manager import event_manager
+        from event_manager import get_event_manager
 
-        event_manager.register_websocket_broadcast(broadcast_event)
+        get_event_manager().register_websocket_broadcast(broadcast_event)
         logger.info("Successfully registered WebSocket broadcast with event manager")
     except ImportError as e:
         logger.warning("Event manager not available, continuing without it: %s", e)
@@ -544,9 +544,9 @@ def _unregister_event_manager_broadcast() -> None:
     Issue #665: Extracted from websocket_endpoint to reduce function length.
     """
     try:
-        from event_manager import event_manager
+        from event_manager import get_event_manager
 
-        event_manager.register_websocket_broadcast(None)
+        get_event_manager().register_websocket_broadcast(None)
         logger.info("WebSocket broadcast unregistered from event manager")
     except ImportError:
         logger.debug("Event manager not available for cleanup")
@@ -862,16 +862,16 @@ def init_npu_worker_websocket():
             return
 
         try:
-            from event_manager import event_manager
+            from event_manager import get_event_manager
 
             # Subscribe to all NPU worker events
-            event_manager.subscribe(
+            get_event_manager().subscribe(
                 "npu.worker.status.changed", broadcast_npu_worker_event
             )
-            event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
-            event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
-            event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
-            event_manager.subscribe(
+            get_event_manager().subscribe("npu.worker.added", broadcast_npu_worker_event)
+            get_event_manager().subscribe("npu.worker.updated", broadcast_npu_worker_event)
+            get_event_manager().subscribe("npu.worker.removed", broadcast_npu_worker_event)
+            get_event_manager().subscribe(
                 "npu.worker.metrics.updated", broadcast_npu_worker_event
             )
 

@@ -16,7 +16,7 @@ import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
@@ -287,10 +287,10 @@ async def login(request: Request, login_data: LoginRequest):
                 "email": f"admin@{ssot_config.auth.domain}",
                 "last_login": None,
             }
-            jwt_token = auth_middleware.create_jwt_token(
+            jwt_token = get_auth_middleware().create_jwt_token(
                 {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
             )
-            session_id = auth_middleware.create_session(
+            session_id = get_auth_middleware().create_session(
                 {"username": "admin", "role": "admin"}, request
             )
             return LoginResponse(
@@ -306,8 +306,8 @@ async def login(request: Request, login_data: LoginRequest):
             login_data.username, login_data.password, ip_address
         )
 
-        jwt_token = auth_middleware.create_jwt_token(user_data)
-        session_id = auth_middleware.create_session(user_data, request)
+        jwt_token = get_auth_middleware().create_jwt_token(user_data)
+        session_id = get_auth_middleware().create_session(user_data, request)
 
         safe_user_data = {
             "username": user_data["username"],
@@ -354,7 +354,7 @@ async def logout(request: Request, logout_data: LogoutRequest):
         session_id = logout_data.session_id or request.headers.get("X-Session-ID")
 
         if session_id:
-            auth_middleware.invalidate_session(session_id)
+            get_auth_middleware().invalidate_session(session_id)
 
         return {"success": True, "message": "Logged out successfully"}
 
@@ -396,7 +396,7 @@ async def get_current_user_info(request: Request):
                 "deployment_mode": "single_user",
             }
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -448,12 +448,12 @@ async def check_authentication(request: Request):
                 "deployment_mode": "single_user",
             }
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         return {
             "authenticated": user_data is not None,
             "role": user_data["role"] if user_data else None,
-            "auth_enabled": auth_middleware.enable_auth,
+            "auth_enabled": get_auth_middleware().enable_auth,
             "deployment_mode": config.mode.value,
         }
 
@@ -462,7 +462,7 @@ async def check_authentication(request: Request):
         return {
             "authenticated": False,
             "role": None,
-            "auth_enabled": auth_middleware.enable_auth,
+            "auth_enabled": get_auth_middleware().enable_auth,
             "error": "Authentication check failed",
         }
 
@@ -483,7 +483,7 @@ async def check_permission(request: Request, operation: str):
     Check if current user has permission for specific operation
     """
     try:
-        has_permission, user_data = auth_middleware.check_file_permissions(
+        has_permission, user_data = get_auth_middleware().check_file_permissions(
             request, operation
         )
 
@@ -508,7 +508,7 @@ def _check_password_change_rate_limit(username: str, ip_address: str) -> None:
     client_id = f"{username}:{ip_address}"
     if not password_change_limiter.is_allowed(client_id):
         remaining_time = PASSWORD_CHANGE_RATE_WINDOW // 60
-        auth_middleware.security_layer.audit_log(
+        get_auth_middleware().security_layer.audit_log(
             action="password_change_rate_limited",
             user=username,
             outcome="denied",
@@ -524,15 +524,15 @@ def _verify_current_password(
     username: str, current_password: str, ip_address: str
 ) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
-    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     if username not in allowed_users:
         raise HTTPException(status_code=404, detail="User not found in system")
 
     user_config = allowed_users[username]
     current_password_hash = user_config.get("password_hash", "")
 
-    if not auth_middleware.verify_password(current_password, current_password_hash):
-        auth_middleware.security_layer.audit_log(
+    if not get_auth_middleware().verify_password(current_password, current_password_hash):
+        get_auth_middleware().security_layer.audit_log(
             action="password_change_failed",
             user=username,
             outcome="denied",
@@ -548,7 +548,7 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
     from config.manager import get_config_manager
 
     # Update in-memory config
-    allowed_users = auth_middleware.security_config.get("allowed_users", {})
+    allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
     allowed_users[username]["password_hash"] = new_password_hash
 
     # Persist to disk
@@ -589,7 +589,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
                 detail="Password change is not available in single-user mode",
             )
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data or user_data.get("auth_method") == "guest":
             raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -602,10 +602,10 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         _check_password_change_rate_limit(username, ip_address)
         _verify_current_password(username, password_data.current_password, ip_address)
 
-        new_password_hash = auth_middleware.hash_password(password_data.new_password)
+        new_password_hash = get_auth_middleware().hash_password(password_data.new_password)
         _persist_password_change(username, new_password_hash)
 
-        auth_middleware.security_layer.audit_log(
+        get_auth_middleware().security_layer.audit_log(
             action="password_changed",
             user=username,
             outcome="success",
@@ -688,8 +688,8 @@ def _decode_refresh_token(token: str) -> Dict:
     try:
         payload = pyjwt.decode(
             token,
-            auth_middleware.jwt_secret,
-            algorithms=[auth_middleware.jwt_algorithm],
+            get_auth_middleware().jwt_secret,
+            algorithms=[get_auth_middleware().jwt_algorithm],
             options={"verify_exp": False},
         )
     except pyjwt.InvalidTokenError as exc:
@@ -751,8 +751,8 @@ async def refresh_token(request: Request):
         user_data["user_id"] = payload["user_id"]
     if payload.get("org_id"):
         user_data["org_id"] = payload["org_id"]
-    new_token = auth_middleware.create_jwt_token(user_data)
-    expiry_seconds = auth_middleware.jwt_expiry_hours * 3600
+    new_token = get_auth_middleware().create_jwt_token(user_data)
+    expiry_seconds = get_auth_middleware().jwt_expiry_hours * 3600
 
     return {
         "success": True,

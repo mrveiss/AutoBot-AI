@@ -1232,7 +1232,7 @@ async def _wire_scheduler_executor() -> None:
     logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
     try:
         from orchestrator import get_orchestrator_sync
-        from workflow_scheduler import ScheduledWorkflow, workflow_scheduler
+        from workflow_scheduler import ScheduledWorkflow, get_workflow_scheduler
 
         orchestrator = get_orchestrator_sync()
 
@@ -1264,7 +1264,7 @@ async def _wire_scheduler_executor() -> None:
             succeeded = result.get("status") in ("completed", "partially_completed")
             return {"success": succeeded, **result}
 
-        workflow_scheduler.set_workflow_executor(_orchestration_executor)
+        get_workflow_scheduler().set_workflow_executor(_orchestration_executor)
         logger.info("[ 98%%] Scheduler: Orchestration executor wired")
     except Exception as e:
         logger.warning(
