@@ -1123,7 +1123,7 @@ class PathConfig(BaseSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
-    code_source_dir: str = Field(default="code_source", alias="AUTOBOT_CODE_SOURCE")
+    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
