@@ -195,8 +195,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
@@ -204,29 +202,11 @@ import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vu
 import CleanupStatistics from '@/components/knowledge/CleanupStatistics.vue'
 import BackupManager from '@/components/knowledge/BackupManager.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 
 const logger = createLogger('KnowledgeMaintenance')
 
 // Types
-interface HealthDashboard {
-  status: 'healthy' | 'warning' | 'degraded' | 'error'
-  last_updated: string
-  stats: {
-    total_facts: number
-    total_vectors: number
-    db_size: number
-    categories: number
-    embedding_cache: Record<string, any>
-  }
-  quality: {
-    overall_score: number
-    dimensions: Record<string, number>
-    critical_issues: number
-    warnings: number
-  }
-  top_recommendations: string[]
-}
-
 interface MaintenanceHistoryEntry {
   type: 'cleanup' | 'dedup' | 'backup' | 'restore' | 'orphan'
   action: string
@@ -234,31 +214,15 @@ interface MaintenanceHistoryEntry {
   timestamp: Date
 }
 
+// Composable — health dashboard fetch
+const { healthDashboard, isLoadingHealth, loadHealthDashboard } = useKnowledgeMaintenance()
+
 // State
 const isRefreshing = ref(false)
-const isLoadingHealth = ref(false)
-const healthDashboard = ref<HealthDashboard | null>(null)
 const maintenanceHistory = ref<MaintenanceHistoryEntry[]>([])
 const cleanupStatsRef = ref<InstanceType<typeof CleanupStatistics> | null>(null)
 
 // Methods
-const loadHealthDashboard = async () => {
-  isLoadingHealth.value = true
-
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
-
-    if (data) {
-      healthDashboard.value = data
-      logger.info('Health dashboard loaded:', data.status)
-    }
-  } catch (error) {
-    logger.error('Failed to load health dashboard:', error)
-  } finally {
-    isLoadingHealth.value = false
-  }
-}
-
 const refreshAll = async () => {
   isRefreshing.value = true
 
