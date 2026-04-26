@@ -227,72 +227,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLogPatternData } from '@/composables/analytics/useLogPatternData'
+import type { LogPattern, LogAnomaly, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
 
 const { t } = useI18n()
 
 const logger = createLogger('LogPatternDashboard')
 
-// Types
-interface LogPattern {
-  pattern_id: string
-  pattern_template: string
-  occurrences: number
-  first_seen: string
-  last_seen: string
-  log_levels: string[]
-  sources: string[]
-  sample_messages: string[]
-  frequency_per_hour: number
-  is_error_pattern: boolean
-  is_anomaly: boolean
-}
-
-interface LogAnomaly {
-  anomaly_id: string
-  anomaly_type: string
-  severity: string
-  description: string
-  timestamp: string
-  affected_sources: string[]
-  metric_before: number
-  metric_after: number
-  confidence: number
-}
-
-interface LogTrend {
-  trend_id: string
-  metric_name: string
-  direction: string
-  change_percent: number
-  time_period: string
-  data_points: Array<Record<string, unknown>>
-}
-
-interface MiningResult {
-  patterns: LogPattern[]
-  anomalies: LogAnomaly[]
-  trends: LogTrend[]
-  summary: {
-    total_logs: number
-    unique_patterns: number
-    error_patterns: number
-    anomalies_detected: number
-  }
-  analysis_time_ms: number
-  logs_analyzed: number
-}
-
-interface RealtimeData {
-  logs_last_5min: number
-  error_count: number
-  level_counts: Record<string, number>
-  recent_errors: Array<Record<string, unknown>>
-}
+const { fetchMiningResult, fetchRealtimeData: _fetchRealtimeData } = useLogPatternData()
 
 // State
 const timeRange = ref(24)
@@ -337,28 +282,14 @@ const filteredPatterns = computed(() => {
 const runAnalysis = async () => {
   isAnalyzing.value = true
   try {
-    const response = await fetchWithAuth(
-      `${getApiBase()}/log-patterns/mine?hours=${timeRange.value}&include_anomalies=true&include_trends=true`
-    )
-    if (response.ok) {
-      miningResult.value = await response.json()
-    }
-  } catch (error) {
-    logger.error('Failed to run log analysis:', error)
+    miningResult.value = await fetchMiningResult(timeRange.value)
   } finally {
     isAnalyzing.value = false
   }
 }
 
 const fetchRealtimeData = async () => {
-  try {
-    const response = await fetchWithAuth(`${getApiBase()}/log-patterns/realtime`)
-    if (response.ok) {
-      realtimeData.value = await response.json()
-    }
-  } catch (error) {
-    logger.error('Failed to fetch realtime data:', error)
-  }
+  realtimeData.value = await _fetchRealtimeData()
 }
 
 const truncate = (text: string, length: number): string => {
