@@ -16,6 +16,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 import redis.asyncio as async_redis
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from config.manager import ConfigManager, get_config_manager
 from llm_interface import LLMInterface, get_llm_interface
 
@@ -363,25 +364,25 @@ class AsyncServiceContainer:
         return info
 
 
-# Global container instance
-container = AsyncServiceContainer()
+get_container = lazy_singleton(AsyncServiceContainer)
 
 
 # Convenience functions for common services
 async def get_config() -> ConfigManager:
     """Get config manager"""
-    return await container.get_service("config")
+    return await get_container().get_service("config")
 
 
 async def get_llm() -> LLMInterface:
     """Get LLM interface"""
-    return await container.get_service("llm")
+    return await get_container().get_service("llm")
 
 
 # Context manager for service lifecycle
 @asynccontextmanager
 async def service_context():
     """Context manager for automatic service lifecycle management"""
+    container = get_container()
     try:
         # Initialize all services
         initialization_results = await container.initialize_all_services()
@@ -418,7 +419,7 @@ def inject_service(service_name: str):
 
         async def wrapper(*args, **kwargs):
             """Async wrapper that injects requested service before calling function."""
-            service = await container.get_service(service_name)
+            service = await get_container().get_service(service_name)
             return await func(service, *args, **kwargs)
 
         return wrapper
@@ -436,7 +437,7 @@ def inject_services(**service_mapping):
             """Async wrapper that injects all mapped services before calling function."""
             services = {}
             for param_name, service_name in service_mapping.items():
-                services[param_name] = await container.get_service(service_name)
+                services[param_name] = await get_container().get_service(service_name)
 
             return await func(*args, **services, **kwargs)
 

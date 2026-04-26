@@ -34,7 +34,7 @@ from autobot_shared.redis_client import get_redis_client
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
-from event_manager import event_manager
+from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from security_layer import SecurityLayer
@@ -254,7 +254,7 @@ class WorkerNode:
             logger.info("Worker capabilities reported to Redis channel '%s'.", channel)
         else:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
-            await event_manager.publish("worker_capability_report", capabilities)
+            await get_event_manager().publish("worker_capability_report", capabilities)
 
     def _validate_user_role(self, task_type: str, task_id: str, user_role: Optional[str]) -> Optional[Dict[str, Any]]:
         """Validate that user_role is provided for task execution.
@@ -351,7 +351,7 @@ class WorkerNode:
 
     async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
         )
@@ -365,7 +365,7 @@ class WorkerNode:
 
     async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
         )

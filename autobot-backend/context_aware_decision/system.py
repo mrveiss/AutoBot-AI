@@ -18,7 +18,7 @@ import numpy as np
 
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from .collectors import ContextCollector
 from .decision_engine import DecisionEngine
@@ -50,7 +50,7 @@ class ContextAwareDecisionSystem:
     ) -> Decision:
         """Make a decision considering comprehensive context."""
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Contextual Decision Making",
             f"Making contextual {decision_type.value} decision: {primary_goal}",
             agent_type="context_aware_decision_system",

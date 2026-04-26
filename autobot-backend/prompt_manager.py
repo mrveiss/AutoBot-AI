@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -1202,8 +1203,7 @@ class PromptManager:
             logger.debug("Redis prompts cache save failed: %s", e)
 
 
-# Global prompt manager instance
-prompt_manager = PromptManager()
+get_prompt_manager = lazy_singleton(PromptManager)
 
 
 def get_prompt(prompt_key: str, **kwargs) -> str:
@@ -1217,7 +1217,7 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     Returns:
         Rendered prompt content
     """
-    return prompt_manager.get(prompt_key, **kwargs)
+    return get_prompt_manager().get(prompt_key, **kwargs)
 
 
 def _build_dynamic_context(
@@ -1249,7 +1249,7 @@ def _build_dynamic_context(
     """
     try:
         dynamic_template_key = "default.agent.system.dynamic_context"
-        return prompt_manager.get(
+        return get_prompt_manager().get(
             dynamic_template_key,
             session_id=session_id or "N/A",
             current_date=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
@@ -1302,7 +1302,7 @@ def get_optimized_prompt(
         Combined prompt with static prefix + dynamic suffix
     """
     # Get static base prompt with includes rendered (will be cached by vLLM)
-    base_prompt = prompt_manager.get(base_prompt_key)
+    base_prompt = get_prompt_manager().get(base_prompt_key)
 
     # Build dynamic context section (Issue #620: extracted helper)
     dynamic_context = _build_dynamic_context(
@@ -1329,14 +1329,14 @@ def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
     Returns:
         List of matching prompt keys
     """
-    return prompt_manager.list_prompts(filter_pattern)
+    return get_prompt_manager().list_prompts(filter_pattern)
 
 
 def reload_prompts() -> None:
     """
     Convenience function to reload all prompts.
     """
-    prompt_manager.reload()
+    get_prompt_manager().reload()
 
 
 # Issue #1327: Supported languages for prompt language injection.

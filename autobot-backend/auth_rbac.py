@@ -34,14 +34,14 @@ from typing import Callable, List, Union
 
 from fastapi import Request
 
-from auth_middleware import auth_middleware
+from autobot_shared.singleton_factory import lazy_singleton
+from auth_middleware import get_auth_middleware
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
-# Initialize security layer for permission checks
-_security_layer = SecurityLayer()
+_get_security_layer = lazy_singleton(SecurityLayer)
 
 
 class Permission(str, Enum):
@@ -294,7 +294,7 @@ def _get_user_permissions(user_role: str) -> List[str]:
         pass
 
     # Also get permissions from SecurityLayer (for backward compatibility)
-    security_perms = _security_layer._get_default_role_permissions(user_role)
+    security_perms = _get_security_layer()._get_default_role_permissions(user_role)
     permissions.extend(security_perms)
 
     return list(set(permissions))  # Remove duplicates
@@ -322,7 +322,7 @@ def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
     perm_str = permission.value if isinstance(permission, Permission) else permission
 
     # Check using SecurityLayer for audit logging
-    return _security_layer.check_permission(user_role, perm_str)
+    return _get_security_layer().check_permission(user_role, perm_str)
 
 
 def _check_single_user_bypass(permission: Union[Permission, str]) -> bool:
@@ -359,7 +359,7 @@ def _deny_permission_access(user_data: dict, perm_str: str, request: Request) ->
     Raises:
         HTTPException via raise_auth_error
     """
-    _security_layer.audit_log(
+    _get_security_layer().audit_log(
         action="permission_denied",
         user=user_data.get("username", "unknown"),
         outcome="denied",
@@ -405,7 +405,7 @@ def require_permission(
         if allow_single_user_bypass and _check_single_user_bypass(permission):
             return True
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
@@ -435,7 +435,7 @@ def _deny_role_access(
     Raises:
         HTTPException via raise_auth_error
     """
-    _security_layer.audit_log(
+    _get_security_layer().audit_log(
         action="role_denied",
         user=user_data.get("username", "unknown"),
         outcome="denied",
@@ -465,7 +465,7 @@ def _deny_any_permission_access(
     Raises:
         HTTPException via raise_auth_error
     """
-    _security_layer.audit_log(
+    _get_security_layer().audit_log(
         action="permission_denied",
         user=user_data.get("username", "unknown"),
         outcome="denied",
@@ -510,7 +510,7 @@ def require_role(
         if allow_single_user_bypass and _check_single_user_bypass("role_check"):
             return True
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
@@ -556,7 +556,7 @@ def require_any_permission(
         if allow_single_user_bypass and _check_single_user_bypass("any_permission"):
             return True
 
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 

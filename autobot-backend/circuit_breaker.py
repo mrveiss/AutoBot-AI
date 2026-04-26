@@ -17,6 +17,7 @@ from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants import CircuitBreakerDefaults
 
 logger = logging.getLogger(__name__)
@@ -494,8 +495,7 @@ class CircuitBreakerManager:
             cb.reset()
 
 
-# Global circuit breaker manager
-circuit_breaker_manager = CircuitBreakerManager()
+get_circuit_breaker_manager = lazy_singleton(CircuitBreakerManager)
 
 
 def circuit_breaker_async(
@@ -530,7 +530,7 @@ def circuit_breaker_async(
         if monitored_exceptions:
             config.monitored_exceptions = monitored_exceptions
 
-        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
+        circuit_breaker = get_circuit_breaker_manager().get_circuit_breaker(
             service_name, config
         )
 
@@ -577,7 +577,7 @@ def circuit_breaker_sync(
         if monitored_exceptions:
             config.monitored_exceptions = monitored_exceptions
 
-        circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
+        circuit_breaker = get_circuit_breaker_manager().get_circuit_breaker(
             service_name, config
         )
 
@@ -603,7 +603,7 @@ async def protected_llm_call(func: Callable, *args, **kwargs) -> Any:
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
-    circuit_breaker = circuit_breaker_manager.get_circuit_breaker("llm_service", config)
+    circuit_breaker = get_circuit_breaker_manager().get_circuit_breaker("llm_service", config)
     return await circuit_breaker.call_async(func, *args, **kwargs)
 
 
@@ -618,7 +618,7 @@ async def protected_database_call(func: Callable, *args, **kwargs) -> Any:
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
-    circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
+    circuit_breaker = get_circuit_breaker_manager().get_circuit_breaker(
         "database_service", config
     )
     return await circuit_breaker.call_async(func, *args, **kwargs)
@@ -634,7 +634,7 @@ async def protected_network_call(func: Callable, *args, **kwargs) -> Any:
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
-    circuit_breaker = circuit_breaker_manager.get_circuit_breaker(
+    circuit_breaker = get_circuit_breaker_manager().get_circuit_breaker(
         "network_service", config
     )
     return await circuit_breaker.call_async(func, *args, **kwargs)

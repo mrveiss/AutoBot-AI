@@ -18,7 +18,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.message_bus import get_message_bus
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -78,7 +78,7 @@ class CorrelationChainResponse(BaseModel):
 def _check_admin(request: Request) -> bool:
     """Require admin role for service-message access."""
     try:
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error(
                 "AUTH_0002",

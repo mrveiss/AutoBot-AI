@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_memory_manager_async import Priority  # Import Priority for backward compatibility
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
@@ -471,5 +472,4 @@ class TaskExecutionContext:
         return self.tracker.store_task_embedding(self.task_id, content, embedding_model, embedding_vector)
 
 
-# Global instance for easy access across the application
-task_tracker = TaskExecutionTracker()
+get_task_tracker = lazy_singleton(TaskExecutionTracker)

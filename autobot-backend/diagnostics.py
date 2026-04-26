@@ -20,12 +20,13 @@ import psutil
 
 try:
     from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.singleton_factory import lazy_singleton
     from constants.threshold_constants import (
         ResourceThresholds,
         RetryConfig,
         TimingConstants,
     )
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
@@ -136,7 +137,7 @@ class PerformanceOptimizedDiagnostics:
     ) -> asyncio.Future:
         """Publish permission request and return future (Issue #315 - extracted helper)."""
         permission_future = asyncio.Future()
-        await event_manager.publish(
+        await get_event_manager().publish(
             "log_message",
             {
                 "task_id": task_id,
@@ -173,7 +174,7 @@ class PerformanceOptimizedDiagnostics:
         )
 
         if attempt < self.permission_retry_attempts - 1:
-            await event_manager.publish(
+            await get_event_manager().publish(
                 "log_message",
                 {
                     "level": "WARNING",
@@ -241,7 +242,7 @@ class PerformanceOptimizedDiagnostics:
         self, task_id: str, elapsed_time: float
     ):
         """Handle user permission timeout with intelligent fallback"""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "log_message",
             {
                 "level": "WARNING",
@@ -496,37 +497,36 @@ class PerformanceOptimizedDiagnostics:
             return {"error": "Memory cleanup failed"}
 
 
-# Global instance with performance optimization
-performance_diagnostics = PerformanceOptimizedDiagnostics()
+get_performance_diagnostics = lazy_singleton(PerformanceOptimizedDiagnostics)
 
 
 # Legacy compatibility functions (with performance improvements)
 async def request_user_permission(task_id: str, report: Dict[str, Any]) -> bool:
     """PERFORMANCE OPTIMIZED: Legacy wrapper with new timeout handling"""
-    return await performance_diagnostics.request_user_permission_optimized(
+    return await get_performance_diagnostics().request_user_permission_optimized(
         task_id, report
     )
 
 
 def get_system_info() -> Dict[str, Any]:
     """Get system information with performance insights"""
-    return performance_diagnostics.check_system_resources()
+    return get_performance_diagnostics().check_system_resources()
 
 
 def force_memory_cleanup() -> Dict[str, Any]:
     """Force system-wide memory cleanup"""
-    return performance_diagnostics.cleanup_and_optimize_memory()
+    return get_performance_diagnostics().cleanup_and_optimize_memory()
 
 
 # Additional performance monitoring functions
 def get_performance_metrics() -> Dict[str, Any]:
     """Get current performance metrics"""
     return {
-        "system_resources": performance_diagnostics.check_system_resources(),
+        "system_resources": get_performance_diagnostics().check_system_resources(),
         "memory_cleanup_available": True,
         "timeout_optimizations_active": True,
         "max_user_permission_timeout": (
-            performance_diagnostics.max_user_permission_timeout
+            get_performance_diagnostics().max_user_permission_timeout
         ),
         "performance_mode": "optimized",
     }
@@ -550,6 +550,5 @@ if __name__ == "__main__":
     logger.info("Performance Metrics: {json.dumps(metrics, indent=2)}")
 
 
-# Backward compatibility aliases
+# Backward compatibility alias
 Diagnostics = PerformanceOptimizedDiagnostics
-performance_diagnostics = PerformanceOptimizedDiagnostics()

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from auth_middleware import auth_middleware, check_admin_permission
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
@@ -208,7 +208,7 @@ async def _authorize_file_operation(
     request: Request, session_id: str, operation: str
 ) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted)."""
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, operation
     )
     if not has_permission:
@@ -782,7 +782,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file preview"

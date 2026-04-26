@@ -41,7 +41,7 @@ from orchestration import (
     WorkflowPlanner,
 )
 from orchestration.primitives import bounded_gather
-from task_execution_tracker import Priority, TaskType, task_tracker
+from task_execution_tracker import Priority, TaskType, get_task_tracker
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
 from utils.agent_selection import find_best_agent_for_task as _find_best_agent
@@ -51,7 +51,7 @@ from utils.agent_selection import update_agent_performance as _update_performanc
 
 # Issue #5040: Imports for merged EnhancedMultiAgentOrchestrator functionality
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
-from event_manager import event_manager as _event_manager
+from event_manager import get_event_manager as _get_event_manager
 
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
@@ -542,7 +542,7 @@ class Orchestrator:
         context: Optional[Dict[str, Any]],
     ) -> None:
         """Start task tracking for user request. Issue #620."""
-        task_tracker.start_task(
+        get_task_tracker().start_task(
             task_id=task_id,
             task_type=TaskType.USER_REQUEST,
             description=user_message[:200],
@@ -587,7 +587,7 @@ class Orchestrator:
 
             processing_time = time.time() - start_time
             self._update_success_metrics(processing_time)
-            task_tracker.complete_task(task_id, result)
+            get_task_tracker().complete_task(task_id, result)
             logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
 
             return self._build_success_response(
@@ -602,7 +602,7 @@ class Orchestrator:
         except Exception as e:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
-            task_tracker.fail_task(task_id, str(e))
+            get_task_tracker().fail_task(task_id, str(e))
             logger.error(
                 "❌ Request %s failed after %.2fs: %s", task_id, processing_time, e
             )
@@ -1664,7 +1664,7 @@ class Orchestrator:
         self, workflow_id: str, event_type: str, data: Dict[str, Any]
     ) -> None:
         """Publish a workflow lifecycle event via the event manager."""
-        await _event_manager.publish(
+        await _get_event_manager().publish(
             "workflow_event",
             {
                 "workflow_id": workflow_id,

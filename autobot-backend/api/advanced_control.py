@@ -17,10 +17,10 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
-from desktop_streaming_manager import desktop_streaming
+from desktop_streaming_manager import get_desktop_streaming
 from enhanced_memory_manager_async import TaskPriority
-from takeover_manager import TakeoverTrigger, takeover_manager
-from task_execution_tracker import task_tracker
+from takeover_manager import TakeoverTrigger, get_takeover_manager
+from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
 
@@ -94,7 +94,7 @@ async def create_streaming_session(
 
     Issue #744: Requires admin authentication.
     """
-    async with task_tracker.track_task(
+    async with get_task_tracker().track_task(
         "Create Desktop Streaming Session",
         f"Creating streaming session for user {request.user_id}",
         agent_type="advanced_control",
@@ -103,7 +103,7 @@ async def create_streaming_session(
     ) as task_context:
         session_config = {"resolution": request.resolution, "depth": request.depth}
 
-        result = await desktop_streaming.create_streaming_session(
+        result = await get_desktop_streaming().create_streaming_session(
             user_id=request.user_id, session_config=session_config
         )
 
@@ -134,7 +134,7 @@ async def terminate_streaming_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await desktop_streaming.terminate_streaming_session(session_id)
+    success = await get_desktop_streaming().terminate_streaming_session(session_id)
     if success:
         logger.info("Desktop streaming session terminated: %s", session_id)
         return {"success": True, "session_id": session_id}
@@ -161,7 +161,7 @@ async def list_streaming_sessions(
 
     Issue #744: Requires admin authentication.
     """
-    sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
     return {"sessions": sessions, "count": len(sessions)}
 
 
@@ -184,7 +184,7 @@ async def get_streaming_capabilities(
 
     Issue #744: Requires admin authentication.
     """
-    capabilities = desktop_streaming.get_system_capabilities()
+    capabilities = get_desktop_streaming().get_system_capabilities()
     return capabilities
 
 
@@ -236,7 +236,7 @@ async def request_takeover(
 
     priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
 
-    request_id = await takeover_manager.request_takeover(
+    request_id = await get_takeover_manager().request_takeover(
         trigger=trigger,
         reason=request.reason,
         requesting_agent=request.requesting_agent,
@@ -272,7 +272,7 @@ async def approve_takeover(
     Issue #744: Requires admin authentication.
     """
     try:
-        session_id = await takeover_manager.approve_takeover(
+        session_id = await get_takeover_manager().approve_takeover(
             request_id=request_id,
             human_operator=approval.human_operator,
             takeover_scope=approval.takeover_scope,
@@ -309,7 +309,7 @@ async def execute_takeover_action(
     Issue #744: Requires admin authentication.
     """
     try:
-        result = await takeover_manager.execute_takeover_action(
+        result = await get_takeover_manager().execute_takeover_action(
             session_id=session_id,
             action_type=action.action_type,
             action_data=action.action_data,
@@ -344,7 +344,7 @@ async def pause_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.pause_takeover_session(session_id)
+    success = await get_takeover_manager().pause_takeover_session(session_id)
     if success:
         return {"success": True, "session_id": session_id, "status": "paused"}
     else:
@@ -371,7 +371,7 @@ async def resume_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.resume_takeover_session(session_id)
+    success = await get_takeover_manager().resume_takeover_session(session_id)
     if success:
         return {"success": True, "session_id": session_id, "status": "active"}
     else:
@@ -401,7 +401,7 @@ async def complete_takeover_session(
 
     Issue #744: Requires admin authentication.
     """
-    success = await takeover_manager.complete_takeover_session(
+    success = await get_takeover_manager().complete_takeover_session(
         session_id=session_id,
         resolution=completion_data.get("resolution", "Session completed"),
         handback_notes=completion_data.get("handback_notes"),
@@ -432,7 +432,7 @@ async def get_pending_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    pending = takeover_manager.get_pending_requests()
+    pending = get_takeover_manager().get_pending_requests()
     return {"pending_requests": pending, "count": len(pending)}
 
 
@@ -455,7 +455,7 @@ async def get_active_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    active = takeover_manager.get_active_sessions()
+    active = get_takeover_manager().get_active_sessions()
     return {"active_sessions": active, "count": len(active)}
 
 
@@ -478,7 +478,7 @@ async def get_takeover_status(
 
     Issue #744: Requires admin authentication.
     """
-    status = takeover_manager.get_system_status()
+    status = get_takeover_manager().get_system_status()
     return status
 
 
@@ -514,16 +514,16 @@ async def get_system_status(
     }
 
     # Get streaming sessions
-    streaming_sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    streaming_sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
 
     # Get takeover data
-    pending_takeovers = takeover_manager.get_pending_requests()
-    active_takeovers = takeover_manager.get_active_sessions()
+    pending_takeovers = get_takeover_manager().get_pending_requests()
+    active_takeovers = get_takeover_manager().get_active_sessions()
     system_status = {
         "status": "healthy",
         "timestamp": psutil.boot_time(),
         "uptime_seconds": psutil.boot_time(),
-        "streaming_capabilities": desktop_streaming.get_system_capabilities(),
+        "streaming_capabilities": get_desktop_streaming().get_system_capabilities(),
     }
 
     response = SystemMonitoringResponse(
@@ -557,7 +557,7 @@ async def emergency_system_stop(
     Issue #744: Requires admin authentication.
     """
     # Request emergency takeover
-    request_id = await takeover_manager.request_takeover(
+    request_id = await get_takeover_manager().request_takeover(
         trigger=TakeoverTrigger.CRITICAL_ERROR,
         reason="Emergency stop activated",
         requesting_agent="emergency_system",
@@ -595,14 +595,14 @@ async def get_system_health(
     try:
         health_status = {
             "status": "healthy",
-            "desktop_streaming_available": desktop_streaming.vnc_manager.vnc_available,
-            "novnc_available": desktop_streaming.vnc_manager.novnc_available,
+            "desktop_streaming_available": get_desktop_streaming().vnc_manager.vnc_available,
+            "novnc_available": get_desktop_streaming().vnc_manager.novnc_available,
             "active_streaming_sessions": len(
-                desktop_streaming.vnc_manager.active_sessions
+                get_desktop_streaming().vnc_manager.active_sessions
             ),
-            "pending_takeovers": len(takeover_manager.pending_requests),
-            "active_takeovers": len(takeover_manager.active_sessions),
-            "paused_tasks": len(takeover_manager.paused_tasks),
+            "pending_takeovers": len(get_takeover_manager().pending_requests),
+            "active_takeovers": len(get_takeover_manager().active_sessions),
+            "paused_tasks": len(get_takeover_manager().paused_tasks),
         }
 
         return health_status
@@ -677,7 +677,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
 
     try:
         # Use the desktop streaming manager's WebSocket handler
-        await desktop_streaming.handle_websocket_client(
+        await get_desktop_streaming().handle_websocket_client(
             websocket, f"/ws/desktop/{session_id}"
         )
     except WebSocketDisconnect:

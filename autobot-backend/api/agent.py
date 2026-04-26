@@ -792,7 +792,7 @@ async def receive_goal(
         JSONResponse: Returns a 403 error if permission is denied, or a 500
             error if an internal error occurs.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
@@ -814,7 +814,7 @@ async def receive_goal(
     logging.info(f"Received goal via API: {goal}")
 
     # Publish events (Issue #620: uses helper)
-    await _publish_goal_events(event_manager, goal, use_phi2)
+    await _publish_goal_events(get_event_manager(), goal, use_phi2)
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
@@ -826,7 +826,7 @@ async def receive_goal(
 
     # Process and return result (Issue #620: uses helper)
     return await _handle_goal_result(
-        event_manager, security_layer, user_role, goal, result_dict, task_start_time
+        get_event_manager(), security_layer, user_role, goal, result_dict, task_start_time
     )
 
 
@@ -852,7 +852,7 @@ async def pause_agent_api(
     without actual functionality. Full implementation will be added with
     backend integration.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
@@ -884,7 +884,7 @@ async def pause_agent_api(
     security_layer.audit_log("agent_pause", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
+        await get_event_manager().publish(
             "agent_paused", {"message": "Agent operation paused."}
         )
     except Exception as e:
@@ -914,7 +914,7 @@ async def resume_agent_api(
     actual functionality.
     Full implementation will be added with backend integration.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
@@ -946,7 +946,7 @@ async def resume_agent_api(
     security_layer.audit_log("agent_resume", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish(
+        await get_event_manager().publish(
             "agent_resumed", {"message": "Agent operation resumed."}
         )
     except Exception as e:
@@ -1037,7 +1037,7 @@ async def execute_command(
                       a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
-    from event_manager import event_manager
+    from event_manager import get_event_manager
 
     security_layer = request.app.state.security_layer
     command = command_data.get("command")
@@ -1047,7 +1047,7 @@ async def execute_command(
     if validation_error:
         if not command:
             await _publish_event_safe(
-                event_manager,
+                get_event_manager(),
                 "error",
                 {"message": "No command provided for execution."},
             )
@@ -1055,7 +1055,7 @@ async def execute_command(
 
     # Publish start event (Issue #281: uses helper)
     await _publish_event_safe(
-        event_manager, "command_execution_start", {"command": command}
+        get_event_manager(), "command_execution_start", {"command": command}
     )
     logging.info(f"Executing command: {command}")
 
@@ -1066,7 +1066,7 @@ async def execute_command(
 
     # Handle result and publish completion event (Issue #620: uses helper)
     return await _handle_command_result(
-        event_manager, security_layer, user_role, command, stdout, stderr, returncode
+        get_event_manager(), security_layer, user_role, command, stdout, stderr, returncode
     )
 
 

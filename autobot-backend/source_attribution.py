@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 logger = logging.getLogger(__name__)
 
 
@@ -251,20 +253,19 @@ class SourceAttributionManager:
         return json.dumps([s.to_dict() for s in self.current_response_sources], indent=2)
 
 
-# Global instance
-source_manager = SourceAttributionManager()
+get_source_manager = lazy_singleton(SourceAttributionManager)
 
 
 def track_source(source_type: Union[SourceType, str], content: str, **kwargs) -> Source:
     """Convenience function to track a source"""
-    return source_manager.add_source(source_type, content, **kwargs)
+    return get_source_manager().add_source(source_type, content, **kwargs)
 
 
 def get_attribution() -> str:
     """Get formatted attribution for current response"""
-    return source_manager.format_attribution_block()
+    return get_source_manager().format_attribution_block()
 
 
 def clear_sources():
     """Clear current response sources"""
-    source_manager.clear_current_sources()
+    get_source_manager().clear_current_sources()

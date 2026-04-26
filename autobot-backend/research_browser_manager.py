@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 
 import aiofiles
 
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 
@@ -684,5 +685,4 @@ class ResearchBrowserManager:
             await self.cleanup_session(session_id)
 
 
-# Global research browser manager
-research_browser_manager = ResearchBrowserManager()
+get_research_browser_manager = lazy_singleton(ResearchBrowserManager)

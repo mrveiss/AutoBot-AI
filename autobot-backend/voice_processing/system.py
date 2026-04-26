@@ -16,7 +16,7 @@ import numpy as np
 
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from .constants import HIGH_RISK_COMMAND_TYPES, HIGH_RISK_INTENTS, SCREEN_STATE_INTENTS
 from .models import AudioInput, SpeechSynthesisRequest, VoiceCommandAnalysis
@@ -86,7 +86,7 @@ class VoiceProcessingSystem:
         self, audio_input: AudioInput, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Complete voice command processing pipeline."""
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Voice Command Processing",
             f"Processing voice command: {audio_input.audio_id}",
             agent_type="voice_processing_system",

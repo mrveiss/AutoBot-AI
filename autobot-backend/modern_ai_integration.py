@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     GOOGLE_GEMINI_PRO,
@@ -1226,5 +1227,4 @@ class ModernAIIntegration:
         }
 
 
-# Global instance
-modern_ai_integration = ModernAIIntegration()
+get_modern_ai_integration = lazy_singleton(ModernAIIntegration)

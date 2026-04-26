@@ -24,7 +24,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from services.audit_logger import AuditResult, get_audit_logger
@@ -82,7 +82,7 @@ def check_admin_permission(request: Request) -> bool:
     """Check if user has admin permission for audit log access"""
     try:
         # Get user from auth middleware
-        user_data = auth_middleware.get_user_from_request(request)
+        user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
             raise_auth_error(

@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
@@ -77,7 +77,7 @@ def check_admin_permission(request: Request) -> str:
     Raises:
         HTTPException: If user lacks admin permissions
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -101,7 +101,7 @@ def check_operator_permission(request: Request) -> str:
     Raises:
         HTTPException: If user lacks operator/admin permissions
     """
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Authentication required")

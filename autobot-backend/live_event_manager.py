@@ -15,6 +15,8 @@ from typing import Dict, Set
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 logger = logging.getLogger(__name__)
 
 _VALID_PREFIXES = {"agent", "task", "workflow", "global"}
@@ -128,7 +130,7 @@ class LiveEventManager:
         return sent
 
 
-live_event_manager = LiveEventManager()
+get_live_event_manager = lazy_singleton(LiveEventManager)
 
 
 async def publish_live_event(channel: str, event_type: str, payload: dict) -> int:
@@ -138,4 +140,4 @@ async def publish_live_event(channel: str, event_type: str, payload: dict) -> in
         await publish_live_event("task:abc123", "task_progress", {"pct": 50})
         await publish_live_event("global", "cost_warning", {"threshold": 10.0})
     """
-    return await live_event_manager.publish(channel, event_type, payload)
+    return await get_live_event_manager().publish(channel, event_type, payload)

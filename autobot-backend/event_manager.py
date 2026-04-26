@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -98,8 +99,7 @@ class EventManager:
             self._listeners[event_type].remove(listener)
 
 
-# Global instance of EventManager
-event_manager = EventManager()
+get_event_manager = lazy_singleton(EventManager)
 
 if __name__ == "__main__":
 
@@ -109,17 +109,17 @@ if __name__ == "__main__":
 
     async def main():
         """Main test function demonstrating EventManager usage."""
-        event_manager.subscribe("task_update", test_listener)
-        event_manager.subscribe("log_message", test_listener)
+        get_event_manager().subscribe("task_update", test_listener)
+        get_event_manager().subscribe("log_message", test_listener)
 
         # Simulate WebSocket broadcast callback
         async def mock_websocket_broadcast(event):
             """Mock callback that simulates WebSocket event broadcast."""
             print(f"WebSocket Broadcast: {event}")  # noqa: print
 
-        event_manager.register_websocket_broadcast(mock_websocket_broadcast)
+        get_event_manager().register_websocket_broadcast(mock_websocket_broadcast)
 
-        await event_manager.publish(
+        await get_event_manager().publish(
             "task_update",
             {
                 "task_id": "123",
@@ -127,10 +127,10 @@ if __name__ == "__main__":
                 "description": "Doing something",
             },
         )
-        await event_manager.publish(
+        await get_event_manager().publish(
             "log_message", {"level": "INFO", "message": "Agent started."}
         )
-        await event_manager.publish(
+        await get_event_manager().publish(
             "task_update",
             {
                 "task_id": "123",
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         )
 
         # Test debug publish
-        await event_manager.debug_publish(
+        await get_event_manager().debug_publish(
             "debug_info", {"message": "This is a debug message."}
         )
 

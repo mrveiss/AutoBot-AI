@@ -13,6 +13,8 @@ import re
 import subprocess  # nosec B404 - elevation wrapper requires subprocess
 from typing import Dict, Tuple
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 logger = logging.getLogger(__name__)
 
 # Pattern to detect sudo commands
@@ -204,8 +206,7 @@ class ElevationWrapper:
         self.session_commands.clear()
 
 
-# Global instance
-elevation_wrapper = ElevationWrapper()
+get_elevation_wrapper = lazy_singleton(ElevationWrapper)
 
 
 def wrap_sudo_command(command: str) -> str:
@@ -218,7 +219,7 @@ def wrap_sudo_command(command: str) -> str:
 
 async def execute_with_elevation(command: str, **kwargs):
     """Convenience function to execute command with elevation if needed"""
-    return await elevation_wrapper.execute_command(command, **kwargs)
+    return await get_elevation_wrapper().execute_command(command, **kwargs)
 
 
 # Monkey-patch subprocess to intercept sudo calls

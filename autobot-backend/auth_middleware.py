@@ -23,6 +23,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
@@ -631,8 +632,7 @@ class AuthenticationMiddleware:
             return False, None
 
 
-# Global authentication middleware instance
-auth_middleware = AuthenticationMiddleware()
+get_auth_middleware = lazy_singleton(AuthenticationMiddleware)
 
 
 def get_current_user(request: Request) -> Dict:
@@ -650,7 +650,7 @@ def get_current_user(request: Request) -> Dict:
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         return {"username": "service:slm", "role": "admin", "service": True}
 
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         raise_auth_error("AUTH_0002", "Authentication required")
     return user_data
@@ -687,7 +687,7 @@ def check_admin_permission(request: Request) -> bool:
         logger.debug("Single user mode: granting admin access")
         return True
 
-    user_data = auth_middleware.get_user_from_request(request)
+    user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
         raise_auth_error("AUTH_0002", "Authentication required")

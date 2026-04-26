@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, field_validator
 
-from auth_middleware import auth_middleware
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.error_constants import (
@@ -246,7 +246,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, permission
     )
     if not has_permission:
@@ -713,7 +713,7 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "upload"
     )
     if not has_permission:
@@ -775,7 +775,7 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "download"
     )
     if not has_permission:
@@ -839,7 +839,7 @@ async def view_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file viewing"
@@ -1117,7 +1117,7 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = auth_middleware.check_file_permissions(
+    has_permission, user_data = get_auth_middleware().check_file_permissions(
         request, "delete"
     )
     if not has_permission:
@@ -1240,7 +1240,7 @@ async def create_directory(
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -1313,7 +1313,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
+    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403, detail="Insufficient permissions for file statistics"

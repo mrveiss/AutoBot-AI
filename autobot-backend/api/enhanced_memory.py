@@ -39,7 +39,7 @@ from enhanced_memory_manager_async import (
     get_async_enhanced_memory_manager,
 )
 from markdown_reference_system import MarkdownReferenceSystem
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -155,8 +155,8 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
         task_stats, markdown_stats, active_tasks, insights = await asyncio.gather(
             memory_manager.get_task_statistics(),
             asyncio.to_thread(markdown_system.get_markdown_statistics),
-            asyncio.to_thread(task_tracker.get_active_tasks),
-            task_tracker.analyze_task_patterns(days_back),
+            asyncio.to_thread(get_task_tracker().get_active_tasks),
+            get_task_tracker().analyze_task_patterns(days_back),
         )
 
         return {
@@ -199,7 +199,7 @@ async def get_task_history(
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
 
-        history = task_tracker.get_task_history(
+        history = get_task_tracker().get_task_history(
             agent_type=agent_type, status=status_enum, limit=limit, days_back=days_back
         )
 
@@ -570,7 +570,7 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
 async def get_active_tasks():
     """Get currently active tasks"""
     try:
-        active_tasks = task_tracker.get_active_tasks()
+        active_tasks = get_task_tracker().get_active_tasks()
 
         return {
             "count": len(active_tasks),

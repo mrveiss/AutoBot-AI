@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from memory import EnhancedMemoryManager, TaskPriority
-from task_execution_tracker import task_tracker
+from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
 from .types import ScreenState
@@ -72,7 +72,7 @@ class ComputerVisionSystem:
     ) -> Dict[str, Any]:
         """Comprehensive screen analysis and understanding"""
 
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Computer Vision Analysis",
             "Complete screen understanding and element detection",
             agent_type="computer_vision_system",
