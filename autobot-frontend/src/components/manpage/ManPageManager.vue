@@ -327,7 +327,7 @@ import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge
 import { useManPages } from '@/composables/knowledge/useManPages'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { formatDate } from '@/utils/formatHelpers'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -377,19 +377,19 @@ export default {
     })
 
     // Use composables for async operations
-    const { execute: fetchProfileOp, loading: loadingProfile } = useAsyncOperation()
-    const { execute: fetchStatusOp, loading: loadingStatus } = useAsyncOperation()
-    const { execute: initializeOp, loading: loadingInitialize } = useAsyncOperation()
-    const { execute: integrateOp, loading: loadingIntegrate } = useAsyncOperation()
-    const { execute: searchOp, loading: loadingSearch } = useAsyncOperation()
+    const { isLoading: isLoadingProfile, wrap: wrapProfile } = useLoadingState()
+    const { isLoading: isLoadingStatus, wrap: wrapStatus } = useLoadingState()
+    const { isLoading: isLoadingInitialize, wrap: wrapInitialize } = useLoadingState()
+    const { isLoading: isLoadingIntegrate, wrap: wrapIntegrate } = useLoadingState()
+    const { isLoading: isLoadingSearch, wrap: wrapSearch } = useLoadingState()
 
     // Computed loading states for backward compatibility
     const loading = computed(() => ({
-      profile: loadingProfile.value,
-      status: loadingStatus.value,
-      initialize: loadingInitialize.value,
-      integrate: loadingIntegrate.value,
-      search: loadingSearch.value
+      profile: isLoadingProfile.value,
+      status: isLoadingStatus.value,
+      initialize: isLoadingInitialize.value,
+      integrate: isLoadingIntegrate.value,
+      search: isLoadingSearch.value
     }))
 
     // Computed properties
@@ -433,10 +433,9 @@ export default {
     // Removed: formatDate - now using composable
 
     const refreshMachineProfile = async () => {
-      if (loading.value.profile) return // Prevent concurrent calls
+      if (isLoadingProfile.value) return // Prevent concurrent calls
 
-      loading.value.profile = true
-      try {
+      await wrapProfile(async () => {
         const profile = await fetchMachineProfileAPI()
 
         if (profile) {
@@ -447,22 +446,17 @@ export default {
           machineProfile.value = null
           setProgressMessage(t('manpage.manager.noProfile'), 'warning')
         }
-      } catch (error) {
+      }).catch(error => {
         logger.error('Error refreshing machine profile:', error)
         setProgressMessage('Could not connect to backend API', 'error')
         machineProfile.value = null
-      } finally {
-        if (loading.value) {
-          loading.value.profile = false
-        }
-      }
+      })
     }
 
     const refreshIntegrationStatus = async () => {
-      if (loading.value.status) return // Prevent concurrent calls
+      if (isLoadingStatus.value) return // Prevent concurrent calls
 
-      loading.value.status = true
-      try {
+      await wrapStatus(async () => {
         const summary = await fetchManPagesSummaryAPI()
 
         if (summary) {
@@ -473,23 +467,18 @@ export default {
           integrationStatus.value = { status: 'not_integrated', message: 'Backend restart required' }
           setProgressMessage('Integration status not available (backend restart required)', 'warning')
         }
-      } catch (error) {
+      }).catch(error => {
         logger.error('Error refreshing integration status:', error)
         setProgressMessage('Could not connect to backend API', 'error')
         integrationStatus.value = { status: 'error', message: 'Connection failed' }
-      } finally {
-        if (loading.value) {
-          loading.value.status = false
-        }
-      }
+      })
     }
 
     const initializeMachineKnowledge = async () => {
-      if (loading.value.initialize) return // Prevent concurrent calls
-      loading.value.initialize = true
+      if (isLoadingInitialize.value) return // Prevent concurrent calls
       setProgressMessage(t('manpage.manager.initializingKnowledge'), 'info', 0)
 
-      try {
+      await wrapInitialize(async () => {
         const response = await initializeMachineKnowledgeAPI(false)
 
         if (response.status === 'success') {
@@ -503,12 +492,10 @@ export default {
         } else {
           throw new Error(response.message || 'Initialization failed')
         }
-      } catch (error) {
+      }).catch(error => {
         logger.error('Error initializing machine knowledge:', error)
         setProgressMessage(`Initialization failed: ${error.message}`, 'error')
-      } finally {
-        if (loading.value) loading.value.initialize = false
-      }
+      })
     }
 
     const integrateManPages = async () => {
@@ -517,11 +504,10 @@ export default {
         return
       }
 
-      if (loading.value.integrate) return // Prevent concurrent calls
-      loading.value.integrate = true
+      if (isLoadingIntegrate.value) return // Prevent concurrent calls
       setProgressMessage('Integrating man pages... This may take a minute.', 'info', 0)
 
-      try {
+      await wrapIntegrate(async () => {
         const response = await integrateManPagesAPI()
 
         if (response.status === 'success') {
@@ -532,12 +518,10 @@ export default {
         } else {
           throw new Error(response.message || 'Integration failed')
         }
-      } catch (error) {
+      }).catch(error => {
         logger.error('Error integrating man pages:', error)
         setProgressMessage(`Integration failed: ${error.message}`, 'error')
-      } finally {
-        if (loading.value) loading.value.integrate = false
-      }
+      })
     }
 
     const searchManPages = async () => {
@@ -546,11 +530,10 @@ export default {
         return
       }
 
-      if (loading.value.search) return // Prevent concurrent calls
-      loading.value.search = true
+      if (isLoadingSearch.value) return // Prevent concurrent calls
       lastSearchQuery.value = searchQuery.value.trim()
 
-      try {
+      await wrapSearch(async () => {
         const response = await searchManPagesAPI(lastSearchQuery.value)
 
         if (response.status === 'success') {
@@ -560,13 +543,11 @@ export default {
         } else {
           throw new Error('Search failed')
         }
-      } catch (error) {
+      }).catch(error => {
         logger.error('Error searching man pages:', error)
         setProgressMessage(`Search failed: ${error.message}`, 'error')
         searchResults.value = []
-      } finally {
-        if (loading.value) loading.value.search = false
-      }
+      })
     }
 
     const testSearchManPages = async () => {
@@ -617,13 +598,11 @@ export default {
       showProgressTracking.value = true
       resetProgress()
 
-      try {
-        loading.value.initialize = true
-        setProgressMessage(t('manpage.manager.initializingKnowledge'), 'info', 0)
+      setProgressMessage(t('manpage.manager.initializingKnowledge'), 'info', 0)
+      updateProgress(t('manpage.manager.initializeMachineKnowledge'), 10, t('manpage.manager.initializingKnowledge'))
+      addProgressMessage(t('manpage.manager.initializingKnowledge'), 'info')
 
-        updateProgress(t('manpage.manager.initializeMachineKnowledge'), 10, t('manpage.manager.initializingKnowledge'))
-        addProgressMessage(t('manpage.manager.initializingKnowledge'), 'info')
-
+      await wrapInitialize(async () => {
         const response = await initializeMachineKnowledgeAPI(false)
 
         if (response.status !== 'success') {
@@ -636,28 +615,23 @@ export default {
 
         await refreshMachineProfile()
         await refreshIntegrationStatus()
-
-      } catch (error) {
+      }).catch(error => {
         logger.error('Failed to initialize machine knowledge:', error)
         updateProgress('Initialization Failed', 0, error.message, 0, 'error')
         addProgressMessage(`Initialization failed: ${error.message}`, 'error')
         setProgressMessage(`Failed to initialize machine knowledge: ${error.message}`, 'error')
-      } finally {
-        if (loading.value) loading.value.initialize = false
-      }
+      })
     }
 
     const integrateManPagesWithProgress = async () => {
       showProgressTracking.value = true
       resetProgress()
 
-      try {
-        loading.value.integrate = true
-        setProgressMessage(t('manpage.manager.integrateManPages'), 'info', 0)
+      setProgressMessage(t('manpage.manager.integrateManPages'), 'info', 0)
+      updateProgress(t('manpage.manager.integrateManPages'), 10, t('manpage.manager.integrateManPages'))
+      addProgressMessage(t('manpage.manager.integrateManPages'), 'info')
 
-        updateProgress(t('manpage.manager.integrateManPages'), 10, t('manpage.manager.integrateManPages'))
-        addProgressMessage(t('manpage.manager.integrateManPages'), 'info')
-
+      await wrapIntegrate(async () => {
         const response = await integrateManPagesAPI()
 
         if (response.status !== 'success') {
@@ -669,15 +643,12 @@ export default {
         setProgressMessage(t('manpage.manager.integrationComplete'), 'success')
 
         await refreshIntegrationStatus()
-
-      } catch (error) {
+      }).catch(error => {
         logger.error('Failed to integrate man pages:', error)
         updateProgress('Integration Failed', 0, error.message, 0, 'error')
         addProgressMessage(`Integration failed: ${error.message}`, 'error')
         setProgressMessage(`Failed to integrate man pages: ${error.message}`, 'error')
-      } finally {
-        if (loading.value) loading.value.integrate = false
-      }
+      })
     }
 
     onMounted(async () => {
