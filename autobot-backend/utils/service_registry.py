@@ -181,9 +181,9 @@ class ServiceRegistry:
             },
             DeploymentMode.DISTRIBUTED: {
                 "default": "{service}.{domain}",
-                "redis": "redis.autobot.local",
-                "ai-stack": "ai-stack.autobot.local",
-                "npu-worker": "npu-worker.autobot.local",
+                "redis": "redis.{domain}",
+                "ai-stack": "ai-stack.{domain}",
+                "npu-worker": "npu-worker.{domain}",
             },
         }
         return cls._cached_host_patterns
