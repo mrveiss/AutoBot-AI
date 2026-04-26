@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
-from api.schemas_agent import AgentSystemCapabilitiesResponse, GoalRequest, GoalResponse, HealthResponse
+from api.schemas_agent import AgentReloadResponse, AgentSystemCapabilitiesResponse, GoalRequest, GoalResponse, HealthResponse
 from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
@@ -271,7 +271,7 @@ async def health_check(
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.post("/reload", response_model=None)
+@router.post("/reload", response_model=AgentReloadResponse)
 async def reload_agent(
     admin_check: bool = Depends(check_admin_permission),
 ):

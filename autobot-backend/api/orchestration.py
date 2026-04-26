@@ -109,7 +109,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     operation="execute_workflow",
     error_code_prefix="ORCHESTRATION",
 )
-@router.post("/workflow/execute", response_model=None)
+@router.post("/workflow/execute", response_model=None)  # Returns JSONResponse directly — no Pydantic schema
 async def execute_workflow(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),

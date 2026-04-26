@@ -138,7 +138,7 @@ async def voice_speak_api(
     operation="voice_synthesize_api",
     error_code_prefix="VOICE",
 )
-@router.post("/synthesize", response_model=None)
+@router.post("/synthesize", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
@@ -179,7 +179,7 @@ async def voice_synthesize_api(
     operation="voice_clone_api",
     error_code_prefix="VOICE",
 )
-@router.post("/clone-voice", response_model=None)
+@router.post("/clone-voice", response_model=None)  # Returns audio/wav Response — no Pydantic schema
 async def voice_clone_api(
     request: Request,
     text: str = Form(...),

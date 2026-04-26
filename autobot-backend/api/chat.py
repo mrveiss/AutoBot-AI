@@ -944,7 +944,7 @@ async def send_message(
     operation="stream_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/stream", response_model=None)
+@router.post("/chat/stream", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -1219,7 +1219,7 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/message", response_model=None)
+@router.post("/chats/{chat_id}/message", response_model=None)  # StreamingResponse — no Pydantic schema
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1299,7 +1299,7 @@ async def _stream_graph_resume(
     operation="resume_chat_graph",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/resume", response_model=None)
+@router.post("/chats/{chat_id}/resume", response_model=None)  # StreamingResponse — no Pydantic schema
 async def resume_chat_graph(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1551,7 +1551,7 @@ async def delete_chat_by_id(
     operation="send_direct_chat_response",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/direct", response_model=None)
+@router.post("/chat/direct", response_model=None)  # StreamingResponse — no Pydantic schema
 async def send_direct_chat_response(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -2094,7 +2094,7 @@ async def enhanced_chat(
     operation="stream_enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/stream-enhanced", response_model=None)
+@router.post("/stream-enhanced", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
