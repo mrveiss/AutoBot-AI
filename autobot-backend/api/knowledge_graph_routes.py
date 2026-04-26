@@ -18,6 +18,15 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    KnowledgeGraphDocumentOverviewResponse,
+    KnowledgeGraphDrillDownResponse,
+    KnowledgeGraphEntitiesResponse,
+    KnowledgeGraphEntityRelationshipsResponse,
+    KnowledgeGraphEventTimelineResponse,
+    KnowledgeGraphEventsResponse,
+    KnowledgeGraphSummariesResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -117,7 +126,7 @@ async def run_pipeline(
     operation="list_entities",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/entities", response_model=None)
+@router.get("/entities", response_model=KnowledgeGraphEntitiesResponse)
 async def list_entities(
     entity_type: Optional[str] = Query(None),
     query: Optional[str] = Query(None),
@@ -144,7 +153,7 @@ async def list_entities(
     operation="get_entity_relationships",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/entities/{entity_id}/relationships", response_model=None)
+@router.get("/entities/{entity_id}/relationships", response_model=KnowledgeGraphEntityRelationshipsResponse)
 async def get_entity_relationships(
     entity_id: str,
     relationship_type: Optional[str] = Query(None),
