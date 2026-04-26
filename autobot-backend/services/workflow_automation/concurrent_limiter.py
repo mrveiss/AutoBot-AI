@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Awaitable, Callable, Deque, Dict, Optional
 
 _ACQUIRE_TIMEOUT_SECONDS = float(os.environ.get("AUTOBOT_CONCURRENT_LIMITER_TIMEOUT", "300"))
+_EVICTION_POLL_SECONDS = 5.0  # max time to wait for oldest entry to vacate before dropping it
 
 from constants.threshold_constants import TimingConstants
 
@@ -255,7 +256,7 @@ class ConcurrentWorkflowLimiter:
 
         # The callback must ultimately call release(), which removes oldest_id
         # from _running.  Poll briefly (up to 5 s) to confirm the slot opened.
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + _EVICTION_POLL_SECONDS
         while oldest_id in self._running and time.monotonic() < deadline:
             await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 
