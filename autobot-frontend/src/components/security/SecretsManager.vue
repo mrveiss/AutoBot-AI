@@ -791,8 +791,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
-import { getBackendUrl } from '@/config/ssot-config';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
+import { useSecretsAuditApi } from '@/composables/security/useSecretsAuditApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
@@ -800,6 +799,7 @@ import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();
 const logger = createLogger('SecretsManager');
+const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsAuditApi();
 
 // Credential type categories with icons and colors (using design tokens)
 const credentialCategories = computed(() => [
@@ -1006,14 +1006,12 @@ const isFormValid = computed(() => {
 const loadSecrets = async () => {
   loading.value = true;
   try {
-    const backendUrl = getBackendUrl();
-
     // Fetch secrets and stats - infrastructure_host is now a regular secret type
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
       secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
       secretsApiClient.getSecretsStats() as Promise<Record<string, any>>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated eventually)
-      fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`).then(r => r.ok ? r.json() : { hosts: [] }).catch(() => ({ hosts: [] }))
+      fetchInfraHosts()
     ]);
 
     // Convert legacy infrastructure hosts to secret-like format for unified display
@@ -1065,14 +1063,8 @@ const loadSecrets = async () => {
 // Load workflow usage for secrets (#1415)
 const loadWorkflowUsage = async () => {
   try {
-    const backendUrl = getBackendUrl();
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/templates/templates/secrets-usage`
-    );
-    if (response.ok) {
-      const data = await response.json();
-      workflowUsage.value = data.secrets_usage || {};
-    }
+    const data = await fetchSecretsUsage();
+    workflowUsage.value = data.secrets_usage || {};
   } catch (error) {
     logger.error('Failed to load workflow usage:', error);
   }
@@ -1283,13 +1275,7 @@ const deleteSecret = async () => {
   try {
     // Handle legacy infrastructure hosts differently (they use old API)
     if (deletingSecret.value._isLegacyHost) {
-      const backendUrl = getBackendUrl();
-      const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts/${deletingSecret.value.id}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to delete infrastructure host');
-      }
+      await deleteInfraHost(deletingSecret.value.id);
     } else {
       // All secrets (including new infrastructure_host type) use unified secrets API
       await secretsApiClient.deleteSecret(deletingSecret.value.id, { chatId: deletingSecret.value.chat_id });
