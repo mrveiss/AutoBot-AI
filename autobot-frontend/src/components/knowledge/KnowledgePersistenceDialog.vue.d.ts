@@ -1,18 +1,19 @@
-import { DefineComponent } from 'vue';
+import type { DefineComponent } from 'vue'
 
 export interface KnowledgeChatContext {
-  topic?: string;
-  keywords?: string[];
-  file_count?: number;
+  topic?: string
+  keywords?: string[]
+  file_count?: number
 }
 
 declare const KnowledgePersistenceDialog: DefineComponent<
   {
-    visible: { type: BooleanConstructor; default: false };
-    chatId: { type: StringConstructor; required: false; default: null };
-    chatContext: { type: ObjectConstructor; default: null };
+    visible?: boolean
+    chatId?: string | null
+    chatContext?: KnowledgeChatContext | null
   },
   {},
-  any
->;
-export default KnowledgePersistenceDialog;
+  unknown
+>
+
+export default KnowledgePersistenceDialog
