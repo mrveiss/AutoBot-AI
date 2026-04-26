@@ -841,3 +841,11 @@ class CostTrackingRecordResponse(BaseModel):
     timestamp: str
     session_id: Optional[str]
     success: bool
+
+
+
+class UsageRecentResponse(BaseModel):
+    """Response for GET /cost/usage/recent — typed wrapper around CostTrackingRecordResponse (#5976)."""
+
+    count: int
+    records: List[CostTrackingRecordResponse]
