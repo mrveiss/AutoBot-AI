@@ -1375,7 +1375,7 @@ def _build_delete_session_response(
     operation="delete_session",
     error_code_prefix="CHAT_SESSIONS",
 )
-@router.delete("/chat/sessions/{session_id}", response_model=None)
+@router.delete("/chat/sessions/{session_id}", response_model=DataResponse)
 async def delete_session(
     session_id: str,
     request: Request,

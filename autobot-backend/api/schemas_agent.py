@@ -711,5 +711,113 @@ class HealthResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# auth.py schemas  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+class AuthUserInfoResponse(BaseModel):
+    """Response for GET /auth/me."""
+
+    username: str
+    role: str
+    email: str
+    auth_method: str
+    authenticated: bool
+    deployment_mode: str
+
+
+class AuthCheckResponse(BaseModel):
+    """Response for GET /auth/check."""
+
+    authenticated: bool
+    role: Optional[str] = None
+    auth_enabled: bool
+    deployment_mode: Optional[str] = None
+    error: Optional[str] = None
+
+
+class AuthPermissionResponse(BaseModel):
+    """Response for GET /auth/permissions/{operation}."""
+
+    permitted: bool
+    operation: str
+    user_role: Optional[str] = None
+    username: Optional[str] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# agent_terminal.py schemas  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+class AgentTerminalExecuteResponse(BaseModel):
+    """Response for POST /agent-terminal/execute — shape varies, extra fields allowed."""
+
+    model_config = {"extra": "allow"}
+    status: str
+
+
+class AgentTerminalApproveResponse(BaseModel):
+    """Response for POST /agent-terminal/sessions/{session_id}/approve."""
+
+    model_config = {"extra": "allow"}
+    status: str
+
+
+class AgentTerminalInterruptResponse(BaseModel):
+    """Response for POST /agent-terminal/sessions/{session_id}/interrupt."""
+
+    status: str
+    message: Optional[str] = None
+    previous_state: Optional[str] = None
+    current_state: Optional[str] = None
+    pending_approval: Optional[Any] = None
+    error: Optional[str] = None
+
+
+class AgentTerminalResumeResponse(BaseModel):
+    """Response for POST /agent-terminal/sessions/{session_id}/resume."""
+
+    status: str
+    message: Optional[str] = None
+    current_state: Optional[str] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# voice.py schemas  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+class VoiceCreateResponse(BaseModel):
+    """Response for POST /voice/voices/create — shape from tts.create_voice(), extra fields allowed."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# llm.py schemas  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+class LLMConfigResponse(BaseModel):
+    """Response for GET /llm/config — provider-specific shape, extra fields allowed."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# logs.py schemas  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+class LogFileMetadata(BaseModel):
+    """Single log file entry for GET /logs/list — shape from log sources, extra fields allowed."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
 # voice.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
