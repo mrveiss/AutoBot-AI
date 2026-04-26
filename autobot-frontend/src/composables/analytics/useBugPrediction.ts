@@ -11,8 +11,7 @@
 
 import { ref, computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import apiClient from '@/utils/ApiClient'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -62,15 +61,15 @@ export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
   const loadBugPrediction = () => bugPredictionTask.start()
 
   const loadCachedBugPrediction = async () => {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const resp = await fetchWithAuth(
-      `${backendUrl}/api/analytics/bug-prediction/cached`,
-    )
-    if (!resp.ok) return
-    const data = await resp.json()
-    if (data.status === 'success' && data.files) {
-      bugPredictionTask.result.value =
-        data as Record<string, unknown>
+    try {
+      const data = await apiClient.get<Record<string, unknown>>(
+        '/api/analytics/bug-prediction/cached',
+      )
+      if (data.status === 'success' && data.files) {
+        bugPredictionTask.result.value = data
+      }
+    } catch {
+      // Cached data not available — silently ignore
     }
   }
 
