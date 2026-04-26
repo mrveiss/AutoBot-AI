@@ -17,6 +17,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('usePatternAnalysis')
 
@@ -162,7 +163,7 @@ export function usePatternAnalysis() {
   )
 
   // Reactive state
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const analyzing = ref(false)
   const error = ref<string | null>(null)
   const wasInterrupted = ref(false)  // #1250: orphaned task detection
@@ -522,14 +523,11 @@ export function usePatternAnalysis() {
    * First tries cached data, falls back to full analysis if no cache
    */
   const getSummary = async (path?: string): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       // First try to get cached summary (fast path)
       const hasCached = await getCachedSummary()
       if (hasCached) {
-        loading.value = false
         return
       }
 
@@ -565,12 +563,10 @@ export function usePatternAnalysis() {
           other_patterns: []
         }
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Summary fetch failed')
       logger.error('Pattern summary fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -581,10 +577,8 @@ export function usePatternAnalysis() {
     minSimilarity: number = 0.8,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = new URLSearchParams({
         min_similarity: minSimilarity.toString(),
@@ -602,12 +596,10 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         duplicatePatterns.value = data.duplicates || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Duplicates fetch failed')
       logger.error('Duplicate patterns fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -617,10 +609,8 @@ export function usePatternAnalysis() {
     path?: string,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
@@ -635,12 +625,10 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         regexOpportunities.value = data.opportunities || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Regex opportunities fetch failed')
       logger.error('Regex opportunities fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -651,10 +639,8 @@ export function usePatternAnalysis() {
     minComplexity: number = 10,
     limit: number = 50
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = new URLSearchParams({
         min_complexity: minComplexity.toString(),
@@ -672,12 +658,10 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         complexityHotspots.value = data.hotspots || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Complexity hotspots fetch failed')
       logger.error('Complexity hotspots fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -687,10 +671,8 @@ export function usePatternAnalysis() {
     path?: string,
     maxSuggestions: number = 20
   ): Promise<void> => {
-    loading.value = true
     error.value = null
-
-    try {
+    await wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
@@ -705,21 +687,17 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         refactoringSuggestions.value = data.suggestions || []
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Refactoring suggestions fetch failed')
       logger.error('Refactoring suggestions fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Get pattern storage stats
    */
   const getStorageStats = async (): Promise<void> => {
-    loading.value = true
-
-    try {
+    await wrap(async () => {
       const backendUrl = await getBackendUrl()
       const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
 
@@ -731,20 +709,16 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         storageStats.value = data.stats
       }
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Storage stats fetch failed:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Clear pattern storage
    */
   const clearStorage = async (): Promise<boolean> => {
-    loading.value = true
-
-    try {
+    return wrap(async () => {
       const backendUrl = await getBackendUrl()
       const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
         method: 'DELETE'
@@ -760,21 +734,17 @@ export function usePatternAnalysis() {
         return true
       }
       return false
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Clear storage failed:', e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Get markdown report
    */
   const getReport = async (path?: string): Promise<string | null> => {
-    loading.value = true
-
-    try {
+    return wrap(async () => {
       const backendUrl = await getBackendUrl()
       const params = path ? `?path=${encodeURIComponent(path)}` : ''
       const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
@@ -788,19 +758,16 @@ export function usePatternAnalysis() {
         return data.report
       }
       return null
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Report fetch failed:', e)
       return null
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
    * Reset all state
    */
   const reset = (): void => {
-    loading.value = false
     analyzing.value = false
     error.value = null
     wasInterrupted.value = false
@@ -819,10 +786,8 @@ export function usePatternAnalysis() {
    * Issue #208: Optimized loading for already indexed data
    */
   const loadCachedData = async (): Promise<boolean> => {
-    loading.value = true
     error.value = null
-
-    try {
+    return wrap(async () => {
       // Load summary and stats in parallel from cache
       const [hasCachedSummary] = await Promise.all([
         getCachedSummary(),
@@ -830,12 +795,10 @@ export function usePatternAnalysis() {
       ])
 
       return hasCachedSummary
-    } catch (e: unknown) {
+    }).catch((e: unknown) => {
       logger.error('Failed to load cached data:', e)
       return false
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
