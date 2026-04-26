@@ -197,6 +197,74 @@ async def get_attr():
 
 
 # ---------------------------------------------------------------------------
+# SuccessMessageResponse / SuccessDataResponse — extended coverage (#5925)
+# ---------------------------------------------------------------------------
+
+
+def test_detects_success_message_response_missing_required_keys(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/msg", response_model=SuccessMessageResponse)
+async def post_msg():
+    return {"success": True}  # missing 'message'
+""",
+    )
+    violations = hook._check_file(f, tmp_path)
+    assert len(violations) == 1
+    assert violations[0][1] == "post_msg"
+
+
+def test_safe_success_message_response_with_both_keys(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/msg", response_model=SuccessMessageResponse)
+async def post_msg():
+    return {"success": True, "message": "done"}
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+def test_detects_success_data_response_missing_message(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/data", response_model=SuccessDataResponse)
+async def post_data():
+    return {"success": True, "data": {}}  # missing 'message'
+""",
+    )
+    violations = hook._check_file(f, tmp_path)
+    assert len(violations) == 1
+
+
+def test_safe_success_data_response_with_required_keys(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/data", response_model=SuccessDataResponse)
+async def post_data():
+    return {"success": True, "message": "ok", "data": None}
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+def test_safe_success_message_response_with_bypass(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/stream", response_model=SuccessMessageResponse)
+async def stream():
+    return StreamingResponse(iter([b"x"]))
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
 # Exit-code integration
 # ---------------------------------------------------------------------------
 

@@ -2,28 +2,32 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Pre-commit hook: verify response_model=DataResponse endpoints return compatible shapes.
+"""Pre-commit hook: verify response_model= endpoints return compatible shapes.
 
-Any FastAPI endpoint annotated with response_model=DataResponse will raise an HTTP 500
-ValidationError at runtime unless it returns a dict with a 'success' key (required, no
-default).  Static type checkers (mypy/pyright) do not validate response_model= decorator
+Any FastAPI endpoint annotated with response_model=<Schema> will raise an HTTP 500
+ValidationError at runtime unless it returns a dict satisfying all required fields.
+Static type checkers (mypy/pyright) do not validate response_model= decorator
 arguments against actual return shapes — this hook fills that gap.
 
-Implements the minimum viable check from issue #5913:
+Checked schemas and their required fields:
+  DataResponse              — requires 'success'
+  SuccessMessageResponse    — requires 'success' + 'message'
+  SuccessDataResponse       — requires 'success' + 'message'
 
-  For every route decorated with response_model=DataResponse, at least one of:
-    1. The function body calls create_success_response()
-    2. A return statement contains a dict literal with key 'success'
-    3. The function returns a bypass type (JSONResponse, Response, StreamingResponse,
-       FileResponse, PlainTextResponse, RedirectResponse) that skips FastAPI validation
+For each, at least one of the following must be true:
+  1. The function body calls create_success_response() [DataResponse only]
+  2. A return statement contains a dict literal with all required keys
+  3. The function returns a bypass type (JSONResponse, Response, StreamingResponse,
+     FileResponse, PlainTextResponse, RedirectResponse) that skips FastAPI validation
 
 Exit codes:
   0 — clean
   1 — violations found
   2 — usage error
 
-Background: #5843 → #5896 → #5904 cascade — 52 runtime-500 bugs introduced by
+Background: #5843 → #5896 → #5904 cascade — 52+61 runtime-500 bugs introduced by
 response_model=DataResponse on endpoints that returned plain dicts without 'success'.
+Extended in #5925 to cover SuccessMessageResponse and SuccessDataResponse.
 """
 from __future__ import annotations
 
@@ -56,6 +60,14 @@ ROUTE_METHODS = frozenset(
     {"get", "post", "put", "delete", "patch", "head", "options", "route", "api_route"}
 )
 
+# Schemas with required fields (no defaults) that this hook validates.
+# Maps schema name → frozenset of required key names that must appear in return dicts.
+CHECKED_SCHEMAS: dict[str, frozenset[str]] = {
+    "DataResponse": frozenset({"success"}),
+    "SuccessMessageResponse": frozenset({"success", "message"}),
+    "SuccessDataResponse": frozenset({"success", "message"}),
+}
+
 ALLOWLIST = {
     "tools/lint/check_response_models.py",
     "tools/lint/check_response_models_test.py",
@@ -64,23 +76,23 @@ ALLOWLIST = {
 _FuncNode = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 
 
-def _has_data_response_model(decorator: ast.expr) -> bool:
-    """Return True if *decorator* is a route call with response_model=DataResponse."""
+def _checked_schema(decorator: ast.expr) -> str | None:
+    """Return the schema name if *decorator* is a route with a checked response_model."""
     if not isinstance(decorator, ast.Call):
-        return False
+        return None
     func = decorator.func
     if not isinstance(func, ast.Attribute):
-        return False
+        return None
     if func.attr not in ROUTE_METHODS:
-        return False
+        return None
     for kw in decorator.keywords:
         if (
             kw.arg == "response_model"
             and isinstance(kw.value, ast.Name)
-            and kw.value.id == "DataResponse"
+            and kw.value.id in CHECKED_SCHEMAS
         ):
-            return True
-    return False
+            return kw.value.id
+    return None
 
 
 def _calls_create_success_response(node: _FuncNode) -> bool:
@@ -95,16 +107,17 @@ def _calls_create_success_response(node: _FuncNode) -> bool:
     return False
 
 
-def _returns_success_dict(node: _FuncNode) -> bool:
-    """Return True if any return statement yields a dict literal with key 'success'."""
+def _return_dict_keys(node: _FuncNode) -> set[str]:
+    """Return the set of string keys found in any return dict literal in *node*."""
+    keys: set[str] = set()
     for child in ast.walk(node):
         if isinstance(child, ast.Return) and child.value is not None:
             val = child.value
             if isinstance(val, ast.Dict):
                 for key in val.keys:
-                    if isinstance(key, ast.Constant) and key.value == "success":
-                        return True
-    return False
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        keys.add(key.value)
+    return keys
 
 
 def _returns_bypass_type(node: _FuncNode) -> bool:
@@ -140,13 +153,15 @@ def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
         if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for dec in func_node.decorator_list:
-            if not _has_data_response_model(dec):
+            schema = _checked_schema(dec)
+            if schema is None:
                 continue
-            if (
-                _calls_create_success_response(func_node)
-                or _returns_success_dict(func_node)
-                or _returns_bypass_type(func_node)
-            ):
+            required_keys = CHECKED_SCHEMAS[schema]
+            if _returns_bypass_type(func_node):
+                break
+            if schema == "DataResponse" and _calls_create_success_response(func_node):
+                break
+            if required_keys.issubset(_return_dict_keys(func_node)):
                 break
             violations.append((func_node.lineno, func_node.name))
             break
@@ -167,8 +182,8 @@ def main(argv: List[str]) -> int:
             rel = path
         for line_no, func_name in hits:
             print(
-                f"[{HOOK_ID}] {rel}:{line_no}: {func_name}() has response_model=DataResponse "
-                f"but body lacks create_success_response() or a return dict with 'success'. "
+                f"[{HOOK_ID}] {rel}:{line_no}: {func_name}() uses a checked response_model "
+                f"but body lacks the required return keys or a safe bypass. "
                 f"Use create_success_response() or a named schema instead. (#5913)",
                 file=sys.stderr,
             )
