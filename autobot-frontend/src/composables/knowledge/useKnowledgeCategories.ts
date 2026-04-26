@@ -68,6 +68,41 @@ export function getCategoryIcon(category: string): string {
 // ==================== Bare imperative API ====================
 
 /**
+ * Fetch fact count for a single category (used by CategoryEditModal delete-warning).
+ * Hits GET /api/knowledge_base/categories/:id/facts?limit=1 and returns total_count.
+ */
+export const fetchCategoryFactCount = async (categoryId: string): Promise<number> => {
+  const data = await apiClient.get<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
+  )
+  return typeof data?.total_count === 'number' ? data.total_count : 0
+}
+
+/**
+ * Update a category's name, description, icon, and/or color.
+ * Returns the raw API response (status + message).
+ */
+export const updateCategory = async (
+  categoryId: string,
+  payload: { name?: string; description?: string; icon?: string; color?: string }
+): Promise<Record<string, unknown>> =>
+  apiClient.put<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}`,
+    payload
+  )
+
+/**
+ * Delete a category by ID.
+ * Returns the raw API response (status + message).
+ */
+export const deleteKnowledgeCategory = async (
+  categoryId: string
+): Promise<Record<string, unknown>> =>
+  apiClient.delete<Record<string, unknown>>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}`
+  )
+
+/**
  * Fetch all categories with counts.
  * Returns list of categories with document counts for filtering.
  */
@@ -178,6 +213,10 @@ export interface UseKnowledgeCategoriesReturn {
   getCategorizedFacts: typeof getCategorizedFacts
   buildCategoryFilterOptions: typeof buildCategoryFilterOptions
   getCategoryIcon: typeof getCategoryIcon
+  // Category CRUD — migrated from CategoryEditModal (#6044)
+  fetchCategoryFactCount: typeof fetchCategoryFactCount
+  updateCategory: typeof updateCategory
+  deleteKnowledgeCategory: typeof deleteKnowledgeCategory
 }
 
 export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
@@ -229,5 +268,8 @@ export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
     getCategorizedFacts,
     buildCategoryFilterOptions,
     getCategoryIcon,
+    fetchCategoryFactCount,
+    updateCategory,
+    deleteKnowledgeCategory,
   }
 }
