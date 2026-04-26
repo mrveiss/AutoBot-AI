@@ -11,11 +11,10 @@ import logging
 from typing import Set
 
 from api.schemas_terminal import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
     CommandRiskLevel,
     SecurityLevel,
 )
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
 logger = logging.getLogger(__name__)
 

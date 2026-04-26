@@ -144,10 +144,10 @@ from api.schemas_terminal import (
     TerminalSystemStatusResponse,
 )
 
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
+
 # Import models from dedicated module (Issue #185 - split oversized files)
 from api.schemas_terminal import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
     AdminExecuteRequest,
     CommandRequest,
     CommandRiskLevel,
