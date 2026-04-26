@@ -18,15 +18,11 @@ import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
-import { useChatStore } from '@/stores/useChatStore'
 import { useDebounce } from '@/composables/useDebounce'
-import { getApiBase } from '@/config/ssot-config'
-import apiClient from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
+import { useCollaborationInvites } from '@/composables/useCollaborationInvites'
+import type { CollaborationUser } from '@/composables/useCollaborationInvites'
 
-const logger = createLogger('InviteUserDialog')
 const { t } = useI18n()
-const chatStore = useChatStore()
 const { inviteCollaborator, sessionPresence } = useSessionCollaboration()
 
 // Props
@@ -48,36 +44,13 @@ useBodyScrollLock(toRef(props, 'modelValue'))
 const { focusFirst } = useInitialFocus(dialogRef)
 watch(() => props.modelValue, (open) => { if (open) focusFirst() }, { immediate: true })
 
-// Types
-interface User {
-  id: string
-  username: string
-  email: string
-  avatar: string | null
-  display_name?: string
-}
-
-interface UserListResponse {
-  users: Array<{
-    id: string
-    username: string
-    email: string
-    display_name?: string
-    avatar_url?: string
-  }>
-  total: number
-  limit: number
-  offset: number
-}
-
 // Local state
 const searchQuery = ref('')
 const selectedRole = ref<'collaborator' | 'viewer'>('collaborator')
 const selectedUserId = ref<string | null>(null)
 const inviting = ref(false)
-const errorMessage = ref<string | null>(null)
-const loading = ref(false)
-const users = ref<User[]>([])
+
+const { users, loading, errorMessage, fetchUsers: fetchUsersFromApi } = useCollaborationInvites()
 
 // Debounce search query for performance (Issue #4035)
 // Reduces unnecessary filtering operations during rapid typing
@@ -85,33 +58,7 @@ const debouncedSearchQuery = useDebounce(searchQuery, 350)
 
 // Fetch users from API
 const fetchUsers = async () => {
-  loading.value = true
-  errorMessage.value = null
-
-  try {
-    const response = await apiClient.get<UserListResponse>(
-      `${getApiBase()}/user-management/users?limit=100&offset=0&include_inactive=false`
-    )
-
-    if (response && response.users && Array.isArray(response.users)) {
-      users.value = response.users.map(user => ({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar_url || null,
-        display_name: user.display_name
-      }))
-      logger.debug(`Loaded ${users.value.length} users from API`)
-    } else {
-      logger.warn('Invalid response structure from users API', response)
-      errorMessage.value = t('collaboration.invite.failedToLoadUsers')
-    }
-  } catch (error) {
-    logger.error('Failed to fetch users:', error)
-    errorMessage.value = error instanceof Error ? error.message : t('collaboration.invite.failedToLoadUsers')
-  } finally {
-    loading.value = false
-  }
+  await fetchUsersFromApi(t('collaboration.invite.failedToLoadUsers'))
 }
 
 // Load users when dialog opens
@@ -156,7 +103,7 @@ const getInitials = (username: string): string => {
 }
 
 // Get display name or username
-const getDisplayName = (user: User): string => {
+const getDisplayName = (user: CollaborationUser): string => {
   return user.display_name || user.username
 }
 
