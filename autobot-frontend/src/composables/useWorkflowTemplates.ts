@@ -19,9 +19,9 @@
  */
 
 import { ref, computed, watch } from 'vue'
-import appConfig from '@/config/AppConfig.js'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
@@ -209,12 +209,8 @@ export function useWorkflowTemplates() {
   }
 
   // ---------------------------------------------------------------------------
-  // POST endpoints (out of scope for #5154 — useAnalyticsEndpoint is GET-only).
+  // POST endpoints — migrated to ApiClient (#6029).
   // ---------------------------------------------------------------------------
-
-  async function getBackendUrl(): Promise<string> {
-    return await appConfig.getServiceUrl('backend')
-  }
 
   async function createWorkflowFromTemplate(
     templateId: string,
@@ -222,21 +218,10 @@ export function useWorkflowTemplates() {
   ): Promise<CreateWorkflowResponse | null> {
     error.value = null
     return wrapMutation(async () => {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/templates/templates/${templateId}/create-workflow`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            template_id: templateId,
-            variables: variables || {},
-            auto_approve: false
-          })
-        }
+      return await apiClient.post<CreateWorkflowResponse>(
+        `${getApiBase()}/templates/templates/${templateId}/create-workflow`,
+        { template_id: templateId, variables: variables || {}, auto_approve: false }
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return await response.json()
     }).catch((e) => {
       error.value = `Failed to create workflow: ${e}`
       logger.error('createWorkflowFromTemplate failed:', e)
@@ -251,21 +236,10 @@ export function useWorkflowTemplates() {
   ): Promise<CreateWorkflowResponse | null> {
     error.value = null
     return wrapMutation(async () => {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(
-        `${backendUrl}/api/templates/templates/${templateId}/execute`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            template_id: templateId,
-            variables: variables || {},
-            auto_approve: autoApprove
-          })
-        }
+      return await apiClient.post<CreateWorkflowResponse>(
+        `${getApiBase()}/templates/templates/${templateId}/execute`,
+        { template_id: templateId, variables: variables || {}, auto_approve: autoApprove }
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return await response.json()
     }).catch((e) => {
       error.value = `Failed to execute template: ${e}`
       logger.error('executeTemplate failed:', e)
