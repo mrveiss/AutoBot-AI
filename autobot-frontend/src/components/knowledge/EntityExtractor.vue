@@ -170,9 +170,9 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { extractEntities as extractEntitiesApi } from '@/composables/knowledge/useKnowledgeEntities'
+import type { EntityMessage } from '@/composables/knowledge/useKnowledgeEntities'
 
 const logger = createLogger('EntityExtractor')
 const { t } = useI18n()
@@ -181,11 +181,6 @@ const router = useRouter()
 // ============================================================================
 // Types
 // ============================================================================
-
-interface Message {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-}
 
 interface ExtractionResult {
   success: boolean
@@ -227,9 +222,9 @@ const emit = defineEmits<{
  * Parses text input into message array
  * Supports plain text and [role] content format
  */
-function parseMessages(text: string): Message[] {
+function parseMessages(text: string): EntityMessage[] {
   const lines = text.split('\n')
-  const messages: Message[] = []
+  const messages: EntityMessage[] = []
   let currentRole: 'user' | 'assistant' | 'system' = 'user'
   let currentContent: string[] = []
 
@@ -286,12 +281,10 @@ async function extractEntities(): Promise<void> {
     const messages = parseMessages(textInput.value)
     logger.info(`Extracting entities from ${messages.length} messages`)
 
-    const parsedResponse = await apiClient.post<Record<string, any>>(`${getApiBase()}/entities/extract`, {
+    const result = await extractEntitiesApi({
       conversation_id: conversationId.value.trim(),
       messages
     })
-
-    const result = parsedResponse?.data || parsedResponse
 
     extractionResult.value = { ...result, timestamp: Date.now() }
 
