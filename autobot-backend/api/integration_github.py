@@ -106,7 +106,7 @@ async def test_connection(
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
-@router.get("/{owner}/{repo}/pull-requests", response_model=DataResponse)
+@router.get("/{owner}/{repo}/pull-requests", response_model=None)
 async def list_pull_requests(
     owner: str,
     repo: str,
@@ -135,7 +135,7 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
-@router.get("/{owner}/{repo}/pull-requests/{pull_number}", response_model=DataResponse)
+@router.get("/{owner}/{repo}/pull-requests/{pull_number}", response_model=None)
 async def get_pull_request(
     owner: str,
     repo: str,
@@ -159,7 +159,7 @@ async def get_pull_request(
         raise HTTPException(status_code=500, detail="Failed to get pull request")
 
 
-@router.get("/{owner}/{repo}/pull-requests/{pull_number}/diff", response_model=DataResponse)
+@router.get("/{owner}/{repo}/pull-requests/{pull_number}/diff", response_model=None)
 async def get_pull_request_diff(
     owner: str,
     repo: str,
@@ -183,7 +183,7 @@ async def get_pull_request_diff(
         raise HTTPException(status_code=500, detail="Failed to get pull request diff")
 
 
-@router.get("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=DataResponse)
+@router.get("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=None)
 async def list_pr_review_comments(
     owner: str,
     repo: str,
@@ -207,7 +207,7 @@ async def list_pr_review_comments(
         raise HTTPException(status_code=500, detail="Failed to list PR comments")
 
 
-@router.post("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=DataResponse)
+@router.post("/{owner}/{repo}/pull-requests/{pull_number}/comments", response_model=None)
 async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
     """Post an issue-level comment to a pull request.
 
@@ -234,7 +234,7 @@ async def post_pr_comment(request: GitHubCommentRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to post PR comment")
 
 
-@router.post("/{owner}/{repo}/pull-requests/{pull_number}/reviews", response_model=DataResponse)
+@router.post("/{owner}/{repo}/pull-requests/{pull_number}/reviews", response_model=None)
 async def submit_pr_review(request: GitHubReviewRequest) -> Dict[str, Any]:
     """Submit a formal pull request review.
 
@@ -271,7 +271,7 @@ async def submit_pr_review(request: GitHubReviewRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to submit PR review")
 
 
-@router.get("/{owner}/{repo}/issues", response_model=DataResponse)
+@router.get("/{owner}/{repo}/issues", response_model=None)
 async def list_issues(
     owner: str,
     repo: str,
@@ -300,7 +300,7 @@ async def list_issues(
         raise HTTPException(status_code=500, detail="Failed to list issues")
 
 
-@router.get("/{owner}/{repo}/issues/{issue_number}", response_model=DataResponse)
+@router.get("/{owner}/{repo}/issues/{issue_number}", response_model=None)
 async def get_issue(
     owner: str,
     repo: str,
@@ -324,7 +324,7 @@ async def get_issue(
         raise HTTPException(status_code=500, detail="Failed to get issue")
 
 
-@router.get("/{owner}/{repo}", response_model=DataResponse)
+@router.get("/{owner}/{repo}", response_model=None)
 async def get_repository(
     owner: str,
     repo: str,
@@ -346,7 +346,7 @@ async def get_repository(
         raise HTTPException(status_code=500, detail="Failed to get repository")
 
 
-@router.get("/{owner}/{repo}/commits", response_model=DataResponse)
+@router.get("/{owner}/{repo}/commits", response_model=None)
 async def list_commits(
     owner: str,
     repo: str,
@@ -372,7 +372,7 @@ async def list_commits(
         raise HTTPException(status_code=500, detail="Failed to list commits")
 
 
-@router.get("/{owner}/{repo}/commits/{ref}", response_model=DataResponse)
+@router.get("/{owner}/{repo}/commits/{ref}", response_model=None)
 async def get_commit(
     owner: str,
     repo: str,
@@ -395,7 +395,7 @@ async def get_commit(
         raise HTTPException(status_code=500, detail="Failed to get commit")
 
 
-@router.get("/{owner}/{repo}/tree/{tree_sha}", response_model=DataResponse)
+@router.get("/{owner}/{repo}/tree/{tree_sha}", response_model=None)
 async def get_repository_tree(
     owner: str,
     repo: str,
@@ -420,7 +420,7 @@ async def get_repository_tree(
         raise HTTPException(status_code=500, detail="Failed to get repository tree")
 
 
-@router.get("/{owner}/{repo}/contents/{path:path}", response_model=DataResponse)
+@router.get("/{owner}/{repo}/contents/{path:path}", response_model=None)
 async def get_file_contents(
     owner: str,
     repo: str,
@@ -445,7 +445,7 @@ async def get_file_contents(
         raise HTTPException(status_code=500, detail="Failed to get file contents")
 
 
-@router.get("/providers", response_model=DataResponse)
+@router.get("/providers", response_model=None)
 async def get_providers() -> List[Dict[str, Any]]:
     """List supported GitHub integration providers.
 

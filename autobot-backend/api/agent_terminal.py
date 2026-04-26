@@ -557,7 +557,7 @@ async def delete_agent_terminal_session(
     operation="execute_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/execute", response_model=DataResponse)
+@router.post("/execute", response_model=None)
 async def execute_agent_command(
     current_user: dict = Depends(get_current_user),
     session_id: str = None,

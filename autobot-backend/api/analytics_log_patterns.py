@@ -922,7 +922,7 @@ def _analyze_pattern_lines(
     operation="get_pattern_details",
     error_code_prefix="LOGPAT",
 )
-@router.get("/pattern/{pattern_id}", response_model=DataResponse)
+@router.get("/pattern/{pattern_id}", response_model=None)
 async def get_pattern_details(
     pattern_id: str,
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to search"),
@@ -971,7 +971,7 @@ async def get_pattern_details(
     operation="get_error_hotspots",
     error_code_prefix="LOGPAT",
 )
-@router.get("/hotspots", response_model=DataResponse)
+@router.get("/hotspots", response_model=None)
 async def get_error_hotspots(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     limit: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
@@ -1049,7 +1049,7 @@ def _aggregate_log_stats(
     operation="get_log_stats",
     error_code_prefix="LOGPAT",
 )
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=None)
 async def get_log_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1093,7 +1093,7 @@ async def get_log_stats(
     operation="get_realtime_summary",
     error_code_prefix="LOGPAT",
 )
-@router.get("/realtime", response_model=DataResponse)
+@router.get("/realtime", response_model=None)
 async def get_realtime_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):

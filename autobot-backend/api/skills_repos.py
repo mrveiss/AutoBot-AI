@@ -58,7 +58,7 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     return repo
 
 
-@router.post("/", summary="Register a new skill repository", response_model=DataResponse)
+@router.post("/", summary="Register a new skill repository", response_model=None)
 async def add_repo(
     body: AddRepoRequest,
     _: None = Depends(check_admin_permission),
@@ -87,8 +87,8 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
-@router.get("", summary="List all registered skill repositories", response_model=DataResponse)
-@router.get("/", include_in_schema=False, response_model=DataResponse)
+@router.get("", summary="List all registered skill repositories", response_model=None)
+@router.get("/", include_in_schema=False, response_model=None)
 async def list_repos() -> List[Dict[str, Any]]:
     """Return all registered skill repositories."""
     engine = get_skills_engine()
@@ -111,7 +111,7 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
-@router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=DataResponse)
+@router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=None)
 async def sync_repo(
     repo_id: str,
     _: None = Depends(check_admin_permission),
@@ -135,7 +135,7 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
-@router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=DataResponse)
+@router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=None)
 async def browse_repo(repo_id: str) -> Dict[str, Any]:
     """List the skill package names available in the specified repository."""
     engine = get_skills_engine()

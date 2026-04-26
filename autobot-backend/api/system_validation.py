@@ -51,7 +51,7 @@ class ValidationResult(BaseModel):
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def validation_health():
     """Health check for validation system"""
     try:
@@ -110,7 +110,7 @@ async def run_comprehensive_validation(
     operation="run_quick_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/quick", response_model=DataResponse)
+@router.get("/validate/quick", response_model=None)
 async def run_quick_validation():
     """Run quick system validation check"""
     try:
@@ -177,7 +177,7 @@ async def run_quick_validation():
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/component/{component_name}", response_model=DataResponse)
+@router.get("/validate/component/{component_name}", response_model=None)
 async def validate_component(component_name: str):
     """Validate specific component"""
     try:
@@ -225,7 +225,7 @@ async def validate_component(component_name: str):
     operation="get_optimization_recommendations",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/recommendations", response_model=DataResponse)
+@router.get("/validate/recommendations", response_model=None)
 async def get_optimization_recommendations():
     """Get system optimization recommendations"""
     try:
@@ -290,7 +290,7 @@ async def get_optimization_recommendations():
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/status", response_model=DataResponse)
+@router.get("/validate/status", response_model=None)
 async def get_validation_status():
     """Get current validation system status"""
     try:
@@ -322,7 +322,7 @@ async def get_validation_status():
     operation="run_performance_benchmark",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/benchmark", response_model=DataResponse)
+@router.post("/validate/benchmark", response_model=None)
 async def run_performance_benchmark():
     """Run performance benchmarking tests"""
     try:

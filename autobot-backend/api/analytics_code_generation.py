@@ -954,7 +954,7 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 
 
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Get code generation service health status.
 
@@ -1017,7 +1017,7 @@ async def refactor_code(
     return await engine.refactor_code(request)
 
 
-@router.post("/validate", response_model=DataResponse)
+@router.post("/validate", response_model=None)
 async def validate_code(
     admin_check: bool = Depends(check_admin_permission),
     request: ValidationRequest = None,
@@ -1040,7 +1040,7 @@ async def validate_code(
     }
 
 
-@router.get("/versions/{file_path:path}", response_model=DataResponse)
+@router.get("/versions/{file_path:path}", response_model=None)
 async def get_versions(
     admin_check: bool = Depends(check_admin_permission), file_path: str = None
 ):
@@ -1088,7 +1088,7 @@ async def rollback_code(
     }
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=None)
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1109,7 +1109,7 @@ async def get_stats(
     return await engine.get_stats(source_id=source_id)
 
 
-@router.get("/refactoring-types", response_model=DataResponse)
+@router.get("/refactoring-types", response_model=None)
 async def get_refactoring_types(admin_check: bool = Depends(check_admin_permission)):
     """
     Get available refactoring types with descriptions.

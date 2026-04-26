@@ -187,7 +187,7 @@ async def get_status() -> StatusResponse:
     )
 
 
-@router.get("/languages", response_model=DataResponse)
+@router.get("/languages", response_model=None)
 async def list_languages() -> Dict[str, str]:
     """Return the supported language codes and their display names."""
     return SUPPORTED_LANGUAGES
@@ -238,7 +238,7 @@ async def update_profile(pid: str, body: ProfileUpdate) -> ProfileDetail:
     "/profiles/{pid}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def delete_profile(pid: str) -> None:
     """Delete a user-created profile. System profiles cannot be deleted."""
@@ -257,7 +257,7 @@ async def delete_profile(pid: str) -> None:
     "/profiles/{pid}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def activate_profile(pid: str) -> None:
     """Set a profile as the active personality."""

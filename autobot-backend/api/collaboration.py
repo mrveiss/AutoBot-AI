@@ -438,7 +438,7 @@ async def share_secret_with_session(
         )
 
 
-@router.get("/{session_id}/presence", response_model=DataResponse)
+@router.get("/{session_id}/presence", response_model=None)
 async def get_presence(
     session_id: str,
     current_user: dict = Depends(get_current_user),

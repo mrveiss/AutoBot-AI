@@ -42,7 +42,7 @@ class SavedReportRequest(BaseModel):
 # =========================================================================
 
 
-@router.post("/reports/save", response_model=DataResponse)
+@router.post("/reports/save", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_report",
@@ -67,7 +67,7 @@ async def save_report(
 # =========================================================================
 
 
-@router.get("/reports/saved", response_model=DataResponse)
+@router.get("/reports/saved", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_saved_reports",

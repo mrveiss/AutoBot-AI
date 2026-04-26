@@ -211,7 +211,7 @@ async def stop_hot_reload():
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def hot_reload_health():
     """
     Health check for hot reload functionality

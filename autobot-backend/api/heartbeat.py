@@ -226,7 +226,7 @@ async def get_run(
     return _run_to_response(run)
 
 
-@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=DataResponse)
+@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=None)
 async def request_wakeup(
     agent_id: str,
     body: WakeupRequestCreate,
@@ -258,7 +258,7 @@ async def list_wakeup_requests(
     return [_wakeup_to_response(r) for r in result.scalars().all()]
 
 
-@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=DataResponse)
+@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=None)
 async def trigger_manual(
     agent_id: str,
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),

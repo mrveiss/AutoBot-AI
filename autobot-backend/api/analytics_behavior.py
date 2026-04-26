@@ -91,7 +91,7 @@ class EngagementMetricsResponse(BaseModel):
     operation="track_user_event",
     error_code_prefix="BEHAVIOR",
 )
-@router.post("/track", response_model=DataResponse)
+@router.post("/track", response_model=None)
 async def track_user_event(
     request: TrackEventRequest,
     current_user: dict = Depends(get_current_user),
@@ -130,7 +130,7 @@ async def track_user_event(
     operation="get_recent_events",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/events/recent", response_model=DataResponse)
+@router.get("/events/recent", response_model=None)
 async def get_recent_events(
     limit: int = Query(
         default=100, ge=1, le=1000, description="Number of events to return"
@@ -163,7 +163,7 @@ async def get_recent_events(
     operation="get_feature_metrics",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/features", response_model=DataResponse)
+@router.get("/features", response_model=None)
 async def get_feature_metrics(
     feature: Optional[str] = Query(
         None, description="Specific feature to get metrics for"
@@ -188,7 +188,7 @@ async def get_feature_metrics(
     operation="get_feature_comparison",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/features/comparison", response_model=DataResponse)
+@router.get("/features/comparison", response_model=None)
 async def get_feature_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -273,7 +273,7 @@ async def get_user_journey(
     operation="get_engagement_metrics",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/engagement", response_model=DataResponse)
+@router.get("/engagement", response_model=None)
 async def get_engagement_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -301,7 +301,7 @@ async def get_engagement_metrics(
     operation="get_daily_stats",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/stats/daily", response_model=DataResponse)
+@router.get("/stats/daily", response_model=None)
 async def get_daily_stats(
     days: int = Query(
         default=30, ge=1, le=90, description="Number of days to retrieve"
@@ -326,7 +326,7 @@ async def get_daily_stats(
     operation="get_usage_heatmap",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/stats/heatmap", response_model=DataResponse)
+@router.get("/stats/heatmap", response_model=None)
 async def get_usage_heatmap(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -349,7 +349,7 @@ async def get_usage_heatmap(
     operation="get_peak_usage",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/stats/peak", response_model=DataResponse)
+@router.get("/stats/peak", response_model=None)
 async def get_peak_usage(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -404,7 +404,7 @@ async def get_peak_usage(
     operation="get_behavior_summary",
     error_code_prefix="BEHAVIOR",
 )
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=None)
 async def get_behavior_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):

@@ -94,7 +94,7 @@ async def list_providers():
     ]
 
 
-@router.post("/test-connection", response_model=DataResponse)
+@router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest):
     """Test connection to a cloud provider."""
     try:
@@ -123,7 +123,7 @@ async def test_connection(request: ConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/resources", response_model=DataResponse)
+@router.get("/{provider}/resources", response_model=None)
 async def list_resources(
     provider: str,
     api_key: Optional[str] = None,
@@ -162,7 +162,7 @@ async def list_resources(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/storage", response_model=DataResponse)
+@router.get("/{provider}/storage", response_model=None)
 async def list_storage(
     provider: str,
     api_key: Optional[str] = None,
@@ -200,7 +200,7 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{provider}/account", response_model=DataResponse)
+@router.get("/{provider}/account", response_model=None)
 async def get_account_info(
     provider: str,
     api_key: Optional[str] = None,

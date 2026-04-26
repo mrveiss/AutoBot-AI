@@ -156,7 +156,7 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
     operation="get_prometheus_mcp_tools",
     error_code_prefix="PROMETHEUS_MCP",
 )
-@router.get("/mcp/tools", response_model=DataResponse)
+@router.get("/mcp/tools", response_model=None)
 async def get_prometheus_mcp_tools() -> List[MCPTool]:
     """
     Get available MCP tools for Prometheus metrics.
@@ -416,7 +416,7 @@ TOOL_HANDLERS = {
     operation="execute_prometheus_tool",
     error_code_prefix="PROMETHEUS_MCP",
 )
-@router.post("/mcp/{tool_name}", response_model=DataResponse)
+@router.post("/mcp/{tool_name}", response_model=None)
 async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata:
     """
     Execute a Prometheus MCP tool

@@ -139,7 +139,7 @@ async def health_check():
         return HealthCheckResponse(status="error", engine_ready=False)
 
 
-@router.get("/analyze-failure", response_model=DataResponse)
+@router.get("/analyze-failure", response_model=None)
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
     error_description: Optional[str] = Query(

@@ -837,7 +837,7 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     operation="delete_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.delete("/conversation/{session_id}/files/{file_id}", response_model=DataResponse)
+@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Delete a specific file from a conversation.

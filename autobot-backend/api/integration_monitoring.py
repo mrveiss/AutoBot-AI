@@ -99,7 +99,7 @@ class MonitorCreateRequest(BaseModel):
     message: str = Field(..., description="Notification message")
 
 
-@router.post("/test-connection", response_model=DataResponse)
+@router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
 
@@ -128,7 +128,7 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
-@router.get("/providers", response_model=DataResponse)
+@router.get("/providers", response_model=None)
 async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     """List supported monitoring providers.
 
@@ -151,7 +151,7 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     }
 
 
-@router.get("/{provider}/hosts", response_model=DataResponse)
+@router.get("/{provider}/hosts", response_model=None)
 async def list_hosts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -188,7 +188,7 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail="Failed to list hosts")
 
 
-@router.post("/{provider}/metrics", response_model=DataResponse)
+@router.post("/{provider}/metrics", response_model=None)
 async def query_metrics(
     provider: str,
     request: MetricsQueryRequest,
@@ -227,7 +227,7 @@ async def query_metrics(
         raise HTTPException(status_code=500, detail="Failed to query metrics")
 
 
-@router.get("/{provider}/alerts", response_model=DataResponse)
+@router.get("/{provider}/alerts", response_model=None)
 async def list_alerts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -264,7 +264,7 @@ async def list_alerts(
         raise HTTPException(status_code=500, detail="Failed to list alerts")
 
 
-@router.post("/{provider}/events", response_model=DataResponse)
+@router.post("/{provider}/events", response_model=None)
 async def get_events(
     provider: str,
     request: EventsQueryRequest,

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
     operation="get_redis_config",
     error_code_prefix="REDIS",
 )
-@router.get("/config", response_model=DataResponse)
+@router.get("/config", response_model=None)
 async def get_redis_config():
     """Get current Redis configuration"""
     try:
@@ -35,7 +35,7 @@ async def get_redis_config():
     operation="update_redis_config",
     error_code_prefix="REDIS",
 )
-@router.post("/config", response_model=DataResponse)
+@router.post("/config", response_model=None)
 async def update_redis_config(config_data: dict):
     """Update Redis configuration"""
     try:
@@ -51,7 +51,7 @@ async def update_redis_config(config_data: dict):
     operation="get_redis_status",
     error_code_prefix="REDIS",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=None)
 async def get_redis_status():
     """Get Redis connection status"""
     try:
@@ -70,7 +70,7 @@ async def get_redis_status():
     operation="test_redis_connection",
     error_code_prefix="REDIS",
 )
-@router.post("/test_connection", response_model=DataResponse)
+@router.post("/test_connection", response_model=None)
 async def test_redis_connection():
     """Test Redis connection with current configuration"""
     try:
@@ -89,7 +89,7 @@ async def test_redis_connection():
     operation="get_redis_health",
     error_code_prefix="REDIS",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def get_redis_health():
     """Get Redis health status for frontend health checks"""
     try:

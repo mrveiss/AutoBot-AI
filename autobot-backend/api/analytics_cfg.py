@@ -1201,7 +1201,7 @@ async def analyze_control_flow(
     operation="analyze_cfg_file",
     error_code_prefix="CFG",
 )
-@router.post("/analyze-file", response_model=DataResponse)
+@router.post("/analyze-file", response_model=None)
 async def analyze_file_control_flow(
     request: AnalyzeFileRequest,
     admin_check: bool = Depends(check_admin_permission),

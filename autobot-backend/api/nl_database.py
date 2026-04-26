@@ -215,7 +215,7 @@ async def nl_query(
     summary="Get trained database schema information",
     description="Returns metadata about databases the NL service has been trained on.",
     tags=["nl-database"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_schema(
     _auth=Depends(get_current_user),
@@ -263,7 +263,7 @@ async def train_on_db(
     summary="Get query history",
     description="Retrieve the history of natural language queries executed by the current user.",
     tags=["nl-database"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_history(
     request: Request,

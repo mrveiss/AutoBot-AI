@@ -258,7 +258,7 @@ async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     return MarketplaceEntry(**entry)
 
 
-@router.get("/categories", response_model=DataResponse)
+@router.get("/categories", response_model=None)
 async def list_categories() -> dict[str, list[str]]:
     """
     List valid plugin categories and sort options.
@@ -293,7 +293,7 @@ async def _get_installed() -> set[str]:
         return set()
 
 
-@router.get("/installed", response_model=DataResponse)
+@router.get("/installed", response_model=None)
 async def list_installed() -> dict[str, list[str]]:
     """
     List names of installed marketplace plugins.
@@ -304,7 +304,7 @@ async def list_installed() -> dict[str, list[str]]:
     return {"installed": sorted(installed)}
 
 
-@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=DataResponse)
+@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=None)
 async def install_plugin(body: InstallRequest) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
@@ -344,7 +344,7 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     return {"status": "installed", "plugin": body.plugin_name}
 
 
-@router.delete("/install/{plugin_name}", response_model=DataResponse)
+@router.delete("/install/{plugin_name}", response_model=None)
 async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
     """
     Remove a marketplace plugin from the installed set.

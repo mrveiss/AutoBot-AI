@@ -986,7 +986,7 @@ async def command_approval(
     operation="execute_command",
     error_code_prefix="AGENT",
 )
-@router.post("/execute_command", response_model=DataResponse)
+@router.post("/execute_command", response_model=None)
 async def execute_command(
     request: Request,
     command_data: dict,

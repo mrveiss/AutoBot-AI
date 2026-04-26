@@ -516,7 +516,7 @@ async def submit_query(
         return {"success": False, "error": "Internal server error"}
 
 
-@router.get("/status/{session_id}", response_model=DataResponse)
+@router.get("/status/{session_id}", response_model=None)
 async def get_status(
     session_id: str,
     current_user: dict = Depends(get_current_user),

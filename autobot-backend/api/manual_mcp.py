@@ -323,7 +323,7 @@ def _doc_index_tool_schema() -> dict:
     operation="manual_mcp_tools",
     error_code_prefix="MANUAL_MCP",
 )
-@router.get("/mcp/tools", response_model=DataResponse)
+@router.get("/mcp/tools", response_model=None)
 async def get_manual_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[dict]:
