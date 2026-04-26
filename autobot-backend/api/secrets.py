@@ -39,7 +39,8 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from middleware.proxy_utils import get_client_ip
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
+from api.schemas_system import SecretsStatusResponse
 
 logger = logging.getLogger(__name__)
 
@@ -793,7 +794,7 @@ async def get_secret_types(
     operation="get_secrets_status",
     error_code_prefix="SECRETS",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=SecretsStatusResponse)
 async def get_secrets_status(
     admin_check: bool = Depends(check_admin_permission),
 ):

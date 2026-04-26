@@ -26,7 +26,14 @@ from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    BugPredictionAnalyzeResponse,
+    BugPredictionStatusResponse,
+    BugPredictionClearStuckResponse,
+    BugPredictionRiskFactorsResponse,
+    BugPredictionRecordBugResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1042,7 +1049,7 @@ async def get_cached_bug_prediction():
     return _no_data_response("No cached bug prediction available")
 
 
-@router.post("/analyze", response_model=None)
+@router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
@@ -1060,7 +1067,7 @@ async def start_bug_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/status/{task_id}", response_model=None)
+@router.get("/status/{task_id}", response_model=BugPredictionStatusResponse)
 async def get_bug_prediction_status(
     task_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -1072,7 +1079,7 @@ async def get_bug_prediction_status(
     return task
 
 
-@router.post("/tasks/clear-stuck", response_model=None)
+@router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
 async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1472,7 +1479,7 @@ async def get_prediction_summary(
         return _no_data_response("Summary generation failed")
 
 
-@router.get("/factors", response_model=None)
+@router.get("/factors", response_model=BugPredictionRiskFactorsResponse)
 async def get_risk_factors(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -1519,7 +1526,7 @@ def _get_factor_description(factor: RiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug", response_model=None)
+@router.post("/record-bug", response_model=BugPredictionRecordBugResponse)
 async def record_bug(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,

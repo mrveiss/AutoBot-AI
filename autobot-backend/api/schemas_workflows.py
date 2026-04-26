@@ -602,5 +602,101 @@ class AdvancedControlInfoResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# skills.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class SkillsListResponse(BaseModel):
+    """Response for GET /skills/."""
+
+    skills: List[Any]
+    total: int
+    categories: List[str]
+
+
+class SkillsCategoriesResponse(BaseModel):
+    """Response for GET /skills/categories."""
+
+    categories: Dict[str, int]
+
+
+class SkillsAllHealthResponse(BaseModel):
+    """Response for GET /skills/health."""
+
+    skills: Dict[str, Any]
+
+
+class SkillsInitializeResponse(BaseModel):
+    """Response for POST /skills/initialize.
+
+    Shape from manager.initialize() — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SkillDetailResponse(BaseModel):
+    """Response for GET /skills/{name}.
+
+    Shape from registry.get_skill_detail() — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SkillHealthResponse(BaseModel):
+    """Response for GET /skills/{name}/health.
+
+    Shape from SkillHealth.model_dump() — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SkillActionsResponse(BaseModel):
+    """Response for GET /skills/{name}/actions."""
+
+    skill: str
+    actions: List[Any]
+
+
+class SkillMetricsResponse(BaseModel):
+    """Response for GET /skills/{name}/metrics.
+
+    Shape from SkillMetrics.get_metrics() with health_score added — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SkillSuggestionsResponse(BaseModel):
+    """Response for GET /skills/{name}/suggestions.
+
+    Shape from SkillFeedbackAnalyzer.get_refinement_suggestions() — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# structured_thinking_mcp.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class StructuredThinkingSessionDetailResponse(BaseModel):
+    """Response for GET /structured-thinking/sessions/{session_id}."""
+
+    session_id: str
+    thought_count: int
+    thoughts: List[Any]
+    stage_analysis: Dict[str, Any]
+    started_at: Optional[str] = None
+    last_thought_at: Optional[str] = None
+    complete: bool
+
+
+# ---------------------------------------------------------------------------
 # analytics.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------

@@ -765,3 +765,82 @@ class FileSandboxStatsResponse(BaseModel):
     total_size_mb: float
     max_file_size_mb: int
     allowed_extensions: List[str]
+
+
+# ---------------------------------------------------------------------------
+# playwright.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class PlaywrightStatusResponse(BaseModel):
+    """Response for GET /playwright/status.
+
+    Shape from service.get_service_status() — opaque; extra allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    service: str
+    status: str
+
+
+class PlaywrightHealthResponse(BaseModel):
+    """Response for GET /playwright/health."""
+
+    status: str
+    ready: bool
+    service: str
+    message: str
+
+
+class PlaywrightQuickTestResponse(BaseModel):
+    """Response for POST /playwright/automation/quick-test."""
+
+    status: str
+    message: str
+    check_logs: str
+    tests: List[str]
+
+
+class PlaywrightBrowserActionResponse(BaseModel):
+    """Response for POST /playwright/navigate, /reload, /back, /forward, /interact,
+    and /worker-screenshot.
+
+    Shape comes from the Browser VM and is opaque; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class PlaywrightWorkerStatusResponse(BaseModel):
+    """Response for GET /playwright/worker-status."""
+
+    status: str
+    browser_connected: bool
+    page_open: Optional[bool] = None
+
+
+class PlaywrightCapabilitiesResponse(BaseModel):
+    """Response for GET /playwright/capabilities."""
+
+    service: str
+    integration: str
+    capabilities: Dict[str, Any]
+    endpoints: List[str]
+
+
+# ---------------------------------------------------------------------------
+# research_browser.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class ResearchBrowserHealthResponse(BaseModel):
+    """Response for GET /research-browser/health."""
+
+    status: str
+    service: str
+    browser_service_url: Optional[str] = None
+    detail: Optional[str] = None
+    timestamp: str

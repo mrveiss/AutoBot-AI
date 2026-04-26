@@ -329,3 +329,48 @@ class AdminFileReadResponse(BaseModel):
     """Response for GET /files/read (admin read file)."""
 
     content: str
+
+
+# ---------------------------------------------------------------------------
+# secrets.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class SecretsStatusResponse(BaseModel):
+    """Response for GET /secrets/status."""
+
+    status: str
+    service: str
+    total_secrets: Optional[int] = None
+    storage_backend: Optional[str] = None
+    encryption_enabled: Optional[bool] = None
+    error: Optional[str] = None
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# log_forwarding.py schemas  (Issue #5912)
+# ---------------------------------------------------------------------------
+
+
+
+class LogForwardingDestinationItem(BaseModel):
+    """Single destination entry in list/detail responses.
+
+    Shape from dest.config.to_dict_sanitized() + extra health fields.
+    Extra fields allowed to handle dynamic config dict.
+    """
+
+    model_config = {"extra": "allow"}
+
+    healthy: bool
+    last_error: Optional[str] = None
+    sent_count: int
+    failed_count: int
+
+
+class LogForwardingDestinationsListResponse(BaseModel):
+    """Response for GET /log-forwarding/destinations — returns a list directly."""
+
+    model_config = {"extra": "allow"}
