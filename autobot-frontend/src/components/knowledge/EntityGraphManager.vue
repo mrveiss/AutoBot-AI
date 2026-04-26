@@ -193,12 +193,11 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeEntityGraph } from '@/composables/knowledge/useKnowledgeEntityGraph'
 import EntityExtractor from './EntityExtractor.vue'
 import GraphRAGQuery from './GraphRAGQuery.vue'
 
@@ -216,18 +215,6 @@ interface Tab {
   icon: string
 }
 
-interface GraphStats {
-  entityCount: number
-  relationCount: number
-  entityTypes: number
-  relationTypes: number
-}
-
-interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
-  components: Record<string, string>
-}
-
 interface ExtractionResult {
   success: boolean
   conversation_id: string
@@ -235,6 +222,19 @@ interface ExtractionResult {
   relations_created: number
   request_id: string
 }
+
+// ============================================================================
+// Composable
+// ============================================================================
+
+const {
+  graphStats,
+  extractionHealth,
+  graphRagHealth,
+  isLoading: isLoadingStats,
+  statsError,
+  refreshStats,
+} = useKnowledgeEntityGraph()
 
 // ============================================================================
 // State
@@ -247,99 +247,7 @@ const tabs = computed<Tab[]>(() => [
 ])
 
 const activeTab = ref('extract')
-const isLoadingStats = ref(false)
-const statsError = ref('')
-
-const graphStats = reactive<GraphStats>({
-  entityCount: 0,
-  relationCount: 0,
-  entityTypes: 0,
-  relationTypes: 0
-})
-
-const extractionHealth = reactive<HealthStatus>({
-  status: 'unknown',
-  components: {}
-})
-
-const graphRagHealth = reactive<HealthStatus>({
-  status: 'unknown',
-  components: {}
-})
-
 const recentExtractions = ref<ExtractionResult[]>([])
-
-// ============================================================================
-// Methods
-// ============================================================================
-
-async function refreshStats(): Promise<void> {
-  isLoadingStats.value = true
-  statsError.value = ''
-
-  try {
-    await Promise.all([
-      fetchGraphStats(),
-      fetchExtractionHealth(),
-      fetchGraphRagHealth()
-    ])
-    logger.info('Stats refreshed successfully')
-  } catch (error) {
-    logger.error('Failed to refresh stats:', error)
-    statsError.value = error instanceof Error ? error.message : 'Failed to load statistics'
-  } finally {
-    isLoadingStats.value = false
-  }
-}
-
-async function fetchGraphStats(): Promise<void> {
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/unified/graph?max_facts=0`)
-    const graphData = data?.data || data
-
-    if (graphData?.entities) {
-      graphStats.entityCount = graphData.entities.length
-      const entityTypeSet = new Set(graphData.entities.map((e: { type: string }) => e.type))
-      graphStats.entityTypes = entityTypeSet.size
-    }
-
-    if (graphData?.relations) {
-      graphStats.relationCount = graphData.relations.length
-      const relTypeSet = new Set(graphData.relations.map((r: { type: string }) => r.type))
-      graphStats.relationTypes = relTypeSet.size
-    }
-  } catch (error) {
-    logger.warn('Could not fetch graph stats:', error)
-  }
-}
-
-async function fetchExtractionHealth(): Promise<void> {
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/entities/extract/health`)
-    const healthData = data?.data || data
-
-    extractionHealth.status = healthData?.status || 'unknown'
-    extractionHealth.components = healthData?.components || {}
-  } catch (error) {
-    logger.warn('Could not fetch extraction health:', error)
-    extractionHealth.status = 'unhealthy'
-    extractionHealth.components = {}
-  }
-}
-
-async function fetchGraphRagHealth(): Promise<void> {
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/graph-rag/health`)
-    const healthData = data?.data || data
-
-    graphRagHealth.status = healthData?.status || 'unknown'
-    graphRagHealth.components = healthData?.components || {}
-  } catch (error) {
-    logger.warn('Could not fetch graph-rag health:', error)
-    graphRagHealth.status = 'unhealthy'
-    graphRagHealth.components = {}
-  }
-}
 
 function handleExtractionComplete(result: ExtractionResult): void {
   recentExtractions.value.unshift(result)
