@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import TimingConstants
-from event_manager import event_manager
+from event_manager import get_event_manager
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -180,7 +180,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _notify_session_started(self, command: str) -> None:
         """Publish session started event. Issue #620."""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_session",
             {
                 "chat_id": self.chat_id,
@@ -314,7 +314,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_sudo_prompt(self, prompt_data: str):
         """Handle sudo password prompts"""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -334,7 +334,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_input_prompt(self, prompt_data: str):
         """Handle interactive prompts"""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -348,7 +348,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _send_to_chat(self, output: str):
         """Send regular output to chat"""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -360,7 +360,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _send_error(self, error: str):
         """Send error message to chat"""
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -401,7 +401,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def take_control(self):
         """Allow user to take full control of terminal"""
         self.input_mode = "user"
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_control",
             {
                 "chat_id": self.chat_id,
@@ -416,7 +416,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def return_control(self):
         """Return control to agent"""
         self.input_mode = "agent"
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_control",
             {
                 "chat_id": self.chat_id,
@@ -472,7 +472,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         async with self._buffer_lock:
             output_lines = len(self.output_buffer)
 
-        await event_manager.publish(
+        await get_event_manager().publish(
             "terminal_session",
             {
                 "chat_id": self.chat_id,

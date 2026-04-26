@@ -171,9 +171,9 @@ class ApprovalHandler:
 
             # IMPLEMENTED: Real-time WebSocket broadcasting via event_manager
             try:
-                from event_manager import event_manager
+                from event_manager import get_event_manager
 
-                await event_manager.publish(
+                await get_event_manager().publish(
                     event_type="command_approval_status",
                     payload={
                         "conversation_id": session.conversation_id,

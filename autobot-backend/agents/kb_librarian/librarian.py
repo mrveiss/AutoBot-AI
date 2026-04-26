@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
-from event_manager import event_manager
+from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter
@@ -349,7 +349,7 @@ class EnhancedKBLibrarian:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored knowledge for tool: %s", tool_name)
 
-        await event_manager.publish(
+        await get_event_manager().publish(
             "knowledge_update",
             {
                 "type": "new_tool",
