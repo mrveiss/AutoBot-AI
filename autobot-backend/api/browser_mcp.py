@@ -642,6 +642,11 @@ def _get_browser_extraction_tools() -> List[MCPTool]:
     operation="get_browser_mcp_tools",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_mcp_tools",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_browser_mcp_tools() -> List[MCPTool]:
     """Get available MCP tools for browser automation operations"""
@@ -704,6 +709,11 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
     operation="navigate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="navigate_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
 async def navigate_mcp(request: NavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
@@ -741,6 +751,11 @@ async def navigate_mcp(request: NavigateRequest) -> Metadata:
     operation="click_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="click_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/click", response_model=BrowserClickResponse)
 async def click_mcp(request: ClickRequest) -> Metadata:
     """Click on element by selector"""
@@ -763,6 +778,11 @@ async def click_mcp(request: ClickRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="fill_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="fill_mcp",
@@ -800,6 +820,11 @@ async def fill_mcp(request: FillRequest) -> Metadata:
     operation="screenshot_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="screenshot_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
 async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
@@ -831,6 +856,11 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     operation="evaluate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="evaluate_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
 async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
@@ -856,6 +886,11 @@ async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="wait_for_selector_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="wait_for_selector_mcp",
@@ -893,6 +928,11 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     operation="get_text_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_text_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
 async def get_text_mcp(request: GetTextRequest) -> Metadata:
     """Extract text content from element"""
@@ -912,6 +952,11 @@ async def get_text_mcp(request: GetTextRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_attribute_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_attribute_mcp",
@@ -945,6 +990,11 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     operation="select_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="select_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/select", response_model=BrowserSelectResponse)
 async def select_mcp(request: SelectRequest) -> Metadata:
     """Select option from dropdown"""
@@ -973,6 +1023,11 @@ async def select_mcp(request: SelectRequest) -> Metadata:
     operation="hover_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="hover_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
 @router.post("/mcp/hover", response_model=BrowserHoverResponse)
 async def hover_mcp(request: HoverRequest) -> Metadata:
     """Hover mouse over element"""
@@ -992,6 +1047,11 @@ async def hover_mcp(request: HoverRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_mcp_status",
+    error_code_prefix="BROWSER_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_mcp_status",

@@ -20,6 +20,7 @@ from api.schemas_knowledge import KnowledgeCognitionSeedResponse, KnowledgeCogni
 from auth_middleware import check_admin_permission
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ class SeedRequest(BaseModel):
     manifest_path: str = _DEFAULT_MANIFEST
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cognition_store_status",
+    error_code_prefix="KNOWLEDGE_COGNITION",
+)
 @router.get("/cognition-store/status", response_model=KnowledgeCognitionStatusResponse)
 async def get_cognition_store_status():
     """Return seed status for all ChromaDB collections that contain seeded docs.
@@ -68,6 +74,11 @@ async def _run_seed(manifest_path: str) -> None:
         logger.error("Background seed failed: manifest=%s error=%s", manifest_path, exc)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_cognition_seed",
+    error_code_prefix="KNOWLEDGE_COGNITION",
+)
 @router.post("/cognition-store/seed", response_model=KnowledgeCognitionSeedResponse)
 async def trigger_cognition_seed(
     request: SeedRequest,

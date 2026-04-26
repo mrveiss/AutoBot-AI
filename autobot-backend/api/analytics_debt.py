@@ -521,6 +521,11 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
     operation="calculate_debt",
     error_code_prefix="DEBT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="calculate_technical_debt",
+    error_code_prefix="ANALYTICS_DEBT",
+)
 @router.post("/calculate", response_model=DataResponse)
 async def calculate_technical_debt(
     request: DebtCalculationRequest, admin_check: bool = Depends(check_admin_permission)
@@ -570,6 +575,11 @@ async def calculate_technical_debt(
     operation="get_debt_summary",
     error_code_prefix="DEBT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_debt_summary",
+    error_code_prefix="ANALYTICS_DEBT",
+)
 @router.get("/summary", response_model=DataResponse)
 async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -601,6 +611,11 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
     error_code_prefix="DEBT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_debt_by_category",
+    error_code_prefix="ANALYTICS_DEBT",
 )
 @router.get("/by-category/{category}", response_model=DataResponse)
 async def get_debt_by_category(
@@ -702,6 +717,11 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     operation="get_debt_trends",
     error_code_prefix="DEBT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_debt_trends",
+    error_code_prefix="ANALYTICS_DEBT",
+)
 @router.get("/trends", response_model=DataResponse)
 async def get_debt_trends(
     days: int = Query(default=30, ge=1, le=365),
@@ -733,6 +753,11 @@ async def get_debt_trends(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_roi_priorities",
     error_code_prefix="DEBT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_roi_priorities",
+    error_code_prefix="ANALYTICS_DEBT",
 )
 @router.get("/roi-priorities", response_model=DataResponse)
 async def get_roi_priorities(
@@ -859,6 +884,11 @@ def _generate_markdown_report(debt_data: dict) -> str:
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_report",
     error_code_prefix="DEBT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_debt_report",
+    error_code_prefix="ANALYTICS_DEBT",
 )
 @router.get("/report", response_model=DataResponse)
 async def get_debt_report(

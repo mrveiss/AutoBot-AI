@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from api.monitoring import ws_manager
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,11 @@ class AlertManagerWebhook(BaseModel):
     alerts: List[AlertInstance]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_alertmanager_webhook",
+    error_code_prefix="ALERTMANAGER_WEBHOOK",
+)
 @router.post("/alertmanager", response_model=None)
 async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
     """
@@ -161,6 +167,11 @@ async def _process_alert(alert: AlertInstance, group_status: str):
         logger.error("Failed to process individual alert: %s", e, exc_info=True)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="alertmanager_webhook_health",
+    error_code_prefix="ALERTMANAGER_WEBHOOK",
+)
 @router.get("/alertmanager/health", response_model=None)
 async def alertmanager_webhook_health():
     """Health check endpoint for AlertManager webhook"""

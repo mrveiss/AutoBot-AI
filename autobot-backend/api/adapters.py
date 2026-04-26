@@ -16,12 +16,18 @@ from fastapi.responses import JSONResponse
 from auth_middleware import get_current_user
 from llm_interface_pkg.adapters.registry import get_adapter_registry
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_adapters",
+    error_code_prefix="ADAPTERS",
+)
 @router.get("/", response_model=DataResponse)
 async def list_adapters(
     current_user: dict = Depends(get_current_user),
@@ -35,6 +41,11 @@ async def list_adapters(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_adapter_environment",
+    error_code_prefix="ADAPTERS",
+)
 @router.get("/{adapter_type}/test", response_model=DataResponse)
 async def test_adapter_environment(
     adapter_type: str,
@@ -54,6 +65,11 @@ async def test_adapter_environment(
     return JSONResponse(status_code=200, content=result.to_dict())
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_adapter_models",
+    error_code_prefix="ADAPTERS",
+)
 @router.get("/{adapter_type}/models", response_model=DataResponse)
 async def list_adapter_models(
     adapter_type: str,
@@ -80,6 +96,11 @@ async def list_adapter_models(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_all_adapters",
+    error_code_prefix="ADAPTERS",
+)
 @router.get("/health", response_model=DataResponse)
 async def test_all_adapters(
     current_user: dict = Depends(get_current_user),
@@ -93,6 +114,11 @@ async def test_all_adapters(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_agent_adapter_override",
+    error_code_prefix="ADAPTERS",
+)
 @router.post("/agent/{agent_id}/override", response_model=DataResponse)
 async def set_agent_adapter_override(
     agent_id: str,
@@ -121,6 +147,11 @@ async def set_agent_adapter_override(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_agent_adapter_override",
+    error_code_prefix="ADAPTERS",
+)
 @router.delete("/agent/{agent_id}/override", response_model=DataResponse)
 async def clear_agent_adapter_override(
     agent_id: str,

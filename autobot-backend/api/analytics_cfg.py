@@ -1145,6 +1145,11 @@ def _calculate_cfg_summary(
     operation="analyze_cfg",
     error_code_prefix="CFG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_control_flow",
+    error_code_prefix="ANALYTICS_CFG",
+)
 @router.post("/analyze", response_model=DataResponse)
 async def analyze_control_flow(
     request: AnalyzeRequest,
@@ -1200,6 +1205,11 @@ async def analyze_control_flow(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_cfg_file",
     error_code_prefix="CFG",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_file_control_flow",
+    error_code_prefix="ANALYTICS_CFG",
 )
 @router.post("/analyze-file", response_model=None)
 async def analyze_file_control_flow(
@@ -1282,6 +1292,11 @@ def _convert_cfg_to_dot(graph: ControlFlowGraph) -> Dict[str, str]:
     operation="export_cfg_dot",
     error_code_prefix="CFG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_cfg_dot",
+    error_code_prefix="ANALYTICS_CFG",
+)
 @router.post("/export/dot", response_model=None)
 async def export_cfg_dot(
     request: AnalyzeRequest,
@@ -1306,6 +1321,11 @@ async def export_cfg_dot(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_complexity_metrics",
     error_code_prefix="CFG",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_complexity_metrics",
+    error_code_prefix="ANALYTICS_CFG",
 )
 @router.post("/complexity", response_model=DataResponse)
 async def get_complexity_metrics(
@@ -1366,6 +1386,11 @@ async def get_complexity_metrics(
     operation="detect_unreachable",
     error_code_prefix="CFG",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_unreachable_code",
+    error_code_prefix="ANALYTICS_CFG",
+)
 @router.post("/unreachable", response_model=DataResponse)
 async def detect_unreachable_code(
     request: AnalyzeRequest,
@@ -1401,6 +1426,11 @@ async def detect_unreachable_code(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_infinite_loops",
     error_code_prefix="CFG",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_infinite_loops",
+    error_code_prefix="ANALYTICS_CFG",
 )
 @router.post("/infinite-loops", response_model=DataResponse)
 async def detect_infinite_loops(
@@ -1445,6 +1475,11 @@ async def detect_infinite_loops(
     category=ErrorCategory.SERVER_ERROR,
     operation="cfg_health",
     error_code_prefix="CFG",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cfg_health",
+    error_code_prefix="ANALYTICS_CFG",
 )
 @router.get("/health", response_model=DataResponse)
 async def cfg_health(

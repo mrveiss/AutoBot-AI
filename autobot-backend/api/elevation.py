@@ -67,6 +67,11 @@ class ElevationAuthorization(BaseModel):
     operation="request_elevation",
     error_code_prefix="ELEVATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_elevation",
+    error_code_prefix="ELEVATION",
+)
 @router.post("/request", response_model=ElevationRequestResponse)
 async def request_elevation(request: ElevationRequest):
     """Request elevation for a privileged operation"""
@@ -92,6 +97,11 @@ async def request_elevation(request: ElevationRequest):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="authorize_elevation",
+    error_code_prefix="ELEVATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="authorize_elevation",
@@ -162,6 +172,11 @@ async def authorize_elevation(auth: ElevationAuthorization):
     operation="get_elevation_status",
     error_code_prefix="ELEVATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_elevation_status",
+    error_code_prefix="ELEVATION",
+)
 @router.get("/status/{request_id}", response_model=ElevationStatusResponse)
 async def get_elevation_status(request_id: str):
     """Check the status of an elevation request"""
@@ -180,6 +195,11 @@ async def get_elevation_status(request_id: str):
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_elevated_command",
+    error_code_prefix="ELEVATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_elevated_command",
@@ -229,6 +249,11 @@ async def execute_elevated_command(session_token: str, command: str):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_requests",
+    error_code_prefix="ELEVATION",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_requests_endpoint",
     error_code_prefix="ELEVATION",
 )
 @router.get("/pending", response_model=ElevationPendingResponse)
@@ -322,6 +347,11 @@ async def run_elevated_command(command: str) -> dict:
     operation="revoke_elevation_session",
     error_code_prefix="ELEVATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_elevation_session",
+    error_code_prefix="ELEVATION",
+)
 @router.delete("/session/{session_token}", response_model=SuccessResponse)
 async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
@@ -332,6 +362,11 @@ async def revoke_elevation_session(session_token: str):
     return {"success": True, "message": "Session revoked"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="elevation_health_check",
+    error_code_prefix="ELEVATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="elevation_health_check",

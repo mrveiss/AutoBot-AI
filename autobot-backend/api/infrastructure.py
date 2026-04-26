@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 
 from auth_middleware import get_current_user
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["infrastructure"])
@@ -56,6 +57,11 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
         return []
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_infrastructure_hosts",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/hosts", response_model=None)
 async def get_infrastructure_hosts(
     capability: Optional[str] = Query(

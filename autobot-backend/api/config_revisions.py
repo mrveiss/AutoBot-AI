@@ -19,6 +19,7 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
 from services.config_revision_service import ConfigRevisionService
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -64,6 +65,11 @@ def _to_response(revision) -> ConfigRevisionResponse:
 # -- Endpoints ---------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_revisions",
+    error_code_prefix="CONFIG_REVISIONS",
+)
 @router.get(
     "/config-revisions/{entity_type}/{entity_id}",
     response_model=List[ConfigRevisionResponse],
@@ -86,6 +92,11 @@ async def list_revisions(
     return [_to_response(r) for r in revisions]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_revision",
+    error_code_prefix="CONFIG_REVISIONS",
+)
 @router.get(
     "/config-revisions/{entity_type}/{entity_id}/{revision_id}",
     response_model=ConfigRevisionResponse,
@@ -113,6 +124,11 @@ async def get_revision(
     return _to_response(revision)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rollback_to_revision",
+    error_code_prefix="CONFIG_REVISIONS",
+)
 @router.post(
     "/config-revisions/{entity_type}/{entity_id}/{revision_id}/rollback",
     response_model=ConfigRevisionResponse,

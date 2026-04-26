@@ -20,6 +20,7 @@ from auth_middleware import get_current_user
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,11 @@ def _resolve_share_recipients(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="invite_user",
+    error_code_prefix="COLLABORATION",
+)
 @router.post("/{session_id}/invite", response_model=InviteResponse)
 async def invite_user(
     session_id: str,
@@ -255,6 +261,11 @@ async def invite_user(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_collaborator",
+    error_code_prefix="COLLABORATION",
+)
 @router.post("/{session_id}/remove", response_model=RemoveResponse)
 async def remove_collaborator(
     session_id: str,
@@ -319,6 +330,11 @@ async def remove_collaborator(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_participants",
+    error_code_prefix="COLLABORATION",
+)
 @router.get("/{session_id}/participants", response_model=SessionParticipantsResponse)
 async def get_participants(
     session_id: str,
@@ -382,6 +398,11 @@ async def get_participants(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="share_secret_with_session",
+    error_code_prefix="COLLABORATION",
+)
 @router.post("/{session_id}/secrets/share", response_model=DataResponse)
 async def share_secret_with_session(
     session_id: str,
@@ -438,6 +459,11 @@ async def share_secret_with_session(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_presence",
+    error_code_prefix="COLLABORATION",
+)
 @router.get("/{session_id}/presence", response_model=None)
 async def get_presence(
     session_id: str,

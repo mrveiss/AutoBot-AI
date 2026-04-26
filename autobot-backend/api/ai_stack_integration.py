@@ -129,6 +129,11 @@ class ContentClassificationRequest(BaseModel):
     operation="ai_stack_health_check",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ai_stack_health_check",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.get("/health", response_model=DataResponse)
 async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -164,6 +169,11 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
     operation="list_ai_agents",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_ai_agents",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.get("/agents", response_model=DataResponse)
 async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
     """
@@ -186,6 +196,11 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_query",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rag_query",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/rag/query", response_model=DataResponse)
 async def rag_query(
@@ -231,6 +246,11 @@ async def rag_query(
     operation="reformulate_query",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reformulate_query",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/rag/reformulate", response_model=DataResponse)
 async def reformulate_query(
     query: str,
@@ -252,6 +272,11 @@ async def reformulate_query(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_documents",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/rag/analyze-documents", response_model=DataResponse)
 async def analyze_documents(
@@ -277,6 +302,11 @@ async def analyze_documents(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/chat/enhanced", response_model=DataResponse)
 async def enhanced_chat(
@@ -330,6 +360,11 @@ async def enhanced_chat(
     operation="extract_knowledge",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="extract_knowledge",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/knowledge/extract", response_model=DataResponse)
 async def extract_knowledge(
     request: KnowledgeExtractionRequest,
@@ -356,6 +391,11 @@ async def extract_knowledge(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_search",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_knowledge_search",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/knowledge/enhanced-search", response_model=DataResponse)
 async def enhanced_knowledge_search(
@@ -402,6 +442,11 @@ async def enhanced_knowledge_search(
     operation="get_system_knowledge",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_knowledge",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.get("/knowledge/system", response_model=DataResponse)
 async def get_system_knowledge(
     knowledge_category: Optional[str] = None,
@@ -427,6 +472,11 @@ async def get_system_knowledge(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="comprehensive_research",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/research/comprehensive", response_model=DataResponse)
 async def comprehensive_research(
@@ -469,6 +519,11 @@ async def comprehensive_research(
     operation="web_research",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="web_research",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/research/web", response_model=DataResponse)
 async def web_research(
     query: str,
@@ -499,6 +554,11 @@ async def web_research(
     operation="search_code",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_code",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/development/search-code", response_model=DataResponse)
 async def search_code(
     request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
@@ -522,6 +582,11 @@ async def search_code(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_speedup",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_development_speedup",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/development/analyze-speedup", response_model=DataResponse)
 async def analyze_development_speedup(
@@ -552,6 +617,11 @@ async def analyze_development_speedup(
     category=ErrorCategory.SERVER_ERROR,
     operation="classify_content",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="classify_content",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/classification/classify", response_model=DataResponse)
 async def classify_content(
@@ -680,6 +750,11 @@ async def _execute_sequential_agents(
     operation="multi_agent_query",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="multi_agent_query",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/orchestrate/multi-agent-query", response_model=DataResponse)
 async def multi_agent_query(
     query: str,
@@ -726,6 +801,11 @@ async def multi_agent_query(
     operation="legacy_rag_search",
     error_code_prefix="AI_STACK",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="legacy_rag_search",
+    error_code_prefix="AI_STACK_INTEGRATION",
+)
 @router.post("/legacy/rag-search", response_model=None)
 async def legacy_rag_search(
     query: str,
@@ -745,6 +825,11 @@ async def legacy_rag_search(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",
     error_code_prefix="AI_STACK",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="legacy_enhanced_chat",
+    error_code_prefix="AI_STACK_INTEGRATION",
 )
 @router.post("/legacy/enhanced-chat", response_model=None)
 async def legacy_enhanced_chat(

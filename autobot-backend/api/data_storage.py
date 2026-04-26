@@ -291,6 +291,11 @@ def get_database_files() -> list[dict]:
     operation="get_storage_stats",
     error_code_prefix="STORAGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_storage_stats",
+    error_code_prefix="DATA_STORAGE",
+)
 @router.get("/stats", response_model=StorageStats)
 async def get_storage_stats():
     """Get comprehensive storage statistics."""
@@ -327,6 +332,11 @@ async def get_storage_stats():
     operation="get_database_files",
     error_code_prefix="STORAGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_files_endpoint",
+    error_code_prefix="DATA_STORAGE",
+)
 @router.get("/databases", response_model=None)
 async def get_database_files_endpoint():
     """Get information about database files in the data directory."""
@@ -350,6 +360,11 @@ async def get_database_files_endpoint():
     category=ErrorCategory.SERVER_ERROR,
     operation="get_category_details",
     error_code_prefix="STORAGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_category_details",
+    error_code_prefix="DATA_STORAGE",
 )
 @router.get("/category/{category_path}", response_model=None)
 async def get_category_details(
@@ -436,6 +451,11 @@ def _scan_and_remove_files(
     operation="cleanup_category",
     error_code_prefix="STORAGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_category",
+    error_code_prefix="DATA_STORAGE",
+)
 @router.post("/cleanup", response_model=CleanupResult)
 async def cleanup_category(
     request: CleanupRequest,
@@ -498,6 +518,11 @@ async def cleanup_category(
     operation="cleanup_old_backups",
     error_code_prefix="STORAGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_old_backups",
+    error_code_prefix="DATA_STORAGE",
+)
 @router.post("/cleanup/old-backups", response_model=None)
 async def cleanup_old_backups(
     dry_run: bool = Query(default=True),
@@ -548,6 +573,11 @@ async def cleanup_old_backups(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation",
     error_code_prefix="STORAGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_conversation",
+    error_code_prefix="DATA_STORAGE",
 )
 @router.delete("/conversations/{conversation_id}", response_model=DataResponse)
 async def delete_conversation(
@@ -607,6 +637,11 @@ async def delete_conversation(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_conversations_summary",
     error_code_prefix="STORAGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_conversations_summary",
+    error_code_prefix="DATA_STORAGE",
 )
 @router.get("/conversations/summary", response_model=None)
 async def get_conversations_summary():

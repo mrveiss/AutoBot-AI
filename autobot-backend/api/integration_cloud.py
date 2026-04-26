@@ -71,6 +71,11 @@ class ResourceListRequest(BaseModel):
     operation="list_providers",
     error_code_prefix="INTEGRATION_CLOUD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/providers", response_model=List[CloudProviderInfo])
 async def list_providers():
     """List all supported cloud providers."""
@@ -105,6 +110,11 @@ async def list_providers():
     operation="test_connection",
     error_code_prefix="INTEGRATION_CLOUD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest):
     """Test connection to a cloud provider."""
@@ -134,6 +144,11 @@ async def test_connection(request: ConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_resources",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_resources",
@@ -183,6 +198,11 @@ async def list_resources(
     operation="list_storage",
     error_code_prefix="INTEGRATION_CLOUD",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_storage",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @router.get("/{provider}/storage", response_model=None)
 async def list_storage(
     provider: str,
@@ -221,6 +241,11 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_account_info",
+    error_code_prefix="INTEGRATION_CLOUD",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_account_info",

@@ -40,6 +40,11 @@ router = APIRouter(tags=["terminal-tools"])
     operation="install_tool",
     error_code_prefix="TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_tool",
+    error_code_prefix="TERMINAL_TOOLS",
+)
 @router.post("/install-tool", response_model=Dict[str, Any])
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
@@ -65,6 +70,11 @@ async def install_tool(request: ToolInstallRequest):
     operation="check_tool_installed",
     error_code_prefix="TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_tool_installed",
+    error_code_prefix="TERMINAL_TOOLS",
+)
 @router.post("/check-tool", response_model=Dict[str, Any])
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
@@ -80,6 +90,11 @@ async def check_tool_installed(tool_name: str):
     operation="validate_command",
     error_code_prefix="TERMINAL",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_command",
+    error_code_prefix="TERMINAL_TOOLS",
+)
 @router.post("/validate-command", response_model=Dict[str, Any])
 async def validate_command(command: str):
     """Validate command safety"""
@@ -94,6 +109,11 @@ async def validate_command(command: str):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_package_managers",
     error_code_prefix="TERMINAL",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_package_managers",
+    error_code_prefix="TERMINAL_TOOLS",
 )
 @router.get("/package-managers", response_model=PackageManagersResponse)
 async def get_package_managers():

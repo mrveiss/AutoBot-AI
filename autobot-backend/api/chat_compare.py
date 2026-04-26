@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,11 @@ async def _fan_out_stream(
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="compare_models",
+    error_code_prefix="CHAT_COMPARE",
+)
 @router.post("/chat/compare", response_model=None)
 async def compare_models(
     body: CompareRequest,

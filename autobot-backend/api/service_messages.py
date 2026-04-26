@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import auth_middleware
 from autobot_shared.message_bus import get_message_bus
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,11 @@ def _msg_to_response(msg) -> ServiceMessageResponse:
 # ------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_latest_messages",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 @router.get("/latest", response_model=LatestMessagesResponse)
 async def get_latest_messages(
     request: Request,
@@ -151,6 +157,11 @@ async def get_latest_messages(
         raise_server_error("API_0003", f"Service message query error: {e}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_correlation_chain",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 @router.get("/chain/{correlation_id}", response_model=CorrelationChainResponse)
 async def get_correlation_chain(
     request: Request,
@@ -181,6 +192,11 @@ async def get_correlation_chain(
         raise_server_error("API_0003", f"Correlation chain query error: {e}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_message",
+    error_code_prefix="SERVICE_MESSAGES",
+)
 @router.get("/{msg_id}", response_model=SingleMessageResponse)
 async def get_message(
     request: Request,

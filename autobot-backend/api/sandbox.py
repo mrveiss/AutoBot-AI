@@ -64,6 +64,11 @@ class SandboxBatchRequest(BaseModel):
     operation="execute_command",
     error_code_prefix="SANDBOX",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_command",
+    error_code_prefix="SANDBOX",
+)
 @router.post("/execute", response_model=None)
 async def execute_command(
     request: SandboxExecuteRequest,
@@ -125,6 +130,11 @@ async def execute_command(
     operation="execute_script",
     error_code_prefix="SANDBOX",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_script",
+    error_code_prefix="SANDBOX",
+)
 @router.post("/execute/script", response_model=None)
 async def execute_script(
     request: SandboxScriptRequest,
@@ -181,6 +191,11 @@ async def execute_script(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_batch",
+    error_code_prefix="SANDBOX",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_batch",
@@ -316,6 +331,11 @@ def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]
     operation="get_sandbox_stats",
     error_code_prefix="SANDBOX",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sandbox_stats",
+    error_code_prefix="SANDBOX",
+)
 @router.get("/stats", response_model=None)
 async def get_sandbox_stats(
     current_user: dict = Depends(get_current_user),
@@ -366,6 +386,11 @@ async def get_sandbox_stats(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_levels",
+    error_code_prefix="SANDBOX",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_levels",
@@ -435,6 +460,11 @@ async def get_security_levels(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sandbox_examples",
+    error_code_prefix="SANDBOX",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sandbox_examples",

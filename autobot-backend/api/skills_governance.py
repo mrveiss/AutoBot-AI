@@ -38,6 +38,7 @@ from skills.models import (
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
 from autobot_shared.time_utils import now_utc
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,6 +97,11 @@ def _governance_default() -> Dict[str, Any]:
     return {"mode": "semi_auto", "gap_detection_enabled": True}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_gap",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.post("/gaps", summary="Generate a skill to fill a capability gap", response_model=SkillsGapResponse)
 async def detect_gap(
     req: GapRequest,
@@ -142,6 +148,11 @@ async def detect_gap(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_drafts",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.get("/drafts", summary="List all skill drafts", response_model=List[SkillsDraftListItem])
 async def list_drafts() -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
@@ -164,6 +175,11 @@ async def list_drafts() -> List[Dict[str, Any]]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_draft",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.post("/drafts/{skill_id}/test", summary="Validate a skill draft", response_model=SkillsDraftTestResponse)
 async def test_draft(
     skill_id: str,
@@ -184,6 +200,11 @@ async def test_draft(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="promote_draft",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin", response_model=SkillsDraftPromoteResponse)
 async def promote_draft(
     skill_id: str,
@@ -239,6 +260,11 @@ async def promote_draft(
     return {"promoted": True, "path": promoted_path, "name": skill.name}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_approvals",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.get("/approvals", summary="List pending skill approvals", response_model=List[SkillsApprovalItem])
 async def list_approvals() -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
@@ -261,6 +287,11 @@ async def list_approvals() -> List[Dict[str, Any]]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="decide_approval",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval", response_model=SkillsApprovalDecisionResponse)
 async def decide_approval(
     approval_id: str,
@@ -280,6 +311,11 @@ async def decide_approval(
     return {"approval_id": approval_id, "status": approval.status}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_governance",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.get("/", summary="Get current governance configuration", response_model=SkillsGovernanceConfigResponse)
 async def get_governance() -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
@@ -298,6 +334,11 @@ async def get_governance() -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_governance",
+    error_code_prefix="SKILLS_GOVERNANCE",
+)
 @router.put("/", summary="Update the governance mode", response_model=SkillsGovernanceUpdateResponse)
 async def update_governance(
     body: GovernanceModeUpdate,

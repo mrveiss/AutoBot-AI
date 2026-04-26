@@ -64,6 +64,11 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     operation="add_repo",
     error_code_prefix="SKILLS_REPOS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.post("/", summary="Register a new skill repository", response_model=None)
 async def add_repo(
     body: AddRepoRequest,
@@ -98,7 +103,17 @@ async def add_repo(
     operation="list_repos",
     error_code_prefix="SKILLS_REPOS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repos",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.get("", summary="List all registered skill repositories", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repos",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.get("/", include_in_schema=False, response_model=None)
 async def list_repos() -> List[Dict[str, Any]]:
     """Return all registered skill repositories."""
@@ -122,6 +137,11 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sync_repo",
@@ -151,6 +171,11 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browse_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="browse_repo",

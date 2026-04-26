@@ -27,6 +27,7 @@ from services.trigger_service import (
     TriggerType,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,11 @@ class FireTriggerRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_trigger",
+    error_code_prefix="TRIGGERS",
+)
 @router.post(
     "/triggers",
     response_model=TriggerCreateResponse,
@@ -140,6 +146,11 @@ async def create_trigger(
     return TriggerCreateResponse(trigger_id=trigger_id, webhook_url=webhook_url)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_triggers",
+    error_code_prefix="TRIGGERS",
+)
 @router.get(
     "/triggers",
     response_model=TriggerListResponse,
@@ -162,6 +173,11 @@ async def list_triggers(
     return TriggerListResponse(triggers=serialised, total=len(serialised))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_trigger",
+    error_code_prefix="TRIGGERS",
+)
 @router.delete(
     "/triggers/{trigger_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -194,6 +210,11 @@ async def delete_trigger(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_webhook",
+    error_code_prefix="TRIGGERS",
+)
 @router.post(
     "/triggers/webhook/{trigger_id}",
     status_code=status.HTTP_200_OK,

@@ -36,6 +36,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from services.tts_client import get_tts_client
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -384,6 +385,11 @@ async def _cleanup_ws_tasks(
         tts_task.cancel()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_stream_ws",
+    error_code_prefix="VOICE_STREAM",
+)
 @router.websocket("/stream")
 async def voice_stream_ws(websocket: WebSocket) -> None:
     """Full-duplex voice conversation WebSocket (#1031, #1319)."""

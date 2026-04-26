@@ -40,6 +40,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +469,11 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_diff",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/analyze", response_model=CodeReviewAnalyzeResponse)
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
@@ -587,6 +593,11 @@ async def analyze_diff(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_by_id",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/review/{review_id}", response_model=CodeReviewReviewByIdResponse)
 async def get_review_by_id(
     review_id: str,
@@ -628,6 +639,11 @@ async def get_review_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="review_file",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.post("/review-file", response_model=CodeReviewFileResponse)
 async def review_file(
     admin_check: bool = Depends(check_admin_permission),
@@ -670,6 +686,11 @@ async def review_file(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_patterns",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/patterns", response_model=None)
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
@@ -695,6 +716,11 @@ async def get_review_patterns(
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_history",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/history", response_model=CodeReviewHistoryResponse)
 async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
@@ -755,6 +781,11 @@ async def get_review_history(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_metrics",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/metrics", response_model=CodeReviewMetricsResponse)
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
@@ -776,6 +807,11 @@ async def get_review_metrics(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_feedback",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.post("/feedback", response_model=CodeReviewFeedbackResponse)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
@@ -822,6 +858,11 @@ async def submit_feedback(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_summary",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/summary", response_model=CodeReviewSummaryResponse)
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
@@ -842,6 +883,11 @@ async def get_review_summary(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_review_categories",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/categories", response_model=None)
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
@@ -869,6 +915,11 @@ class PatternToggleRequest(BaseModel):
     enabled: bool
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_pattern_preference",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.post("/patterns/toggle", response_model=CodeReviewPatternToggleResponse)
 async def toggle_pattern_preference(
     request: PatternToggleRequest,
@@ -918,6 +969,11 @@ async def toggle_pattern_preference(
         raise HTTPException(status_code=500, detail="Failed to save preference")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_preferences",
+    error_code_prefix="ANALYTICS_CODE_REVIEW",
+)
 @router.get("/patterns/preferences", response_model=CodeReviewPatternPreferencesResponse)
 async def get_pattern_preferences(
     admin_check: bool = Depends(check_admin_permission),

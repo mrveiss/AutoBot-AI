@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
     operation="voice_listen_api",
     error_code_prefix="VOICE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_listen_api",
+    error_code_prefix="VOICE",
+)
 @router.post("/listen", response_model=VoiceListenResponse)
 async def voice_listen_api(request: Request, user_role: str = Form("user")):
     """Listen and convert speech to text"""
@@ -66,6 +71,11 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_speak_api",
+    error_code_prefix="VOICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_speak_api",
@@ -120,6 +130,11 @@ async def voice_speak_api(
     operation="voice_synthesize_api",
     error_code_prefix="VOICE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_synthesize_api",
+    error_code_prefix="VOICE",
+)
 @router.post("/synthesize", response_model=None)
 async def voice_synthesize_api(
     request: Request,
@@ -151,6 +166,11 @@ async def voice_synthesize_api(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_clone_api",
+    error_code_prefix="VOICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_clone_api",
@@ -192,6 +212,11 @@ async def voice_clone_api(
 # ------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_list_api",
+    error_code_prefix="VOICE",
+)
 @router.get("/voices", response_model=None)
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
@@ -200,6 +225,11 @@ async def voice_list_api():
     return voices
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_create_api",
+    error_code_prefix="VOICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_create_api",
@@ -217,6 +247,11 @@ async def voice_create_api(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_delete_api",
+    error_code_prefix="VOICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_delete_api",
@@ -300,6 +335,11 @@ async def _transcribe_with_whisper(
     return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix, language)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_transcribe_api",
+    error_code_prefix="VOICE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_transcribe_api",

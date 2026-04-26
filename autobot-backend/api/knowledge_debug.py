@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
     operation="get_fresh_knowledge_stats",
     error_code_prefix="KNOWLEDGE_FRESH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fresh_knowledge_stats",
+    error_code_prefix="KNOWLEDGE_DEBUG",
+)
 @router.get("/fresh_stats", response_model=KnowledgeFreshStatsResponse)
 async def get_fresh_knowledge_stats(request: Request = None):
     """Get knowledge base stats using a completely fresh instance (bypasses all cache)"""
@@ -99,6 +104,11 @@ async def get_fresh_knowledge_stats(request: Request = None):
     operation="debug_redis_connection",
     error_code_prefix="KNOWLEDGE_FRESH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="debug_redis_connection",
+    error_code_prefix="KNOWLEDGE_DEBUG",
+)
 @router.get("/debug_redis", response_model=KnowledgeDebugRedisResponse)
 async def debug_redis_connection():
     """Debug Redis connection and vector counts using canonical utility.
@@ -169,6 +179,11 @@ async def debug_redis_connection():
     category=ErrorCategory.SERVER_ERROR,
     operation="rebuild_search_index",
     error_code_prefix="KNOWLEDGE_FRESH",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rebuild_search_index",
+    error_code_prefix="KNOWLEDGE_DEBUG",
 )
 @router.post("/rebuild_index", response_model=KnowledgeRebuildIndexResponse)
 async def rebuild_search_index():

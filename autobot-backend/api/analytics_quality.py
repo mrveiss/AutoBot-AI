@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from auth_middleware import check_admin_permission
 from api.schemas_common import DataResponse, SuccessResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -966,6 +967,11 @@ manager = ConnectionManager()
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health_score",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/health-score", response_model=None)
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
@@ -1004,6 +1010,11 @@ async def get_health_score(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_metrics",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/metrics", response_model=None)
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
@@ -1063,6 +1074,11 @@ async def get_quality_metrics(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_distribution",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/patterns", response_model=None)
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
@@ -1116,6 +1132,11 @@ async def get_pattern_distribution(
     return {"status": "success", "patterns": result}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_complexity_metrics",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/complexity", response_model=None)
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
@@ -1233,6 +1254,11 @@ def _calculate_trend_statistics(scores: list) -> dict:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_trends",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/trends", response_model=None)
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
@@ -1268,6 +1294,11 @@ async def get_quality_trends(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_snapshot",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/snapshot", response_model=None)
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
@@ -1336,6 +1367,11 @@ async def get_quality_snapshot(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="drill_down_category",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/drill-down/{category}", response_model=None)
 async def drill_down_category(
     category: str,
@@ -1385,6 +1421,11 @@ async def drill_down_category(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_quality_report",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.get("/export", response_model=DataResponse)
 async def export_quality_report(
     format: str = Query("json", pattern="^(json|csv|pdf)$"),
@@ -1457,6 +1498,11 @@ _WS_MESSAGE_HANDLERS = {
 }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_quality_updates",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
 @router.websocket("/ws")
 async def websocket_quality_updates(websocket: WebSocket):
     """

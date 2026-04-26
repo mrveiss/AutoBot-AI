@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from project_state_manager import get_project_state_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,11 @@ class ProjectReportResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT",
+)
 @router.get("/status", response_model=ProjectStatusResponse)
 async def get_project_status(detailed: bool = False) -> ProjectStatusResponse:
     """Return current project development phase status.
@@ -95,6 +101,11 @@ async def get_project_status(detailed: bool = False) -> ProjectStatusResponse:
         raise HTTPException(status_code=500, detail="Failed to retrieve project status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_report",
+    error_code_prefix="PROJECT",
+)
 @router.get("/report", response_model=ProjectReportResponse)
 async def get_project_report() -> ProjectReportResponse:
     """Return a summary report of project completion and phase state."""

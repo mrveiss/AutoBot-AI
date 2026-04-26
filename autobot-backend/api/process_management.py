@@ -21,6 +21,7 @@ from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -74,6 +75,11 @@ class SpawnResponse(BaseModel):
 # -- Endpoints -------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="spawn_process",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.post("/processes/spawn", response_model=SpawnResponse)
 async def spawn_process(
     body: SpawnRequest,
@@ -96,6 +102,11 @@ async def spawn_process(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_process_status",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.get("/processes/{process_id}", response_model=DataResponse)
 async def get_process_status(
     process_id: str,
@@ -109,6 +120,11 @@ async def get_process_status(
     return JSONResponse(status_code=200, content=data)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_process_logs",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.get("/processes/{process_id}/logs", response_model=None)
 async def get_process_logs(
     process_id: str,
@@ -125,6 +141,11 @@ async def get_process_logs(
     return PlainTextResponse(content=_read_log_file(log_path), status_code=200)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="signal_process",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.post("/processes/{process_id}/signal", response_model=DataResponse)
 async def signal_process(
     process_id: str,
@@ -148,6 +169,11 @@ async def signal_process(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_processes",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.get("/agents/{agent_id}/processes", response_model=DataResponse)
 async def list_agent_processes(
     agent_id: str,
@@ -166,6 +192,11 @@ async def list_agent_processes(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_process_logs",
+    error_code_prefix="PROCESS_MANAGEMENT",
+)
 @router.websocket("/processes/{process_id}/stream")
 async def stream_process_logs(
     websocket: WebSocket,

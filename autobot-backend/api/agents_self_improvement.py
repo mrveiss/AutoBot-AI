@@ -13,6 +13,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,11 @@ class ResetLearningResponse(BaseModel):
     message: str
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_outcomes",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
+)
 @router.get(
     "/{agent_id}/outcomes",
     response_model=List[TaskOutcomeResponse],
@@ -92,6 +98,11 @@ async def get_agent_outcomes(
     return [TaskOutcomeResponse(**o.__dict__) for o in outcomes]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_learned_strategies",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
+)
 @router.get(
     "/{agent_id}/learned-strategies",
     response_model=Optional[LearnedStrategyResponse],
@@ -110,6 +121,11 @@ async def get_learned_strategies(
     return LearnedStrategyResponse(**strategy.__dict__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_agent_learning",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
+)
 @router.post(
     "/{agent_id}/reset-learning",
     response_model=ResetLearningResponse,

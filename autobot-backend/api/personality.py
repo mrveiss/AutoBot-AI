@@ -19,6 +19,7 @@ from pydantic import BaseModel, field_validator
 from auth_middleware import check_admin_permission
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
@@ -160,12 +161,22 @@ def _not_found(pid: str) -> HTTPException:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_profiles",
+    error_code_prefix="PERSONALITY",
+)
 @router.get("/profiles", response_model=List[ProfileSummary])
 async def list_profiles() -> List[Dict[str, Any]]:
     """List all personality profiles."""
     return get_personality_manager().list_profiles()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active",
+    error_code_prefix="PERSONALITY",
+)
 @router.get("/active", response_model=Optional[ProfileDetail])
 async def get_active() -> Optional[ProfileDetail]:
     """Return the active profile, or null if personality is disabled."""
@@ -176,6 +187,11 @@ async def get_active() -> Optional[ProfileDetail]:
     return _profile_to_detail(profile)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="PERSONALITY",
+)
 @router.get("/status", response_model=StatusResponse)
 async def get_status() -> StatusResponse:
     """Return enabled flag and active profile id."""
@@ -187,12 +203,22 @@ async def get_status() -> StatusResponse:
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_languages",
+    error_code_prefix="PERSONALITY",
+)
 @router.get("/languages", response_model=None)
 async def list_languages() -> Dict[str, str]:
     """Return the supported language codes and their display names."""
     return SUPPORTED_LANGUAGES
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.get("/profiles/{pid}", response_model=ProfileDetail)
 async def get_profile(pid: str) -> ProfileDetail:
     """Fetch a single profile by id."""
@@ -207,6 +233,11 @@ async def get_profile(pid: str) -> ProfileDetail:
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.post(
     "/profiles",
     response_model=ProfileDetail,
@@ -219,6 +250,11 @@ async def create_profile(body: ProfileCreate) -> ProfileDetail:
     return _profile_to_detail(profile)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.put(
     "/profiles/{pid}",
     response_model=ProfileDetail,
@@ -234,6 +270,11 @@ async def update_profile(pid: str, body: ProfileUpdate) -> ProfileDetail:
     return _profile_to_detail(profile)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.delete(
     "/profiles/{pid}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -253,6 +294,11 @@ async def delete_profile(pid: str) -> None:
         raise _not_found(pid) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="activate_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.post(
     "/profiles/{pid}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -267,6 +313,11 @@ async def activate_profile(pid: str) -> None:
         raise _not_found(pid) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_profile",
+    error_code_prefix="PERSONALITY",
+)
 @router.post(
     "/profiles/{pid}/reset",
     response_model=ProfileDetail,
@@ -281,6 +332,11 @@ async def reset_profile(pid: str) -> ProfileDetail:
     return _profile_to_detail(profile)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_personality",
+    error_code_prefix="PERSONALITY",
+)
 @router.post(
     "/toggle",
     response_model=StatusResponse,

@@ -18,6 +18,7 @@ from integrations.cicd_integration import (
     JenkinsIntegration,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ class ProviderInfo(BaseModel):
     auth_type: str = Field(..., description="Authentication type")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a CI/CD provider.
@@ -85,6 +91,11 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.get("/providers", response_model=None)
 async def list_providers() -> List[ProviderInfo]:
     """List supported CI/CD providers.
@@ -114,6 +125,11 @@ async def list_providers() -> List[ProviderInfo]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pipelines",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.get("/{provider}/pipelines", response_model=None)
 async def list_pipelines(
     provider: CICDProvider,
@@ -155,6 +171,11 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pipeline_status",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.get("/{provider}/pipelines/{pipeline_id}/status", response_model=None)
 async def get_pipeline_status(
     provider: CICDProvider,
@@ -195,6 +216,11 @@ async def get_pipeline_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_pipeline",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.post("/{provider}/pipelines/{pipeline_id}/trigger", response_model=None)
 async def trigger_pipeline(
     provider: CICDProvider,
@@ -238,6 +264,11 @@ async def trigger_pipeline(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pipeline_logs",
+    error_code_prefix="INTEGRATION_CICD",
+)
 @router.get("/{provider}/pipelines/{pipeline_id}/logs", response_model=None)
 async def get_pipeline_logs(
     provider: CICDProvider,

@@ -792,7 +792,17 @@ async def stream_chat_response(
     operation="list_chats",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_chats",
+    error_code_prefix="CHAT",
+)
 @router.get("/chats", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_chats",
+    error_code_prefix="CHAT",
+)
 @router.get("/chat/chats", response_model=DataResponse)  # Frontend compatibility alias
 async def list_chats(
     current_user: dict = Depends(get_current_user),
@@ -834,7 +844,17 @@ async def list_chats(
     operation="send_message",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="CHAT",
+)
 @router.post("/chat", response_model=DataResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="CHAT",
+)
 @router.post("/chat/message", response_model=DataResponse)  # Alternative endpoint
 async def send_message(
     current_user: dict = Depends(get_current_user),
@@ -919,6 +939,11 @@ async def send_message(
     operation="stream_message",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_message",
+    error_code_prefix="CHAT",
+)
 @router.post("/chat/stream", response_model=None)
 async def stream_message(
     current_user: dict = Depends(get_current_user),
@@ -961,6 +986,11 @@ async def stream_message(
 
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,
+    operation="chat_health_check",
+    error_code_prefix="CHAT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
@@ -1012,6 +1042,11 @@ async def chat_health_check(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="chat_statistics",
+    error_code_prefix="CHAT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat_statistics",
@@ -1179,6 +1214,11 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_chat_message_by_id",
+    error_code_prefix="CHAT",
+)
 @router.post("/chats/{chat_id}/message", response_model=None)
 async def send_chat_message_by_id(
     chat_id: str,
@@ -1249,6 +1289,11 @@ async def _stream_graph_resume(
         yield f"data: {json.dumps(evt)}\n\n"
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_chat_graph",
+    error_code_prefix="CHAT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_chat_graph",
@@ -1394,6 +1439,11 @@ async def _merge_chat_messages(
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_chat_by_id",
+    error_code_prefix="CHAT",
+)
 @router.post("/chats/{chat_id}/save", response_model=DataResponse)
 async def save_chat_by_id(
     chat_id: str,
@@ -1445,6 +1495,11 @@ async def save_chat_by_id(
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_chat_by_id",
+    error_code_prefix="CHAT",
+)
 @router.delete("/chats/{chat_id}", response_model=DataResponse)
 async def delete_chat_by_id(
     chat_id: str,
@@ -1486,6 +1541,11 @@ async def delete_chat_by_id(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_direct_chat_response",
+    error_code_prefix="CHAT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_direct_chat_response",
@@ -1952,6 +2012,11 @@ async def _generate_enhanced_stream(
     operation="enhanced_chat",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat",
+    error_code_prefix="CHAT",
+)
 @router.post("/enhanced", response_model=DataResponse)
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
@@ -2024,6 +2089,11 @@ async def enhanced_chat(
     operation="stream_enhanced_chat",
     error_code_prefix="CHAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_enhanced_chat",
+    error_code_prefix="CHAT",
+)
 @router.post("/stream-enhanced", response_model=None)
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
@@ -2053,6 +2123,11 @@ async def stream_enhanced_chat(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat_health_check",
+    error_code_prefix="CHAT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat_health_check",
@@ -2107,6 +2182,11 @@ async def enhanced_chat_health_check(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_enhanced_chat_capabilities",
+    error_code_prefix="CHAT",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_chat_capabilities",
@@ -2203,6 +2283,11 @@ class DetectLanguageRequest(BaseModel):
     operation="translate_text",
     error_code_prefix="TRANSLATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="translate_text",
+    error_code_prefix="CHAT",
+)
 @router.post("/translate", response_model=DataResponse)
 async def translate_text(
     body: TranslateRequest,
@@ -2231,6 +2316,11 @@ async def translate_text(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_language",
     error_code_prefix="TRANSLATE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_language",
+    error_code_prefix="CHAT",
 )
 @router.post("/detect-language", response_model=DataResponse)
 async def detect_language(

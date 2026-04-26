@@ -284,6 +284,11 @@ rum_logger = setup_rum_logger()
     operation="configure_rum",
     error_code_prefix="RUM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="configure_rum",
+    error_code_prefix="RUM",
+)
 @router.post("/config", response_model=RUMConfigResponse)
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
@@ -316,6 +321,11 @@ async def configure_rum(config: RumConfig):
         raise HTTPException(status_code=500, detail="Error configuring RUM")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="log_rum_event",
+    error_code_prefix="RUM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="log_rum_event",
@@ -380,6 +390,11 @@ async def log_rum_event(event: RumEvent):
     operation="disable_rum",
     error_code_prefix="RUM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_rum",
+    error_code_prefix="RUM",
+)
 @router.post("/disable", response_model=RUMDisableResponse)
 async def disable_rum():
     """Disable RUM monitoring"""
@@ -397,6 +412,11 @@ async def disable_rum():
         raise HTTPException(status_code=500, detail="Error disabling RUM")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_rum_data",
+    error_code_prefix="RUM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_rum_data",
@@ -430,6 +450,11 @@ async def clear_rum_data():
         raise HTTPException(status_code=500, detail="Error clearing RUM data")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_rum_data",
+    error_code_prefix="RUM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_rum_data",
@@ -475,6 +500,11 @@ async def export_rum_data():
         raise HTTPException(status_code=500, detail="Error exporting RUM data")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rum_status",
+    error_code_prefix="RUM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rum_status",
@@ -680,6 +710,11 @@ def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int
     return recorded_count
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_rum_metrics",
+    error_code_prefix="RUM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_rum_metrics",

@@ -418,6 +418,11 @@ def _list_directory_contents(target_path: Path) -> tuple:
     operation="list_files",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_files",
+    error_code_prefix="FILES",
+)
 @router.get("/list", response_model=DirectoryListing)
 async def list_files(request: Request, path: str = ""):
     """
@@ -685,6 +690,11 @@ async def _delete_directory_item(
     operation="upload_file",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_file",
+    error_code_prefix="FILES",
+)
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     request: Request,
@@ -751,6 +761,11 @@ async def upload_file(
     operation="download_file",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="download_file",
+    error_code_prefix="FILES",
+)
 @router.get("/download/{path:path}", response_model=None)
 async def download_file(request: Request, path: str):
     """
@@ -805,6 +820,11 @@ async def download_file(request: Request, path: str):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="view_file",
+    error_code_prefix="FILES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="view_file",
@@ -934,6 +954,11 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rename_file_or_directory",
+    error_code_prefix="FILES",
+)
 @router.post("/rename", response_model=FileRenameResponse)
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
@@ -1024,6 +1049,11 @@ async def _read_text_content(target_file: Path) -> tuple:
     operation="preview_file",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="preview_file",
+    error_code_prefix="FILES",
+)
 @router.get("/preview", response_model=FilePreviewResponse)
 async def preview_file(request: Request, path: str):
     """
@@ -1067,6 +1097,11 @@ async def preview_file(request: Request, path: str):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_file",
+    error_code_prefix="FILES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_file",
@@ -1147,6 +1182,11 @@ def _log_directory_create_audit(
     operation="create_directory",
     error_code_prefix="FILES",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_directory",
+    error_code_prefix="FILES",
+)
 @router.post("/create_directory", response_model=DirectoryCreateResponse)
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
@@ -1186,6 +1226,11 @@ async def create_directory(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_directory_tree",
+    error_code_prefix="FILES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_directory_tree",
@@ -1254,6 +1299,11 @@ async def get_directory_tree(request: Request, path: str = ""):
     return {"path": path, "tree": tree_data}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_stats",
+    error_code_prefix="FILES",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_stats",
@@ -1355,6 +1405,11 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_list_directory",
+    error_code_prefix="FILES",
+)
 @router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
 async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
     """List directory contents at an absolute path.
@@ -1376,6 +1431,11 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_read_file",
+    error_code_prefix="FILES",
+)
 @router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
 async def admin_read_file(path: str) -> dict:
     """Return text content of a file at an absolute path.

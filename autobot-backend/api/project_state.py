@@ -64,6 +64,11 @@ class PhaseValidationModel(BaseModel):
     operation="get_project_status",
     error_code_prefix="PROJECT_STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",
@@ -114,6 +119,11 @@ async def get_project_status(detailed: bool = False):
     operation="run_validation",
     error_code_prefix="PROJECT_STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_validation",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/validate", response_model=DataResponse)
 async def run_validation():
     """Run validation on all project phases"""
@@ -155,6 +165,11 @@ async def run_validation():
     operation="get_validation_report",
     error_code_prefix="PROJECT_STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_report",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/report", response_model=DataResponse)
 async def get_validation_report():
     """Get detailed validation report in markdown format"""
@@ -177,6 +192,11 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_phases",
+    error_code_prefix="PROJECT_STATE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_phases",
@@ -238,6 +258,11 @@ async def get_all_phases():
     operation="activate_phase",
     error_code_prefix="PROJECT_STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="activate_phase",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/phase/{phase_id}/activate", response_model=DataResponse)
 async def activate_phase(phase_id: str):
     """Activate a specific development phase"""
@@ -279,6 +304,11 @@ async def activate_phase(phase_id: str):
     operation="auto_progress_phases",
     error_code_prefix="PROJECT_STATE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="auto_progress_phases",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/auto-progress", response_model=DataResponse)
 async def auto_progress_phases():
     """Run automated phase progression logic"""
@@ -297,6 +327,11 @@ async def auto_progress_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="PROJECT_STATE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",

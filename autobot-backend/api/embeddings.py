@@ -57,6 +57,11 @@ class EmbeddingUpdate(BaseModel):
     operation="get_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_settings",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.get("/settings", response_model=DataResponse)
 async def get_embedding_settings(
     current_user: dict = Depends(get_current_user),
@@ -100,6 +105,11 @@ async def get_embedding_settings(
         raise HTTPException(status_code=500, detail="Failed to get embedding settings")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_embedding_settings",
+    error_code_prefix="EMBEDDINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_settings",
@@ -164,6 +174,11 @@ async def update_embedding_settings(
     operation="get_available_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_embedding_models",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.get("/models", response_model=DataResponse)
 async def get_available_embedding_models(
     current_user: dict = Depends(get_current_user),
@@ -207,6 +222,11 @@ async def get_available_embedding_models(
         raise HTTPException(status_code=500, detail="Failed to get embedding models")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_embedding_models",
+    error_code_prefix="EMBEDDINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_embedding_models",
@@ -268,6 +288,11 @@ async def refresh_embedding_models(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_status",
+    error_code_prefix="EMBEDDINGS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_status",

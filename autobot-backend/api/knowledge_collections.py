@@ -79,6 +79,11 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
     operation="create_collection",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.post("/collections", response_model=KnowledgeCollectionCreateResponse)
 async def create_collection(
     request: CreateCollectionRequest,
@@ -134,6 +139,11 @@ async def create_collection(
     operation="list_collections",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_collections",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.get("/collections", response_model=KnowledgeCollectionListResponse)
 async def list_collections(
     pagination: PaginationParams = Depends(),
@@ -188,6 +198,11 @@ async def list_collections(
     operation="get_collection",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.get("/collections/{collection_id}", response_model=KnowledgeCollectionDetailResponse)
 async def get_collection(
     collection_id: str = Path(..., description="Collection UUID"),
@@ -236,6 +251,11 @@ async def get_collection(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_collection",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
 @router.put("/collections/{collection_id}", response_model=KnowledgeCollectionUpdateResponse)
 async def update_collection(
@@ -302,6 +322,11 @@ async def update_collection(
     operation="delete_collection",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.delete("/collections/{collection_id}", response_model=KnowledgeCollectionDeleteResponse)
 async def delete_collection(
     collection_id: str = Path(..., description="Collection UUID"),
@@ -366,6 +391,11 @@ async def delete_collection(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_facts_to_collection",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_facts_to_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
 @router.post("/collections/{collection_id}/facts", response_model=KnowledgeCollectionAddFactsResponse)
 async def add_facts_to_collection(
@@ -432,6 +462,11 @@ async def add_facts_to_collection(
     operation="remove_facts_from_collection",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_facts_from_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.delete("/collections/{collection_id}/facts", response_model=KnowledgeCollectionRemoveFactsResponse)
 async def remove_facts_from_collection(
     collection_id: str = Path(..., description="Collection UUID"),
@@ -494,6 +529,11 @@ async def remove_facts_from_collection(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_in_collection",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_facts_in_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
 @router.get("/collections/{collection_id}/facts", response_model=KnowledgeCollectionFactsListResponse)
 async def get_facts_in_collection(
@@ -561,6 +601,11 @@ async def get_facts_in_collection(
     operation="get_fact_collections",
     error_code_prefix="KNOWLEDGE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fact_collections",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
 @router.get("/facts/{fact_id}/collections", response_model=KnowledgeFactCollectionsResponse)
 async def get_fact_collections(
     fact_id: str = Path(..., description="Fact UUID"),
@@ -615,6 +660,11 @@ async def get_fact_collections(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_collection",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_collection",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
 @router.post("/collections/{collection_id}/export", response_model=KnowledgeCollectionExportResponse)
 async def export_collection(
@@ -679,6 +729,11 @@ async def export_collection(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_delete_collection_facts",
     error_code_prefix="KNOWLEDGE",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="bulk_delete_collection_facts",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
 @router.post("/collections/{collection_id}/bulk-delete", response_model=KnowledgeCollectionBulkDeleteResponse)
 async def bulk_delete_collection_facts(

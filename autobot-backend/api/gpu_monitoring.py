@@ -44,6 +44,11 @@ def _gpu_unavailable_error() -> HTTPException:
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_gpu_efficiency",
+    error_code_prefix="GPU_MONITORING",
+)
 @router.get("/efficiency", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -70,6 +75,11 @@ async def get_gpu_efficiency(
     return {"success": True, "efficiency": result}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_gpu_capabilities",
+    error_code_prefix="GPU_MONITORING",
+)
 @router.get("/capabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -93,6 +103,11 @@ async def get_gpu_capabilities(
     return {"success": True, "capabilities": caps}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_gpu_benchmark",
+    error_code_prefix="GPU_MONITORING",
+)
 @router.post("/benchmark", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -116,6 +131,11 @@ async def run_gpu_benchmark(
     return {"success": True, "benchmark": result}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="optimize_gpu_multimodal",
+    error_code_prefix="GPU_MONITORING",
+)
 @router.post("/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -143,6 +163,11 @@ async def optimize_gpu_multimodal(
     return {"success": True, "optimization": asdict(result)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_gpu_config",
+    error_code_prefix="GPU_MONITORING",
+)
 @router.patch("/config", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -22,6 +22,7 @@ from integrations.communication_integration import (
     SlackIntegration,
     TeamsIntegration,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,11 @@ class WebhookMessageRequest(BaseModel):
     title: Optional[str] = Field(None, description="Message title")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.post(
     "/test-connection",
     response_model=IntegrationHealth,
@@ -88,6 +94,11 @@ async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
         ) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.get(
     "/providers",
     response_model=List[ProviderInfo],
@@ -117,6 +128,11 @@ async def list_providers() -> List[ProviderInfo]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_channels",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.get(
     "/{provider}/channels",
     response_model=Dict[str, Any],
@@ -170,6 +186,11 @@ async def list_channels(
         ) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.post(
     "/{provider}/messages",
     response_model=Dict[str, Any],
@@ -201,6 +222,11 @@ async def send_message(
         ) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_channel_history",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.get(
     "/{provider}/channels/{channel_id}/history",
     response_model=Dict[str, Any],
@@ -240,6 +266,11 @@ async def get_channel_history(
         ) from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_webhook_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
+)
 @router.post(
     "/{provider}/webhooks",
     response_model=Dict[str, Any],

@@ -364,6 +364,11 @@ def _build_timeline_response(
     operation="get_evolution_timeline",
     error_code_prefix="EVOLUTION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_evolution_timeline",
+    error_code_prefix="ANALYTICS_EVOLUTION",
+)
 @router.get("/timeline", response_model=DataResponse)
 async def get_evolution_timeline(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -433,6 +438,11 @@ async def get_evolution_timeline(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
     error_code_prefix="EVOLUTION",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_evolution",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
 @router.get("/patterns", response_model=DataResponse)
 async def get_pattern_evolution(
@@ -608,6 +618,11 @@ def _build_trends_success_response(
     operation="get_quality_trends",
     error_code_prefix="EVOLUTION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quality_trends",
+    error_code_prefix="ANALYTICS_EVOLUTION",
+)
 @router.get("/trends", response_model=DataResponse)
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
@@ -680,6 +695,11 @@ async def get_quality_trends(
     operation="record_snapshot",
     error_code_prefix="EVOLUTION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_quality_snapshot",
+    error_code_prefix="ANALYTICS_EVOLUTION",
+)
 @router.post("/snapshot", response_model=DataResponse)
 async def record_quality_snapshot(
     snapshot: QualitySnapshot,
@@ -716,6 +736,11 @@ async def record_quality_snapshot(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_pattern_snapshot",
     error_code_prefix="EVOLUTION",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="record_pattern_snapshot",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
 @router.post("/pattern-snapshot", response_model=DataResponse)
 async def record_pattern_snapshot(
@@ -836,6 +861,11 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     operation="export_evolution_data",
     error_code_prefix="EVOLUTION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_evolution_data",
+    error_code_prefix="ANALYTICS_EVOLUTION",
+)
 @router.get("/export", response_model=DataResponse)
 async def export_evolution_data(
     format: str = Query("json", description="Export format: json, csv"),
@@ -896,6 +926,11 @@ async def export_evolution_data(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_summary",
     error_code_prefix="EVOLUTION",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_evolution_summary",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
 @router.get("/summary", response_model=DataResponse)
 async def get_evolution_summary(
@@ -1258,6 +1293,11 @@ def _validate_evolution_repo_path(repo_path_str: str):
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_evolution_analysis",
     error_code_prefix="EVOLUTION",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_evolution_analysis",
+    error_code_prefix="ANALYTICS_EVOLUTION",
 )
 @router.post("/analyze", response_model=EvolutionAnalysisResponse)
 async def trigger_evolution_analysis(

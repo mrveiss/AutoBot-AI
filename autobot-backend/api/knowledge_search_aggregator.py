@@ -370,6 +370,11 @@ def _search_documentation(
     operation="unified_search",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unified_search",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
+)
 @router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
 async def unified_search(req: Request, body: UnifiedSearchRequest):
     """
@@ -418,6 +423,11 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     category=ErrorCategory.SERVER_ERROR,
     operation="unified_stats",
     error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unified_stats",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
 @router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
 async def unified_stats(req: Request):
@@ -486,6 +496,11 @@ async def unified_stats(req: Request):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_context",
     error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_llm_context",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
 @router.post("/context", response_model=KnowledgeUnifiedContextResponse)
 async def get_llm_context(req: Request, body: ContextRequest):
@@ -558,6 +573,11 @@ async def get_llm_context(req: Request, body: ContextRequest):
     operation="search_documentation",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_documentation",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
+)
 @router.get("/documentation/search", response_model=KnowledgeDocumentationSearchResponse)
 async def search_documentation(
     query: str,
@@ -610,6 +630,11 @@ async def search_documentation(
     category=ErrorCategory.SERVER_ERROR,
     operation="documentation_stats",
     error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="documentation_stats",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
 @router.get("/documentation/stats", response_model=KnowledgeDocumentationStatsResponse)
 async def documentation_stats():
@@ -951,6 +976,11 @@ def _update_category_fact_counts(
     operation="get_unified_graph",
     error_code_prefix="KNOWLEDGE_UNIFIED",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_graph",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
+)
 @router.post("/graph", response_model=KnowledgeUnifiedGraphResponse)
 async def get_unified_graph(req: Request, body: GraphRequest):
     """
@@ -1020,6 +1050,11 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_graph_simple",
     error_code_prefix="KNOWLEDGE_UNIFIED",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_graph_simple",
+    error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
 @router.get("/graph", response_model=KnowledgeUnifiedGraphResponse)
 async def get_unified_graph_simple(

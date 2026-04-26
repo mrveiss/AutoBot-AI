@@ -115,6 +115,11 @@ class ConflictSchema(BaseModel):
 # ===== ENDPOINTS =====
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ground_response",
+    error_code_prefix="KNOWLEDGE_GROUNDING",
+)
 @router.post("/ground-response", response_model=KnowledgeGroundResponseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -194,6 +199,11 @@ async def ground_response(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="verify_claim",
+    error_code_prefix="KNOWLEDGE_GROUNDING",
+)
 @router.post("/verify-claim", response_model=KnowledgeVerifyClaimResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -267,6 +277,11 @@ async def verify_claim(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_conflicts",
+    error_code_prefix="KNOWLEDGE_GROUNDING",
+)
 @router.get("/kb-conflicts", response_model=KnowledgeConflictsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -403,6 +418,11 @@ async def list_conflicts(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resolve_conflict",
+    error_code_prefix="KNOWLEDGE_GROUNDING",
+)
 @router.post("/kb-conflicts/{conflict_id}/resolve", response_model=KnowledgeResolveConflictResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -468,6 +488,11 @@ async def resolve_conflict(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_stats",
+    error_code_prefix="KNOWLEDGE_GROUNDING",
+)
 @router.get("/kb-stats", response_model=KnowledgeGroundingStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

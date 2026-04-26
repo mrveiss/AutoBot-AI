@@ -348,6 +348,11 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
     operation="get_structured_thinking_mcp_tools",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_structured_thinking_mcp_tools",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     """
@@ -363,6 +368,11 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_thought_mcp",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_thought_mcp",
@@ -439,6 +449,11 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     operation="generate_summary_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_summary_mcp",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @router.post("/mcp/generate_summary", response_model=DataResponse)
 async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
@@ -506,6 +521,11 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     operation="clear_history_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_history_mcp",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @router.post("/mcp/clear_history", response_model=StructuredThinkingClearResponse)
 async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     """Clear the thinking history for a session"""
@@ -528,6 +548,11 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_structured_session",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_structured_session",
@@ -567,6 +592,11 @@ async def get_structured_session(session_id: str) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_structured_sessions",
+    error_code_prefix="STRUCTURED_THINKING_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_structured_sessions",

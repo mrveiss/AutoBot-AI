@@ -19,6 +19,7 @@ from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -99,6 +100,11 @@ class MonitorCreateRequest(BaseModel):
     message: str = Field(..., description="Notification message")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.post("/test-connection", response_model=None)
 async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
@@ -128,6 +134,11 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.get("/providers", response_model=None)
 async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     """List supported monitoring providers.
@@ -151,6 +162,11 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_hosts",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.get("/{provider}/hosts", response_model=None)
 async def list_hosts(
     provider: str,
@@ -188,6 +204,11 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail="Failed to list hosts")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_metrics",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.post("/{provider}/metrics", response_model=None)
 async def query_metrics(
     provider: str,
@@ -227,6 +248,11 @@ async def query_metrics(
         raise HTTPException(status_code=500, detail="Failed to query metrics")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_alerts",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.get("/{provider}/alerts", response_model=None)
 async def list_alerts(
     provider: str,
@@ -264,6 +290,11 @@ async def list_alerts(
         raise HTTPException(status_code=500, detail="Failed to list alerts")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_events",
+    error_code_prefix="INTEGRATION_MONITORING",
+)
 @router.post("/{provider}/events", response_model=None)
 async def get_events(
     provider: str,

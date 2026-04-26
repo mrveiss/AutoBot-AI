@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from project_state_manager import get_project_state_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,11 @@ class ValidationRunResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phases_status",
+    error_code_prefix="PHASES",
+)
 @router.get("/status", response_model=PhasesStatusResponse)
 async def get_phases_status() -> PhasesStatusResponse:
     """Return phase completion status for all development phases."""
@@ -89,6 +95,11 @@ async def get_phases_status() -> PhasesStatusResponse:
         raise HTTPException(status_code=500, detail="Failed to retrieve phases status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_phases_validation",
+    error_code_prefix="PHASES",
+)
 @router.post("/validation/run", response_model=ValidationRunResponse)
 async def run_phases_validation() -> ValidationRunResponse:
     """Queue a phase validation run.

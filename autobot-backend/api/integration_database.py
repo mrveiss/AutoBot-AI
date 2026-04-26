@@ -167,6 +167,11 @@ def _get_integration_class(provider: str):
     operation="test_database_connection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_database_connection",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @router.post("/test-connection", response_model=None)
 async def test_database_connection(request: DatabaseConnectionRequest):
     """
@@ -207,6 +212,11 @@ async def test_database_connection(request: DatabaseConnectionRequest):
     operation="list_database_providers",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_database_providers",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @router.get("/providers", response_model=None)
 async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     """
@@ -239,6 +249,11 @@ async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     return {"providers": providers, "count": len(providers)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_database_query",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_database_query",
@@ -297,6 +312,11 @@ async def execute_database_query(provider: str, request: QueryRequest):
     operation="query_mongodb_collection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_mongodb_collection",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @router.post("/mongodb/query-collection", response_model=None)
 async def query_mongodb_collection(request: MongoQueryRequest):
     """
@@ -345,6 +365,11 @@ async def query_mongodb_collection(request: MongoQueryRequest):
     operation="list_databases",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_databases",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @router.post("/{provider}/databases", response_model=None)
 async def list_databases(provider: str, request: DatabaseListRequest):
     """
@@ -381,6 +406,11 @@ async def list_databases(provider: str, request: DatabaseListRequest):
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_tables",
+    error_code_prefix="INTEGRATION_DATABASE",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_tables",

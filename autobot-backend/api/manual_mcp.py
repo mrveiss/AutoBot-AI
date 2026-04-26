@@ -323,6 +323,11 @@ def _doc_index_tool_schema() -> dict:
     operation="manual_mcp_tools",
     error_code_prefix="MANUAL_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_manual_mcp_tools",
+    error_code_prefix="MANUAL_MCP",
+)
 @router.get("/mcp/tools", response_model=None)
 async def get_manual_mcp_tools(
     current_user: dict = Depends(get_current_user),
@@ -341,6 +346,11 @@ async def get_manual_mcp_tools(
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="manual_mcp_lookup",
+    error_code_prefix="MANUAL_MCP",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_lookup_man_page",
     error_code_prefix="MANUAL_MCP",
 )
 @router.post("/mcp/lookup_man_page", response_model=DataResponse)
@@ -383,6 +393,11 @@ async def mcp_lookup_man_page(
     operation="manual_mcp_search",
     error_code_prefix="MANUAL_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_search_man_pages",
+    error_code_prefix="MANUAL_MCP",
+)
 @router.post("/mcp/search_man_pages", response_model=DataResponse)
 async def mcp_search_man_pages(
     request: ManPageSearchRequest,
@@ -417,6 +432,11 @@ async def mcp_search_man_pages(
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="manual_mcp_doc_index",
+    error_code_prefix="MANUAL_MCP",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_get_doc_index",
     error_code_prefix="MANUAL_MCP",
 )
 @router.post("/mcp/get_doc_index", response_model=DataResponse)

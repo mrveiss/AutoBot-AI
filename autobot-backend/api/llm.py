@@ -50,6 +50,11 @@ def _get_llm_interface():
     operation="get_llm_config",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_llm_config",
+    error_code_prefix="LLM",
+)
 @router.get("/config", response_model=None)
 async def get_llm_config(
     current_user: dict = Depends(get_current_user),
@@ -65,6 +70,11 @@ async def get_llm_config(
         raise HTTPException(status_code=500, detail="Error getting LLM config")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_llm_config",
+    error_code_prefix="LLM",
+)
 @router.post("/config", response_model=DataResponse)
 async def update_llm_config(
     config_data: dict,
@@ -97,6 +107,11 @@ async def update_llm_config(
     operation="test_llm_connection",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_llm_connection",
+    error_code_prefix="LLM",
+)
 @router.post("/test_connection", response_model=LLMConnectionTestResponse)
 async def test_llm_connection(
     current_user: dict = Depends(get_current_user),
@@ -116,6 +131,11 @@ async def test_llm_connection(
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_llm_models",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_llm_models",
@@ -143,6 +163,11 @@ async def get_available_llm_models(
         raise HTTPException(status_code=500, detail="Error getting available models")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_llm",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_llm",
@@ -220,6 +245,11 @@ def _build_llm_update_response() -> dict:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_llm_provider",
+    error_code_prefix="LLM",
+)
 @router.post("/provider", response_model=DataResponse)
 async def update_llm_provider(
     provider_data: dict,
@@ -247,6 +277,11 @@ async def update_llm_provider(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_embedding_models",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_embedding_models",
@@ -321,6 +356,11 @@ async def _apply_embedding_config(
     await asyncio.to_thread(config.save_config_to_yaml)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_embedding_model",
+    error_code_prefix="LLM",
+)
 @router.post("/embedding", response_model=DataResponse)
 async def update_embedding_model(
     embedding_data: dict,
@@ -463,6 +503,11 @@ def _build_active_provider_info(
     operation="get_comprehensive_llm_status",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_comprehensive_llm_status",
+    error_code_prefix="LLM",
+)
 @router.get("/status/comprehensive", response_model=DataResponse)
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 async def get_comprehensive_llm_status(
@@ -510,6 +555,11 @@ async def get_comprehensive_llm_status(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_llm_status",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_status",
@@ -578,6 +628,11 @@ def _get_model_from_cloud_config(unified_config: dict) -> str:
     return model if (api_key and model) else ""
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_llm_status",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quick_llm_status",
@@ -658,6 +713,11 @@ def _build_providers_health_dict(results: dict) -> tuple:
     operation="get_all_providers_health",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_providers_health",
+    error_code_prefix="LLM",
+)
 @router.get("/health/providers", response_model=DataResponse)
 @cache_response(cache_key="llm_providers_health", ttl=30)
 async def get_all_providers_health():
@@ -714,6 +774,11 @@ async def get_all_providers_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_provider_health",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_provider_health",
@@ -780,6 +845,11 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
     operation="clear_provider_health_cache",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_provider_health_cache",
+    error_code_prefix="LLM",
+)
 @router.post("/health/providers/clear-cache", response_model=DataResponse)
 async def clear_provider_health_cache(
     provider_name: str = None,
@@ -827,6 +897,11 @@ async def clear_provider_health_cache(
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tiered_routing_metrics",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_metrics",
@@ -882,6 +957,11 @@ async def get_tiered_routing_metrics(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tiered_routing_config",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_config",
@@ -1013,6 +1093,11 @@ def _build_tiered_routing_response(tier_router) -> dict:
     operation="update_tiered_routing_config",
     error_code_prefix="LLM",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_tiered_routing_config",
+    error_code_prefix="LLM",
+)
 @router.post("/tiered-routing/config", response_model=DataResponse)
 async def update_tiered_routing_config(
     config_data: dict,
@@ -1055,6 +1140,11 @@ async def update_tiered_routing_config(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_tiered_routing_metrics",
+    error_code_prefix="LLM",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_tiered_routing_metrics",

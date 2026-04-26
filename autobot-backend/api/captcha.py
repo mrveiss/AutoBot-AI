@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from autobot_shared.time_utils import utc_timestamp
 from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = logging.getLogger(__name__)
@@ -48,6 +49,11 @@ class CaptchaResolutionResponse(BaseModel):
     timestamp: Optional[str] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resolve_captcha",
+    error_code_prefix="CAPTCHA",
+)
 @router.post("/{captcha_id}/resolve", response_model=CaptchaResolutionResponse)
 async def resolve_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to mark as solved"),
@@ -103,6 +109,11 @@ async def resolve_captcha(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="skip_captcha",
+    error_code_prefix="CAPTCHA",
+)
 @router.post("/{captcha_id}/skip", response_model=CaptchaResolutionResponse)
 async def skip_captcha(
     captcha_id: str = Path(..., description="CAPTCHA ID to skip"),
@@ -157,6 +168,11 @@ async def skip_captcha(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_captchas",
+    error_code_prefix="CAPTCHA",
+)
 @router.get("/pending", response_model=DataResponse)
 async def get_pending_captchas() -> JSONResponse:
     """
@@ -187,6 +203,11 @@ async def get_pending_captchas() -> JSONResponse:
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="captcha_health",
+    error_code_prefix="CAPTCHA",
+)
 @router.get("/health", response_model=DataResponse)
 async def captcha_health() -> JSONResponse:
     """

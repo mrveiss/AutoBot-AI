@@ -195,6 +195,11 @@ class QueueControlRequest(BaseModel):
     operation="schedule_workflow",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="schedule_workflow",
+    error_code_prefix="SCHEDULER",
+)
 @router.post("/schedule", response_model=SchedulerWorkflowCreateResponse)
 async def schedule_workflow(request: ScheduleWorkflowRequest):
     """Schedule a workflow for future execution"""
@@ -239,6 +244,11 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
     operation="list_scheduled_workflows",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_scheduled_workflows",
+    error_code_prefix="SCHEDULER",
+)
 @router.get("/workflows", response_model=SchedulerWorkflowListResponse)
 async def list_scheduled_workflows(
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -278,6 +288,11 @@ async def list_scheduled_workflows(
     operation="get_workflow_details",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_details",
+    error_code_prefix="SCHEDULER",
+)
 @router.get("/workflows/{workflow_id}", response_model=SchedulerWorkflowDetailResponse)
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific scheduled workflow (Issue #372)"""
@@ -292,6 +307,11 @@ async def get_workflow_details(workflow_id: str):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reschedule_workflow",
+    error_code_prefix="SCHEDULER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reschedule_workflow",
@@ -340,6 +360,11 @@ async def reschedule_workflow(workflow_id: str, request: RescheduleRequest):
     operation="cancel_workflow",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_workflow",
+    error_code_prefix="SCHEDULER",
+)
 @router.delete("/workflows/{workflow_id}", response_model=SchedulerCancelResponse)
 async def cancel_workflow(workflow_id: str):
     """Cancel a scheduled or queued workflow"""
@@ -362,6 +387,11 @@ async def cancel_workflow(workflow_id: str):
     operation="get_scheduler_status",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_scheduler_status",
+    error_code_prefix="SCHEDULER",
+)
 @router.get("/status", response_model=SchedulerStatusResponse)
 async def get_scheduler_status():
     """Get current scheduler and queue status"""
@@ -370,6 +400,11 @@ async def get_scheduler_status():
     return {"success": True, "scheduler_status": status}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_queue_status",
+    error_code_prefix="SCHEDULER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_queue_status",
@@ -420,6 +455,11 @@ async def get_queue_status():
     operation="control_queue",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_queue",
+    error_code_prefix="SCHEDULER",
+)
 @router.post("/queue/control", response_model=SchedulerQueueControlResponse)
 async def control_queue(request: QueueControlRequest):
     """Control queue operations (pause, resume, set max concurrent)"""
@@ -452,6 +492,11 @@ async def control_queue(request: QueueControlRequest):
     operation="start_scheduler",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_scheduler",
+    error_code_prefix="SCHEDULER",
+)
 @router.post("/start", response_model=SchedulerStartResponse)
 async def start_scheduler():
     """Start the workflow scheduler"""
@@ -464,6 +509,11 @@ async def start_scheduler():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_scheduler",
+    error_code_prefix="SCHEDULER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_scheduler",
@@ -552,6 +602,11 @@ def _build_template_schedule_request(
     operation="schedule_template_workflow",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="schedule_template_workflow",
+    error_code_prefix="SCHEDULER",
+)
 @router.get("/templates/schedule/{template_id}", response_model=SchedulerTemplateScheduleResponse)
 async def schedule_template_workflow(
     template_id: str,
@@ -612,6 +667,11 @@ async def schedule_template_workflow(
     operation="get_scheduler_statistics",
     error_code_prefix="SCHEDULER",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_scheduler_statistics",
+    error_code_prefix="SCHEDULER",
+)
 @router.get("/stats", response_model=SchedulerStatsResponse)
 async def get_scheduler_statistics():
     """Get detailed scheduler statistics"""
@@ -662,6 +722,11 @@ async def get_scheduler_statistics():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_schedule_workflows",
+    error_code_prefix="SCHEDULER",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_schedule_workflows",

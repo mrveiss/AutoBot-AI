@@ -46,6 +46,11 @@ router = APIRouter(prefix="/export", tags=["analytics", "export"])
     operation="export_cost_csv",
     error_code_prefix="EXPORT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_cost_csv",
+    error_code_prefix="ANALYTICS_EXPORT",
+)
 @router.get("/csv/costs", response_model=None)
 async def export_cost_csv(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to export"),
@@ -91,6 +96,11 @@ async def export_cost_csv(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_agent_csv",
     error_code_prefix="EXPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_agent_csv",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
 @router.get("/csv/agents", response_model=None)
 async def export_agent_csv(
@@ -144,6 +154,11 @@ async def export_agent_csv(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_usage_csv",
     error_code_prefix="EXPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_usage_csv",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
 @router.get("/csv/usage", response_model=None)
 async def export_usage_csv(
@@ -215,6 +230,11 @@ async def export_usage_csv(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_full_json",
     error_code_prefix="EXPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_full_json",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
 @router.get("/json/full", response_model=DataResponse)
 async def export_full_json(
@@ -373,6 +393,11 @@ def _build_agent_metrics_lines(agent_metrics: list) -> list[str]:
     category=ErrorCategory.SERVER_ERROR,
     operation="export_prometheus",
     error_code_prefix="EXPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_prometheus",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
 @router.get("/prometheus", response_model=None)
 async def export_prometheus(
@@ -550,6 +575,11 @@ def _get_grafana_panels() -> list:
     operation="export_grafana_dashboard",
     error_code_prefix="EXPORT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_grafana_dashboard",
+    error_code_prefix="ANALYTICS_EXPORT",
+)
 @router.get("/grafana-dashboard", response_model=DataResponse)
 async def export_grafana_dashboard(
     admin_check: bool = Depends(check_admin_permission),
@@ -605,6 +635,11 @@ async def export_grafana_dashboard(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_export_formats",
     error_code_prefix="EXPORT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_export_formats",
+    error_code_prefix="ANALYTICS_EXPORT",
 )
 @router.get("/formats", response_model=ExportFormatsResponse)
 async def get_export_formats(

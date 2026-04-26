@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,11 @@ class EventSearchRequest(BaseModel):
 # --- Pipeline Endpoints ---
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_pipeline",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.post("/pipeline/run", response_model=PipelineRunResponse)
 async def run_pipeline(
     request: PipelineRunRequest,
@@ -106,6 +112,11 @@ async def run_pipeline(
 # --- Entity Endpoints ---
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_entities",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/entities", response_model=None)
 async def list_entities(
     entity_type: Optional[str] = Query(None),
@@ -128,6 +139,11 @@ async def list_entities(
         raise HTTPException(status_code=500, detail="Entity listing failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_entity_relationships",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/entities/{entity_id}/relationships", response_model=None)
 async def get_entity_relationships(
     entity_id: str,
@@ -157,6 +173,11 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_events",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/events", response_model=None)
 async def search_events(
     start_date: Optional[str] = Query(None),
@@ -195,6 +216,11 @@ async def search_events(
         raise HTTPException(status_code=500, detail="Event search failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_event_timeline",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/events/{entity_name}/timeline", response_model=None)
 async def get_event_timeline(
     entity_name: str,
@@ -228,6 +254,11 @@ async def get_event_timeline(
 # --- Summary Endpoints ---
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_summaries",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/summaries/search", response_model=None)
 async def search_summaries(
     query: str = Query(..., description="Search query"),
@@ -256,6 +287,11 @@ async def search_summaries(
         raise HTTPException(status_code=500, detail="Summary search failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_document_overview",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/documents/{document_id}/overview", response_model=None)
 async def get_document_overview(
     document_id: str,
@@ -277,6 +313,11 @@ async def get_document_overview(
         raise HTTPException(status_code=500, detail="Document overview failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="drill_down_summary",
+    error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
+)
 @router.get("/summaries/{summary_id}/drill-down", response_model=None)
 async def drill_down_summary(
     summary_id: str,

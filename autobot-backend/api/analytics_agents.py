@@ -109,6 +109,11 @@ class CompleteTaskRequest(BaseModel):
     operation="get_all_agents_performance",
     error_code_prefix="AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_agents_performance",
+    error_code_prefix="ANALYTICS_AGENTS",
+)
 @router.get("/performance", response_model=AgentAllPerformanceResponse)
 async def get_all_agents_performance(
     admin_check: bool = Depends(check_admin_permission),
@@ -143,6 +148,11 @@ async def get_all_agents_performance(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_performance",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_performance",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 async def get_agent_performance(
@@ -187,6 +197,11 @@ async def get_agent_performance(
     operation="get_agent_history",
     error_code_prefix="AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_history",
+    error_code_prefix="ANALYTICS_AGENTS",
+)
 @router.get("/{agent_id}/history", response_model=AgentHistoryResponse)
 async def get_agent_history(
     agent_id: str,
@@ -214,6 +229,11 @@ async def get_agent_history(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_tasks",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_tasks",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.get("/tasks/recent", response_model=AgentRecentTasksResponse)
 async def get_recent_tasks(
@@ -245,6 +265,11 @@ async def get_recent_tasks(
     category=ErrorCategory.SERVER_ERROR,
     operation="compare_agents",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="compare_agents",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.get("/comparison", response_model=AgentComparisonResponse)
 async def compare_agents(
@@ -337,6 +362,11 @@ def _check_agent_metrics(metrics) -> list:
     operation="get_agent_recommendations",
     error_code_prefix="AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_recommendations",
+    error_code_prefix="ANALYTICS_AGENTS",
+)
 @router.get("/recommendations", response_model=AgentRecommendationsResponse)
 async def get_agent_recommendations(
     admin_check: bool = Depends(check_admin_permission),
@@ -390,6 +420,11 @@ async def get_agent_recommendations(
     operation="get_performance_trends",
     error_code_prefix="AGENT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_trends",
+    error_code_prefix="ANALYTICS_AGENTS",
+)
 @router.get("/trends", response_model=AgentPerformanceTrendsResponse)
 async def get_performance_trends(
     agent_id: Optional[str] = Query(
@@ -415,6 +450,11 @@ async def get_performance_trends(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_types",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_types",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.get("/types", response_model=AgentTypesResponse)
 async def get_agent_types(
@@ -442,6 +482,11 @@ async def get_agent_types(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_start",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="track_task_start",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.post("/tasks/start", response_model=AgentTaskStartResponse)
 async def track_task_start(
@@ -475,6 +520,11 @@ async def track_task_start(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_complete",
     error_code_prefix="AGENT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="track_task_complete",
+    error_code_prefix="ANALYTICS_AGENTS",
 )
 @router.post("/tasks/complete", response_model=AgentTaskCompleteResponse)
 async def track_task_complete(

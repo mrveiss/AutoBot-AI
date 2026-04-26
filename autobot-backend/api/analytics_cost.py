@@ -116,6 +116,11 @@ class ModelPricingInfo(BaseModel):
     operation="get_cost_summary",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_summary",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/summary", response_model=CostSummaryResponse)
 async def get_cost_summary(
     days: int = Query(
@@ -149,6 +154,11 @@ async def get_cost_summary(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cost_by_model",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_model",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.get("/by-model", response_model=CostByModelResponse)
 async def get_cost_by_model(
@@ -197,6 +207,11 @@ async def get_cost_by_model(
     operation="get_cost_by_session",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_session",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/by-session/{session_id}", response_model=SessionCostResponse)
 async def get_cost_by_session(
     session_id: str,
@@ -232,6 +247,11 @@ async def get_cost_by_session(
     operation="get_cost_trends",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_trends",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/trends", response_model=CostTrendResponse)
 async def get_cost_trends(
     days: int = Query(
@@ -264,6 +284,11 @@ async def get_cost_trends(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cost_forecast",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_forecast",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.get("/forecast", response_model=CostForecastResponse)
 async def get_cost_forecast(
@@ -328,6 +353,11 @@ async def get_cost_forecast(
     operation="get_recent_usage",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_usage",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/usage/recent", response_model=UsageRecentResponse)
 async def get_recent_usage(
     limit: int = Query(
@@ -360,6 +390,11 @@ async def get_recent_usage(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_pricing",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_model_pricing",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.get("/pricing", response_model=ModelPricingResponse)
 async def get_model_pricing(
@@ -413,6 +448,11 @@ async def get_model_pricing(
     operation="calculate_cost_estimate",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="calculate_cost_estimate",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/estimate", response_model=CostEstimateResponse)
 async def calculate_cost_estimate(
     model: str = Query(..., description="Model name"),
@@ -448,6 +488,11 @@ async def calculate_cost_estimate(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_budget_alert",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_budget_alert",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.post("/budget-alert", response_model=BudgetAlertCreateResponse)
 async def set_budget_alert(
@@ -485,6 +530,11 @@ async def set_budget_alert(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_budget_alerts",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_budget_alerts",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.get("/budget-alerts", response_model=BudgetAlertsListResponse)
 async def get_budget_alerts(
@@ -580,6 +630,11 @@ async def _get_current_costs(tracker, today: datetime) -> dict:
     operation="get_budget_status",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_budget_status",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/budget-status", response_model=BudgetStatusResponse)
 async def get_budget_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -637,6 +692,11 @@ class AgentCostResponse(BaseModel):
     operation="get_cost_by_agent_all",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_agent_all",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/by-agent", response_model=AllAgentCostsResponse)
 async def get_cost_by_agent_all(
     admin_check: bool = Depends(check_admin_permission),
@@ -682,6 +742,11 @@ async def get_cost_by_agent_all(
     operation="get_cost_by_agent_single",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_agent_single",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.get("/by-agent/{agent_id}", response_model=SingleAgentCostResponse)
 async def get_cost_by_agent_single(
     agent_id: str,
@@ -707,6 +772,11 @@ async def get_cost_by_agent_single(
     operation="set_agent_budget",
     error_code_prefix="COST",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_agent_budget",
+    error_code_prefix="ANALYTICS_COST",
+)
 @router.put("/by-agent/{agent_id}/budget", response_model=AgentBudgetSetResponse)
 async def set_agent_budget(
     agent_id: str,
@@ -727,6 +797,11 @@ async def set_agent_budget(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_budget_status",
     error_code_prefix="COST",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_budget_status",
+    error_code_prefix="ANALYTICS_COST",
 )
 @router.get("/by-agent/{agent_id}/budget", response_model=AgentBudgetStatusResponse)
 async def get_agent_budget_status(

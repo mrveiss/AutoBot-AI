@@ -30,6 +30,7 @@ from api.schemas_workflows import (
     SkillMetricsResponse,
     SkillSuggestionsResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,11 @@ class SkillFeedbackRequest(BaseModel):
 # --- Endpoints ---
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_skills",
+    error_code_prefix="SKILLS",
+)
 @router.get("/", summary="List all skills", response_model=SkillsListResponse)
 async def list_skills(
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -113,6 +119,11 @@ async def list_skills(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_categories",
+    error_code_prefix="SKILLS",
+)
 @router.get("/categories", summary="List skill categories", response_model=SkillsCategoriesResponse)
 async def list_categories() -> Dict[str, Any]:
     """List all available skill categories with counts."""
@@ -121,6 +132,11 @@ async def list_categories() -> Dict[str, Any]:
     return {"categories": {cat: len(skills) for cat, skills in by_cat.items()}}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_health",
+    error_code_prefix="SKILLS",
+)
 @router.get("/health", summary="Get health of all skills", response_model=SkillsAllHealthResponse)
 async def get_all_health() -> Dict[str, Any]:
     """Get health status for all registered skills."""
@@ -128,6 +144,11 @@ async def get_all_health() -> Dict[str, Any]:
     return {"skills": registry.get_all_health()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="initialize_skills",
+    error_code_prefix="SKILLS",
+)
 @router.post("/initialize", summary="Initialize skills system", response_model=SkillsInitializeResponse)
 async def initialize_skills() -> Dict[str, Any]:
     """Discover and load all builtin skills."""
@@ -136,6 +157,11 @@ async def initialize_skills() -> Dict[str, Any]:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill",
+    error_code_prefix="SKILLS",
+)
 @router.get("/{name}", summary="Get skill details", response_model=SkillDetailResponse)
 async def get_skill(name: str) -> Dict[str, Any]:
     """Get detailed information about a specific skill."""
@@ -146,6 +172,11 @@ async def get_skill(name: str) -> Dict[str, Any]:
     return detail
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_skill",
+    error_code_prefix="SKILLS",
+)
 @router.post("/{name}/enable", summary="Enable a skill", response_model=None)
 async def enable_skill(name: str) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
@@ -158,6 +189,11 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_skill",
+    error_code_prefix="SKILLS",
+)
 @router.post("/{name}/disable", summary="Disable a skill", response_model=None)
 async def disable_skill(name: str) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
@@ -170,6 +206,11 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="SKILLS",
+)
 @router.put("/{name}/config", summary="Update skill config", response_model=None)
 async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     """Update a skill's configuration values."""
@@ -185,6 +226,11 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_skill",
+    error_code_prefix="SKILLS",
+)
 @router.post("/{name}/execute", summary="Execute a skill action", response_model=None)
 async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
@@ -198,6 +244,11 @@ async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_health",
+    error_code_prefix="SKILLS",
+)
 @router.get("/{name}/health", summary="Get skill health", response_model=SkillHealthResponse)
 async def get_skill_health(name: str) -> Dict[str, Any]:
     """Get health status for a specific skill."""
@@ -208,6 +259,11 @@ async def get_skill_health(name: str) -> Dict[str, Any]:
     return health.model_dump()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_skill_actions",
+    error_code_prefix="SKILLS",
+)
 @router.get("/{name}/actions", summary="List skill actions", response_model=SkillActionsResponse)
 async def list_skill_actions(name: str) -> Dict[str, Any]:
     """List available actions for a skill."""
@@ -221,6 +277,11 @@ async def list_skill_actions(name: str) -> Dict[str, Any]:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_metrics",
+    error_code_prefix="SKILLS",
+)
 @router.get("/{name}/metrics", summary="Get skill metrics", response_model=SkillMetricsResponse)
 async def get_skill_metrics(
     name: str,
@@ -243,6 +304,11 @@ async def get_skill_metrics(
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_skill_feedback",
+    error_code_prefix="SKILLS",
+)
 @router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse)
 async def submit_skill_feedback(
     name: str,
@@ -269,6 +335,11 @@ async def submit_skill_feedback(
         raise HTTPException(status_code=500, detail="Failed to log feedback")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_refinement_suggestions",
+    error_code_prefix="SKILLS",
+)
 @router.get("/{name}/suggestions", summary="Get skill refinement suggestions", response_model=SkillSuggestionsResponse)
 async def get_refinement_suggestions(name: str) -> Dict[str, Any]:
     """Get suggestions for improving a skill (Issue #4339)."""

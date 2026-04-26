@@ -99,6 +99,11 @@ class AnalysisRequest(BaseModel):
     operation="analyze_codebase_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_codebase_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.post("/analyze", response_model=DataResponse)
 async def analyze_codebase_endpoint(request: AnalysisRequest):
     """
@@ -148,6 +153,11 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     operation="analyze_codebase_get",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_codebase_get",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.get("/analyze", response_model=None)
 async def analyze_codebase_get(
     path: str = Query(..., description="Root path to analyze"),
@@ -164,6 +174,11 @@ async def analyze_codebase_get(
     return await analyze_codebase_endpoint(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_duplicates_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_duplicates_endpoint",
@@ -217,6 +232,11 @@ async def find_duplicates_endpoint(
     operation="analyze_patterns_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_patterns_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.get("/patterns", response_model=DataResponse)
 async def analyze_patterns_endpoint(
     path: str = Query(..., description="Root path to analyze"),
@@ -265,6 +285,11 @@ async def analyze_patterns_endpoint(
     operation="analyze_imports_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_imports_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.get("/imports", response_model=DataResponse)
 async def analyze_imports_endpoint(
     path: str = Query(..., description="Root path to analyze"),
@@ -305,6 +330,11 @@ async def analyze_imports_endpoint(
     operation="detect_dead_code_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_dead_code_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.get("/dead-code", response_model=DataResponse)
 async def detect_dead_code_endpoint(
     path: str = Query(..., description="Root path to analyze")
@@ -334,6 +364,11 @@ async def detect_dead_code_endpoint(
         raise HTTPException(status_code=500, detail="Dead code detection failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_refactoring_opportunities_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_refactoring_opportunities_endpoint",
@@ -383,6 +418,11 @@ async def find_refactoring_opportunities_endpoint(
         raise HTTPException(status_code=500, detail="Refactoring analysis failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_quality_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_quality_endpoint",
@@ -477,6 +517,11 @@ def _calculate_health_score(result: dict, metrics: dict) -> int:
     operation="get_recommendations_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recommendations_endpoint",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @router.get("/recommendations", response_model=DataResponse)
 async def get_recommendations_endpoint(
     path: str = Query(..., description="Root path to analyze")
@@ -514,6 +559,11 @@ async def get_recommendations_endpoint(
         raise HTTPException(status_code=500, detail="Recommendations failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_development_speedup_status",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_development_speedup_status",
@@ -581,6 +631,11 @@ async def get_development_speedup_status():
         raise HTTPException(status_code=500, detail="Status check failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_analysis_examples",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analysis_examples",

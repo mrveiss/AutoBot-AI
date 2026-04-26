@@ -504,6 +504,11 @@ def _calculate_check_statistics(
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_staged_files",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/check", response_model=CommitCheckResult)
 async def check_staged_files(
     admin_check: bool = Depends(check_admin_permission),
@@ -562,6 +567,11 @@ async def check_staged_files(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_content",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.post("/check-content", response_model=list[CheckResult])
 async def check_content(
     content: str,
@@ -585,6 +595,11 @@ async def check_content(
     return results
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_checks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/checks", response_model=list[CheckDefinition])
 async def list_checks(
     admin_check: bool = Depends(check_admin_permission),
@@ -597,6 +612,11 @@ async def list_checks(
     return list(BUILTIN_CHECKS.values())
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_check",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/checks/{check_id}", response_model=CheckDefinition)
 async def get_check(
     check_id: str,
@@ -612,6 +632,11 @@ async def get_check(
     return BUILTIN_CHECKS[check_id]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_check",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.post("/checks/{check_id}/toggle", response_model=CheckToggleResponse)
 async def toggle_check(
     check_id: str,
@@ -635,6 +660,11 @@ async def toggle_check(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_config",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/config", response_model=HookConfig)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
@@ -648,6 +678,11 @@ async def get_config(
         return _hook_config
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_config",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.post("/config", response_model=HookConfigUpdateResponse)
 async def update_config(
     config: HookConfig,
@@ -665,6 +700,11 @@ async def update_config(
     return {"message": "Configuration updated", "config": config}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_status",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/status", response_model=HookStatus)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -792,6 +832,11 @@ async def _write_hook_file(hook_path: Path, content: str) -> dict:
         raise HTTPException(status_code=500, detail="Failed to install hooks")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_hooks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.post("/install", response_model=HookInstallResponse)
 async def install_hooks(
     admin_check: bool = Depends(check_admin_permission),
@@ -816,6 +861,11 @@ async def install_hooks(
     return await _write_hook_file(hook_path, hook_content)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="uninstall_hooks",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.post("/uninstall", response_model=HookInstallResponse)
 async def uninstall_hooks(
     admin_check: bool = Depends(check_admin_permission),
@@ -850,6 +900,11 @@ async def uninstall_hooks(
         raise HTTPException(status_code=500, detail="Failed to uninstall hooks")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/history", response_model=list[CommitCheckResult])
 async def get_history(
     admin_check: bool = Depends(check_admin_permission),
@@ -864,6 +919,11 @@ async def get_history(
         return _check_history[:limit]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_summary",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/summary", response_model=PrecommitSummaryResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
@@ -927,6 +987,11 @@ async def get_summary(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_categories",
+    error_code_prefix="ANALYTICS_PRECOMMIT",
+)
 @router.get("/categories", response_model=list[CategoryItem])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
@@ -969,6 +1034,7 @@ def get_demo_content(filepath: str) -> str:
     if filepath.endswith(".py"):
         return """
 import os
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Configuration
 password = "admin123"  # noqa: S105 — intentional demo credential for analyzer testing

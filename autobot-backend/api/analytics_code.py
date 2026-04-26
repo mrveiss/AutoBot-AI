@@ -58,6 +58,11 @@ def set_analytics_dependencies(controller, state):
     operation="index_codebase",
     error_code_prefix="ANALYTICS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="index_codebase",
+    error_code_prefix="ANALYTICS_CODE",
+)
 @router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
 async def index_codebase(
     request: CodeAnalysisRequest,
@@ -92,6 +97,11 @@ async def index_codebase(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_analysis_status",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_analysis_status",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.get("/code/status", response_model=AnalyticsCodeStatusResponse)
 async def get_code_analysis_status(
@@ -148,6 +158,11 @@ async def get_code_analysis_status(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_assessment",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
 async def get_code_quality_assessment(
@@ -217,6 +232,11 @@ async def get_code_quality_assessment(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_metrics",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
 async def get_code_quality_metrics(
@@ -327,6 +347,11 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_communication_chains",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 async def get_communication_chains(
@@ -455,6 +480,11 @@ def _generate_communication_chain_insights(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_communication_chains_detailed",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.post("/code/analyze/communication-chains", response_model=None)
 async def analyze_communication_chains_detailed(
@@ -599,6 +629,11 @@ def _score_to_grade(score: float) -> str:
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_score",
+    error_code_prefix="ANALYTICS_CODE",
 )
 @router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 async def get_code_quality_score(

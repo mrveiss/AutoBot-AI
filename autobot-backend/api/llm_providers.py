@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from auth_middleware import check_admin_permission, get_current_user
 from utils.advanced_cache_manager import cache_response
 from api.schemas_common import DataResponse, SuccessResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,11 @@ def _get_llm_interface():
     return LLMInterface()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="switch_llm_provider",
+    error_code_prefix="LLM_PROVIDERS",
+)
 @router.post("/switch", response_model=DataResponse)
 async def switch_llm_provider(
     switch_data: dict,
@@ -52,6 +58,11 @@ async def switch_llm_provider(
     return JSONResponse(status_code=200, content=result)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_llm_providers",
+    error_code_prefix="LLM_PROVIDERS",
+)
 @router.get("/providers", response_model=DataResponse)
 @cache_response(cache_key="llm_providers_list", ttl=30)
 async def list_llm_providers(
@@ -66,6 +77,11 @@ async def list_llm_providers(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_llm_provider",
+    error_code_prefix="LLM_PROVIDERS",
+)
 @router.post("/providers/{provider_name}/test", response_model=DataResponse)
 async def test_llm_provider(
     provider_name: str,

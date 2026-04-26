@@ -170,6 +170,11 @@ def _deserialize_job(data: str) -> BatchJob:
     operation="create_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_batch_job",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.post("", response_model=BatchJob)
 async def create_batch_job(
     job_data: BatchJobCreate,
@@ -212,6 +217,11 @@ async def create_batch_job(
     return job
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_batch_jobs",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_jobs",
@@ -276,6 +286,11 @@ async def list_batch_jobs(
     operation="get_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_job",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/{job_id}", response_model=BatchJob)
 async def get_batch_job(
     job_id: str,
@@ -305,6 +320,11 @@ async def get_batch_job(
     return _deserialize_job(job_data.decode("utf-8"))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_batch_job",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_job",
@@ -358,6 +378,11 @@ async def delete_batch_job(
     operation="get_job_logs",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_job_logs",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/{job_id}/logs", response_model=List[LogEntry])
 async def get_job_logs(
     job_id: str,
@@ -403,6 +428,11 @@ async def get_job_logs(
     operation="list_batch_templates",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_batch_templates",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/templates/", response_model=List[BatchTemplate])
 async def list_batch_templates(
     current_user: dict = Depends(get_current_user),
@@ -431,6 +461,11 @@ async def list_batch_templates(
     return templates
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_batch_template",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_template",
@@ -474,6 +509,11 @@ async def create_batch_template(
     operation="get_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_template",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/templates/{template_id}", response_model=BatchTemplate)
 async def get_batch_template(
     template_id: str,
@@ -498,6 +538,11 @@ async def get_batch_template(
     return BatchTemplate(**template_dict)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_batch_template",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_template",
@@ -538,6 +583,11 @@ async def delete_batch_template(
     operation="list_batch_schedules",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_batch_schedules",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/schedules/", response_model=List[BatchSchedule])
 async def list_batch_schedules(
     current_user: dict = Depends(get_current_user),
@@ -566,6 +616,11 @@ async def list_batch_schedules(
     return schedules
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_batch_schedule",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_schedule",
@@ -613,6 +668,11 @@ async def create_batch_schedule(
     operation="delete_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_batch_schedule",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.delete("/schedules/{schedule_id}", response_model=None)
 async def delete_batch_schedule(
     schedule_id: str,
@@ -643,6 +703,11 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_jobs_health",
+    error_code_prefix="BATCH_JOBS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_jobs_health",
@@ -741,6 +806,11 @@ class BatchResponse(BaseModel):
     operation="get_batch_status",
     error_code_prefix="BATCH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_status",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/status", response_model=None)
 async def get_batch_status():
     """Get batch processing service status"""
@@ -758,6 +828,11 @@ async def get_batch_status():
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_load",
     error_code_prefix="BATCH",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_load",
+    error_code_prefix="BATCH_JOBS",
 )
 @router.post("/load", response_model=None)
 async def batch_load(batch_request: BatchRequest):
@@ -813,7 +888,17 @@ async def batch_load(batch_request: BatchRequest):
     operation="batch_chat_initialization",
     error_code_prefix="BATCH",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_chat_initialization",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.get("/chat-init", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_chat_initialization",
+    error_code_prefix="BATCH_JOBS",
+)
 @router.post("/chat-init", response_model=None)
 async def batch_chat_initialization():
     """

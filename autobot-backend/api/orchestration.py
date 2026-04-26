@@ -104,6 +104,11 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_workflow",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.post("/workflow/execute", response_model=None)
 async def execute_workflow(
     request: WorkflowRequest,
@@ -149,6 +154,11 @@ async def execute_workflow(
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_plan",
+    error_code_prefix="ORCHESTRATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_plan",
@@ -219,6 +229,11 @@ async def create_workflow_plan(
     operation="get_agent_performance",
     error_code_prefix="ORCHESTRATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_performance",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/agents/performance", response_model=DataResponse)
 async def get_agent_performance(
     current_user: dict = Depends(get_current_user),
@@ -247,6 +262,11 @@ async def get_agent_performance(
         raise HTTPException(status_code=500, detail="Failed to get performance report")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="recommend_agents",
+    error_code_prefix="ORCHESTRATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="recommend_agents",
@@ -308,6 +328,11 @@ async def recommend_agents(
     operation="get_active_workflows",
     error_code_prefix="ORCHESTRATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_workflows",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/workflow/active", response_model=DataResponse)
 async def get_active_workflows(
     current_user: dict = Depends(get_current_user),
@@ -359,6 +384,11 @@ async def get_active_workflows(
     operation="get_execution_strategies",
     error_code_prefix="ORCHESTRATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_execution_strategies",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/strategies", response_model=DataResponse)
 async def get_execution_strategies(
     admin_check: bool = Depends(check_admin_permission),
@@ -401,6 +431,11 @@ async def get_execution_strategies(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_capabilities",
+    error_code_prefix="ORCHESTRATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_capabilities",
@@ -462,6 +497,11 @@ async def get_agent_capabilities(
     operation="get_orchestration_status",
     error_code_prefix="ORCHESTRATION",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_orchestration_status",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/status", response_model=DataResponse)
 async def get_orchestration_status(
     admin_check: bool = Depends(check_admin_permission),
@@ -512,6 +552,11 @@ async def get_orchestration_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_orchestration_examples",
+    error_code_prefix="ORCHESTRATION",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orchestration_examples",

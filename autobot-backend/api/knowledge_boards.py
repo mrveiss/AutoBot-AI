@@ -104,6 +104,11 @@ async def _get_redis(req: Request):
     operation="list_boards",
     error_code_prefix="KB_BOARDS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_boards",
+    error_code_prefix="KNOWLEDGE_BOARDS",
+)
 @router.get("/boards", response_model=KnowledgeBoardsListResponse)
 async def list_boards(
     admin_check: bool = Depends(check_admin_permission),
@@ -140,6 +145,11 @@ async def list_boards(
     operation="create_board",
     error_code_prefix="KB_BOARDS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_board",
+    error_code_prefix="KNOWLEDGE_BOARDS",
+)
 @router.post("/boards", status_code=201, response_model=KnowledgeBoardCreateResponse)
 async def create_board(
     request: CreateBoardRequest = None,
@@ -170,6 +180,11 @@ async def create_board(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_board",
     error_code_prefix="KB_BOARDS",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_board",
+    error_code_prefix="KNOWLEDGE_BOARDS",
 )
 @router.delete("/boards/{board_id}", response_model=KnowledgeBoardDeleteResponse)
 async def delete_board(

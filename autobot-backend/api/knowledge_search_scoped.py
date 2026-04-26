@@ -22,6 +22,7 @@ from knowledge.search_filters import (
 )
 from knowledge_factory import get_or_create_knowledge_base
 from user_management.models.user import User
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,11 @@ async def _build_scoped_search_response(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scoped_search",
+    error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
+)
 @router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_search(
     search_request: ScopedSearchRequest,
@@ -235,6 +241,11 @@ async def _synthesize_rag_response(
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scoped_rag_search",
+    error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
+)
 @router.post("/rag/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_rag_search(
     search_request: ScopedSearchRequest,
@@ -287,6 +298,11 @@ async def scoped_rag_search(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_accessible_scopes",
+    error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
+)
 @router.get("/accessible-scopes", response_model=KnowledgeAccessibleScopesResponse)
 async def get_accessible_scopes(
     request: Request, current_user: User = Depends(get_current_user)

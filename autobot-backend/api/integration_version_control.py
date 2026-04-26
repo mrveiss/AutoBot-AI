@@ -17,6 +17,7 @@ from integrations.version_control_integration import (
     GitLabIntegration,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -110,6 +111,11 @@ def _create_integration(provider: str, config: IntegrationConfig) -> Any:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.post("/test-connection", response_model=IntegrationHealth)
 async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
     """Test VCS provider connection.
@@ -145,6 +151,11 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_providers",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.get("/providers", response_model=List[ProviderInfo])
 async def get_providers() -> List[ProviderInfo]:
     """Get list of supported VCS providers.
@@ -166,6 +177,11 @@ async def get_providers() -> List[ProviderInfo]:
     return providers
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repositories",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.get("/{provider}/repositories", response_model=None)
 async def list_repositories(
     provider: str,
@@ -207,6 +223,11 @@ async def list_repositories(
         raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_branches",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.get("/{provider}/repositories/{repo_id}/branches", response_model=None)
 async def list_branches(
     provider: str,
@@ -274,6 +295,11 @@ def _build_pr_params(
         return "list_pull_requests", params
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_pull_requests",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=None)
 async def list_pull_requests(
     provider: str,
@@ -297,6 +323,11 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_commit_info",
+    error_code_prefix="INTEGRATION_VERSION_CONTROL",
+)
 @router.get("/{provider}/repositories/{repo_id}/commits", response_model=None)
 async def get_commit_info(
     provider: str,

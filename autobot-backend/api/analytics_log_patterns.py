@@ -831,6 +831,11 @@ def _build_mining_summary(
     operation="mine_log_patterns",
     error_code_prefix="LOGPAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mine_log_patterns",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
+)
 @router.get("/mine", response_model=PatternMiningResult)
 async def mine_log_patterns(
     sources: Optional[str] = Query(None, description="Comma-separated log sources"),
@@ -922,6 +927,11 @@ def _analyze_pattern_lines(
     operation="get_pattern_details",
     error_code_prefix="LOGPAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_details",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
+)
 @router.get("/pattern/{pattern_id}", response_model=None)
 async def get_pattern_details(
     pattern_id: str,
@@ -970,6 +980,11 @@ async def get_pattern_details(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_hotspots",
     error_code_prefix="LOGPAT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_hotspots",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
 @router.get("/hotspots", response_model=None)
 async def get_error_hotspots(
@@ -1049,6 +1064,11 @@ def _aggregate_log_stats(
     operation="get_log_stats",
     error_code_prefix="LOGPAT",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_log_stats",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
+)
 @router.get("/stats", response_model=None)
 async def get_log_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
@@ -1092,6 +1112,11 @@ async def get_log_stats(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_realtime_summary",
     error_code_prefix="LOGPAT",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_realtime_summary",
+    error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
 @router.get("/realtime", response_model=None)
 async def get_realtime_summary(

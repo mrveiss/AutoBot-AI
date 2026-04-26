@@ -59,6 +59,11 @@ class QueryAnalysisRequest(BaseModel):
     operation="get_awareness_status",
     error_code_prefix="LLM_AWARENESS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_awareness_status",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/status", response_model=LLMAwarenessStatusResponse)
 async def get_awareness_status():
     """Get LLM self-awareness system status"""
@@ -79,6 +84,11 @@ async def get_awareness_status():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_context",
+    error_code_prefix="LLM_AWARENESS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_context",
@@ -154,6 +164,11 @@ async def get_system_context(
     operation="get_capabilities_summary",
     error_code_prefix="LLM_AWARENESS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capabilities_summary",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/capabilities", response_model=LLMCapabilitiesSummaryResponse)
 async def get_capabilities_summary():
     """Get detailed capabilities summary"""
@@ -189,6 +204,11 @@ async def get_capabilities_summary():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="inject_awareness_context",
+    error_code_prefix="LLM_AWARENESS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="inject_awareness_context",
@@ -233,6 +253,11 @@ async def inject_awareness_context(request: PromptInjectionRequest):
     operation="analyze_query_with_awareness",
     error_code_prefix="LLM_AWARENESS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_query_with_awareness",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.post("/analyze-query", response_model=LLMAnalyzeQueryResponse)
 async def analyze_query_with_awareness(request: QueryAnalysisRequest):
     """Analyze a query with phase and capability awareness"""
@@ -257,6 +282,11 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
     operation="get_capability_summary_text",
     error_code_prefix="LLM_AWARENESS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capability_summary_text",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/summary/text", response_model=LLMCapabilitySummaryTextResponse)
 async def get_capability_summary_text():
     """Get human-readable capability summary"""
@@ -275,6 +305,11 @@ async def get_capability_summary_text():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase_information",
+    error_code_prefix="LLM_AWARENESS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase_information",
@@ -306,6 +341,11 @@ async def get_phase_information():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_awareness_metrics",
+    error_code_prefix="LLM_AWARENESS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_awareness_metrics",
@@ -351,6 +391,11 @@ async def get_awareness_metrics():
     operation="export_awareness_data",
     error_code_prefix="LLM_AWARENESS",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_awareness_data",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.post("/export", response_model=LLMExportAwarenessResponse)
 async def export_awareness_data(
     include_history: bool = Query(False),
@@ -375,6 +420,11 @@ async def export_awareness_data(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="llm_awareness_health",
+    error_code_prefix="LLM_AWARENESS",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="llm_awareness_health",

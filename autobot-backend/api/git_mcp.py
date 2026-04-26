@@ -725,6 +725,11 @@ def _get_git_change_tools() -> List[MCPTool]:
     operation="get_git_mcp_tools",
     error_code_prefix="GIT_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_mcp_tools",
+    error_code_prefix="GIT_MCP",
+)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_git_mcp_tools() -> List[MCPTool]:
     """
@@ -743,6 +748,11 @@ async def get_git_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_status_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_status_mcp",
@@ -782,6 +792,11 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_log_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_log_mcp",
@@ -834,6 +849,11 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     operation="git_diff_mcp",
     error_code_prefix="GIT_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_diff_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @router.post("/mcp/diff", response_model=GitMCPOperationResponse)
 async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     """
@@ -880,6 +900,11 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_branch_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="git_branch_mcp",
@@ -938,6 +963,11 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     operation="git_blame_mcp",
     error_code_prefix="GIT_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_blame_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @router.post("/mcp/blame", response_model=GitMCPOperationResponse)
 async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     """
@@ -982,6 +1012,11 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     operation="git_show_mcp",
     error_code_prefix="GIT_MCP",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="git_show_mcp",
+    error_code_prefix="GIT_MCP",
+)
 @router.post("/mcp/show", response_model=GitMCPOperationResponse)
 async def git_show_mcp(request: GitShowRequest) -> Metadata:
     """
@@ -1015,6 +1050,11 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_repo_info",
+    error_code_prefix="GIT_MCP",
+)
 @router.get("/mcp/info", response_model=GitMCPInfoResponse)
 async def get_git_repo_info() -> Metadata:
     """
@@ -1073,6 +1113,11 @@ async def get_git_repo_info() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_mcp_status",
+    error_code_prefix="GIT_MCP",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_git_mcp_status",
