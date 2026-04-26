@@ -23,7 +23,7 @@ from typing import Any, Dict
 from fastapi import APIRouter
 
 from api.schemas_terminal import PackageManagersResponse
-from api.terminal_models import ToolInstallRequest
+from api.schemas_terminal import ToolInstallRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
