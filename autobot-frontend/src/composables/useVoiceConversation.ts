@@ -631,6 +631,8 @@ async function _transcribeAudioWithLanguage(
   if (lang) form.append('language', lang)
   _transcribeController?.abort()
   _transcribeController = new AbortController()
+  // fetchWithAuth retained: FormData audio body (multipart) and AbortController signal
+  // are incompatible with apiClient.post(). Exempt per composable-weakness-remediation design.
   const res = await fetchWithAuth(`${getApiBase()}/voice/transcribe`, {
     method: 'POST',
     body: form,
