@@ -1,4 +1,4 @@
--e ../autobot-shared
+-e ../autobot_shared
 
 # Browser automation
 playwright>=1.58.0
