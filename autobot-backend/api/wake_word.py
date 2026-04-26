@@ -16,6 +16,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
+from api.schemas_system import (
+    WakeWordGetConfigResponse,
+    WakeWordGetWordsResponse,
+    WakeWordListeningStatusResponse,
+    WakeWordStatsResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
@@ -109,7 +115,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     operation="get_wake_words",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/words", response_model=None)
+@router.get("/words", response_model=WakeWordGetWordsResponse)
 async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
     detector = get_wake_word_detector()
@@ -193,7 +199,7 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     operation="get_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/config", response_model=None)
+@router.get("/config", response_model=WakeWordGetConfigResponse)
 async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
     detector = get_wake_word_detector()
@@ -251,7 +257,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     operation="get_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/stats", response_model=None)
+@router.get("/stats", response_model=WakeWordStatsResponse)
 async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
     detector = get_wake_word_detector()
@@ -419,7 +425,7 @@ async def stop_listening() -> Metadata:
     operation="get_listening_status",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/listening/status", response_model=None)
+@router.get("/listening/status", response_model=WakeWordListeningStatusResponse)
 async def get_listening_status() -> Metadata:
     """
     Get background listening status including real-time CPU metrics.

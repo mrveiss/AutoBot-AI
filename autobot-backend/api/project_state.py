@@ -17,6 +17,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
 from api.schemas_common import DataResponse
+from api.schemas_system import ProjectStateHealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +338,7 @@ async def auto_progress_phases():
     operation="health_check",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=ProjectStateHealthResponse)
 async def health_check():
     """Health check for project state API"""
     try:

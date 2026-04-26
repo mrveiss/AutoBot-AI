@@ -15,6 +15,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
+from api.schemas_system import HotReloadHealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ async def stop_hot_reload():
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=HotReloadHealthResponse)
 async def hot_reload_health():
     """
     Health check for hot reload functionality

@@ -155,7 +155,7 @@ async def health_check():
     operation="analyze_failure_get",
     error_code_prefix="DIAGNOSTICS",
 )
-@router.get("/analyze-failure", response_model=None)
+@router.get("/analyze-failure", response_model=FailureAnalysisResponse)
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
     error_description: Optional[str] = Query(

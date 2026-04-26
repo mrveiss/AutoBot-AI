@@ -556,3 +556,352 @@ class GitHubProviderInfo(BaseModel):
     description: str
     required_settings: List[str]
     optional_settings: List[str]
+
+
+# ---------------------------------------------------------------------------
+# redis.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class RedisConfigResponse(BaseModel):
+    """Response for GET /config and POST /config in redis.py.
+
+    ConfigService.get_redis_config() returns these fields; extra fields
+    allowed for additional redis_config keys.
+    """
+
+    model_config = {"extra": "allow"}
+
+    type: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+
+
+class RedisConnectionStatusResponse(BaseModel):
+    """Response for GET /status, POST /test_connection in redis.py.
+
+    ConnectionTester.test_redis_connection() returns status + message at minimum;
+    connected path adds host/port/redis_search_module_loaded. Extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+    message: Optional[str] = None
+
+
+class RedisHealthResponse(BaseModel):
+    """Response for GET /health in redis.py."""
+
+    status: str
+    redis_status: Optional[str] = None
+    message: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    redis_search_module_loaded: bool = False
+
+
+# ---------------------------------------------------------------------------
+# services.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class ServicesHealthDeprecatedResponse(BaseModel):
+    """Response for GET /health (deprecated) in services.py."""
+
+    status: str
+    deprecated: bool
+    use_instead: str
+    timestamp: Any
+
+
+class ServicesHealthAggregateResponse(BaseModel):
+    """Response for GET /services/health in services.py.
+
+    Shape is either from monitoring (opaque) or the fallback dict built
+    from ServicesResponse. Extra fields allowed for monitoring pass-through.
+    """
+
+    model_config = {"extra": "allow"}
+
+    timestamp: Optional[float] = None
+    overall_status: Optional[str] = None
+    total_services: Optional[int] = None
+    healthy_services: Optional[int] = None
+    degraded_services: Optional[int] = None
+    critical_services: Optional[int] = None
+
+
+class VMStatusItem(BaseModel):
+    """A single VM entry in ServicesVMsStatusResponse."""
+
+    name: str
+    ip: str
+    status: str
+    services: List[Any] = []
+    last_check: Optional[Any] = None
+
+
+class ServicesVMsStatusResponse(BaseModel):
+    """Response for GET /vms/status in services.py."""
+
+    vms: List[VMStatusItem]
+    total_count: int
+    online_count: int
+    offline_count: int
+    overall_status: str
+    last_updated: Any
+
+
+# ---------------------------------------------------------------------------
+# wake_word.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class WakeWordGetWordsResponse(BaseModel):
+    """Response for GET /words in wake_word.py."""
+
+    wake_words: List[str]
+    total: int
+
+
+class WakeWordGetConfigResponse(BaseModel):
+    """Response for GET /config in wake_word.py.
+
+    WakeWordDetector.get_config() returns these fields.
+    """
+
+    enabled: bool
+    wake_words: List[str]
+    confidence_threshold: float
+    cooldown_seconds: float
+    max_false_positive_rate: float
+    adaptive_threshold: bool
+    noise_tolerance: Optional[float] = None
+    max_cpu_percent: Optional[float] = None
+
+
+class WakeWordStatsResponse(BaseModel):
+    """Response for GET /stats in wake_word.py.
+
+    WakeWordDetector.get_stats() return shape.
+    """
+
+    total_detections: int
+    true_positives: int
+    false_positives: int
+    accuracy: float
+    average_confidence: float
+    total_listening_time: float
+    cpu_usage_percent: float
+
+
+class WakeWordListeningStatusResponse(BaseModel):
+    """Response for GET /listening/status in wake_word.py."""
+
+    active: bool
+    duty_cycle_ms: float
+    sleep_ms: float
+    chunks_processed: int
+    throttle_events: int
+    current_cpu_percent: float
+    max_cpu_percent: float
+
+
+# ---------------------------------------------------------------------------
+# developer.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class DeveloperEndpointsResponse(BaseModel):
+    """Response for GET /endpoints in developer.py."""
+
+    total_endpoints: int
+    routers: List[str]
+    endpoints: Dict[str, Any]
+
+
+class DeveloperConfigResponse(BaseModel):
+    """Response for GET /config in developer.py."""
+
+    enabled: bool
+    enhanced_errors: bool
+    endpoint_suggestions: bool
+    debug_logging: bool
+
+
+class DeveloperConfigUpdateResponse(BaseModel):
+    """Response for POST /config in developer.py."""
+
+    status: str
+    config: Dict[str, Any]
+
+
+class DeveloperSystemInfoResponse(BaseModel):
+    """Response for GET /system-info in developer.py.
+
+    Returns opaque config sections from unified_config_manager. Extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    config_loaded: bool
+    available_routers: List[str]
+
+
+# ---------------------------------------------------------------------------
+# startup.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class StartupStatusResponse(BaseModel):
+    """Response for GET /status in startup.py."""
+
+    current_phase: str
+    progress: int
+    messages: List[Any]
+    elapsed_time: float
+    is_ready: bool
+
+
+# ---------------------------------------------------------------------------
+# hot_reload.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class HotReloadHealthResponse(BaseModel):
+    """Response for GET /health in hot_reload.py."""
+
+    status: str
+    running: bool
+    watched_modules: int
+    watched_paths: int
+    service: str
+
+
+# ---------------------------------------------------------------------------
+# service_monitor.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class ServiceStatusItem(BaseModel):
+    """A single service entry in ServiceMonitorServicesResponse."""
+
+    status: str
+    health: str
+
+
+class ServiceMonitorServicesResponse(BaseModel):
+    """Response for GET /services in service_monitor.py."""
+
+    services: Dict[str, ServiceStatusItem]
+
+
+class VMStatusListItem(BaseModel):
+    """A single VM entry in ServiceMonitorVMsResponse."""
+
+    name: str
+    status: str
+    message: str
+
+
+class ServiceMonitorVMsResponse(BaseModel):
+    """Response for GET /vms/status in service_monitor.py."""
+
+    vms: List[VMStatusListItem]
+
+
+# ---------------------------------------------------------------------------
+# infrastructure.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class InfrastructureHostItem(BaseModel):
+    """A single infrastructure host entry.
+
+    Derived from _load_secrets_hosts() in infrastructure.py.
+    """
+
+    id: str
+    name: str
+    host: str
+    ssh_port: int
+    vnc_port: Optional[int] = None
+    username: str
+    os: Optional[str] = None
+    description: str
+    capabilities: List[str]
+
+
+class InfrastructureHostsResponse(BaseModel):
+    """Response for GET /hosts in infrastructure.py."""
+
+    hosts: List[InfrastructureHostItem]
+
+
+# ---------------------------------------------------------------------------
+# heartbeat.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class HeartbeatWakeupQueuedResponse(BaseModel):
+    """Response for POST /{agent_id}/wakeup in heartbeat.py."""
+
+    id: str
+    agent_id: str
+    status: str
+
+
+class HeartbeatTriggerResponse(BaseModel):
+    """Response for POST /{agent_id}/trigger in heartbeat.py."""
+
+    agent_id: str
+    status: str
+
+
+# ---------------------------------------------------------------------------
+# alertmanager_webhook.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class AlertManagerWebhookReceiveResponse(BaseModel):
+    """Response for POST /alertmanager in alertmanager_webhook.py."""
+
+    status: str
+    processed: int
+    timestamp: str
+
+
+class AlertManagerWebhookHealthResponse(BaseModel):
+    """Response for GET /alertmanager/health in alertmanager_webhook.py."""
+
+    status: str
+    endpoint: str
+    websocket_manager: str
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# overseer_handlers.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class OverseerStatusResponse(BaseModel):
+    """Response for GET /status/{session_id} in overseer_handlers.py."""
+
+    active: bool
+    summary: Optional[Any] = None
+
+
+# ---------------------------------------------------------------------------
+# project_state.py schemas  (Issue #5990)
+# ---------------------------------------------------------------------------
+
+
+class ProjectStateHealthResponse(BaseModel):
+    """Response for GET /health in project_state.py."""
+
+    status: str
+    current_phase: str
+    overall_completion: float
+    timestamp: Optional[str] = None

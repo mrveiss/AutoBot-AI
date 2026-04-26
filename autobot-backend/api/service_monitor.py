@@ -18,7 +18,10 @@ import aiohttp
 from fastapi import APIRouter
 
 from autobot_shared.ssot_config import config as _ssot
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    ServiceMonitorServicesResponse,
+    ServiceMonitorVMsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -71,7 +74,7 @@ async def _check_redis_health() -> Tuple[str, str]:
     operation="get_service_statuses",
     error_code_prefix="SERVICE_MONITOR",
 )
-@router.get("/services", response_model=None)
+@router.get("/services", response_model=ServiceMonitorServicesResponse)
 async def get_service_statuses() -> Dict[str, Any]:
     """Return health status for each AutoBot supporting service.
 
@@ -120,7 +123,7 @@ async def get_service_statuses() -> Dict[str, Any]:
     operation="get_vm_statuses",
     error_code_prefix="SERVICE_MONITOR",
 )
-@router.get("/vms/status", response_model=None)
+@router.get("/vms/status", response_model=ServiceMonitorVMsResponse)
 async def get_vm_statuses() -> Dict[str, Any]:
     """Return status for AutoBot VMs as a list.
 

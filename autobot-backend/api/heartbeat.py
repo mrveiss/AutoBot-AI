@@ -29,7 +29,10 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
-from api.schemas_common import DataResponse
+from api.schemas_system import (
+    HeartbeatTriggerResponse,
+    HeartbeatWakeupQueuedResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -257,7 +260,7 @@ async def get_run(
     operation="request_wakeup",
     error_code_prefix="HEARTBEAT",
 )
-@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=None)
+@router.post("/{agent_id}/wakeup", status_code=status.HTTP_202_ACCEPTED, response_model=HeartbeatWakeupQueuedResponse)
 async def request_wakeup(
     agent_id: str,
     body: WakeupRequestCreate,
@@ -299,7 +302,7 @@ async def list_wakeup_requests(
     operation="trigger_manual",
     error_code_prefix="HEARTBEAT",
 )
-@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=None)
+@router.post("/{agent_id}/trigger", status_code=status.HTTP_202_ACCEPTED, response_model=HeartbeatTriggerResponse)
 async def trigger_manual(
     agent_id: str,
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),
