@@ -82,6 +82,15 @@ ALLOWLIST = {
 _FuncNode = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 
 
+def _scope_walk(node: ast.AST):
+    """Walk AST descendants without entering nested function/class definitions."""
+    yield node
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        yield from _scope_walk(child)
+
+
 def _checked_schema(decorator: ast.expr) -> str | None:
     """Return the schema name if *decorator* is a route with a checked response_model."""
     if not isinstance(decorator, ast.Call):
@@ -148,7 +157,7 @@ def _var_dict_keys(node: _FuncNode) -> dict[str, set[str]]:
         return result
     """
     var_keys: dict[str, set[str]] = {}
-    for child in ast.walk(node):
+    for child in _scope_walk(node):
         if not isinstance(child, ast.Assign):
             continue
         if not isinstance(child.value, ast.Dict):
@@ -166,7 +175,7 @@ def _var_dict_keys(node: _FuncNode) -> dict[str, set[str]]:
 def _returned_var_names(node: _FuncNode) -> set[str]:
     """Return the set of local variable names that appear in bare return statements."""
     names: set[str] = set()
-    for child in ast.walk(node):
+    for child in _scope_walk(node):
         if isinstance(child, ast.Return) and isinstance(child.value, ast.Name):
             names.add(child.value.id)
     return names

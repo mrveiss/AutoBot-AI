@@ -363,3 +363,54 @@ async def post_msg():
     )
     violations = hook._check_file(f, tmp_path)
     assert len(violations) == 1
+
+
+# ---------------------------------------------------------------------------
+# Attribute-access bypass (#5965) — responses.JSONResponse / module.StreamingResponse
+# ---------------------------------------------------------------------------
+
+
+def test_safe_with_jsonresponse_via_attribute(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/raw", response_model=DataResponse)
+async def raw():
+    return responses.JSONResponse(content={"key": "val"})
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+def test_safe_with_streamingresponse_via_attribute(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/stream", response_model=DataResponse)
+async def stream():
+    return some_module.StreamingResponse(iter([b"data"]))
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
+# Nested-function scope isolation (#5964) — inner dict must not bleed out
+# ---------------------------------------------------------------------------
+
+
+def test_detects_violation_when_only_nested_function_has_success_dict(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/bad", response_model=DataResponse)
+async def bad_endpoint():
+    async def _build():
+        result = {"success": True, "data": []}
+        return result
+    return {"items": [], "count": 0}
+""",
+    )
+    violations = hook._check_file(f, tmp_path)
+    assert len(violations) == 1
+    assert violations[0][1] == "bad_endpoint"
