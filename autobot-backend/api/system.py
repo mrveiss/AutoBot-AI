@@ -121,7 +121,7 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
         "lmstudio": {
             "url": config.get(
                 "backend.llm.local.providers.lmstudio.endpoint",
-                os.getenv("LMSTUDIO_HOST", "http://127.0.0.1:1234"),
+                ssot_config.llm.lmstudio_host,
             ),
         },
     }

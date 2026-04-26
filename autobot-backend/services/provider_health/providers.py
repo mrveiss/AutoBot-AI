@@ -12,7 +12,7 @@ import time
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import get_ollama_url
+from autobot_shared.ssot_config import config as ssot_config, get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
@@ -425,7 +425,7 @@ class LMStudioHealth(BaseProviderHealth):
         """Initialize LM Studio health checker with host configuration."""
         super().__init__("lmstudio")
         # LM Studio default port is 1234
-        self.lmstudio_host = os.getenv("LMSTUDIO_HOST", "http://127.0.0.1:1234")
+        self.lmstudio_host = ssot_config.llm.lmstudio_host
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
         """Check LM Studio service health"""

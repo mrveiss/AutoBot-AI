@@ -213,6 +213,9 @@ class LLMConfig(BaseSettings):
         default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
     )
     custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
+    lmstudio_host: str = Field(
+        default="http://127.0.0.1:1234", alias="LMSTUDIO_HOST"
+    )
 
     # GPU Ollama endpoint for model-to-endpoint routing (#1070)
     ollama_gpu_endpoint: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_ENDPOINT")
@@ -419,6 +422,7 @@ class LLMConfig(BaseSettings):
             "openai": self.openai_endpoint,
             "anthropic": self.anthropic_endpoint,
             "custom": self.custom_endpoint,
+            "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
 
