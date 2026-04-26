@@ -11,9 +11,9 @@
       :disabled="disabled || loading"
     >
       <!-- Infrastructure hosts from API (Issue #715) -->
-      <optgroup v-if="infrastructureHosts.length > 0" :label="$t('terminal.infrastructureHosts')">
+      <optgroup v-if="terminalHosts.length > 0" :label="$t('terminal.infrastructureHosts')">
         <option
-          v-for="host in infrastructureHosts"
+          v-for="host in terminalHosts"
           :key="host.id"
           :value="host.id"
         >
@@ -42,24 +42,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getApiBase } from '@/config/ssot-config'
+import { useHostSelection } from '@/composables/useHostSelection'
 
 const logger = createLogger('HostSelector')
-
-/**
- * Infrastructure host from API (Issue #715).
- */
-interface InfrastructureHost {
-  id: string
-  name: string
-  host: string
-  ssh_port?: number
-  vnc_port?: number
-  capabilities?: string[]
-  description?: string
-  os?: string
-}
 
 // Props
 interface Props {
@@ -85,53 +70,34 @@ const emit = defineEmits<{
 // Store
 const terminalStore = useTerminalStore()
 
+// Composable
+const { terminalHosts, terminalHostsLoading, loadTerminalHosts } = useHostSelection()
+
 // Local state
 const selectedHostId = ref(props.modelValue)
-const infrastructureHosts = ref<HostConfig[]>([])
-const loading = ref(false)
+const loading = terminalHostsLoading
 
 // Computed
 const defaultHosts = computed(() => props.hosts)
 
 const allHosts = computed(() => {
-  return [...infrastructureHosts.value, ...defaultHosts.value]
+  return [...terminalHosts.value, ...defaultHosts.value]
 })
 
 const selectedHostConfig = computed(() => {
   return allHosts.value.find(host => host.id === selectedHostId.value)
 })
 
-// Load infrastructure hosts from API (Issue #715)
+// Load infrastructure hosts from API via composable (Issue #715, #6089)
 const loadInfrastructureHosts = async () => {
-  loading.value = true
-  try {
-    // Use relative URL to go through Vite proxy
-    const response = await fetchWithAuth(`${getApiBase()}/infrastructure/hosts`)
-    if (!response.ok) {
-      throw new Error(`Failed to load hosts: ${response.statusText}`)
-    }
-    const data = await response.json()
+  await loadTerminalHosts()
 
-    // Convert infrastructure hosts to HostConfig format
-    infrastructureHosts.value = (data.hosts || []).map((h: InfrastructureHost) => ({
-      id: h.id,
-      name: h.name,
-      ip: h.host,
-      port: h.ssh_port || 22,
-      description: h.description || `${h.os || 'Host'} - ${h.capabilities?.join(', ') || 'SSH'}`
-    }))
+  logger.info(`Loaded ${terminalHosts.value.length} infrastructure hosts`)
 
-    logger.info(`Loaded ${infrastructureHosts.value.length} infrastructure hosts`)
-
-    // If no host is selected yet and we have infrastructure hosts, select the first one
-    if (!selectedHostId.value && infrastructureHosts.value.length > 0) {
-      selectedHostId.value = infrastructureHosts.value[0].id
-      handleHostChange()
-    }
-  } catch (error) {
-    logger.error('Failed to load infrastructure hosts:', error)
-  } finally {
-    loading.value = false
+  // If no host is selected yet and we have infrastructure hosts, select the first one
+  if (!selectedHostId.value && terminalHosts.value.length > 0) {
+    selectedHostId.value = terminalHosts.value[0].id
+    handleHostChange()
   }
 }
 
