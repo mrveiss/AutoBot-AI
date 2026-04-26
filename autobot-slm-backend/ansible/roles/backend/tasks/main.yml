@@ -250,6 +250,14 @@
       - "--exclude=archives"
   tags: ['backend', 'deploy']
 
+- name: "Backend | Clear stale .pyc files after source sync (#6193)"
+  ansible.builtin.shell: |
+    find "{{ backend_code_dir }}" -name '*.pyc' -delete
+    find "{{ backend_install_dir }}/autobot_shared" -name '*.pyc' -delete 2>/dev/null || true
+    find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
+  changed_when: false
+  tags: ['backend', 'deploy']
+
 - name: Create backend symlink for imports
   ansible.builtin.file:
     src: "{{ backend_code_dir }}"
