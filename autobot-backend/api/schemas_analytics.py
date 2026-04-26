@@ -7,9 +7,11 @@ Analytics, cost, budget, usage, and metrics schemas.
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessMessageResponse
+from constants import PATH
+from type_defs.common import Metadata
 
 
 # ---------------------------------------------------------------------------
@@ -1103,3 +1105,61 @@ class AgentBudgetStatusResponse(BaseModel):
     """Response for GET /cost/by-agent/{agent_id}/budget — opaque tracker result."""
 
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_models.py classes (merged from analytics_models.py — Issue #5996)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsOverview(BaseModel):
+    """Comprehensive analytics dashboard overview model"""
+
+    timestamp: str
+    system_health: Metadata
+    performance_metrics: Metadata
+    communication_patterns: Metadata
+    code_analysis_status: Metadata
+    usage_statistics: Metadata
+    realtime_metrics: Metadata
+    trends: Metadata
+
+
+class CommunicationPattern(BaseModel):
+    """Communication pattern analysis model"""
+
+    endpoint: str
+    frequency: int
+    avg_response_time: float
+    error_rate: float
+    last_accessed: str
+    pattern_type: str = Field(description="API, WebSocket, or Internal")
+
+
+class CodeAnalysisRequest(BaseModel):
+    """Code analysis request model"""
+
+    target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
+    analysis_type: str = Field(
+        default="full", description="full, incremental, or communication_chains"
+    )
+    include_metrics: bool = True
+
+
+class PerformanceMetrics(BaseModel):
+    """Performance metrics model"""
+
+    response_times: List[float]
+    throughput: float
+    error_rates: Metadata
+    resource_utilization: Metadata
+    bottlenecks: List[str]
+
+
+class RealTimeEvent(BaseModel):
+    """Real-time analytics event model"""
+
+    event_type: str
+    timestamp: str
+    data: Metadata
+    severity: str = "info"

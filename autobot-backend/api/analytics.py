@@ -33,8 +33,7 @@ from api.analytics_controller import (
     get_service_address,
 )
 
-# Import models from dedicated module (Issue #185 - split oversized files)
-from api.analytics_models import AnalyticsOverview, RealTimeEvent
+from api.schemas_analytics import AnalyticsOverview, RealTimeEvent
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
