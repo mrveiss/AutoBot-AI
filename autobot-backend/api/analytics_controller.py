@@ -25,8 +25,7 @@ from typing import Dict, List
 import psutil
 import redis
 
-# Import models from dedicated module (Issue #185)
-from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
+from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
