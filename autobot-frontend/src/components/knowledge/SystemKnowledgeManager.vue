@@ -191,7 +191,7 @@ import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge
 import { useManPages } from '@/composables/knowledge/useManPages';
 import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
-import { useAsyncOperation } from '@/composables/useAsyncOperation';
+import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
 import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
 import appConfig from '@/config/AppConfig.js';
@@ -245,13 +245,13 @@ export default {
     const activityLog = ref([]);
 
     // Use composables for async operations
-    const { execute: fetchStatsOp, loading: isLoading } = useAsyncOperation();
-    const { execute: initializeMachineKnowledgeOp, loading: isInitializing } = useAsyncOperation();
-    const { execute: reindexDocumentsOp, loading: isReindexing } = useAsyncOperation();
-    const { execute: refreshSystemKnowledgeOp, loading: isRefreshing } = useAsyncOperation();
-    const { execute: populateManPagesOp, loading: isPopulating } = useAsyncOperation();
-    const { execute: populateAutoBotDocsOp, loading: isDocPopulating } = useAsyncOperation();
-    const { execute: generateVectorEmbeddingsOp, loading: isVectorizing } = useAsyncOperation();
+    const { isLoading, wrap: fetchStatsOp } = useLoadingState()
+    const { isLoading: isInitializing, wrap: initializeMachineKnowledgeOp } = useLoadingState()
+    const { isLoading: isReindexing, wrap: reindexDocumentsOp } = useLoadingState()
+    const { isLoading: isRefreshing, wrap: refreshSystemKnowledgeOp } = useLoadingState()
+    const { isLoading: isPopulating, wrap: populateManPagesOp } = useLoadingState()
+    const { isLoading: isDocPopulating, wrap: populateAutoBotDocsOp } = useLoadingState()
+    const { isLoading: isVectorizing, wrap: generateVectorEmbeddingsOp } = useLoadingState()
 
     const addLogEntry = (message, status) => {
       const time = new Date().toLocaleTimeString();
