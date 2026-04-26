@@ -516,6 +516,7 @@ import { getConfig, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const { t } = useI18n()
 
@@ -597,7 +598,7 @@ const props = withDefaults(defineProps<Props>(), {
 // State
 // ============================================================================
 
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const allComponents = ref<Component[]>([])
 const connections = ref<Connection[]>([])
 const componentGroups = ref<ComponentGroup[]>([])
@@ -700,8 +701,7 @@ const visibleConnections = computed(() => {
 // ============================================================================
 
 async function refreshArchitecture() {
-  isLoading.value = true
-
+  await wrap(async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/monitoring/services/health
     const healthData = await apiClient.get<Record<string, any>>(`${getApiBase()}/monitoring/services/health`)
@@ -713,9 +713,8 @@ async function refreshArchitecture() {
     logger.error('Failed to fetch architecture data:', error)
     // Generate default architecture on error
     generateArchitecture({})
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 function generateArchitecture(serviceHealth: Record<string, unknown>) {
