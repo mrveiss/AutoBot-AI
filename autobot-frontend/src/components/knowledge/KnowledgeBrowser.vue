@@ -124,10 +124,10 @@
 
         <div v-else-if="error" class="error-state">
           <i class="fas fa-exclamation-triangle"></i>
-          <p>{{ error }}</p>
+          <p>{{ error?.message }}</p>
           <BaseButton
             variant="primary"
-            @click="() => loadKnowledgeTree(loadKnowledgeTreeFn)"
+            @click="retryLoadKnowledgeTree"
             class="retry-btn"
           >
             <i class="fas fa-redo"></i> {{ $t('knowledge.browser.retryBtn') }}
@@ -202,7 +202,7 @@ import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge
 import { useManPages } from '@/composables/knowledge/useManPages'
 import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { usePagination } from '@/composables/usePagination'
 import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
@@ -291,18 +291,10 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
 
 
 // Use composables for async operations
-const {
-  execute: loadKnowledgeTree,
-  loading: isLoading,
-  error
-} = useAsyncOperation()
-
-const {
-  execute: loadFileContentOp,
-  loading: isLoadingContent,
-  error: contentError,
-  reset: resetContentError
-} = useAsyncOperation()
+const { isLoading, wrap: loadKnowledgeTree } = useLoadingState()
+const error = ref<Error | null>(null)
+const { isLoading: isLoadingContent, wrap: loadFileContentOp } = useLoadingState()
+const contentError = ref<Error | null>(null)
 
 // Cursor-based pagination for user knowledge entries
 const allLoadedEntries = ref<any[]>([])
@@ -667,7 +659,14 @@ const refreshVectorizationStatus = async () => {
   }
 }
 
-// Load main knowledge tree with useAsyncOperation wrapper
+// Load main knowledge tree with useLoadingState wrapper
+const retryLoadKnowledgeTree = () => {
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
+}
+
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
   const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
@@ -931,7 +930,10 @@ const handlePopulate = async (categoryId: string) => {
     populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
 
     // Reload the knowledge tree to show new items
-    await loadKnowledgeTree(loadKnowledgeTreeFn)
+    error.value = null
+    await loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+      error.value = err instanceof Error ? err : new Error(String(err))
+    })
 
     logger.info(`${categoryId} population completed:`, result)
   } catch (error) {
@@ -971,6 +973,7 @@ const loadFolderContents = async (folder: TreeNode) => {
 }
 
 const loadFileContent = async (file: TreeNode) => {
+  contentError.value = null
   await loadFileContentOp(async () => {
     // First check if we have full_content in metadata
     if (file.metadata?.full_content) {
@@ -996,6 +999,8 @@ const loadFileContent = async (file: TreeNode) => {
         fileContent.value = file.content || 'Content not available'
       }
     }
+  }).catch(err => {
+    contentError.value = err instanceof Error ? err : new Error(String(err))
   })
   // Update size to reflect actual loaded content length
   if (selectedFile.value && fileContent.value) {
@@ -1055,7 +1060,7 @@ const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => 
 const clearSelection = () => {
   selectedFile.value = null
   fileContent.value = ''
-  resetContentError()
+  contentError.value = null
 }
 
 const handleSearch = (query: string) => {
@@ -1082,7 +1087,10 @@ const getFileIcon = (node: TreeNode): string => {
 // Lifecycle
 onMounted(() => {
   loadMainCategories()
-  loadKnowledgeTree(loadKnowledgeTreeFn)
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
 
   // Set preselected category from props
   if (props.preselectedCategory) {
@@ -1098,7 +1106,10 @@ onUnmounted(() => {
 watch(() => props.mode, () => {
   // Reset pagination state when switching modes
   resetPagination()
-  loadKnowledgeTree(loadKnowledgeTreeFn)
+  error.value = null
+  loadKnowledgeTree(loadKnowledgeTreeFn).catch(err => {
+    error.value = err instanceof Error ? err : new Error(String(err))
+  })
   clearSelection()
   nodeExpansion.collapseAll()
 })
