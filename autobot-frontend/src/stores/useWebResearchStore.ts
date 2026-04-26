@@ -21,7 +21,7 @@ export interface ResearchStatus {
   enabled: boolean
   preferred_method: string
   cache_stats: CacheStats | null
-  circuit_breakers: any
+  circuit_breakers: Record<string, unknown>
 }
 
 export interface WebResearchSettings {

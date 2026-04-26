@@ -68,7 +68,7 @@ export interface ConnectionTestOptions {
   /**
    * Request body (for POST requests)
    */
-  body?: any
+  body?: unknown
 
   /**
    * Expected response status code (default: 200)
@@ -318,20 +318,20 @@ export function useConnectionTester(
 
       return true
 
-    } catch (error: any) {
+    } catch (error) {
       clearTimeout(timeoutId)
 
       // Handle different error types
       let errorMessage: string
 
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         errorMessage = `Connection timeout (>${timeout}ms)`
         await updateStatus('disconnected', errorMessage)
       } else if (error instanceof TypeError) {
         errorMessage = `Network error: ${error.message}`
         await updateStatus('error', errorMessage)
       } else {
-        errorMessage = error.message || 'Unknown connection error'
+        errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
         await updateStatus('error', errorMessage)
       }
 

@@ -269,7 +269,7 @@ export function useClipboard(options: ClipboardOptions = {}): UseClipboardReturn
 
       return true
 
-    } catch (err: any) {
+    } catch (err) {
       // Error handling
       const errorObj = err instanceof Error ? err : new Error(String(err))
       error.value = errorObj

@@ -170,7 +170,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
   })
 
   // Computed: is WebSocket connected
-  const isConnected = computed(() => (globalWebSocketService as any).isConnected?.value ?? false)
+  const isConnected = computed(() => globalWebSocketService.isConnected.value)
 
   /**
    * Handle incoming WebSocket messages for collaboration
@@ -317,7 +317,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
   }
 
   /**
@@ -352,7 +352,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
 
     // Start presence heartbeat
     if (presenceInterval) {
@@ -376,7 +376,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
 
     // Clear state
     if (presenceInterval) {
@@ -439,7 +439,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
     logger.debug(`[Issue #608] Sent invitation to user ${userId}`)
     return true
   }
@@ -460,7 +460,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
 
     // If accepted, join the session
     if (accept) {
@@ -493,7 +493,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
   }
 
   /**
@@ -521,7 +521,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       timestamp: new Date().toISOString()
     }
 
-    globalWebSocketService.send(message as any)
+    globalWebSocketService.send(message as unknown as Record<string, unknown>)
     logger.debug(`[Issue #608] Shared secret ${secretName} with session`)
   }
 
