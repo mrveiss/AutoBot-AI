@@ -93,8 +93,8 @@ def _get_sharing_service() -> WorkflowSharingService:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/export/{workflow_id}", response_model=WorkflowExportResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def export_workflow(
     workflow_id: str,
     current_user: dict = Depends(get_current_user),
@@ -132,8 +132,8 @@ async def export_workflow(
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/validate", response_model=WorkflowValidateImportResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def validate_import(
     body: ImportWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -159,8 +159,8 @@ async def validate_import(
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/import", response_model=WorkflowImportResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def import_workflow(
     body: ImportWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -198,8 +198,8 @@ async def import_workflow(
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/share", response_model=WorkflowShareResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def share_workflow(
     body: ShareWorkflowRequest,
     current_user: dict = Depends(get_current_user),
@@ -237,8 +237,8 @@ async def share_workflow(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.delete("/share/{share_id}", response_model=WorkflowUnshareResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def unshare_workflow(
     share_id: str,
     current_user: dict = Depends(get_current_user),
@@ -262,8 +262,8 @@ async def unshare_workflow(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/shares", response_model=WorkflowListSharesResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def list_shared_workflows(
     current_user: dict = Depends(get_current_user),
     sharing: WorkflowSharingService = Depends(_get_sharing_service),
@@ -284,8 +284,8 @@ async def list_shared_workflows(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/share/{share_id}/clone", response_model=WorkflowImportResponse)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 async def clone_shared_workflow(
     share_id: str,
     body: CloneWorkflowRequest,
