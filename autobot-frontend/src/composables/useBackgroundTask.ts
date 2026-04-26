@@ -16,6 +16,7 @@
 import { ref, onUnmounted, type Ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -51,16 +52,17 @@ async function getBackendUrl(): Promise<string> {
  * Shared helper used by both 409 recovery and orphan auto-retry.
  */
 async function clearStuckTasks(clearUrl: string, signal?: AbortSignal): Promise<void> {
-  const backendUrl = await getBackendUrl()
-  await fetchWithAuth(
-    `${backendUrl}${clearUrl}?force=true`,
-    { method: 'POST', signal },
-  )
+  // Note: apiClient.post does not support AbortSignal; signal parameter kept for API compatibility.
+  void signal
+  await apiClient.post(`${clearUrl}?force=true`)
 }
 
 /**
  * POST to the /analyze endpoint and return the response.
  * Shared helper to avoid duplicating the fetch logic.
+ *
+ * fetchWithAuth retained: callers check response.status === 409 for conflict detection.
+ * ApiClient throws on non-2xx making status inspection impossible. Exempt.
  */
 async function postAnalyze(
   baseUrl: string,
@@ -228,6 +230,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
       const poller = usePollingJob<PollResult>(
         async () => {
           try {
+            // fetchWithAuth retained: AbortController signal required for polling abort. Exempt.
             const backendUrl = await getBackendUrl()
             const resp = await fetchWithAuth(
               `${backendUrl}${baseUrl}/status/${id}`,
