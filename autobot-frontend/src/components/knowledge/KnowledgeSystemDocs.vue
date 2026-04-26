@@ -19,9 +19,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import apiClient from '@/utils/ApiClient'
 import { useLoadingState } from '@/composables/useLoadingState'
-import { getApiBase } from '@/config/ssot-config'
+import { fetchDocCategories, fetchCategoryDocs, fetchDocContent } from '@/composables/knowledge/useKnowledgeSystemDocs'
+import type { SystemDoc, DocCategory } from '@/composables/knowledge/useKnowledgeSystemDocs'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -29,34 +29,6 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('KnowledgeSystemDocs')
 
 const { t } = useI18n()
-
-// =============================================================================
-// Type Definitions
-// =============================================================================
-
-interface SystemDoc {
-  id: string
-  title: string
-  path: string
-  content: string
-  type: string
-  category: string
-  metadata?: {
-    wordCount?: number
-    lastModified?: string
-    author?: string
-  }
-}
-
-interface DocCategory {
-  id: string
-  name: string
-  path: string
-  icon: string
-  children: DocCategory[]
-  docs: SystemDoc[]
-  docCount: number
-}
 
 // =============================================================================
 // State
@@ -106,38 +78,34 @@ const docWordCount = computed(() => {
 async function loadDocCategories(): Promise<void> {
   error.value = null
   await wrap(async () => {
-  try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/system-docs/categories`)
-
-    if (data?.categories) {
-      categories.value = data.categories
-      // Auto-select first category if exists
-      if (categories.value.length > 0 && !selectedCategory.value) {
-        selectCategory(categories.value[0])
+    try {
+      const data = await fetchDocCategories()
+      if (data?.categories) {
+        categories.value = data.categories
+        // Auto-select first category if exists
+        if (categories.value.length > 0 && !selectedCategory.value) {
+          selectCategory(categories.value[0])
+        }
       }
+    } catch (err) {
+      logger.error('Failed to load doc categories:', err)
+      error.value = t('knowledge.systemDocs.errorLoadCategories')
     }
-  } catch (err) {
-    logger.error('Failed to load doc categories:', err)
-    error.value = t('knowledge.systemDocs.errorLoadCategories')
-  }
   })
 }
 
 async function loadCategoryDocs(category: DocCategory): Promise<void> {
   error.value = null
   await wrap(async () => {
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
-    )
-
-    if (data?.docs) {
-      category.docs = data.docs
+    try {
+      const data = await fetchCategoryDocs(category.path)
+      if (data?.docs) {
+        category.docs = data.docs
+      }
+    } catch (err) {
+      logger.error('Failed to load category docs:', err)
+      error.value = t('knowledge.systemDocs.errorLoadDocs')
     }
-  } catch (err) {
-    logger.error('Failed to load category docs:', err)
-    error.value = t('knowledge.systemDocs.errorLoadDocs')
-  }
   })
 }
 
@@ -149,19 +117,16 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
 
   error.value = null
   await wrap(async () => {
-  try {
-    const data = await apiClient.get<Record<string, any>>(
-      `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
-    )
-
-    if (data?.doc) {
-      doc.content = data.doc.content
-      selectedDoc.value = doc
+    try {
+      const data = await fetchDocContent(doc.id)
+      if (data?.doc) {
+        doc.content = data.doc.content
+        selectedDoc.value = doc
+      }
+    } catch (err) {
+      logger.error('Failed to load doc content:', err)
+      error.value = t('knowledge.systemDocs.errorLoadContent')
     }
-  } catch (err) {
-    logger.error('Failed to load doc content:', err)
-    error.value = t('knowledge.systemDocs.errorLoadContent')
-  }
   })
 }
 
