@@ -79,7 +79,7 @@ export interface PaginationOptions {
    * For server-side pagination: current page data
    * Used instead of slicing the data array
    */
-  serverPageData?: any[]
+  serverPageData?: unknown[]
 
   /**
    * Callback when page changes (for server-side pagination)
@@ -222,7 +222,7 @@ export interface UsePaginationReturn<T> {
  * })
  * ```
  */
-export function usePagination<T = any>(
+export function usePagination<T = unknown>(
   data: Ref<T[]>,
   options: PaginationOptions = {}
 ): UsePaginationReturn<T> {

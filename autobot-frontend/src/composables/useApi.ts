@@ -73,15 +73,17 @@ export function useApiWithState() {
         logger.error('API call failed:', error)
 
         if (showErrorToast && !silent) {
-          // Issue #156 Fix: Add type guards for unknown error
-          const errorObj = error as any // Type assertion for error with response/message properties
+          // Issue #156 Fix: Extract error properties with type guards
+          interface HttpErrorLike { response?: { data?: { detail?: string }; status?: number }; message?: string }
+          const errorObj = error as HttpErrorLike
+          const errMsg = error instanceof Error ? error.message : ''
 
           // Use subtle error notification instead of intrusive popup
-          const fullErrorMessage = errorObj.response?.data?.detail || errorObj.message || errorMessage
+          const fullErrorMessage = errorObj.response?.data?.detail || errMsg || errorMessage
 
           // Check if this is a network/server error
-          const isServerError = errorObj.response?.status >= 500 || errorObj.message?.includes('HTTP 500')
-          const isNetworkError = errorObj.message?.includes('Failed to fetch') || errorObj.message?.includes('Network Error')
+          const isServerError = (errorObj.response?.status ?? 0) >= 500 || errMsg.includes('HTTP 500')
+          const isNetworkError = errMsg.includes('Failed to fetch') || errMsg.includes('Network Error')
 
           // Determine severity
           const severity = (isServerError || isNetworkError) ? 'warning' : 'error'
@@ -211,7 +213,7 @@ export function useChatApi() {
     /**
      * Save chat messages
      */
-    async saveChatMessages(chatId: string, messages: any[]) {
+    async saveChatMessages(chatId: string, messages: Record<string, unknown>[]) {
       return withErrorHandling(
         () => api.saveChatMessages(chatId, messages),
         { errorMessage: 'Failed to save chat - connection issue. Your messages are safely stored locally.' }
@@ -385,24 +387,24 @@ export function useConnectionStatus() {
      * Get current base URL
      */
     getBaseUrl() {
-      // Issue #156 Fix: ApiClient doesn't have getBaseUrl(), access private property via type assertion
-      return (api as any).baseUrl || ''
+      // Use public getConfiguration() to read the private baseUrl field
+      return String(api.getConfiguration().baseUrl || '')
     },
 
     /**
      * Update base URL
      */
     setBaseUrl(url: string) {
-      // Issue #156 Fix: ApiClient doesn't have setBaseUrl(), set private property via type assertion
-      (api as any).baseUrl = url
+      // Use public setBaseUrl() method
+      api.setBaseUrl(url)
     },
 
     /**
      * Update timeout
      */
     setTimeout(timeout: number) {
-      // Issue #156 Fix: ApiClient doesn't have setTimeout(), set private property via type assertion
-      (api as any).timeout = timeout
+      // Use public setTimeout() method
+      api.setTimeout(timeout)
     }
   }
 }

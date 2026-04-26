@@ -62,7 +62,7 @@ export interface ChatSession {
     vncUrl?: string
     sessionId?: string
     lastActivity?: Date
-    automationContext?: Record<string, any>
+    automationContext?: Record<string, unknown>
   }
 }
 
@@ -262,7 +262,7 @@ export const useChatStore = defineStore('chat', () => {
    * @param metadataUpdates - Partial metadata to merge
    * @returns true if message was found and updated
    */
-  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, any>): boolean {
+  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, unknown>): boolean {
     if (!currentSession.value) return false
     const msgs = currentSession.value.messages
 
@@ -299,7 +299,7 @@ export const useChatStore = defineStore('chat', () => {
    * @param criteria - Metadata key-value pairs to match
    * @returns The matching message or undefined
    */
-  function findMessageByMetadata(criteria: Record<string, any>): ChatMessage | undefined {
+  function findMessageByMetadata(criteria: Record<string, unknown>): ChatMessage | undefined {
     if (!currentSession.value) return undefined
 
     return currentSession.value.messages.find(msg => {
@@ -582,7 +582,7 @@ export const useChatStore = defineStore('chat', () => {
     return desktopUrl
   }
 
-  function updateDesktopContext(sessionId: string, context: Record<string, any>) {
+  function updateDesktopContext(sessionId: string, context: Record<string, unknown>) {
     let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
       createDesktopSession(sessionId)
@@ -602,7 +602,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function getDesktopContext(sessionId: string): Record<string, any> {
+  function getDesktopContext(sessionId: string): Record<string, unknown> {
     const session = sessions.value.find(s => s.id === sessionId)
     return session?.desktopSession?.automationContext || {}
   }
@@ -843,7 +843,7 @@ export const useChatStore = defineStore('chat', () => {
 
         // Check for specific session IDs
         const storeIds = sessions.value.map(s => s.id)
-        const persistedIds = parsed.sessions?.map((s: any) => s.id) || []
+        const persistedIds = parsed.sessions?.map((s: { id: string }) => s.id) || []
         logger.debug(`  Store IDs: [${storeIds.join(', ')}]`)
         logger.debug(`  Persisted IDs: [${persistedIds.join(', ')}]`)
 
@@ -942,16 +942,16 @@ export const useChatStore = defineStore('chat', () => {
           const parsed = JSON.parse(value)
           // Convert timestamp strings back to Date objects
           if (parsed.sessions) {
-            parsed.sessions = parsed.sessions.map((session: any) => ({
+            parsed.sessions = parsed.sessions.map((session: Record<string, unknown>) => ({
               ...session,
               createdAt: new Date(session.createdAt),
               updatedAt: new Date(session.updatedAt),
-              messages: session.messages.map((msg: any) => ({
+              messages: (session.messages as Record<string, unknown>[]).map((msg) => ({
                 ...msg,
                 timestamp: new Date(msg.timestamp)
               })),
               // Issue #608: Handle activity timestamps
-              activities: session.activities?.map((activity: any) => ({
+              activities: (session.activities as Record<string, unknown>[] | undefined)?.map((activity) => ({
                 ...activity,
                 timestamp: new Date(activity.timestamp)
               })),

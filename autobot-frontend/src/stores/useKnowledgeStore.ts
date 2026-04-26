@@ -311,7 +311,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function refreshStats() {
     try {
       isLoading.value = true
-      stats.value = await ApiClient.get<any>(`${getApiBase()}/knowledge_base/stats`)
+      stats.value = await ApiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`)
     } catch (error) {
       logger.error('Failed to refresh stats:', error)
       // Issue #820: Preserve previous stats on error instead of resetting to zeros.
@@ -423,7 +423,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   // API-based category update (Issue #747)
   async function updateCategory(id: string, data: Partial<Category>) {
     try {
-      const result = await ApiClient.put<any>(`${getApiBase()}/knowledge_base/categories/${id}`, data)
+      const result = await ApiClient.put<{ status: string; category?: Category; message?: string }>(`${getApiBase()}/knowledge_base/categories/${id}`, data)
       if (result.status === 'success') {
         logger.info('Category updated successfully: %s', id)
         return result.category
@@ -439,7 +439,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   // API-based category delete (Issue #747)
   async function deleteCategory(id: string) {
     try {
-      const result = await ApiClient.delete<any>(`${getApiBase()}/knowledge_base/categories/${id}`)
+      const result = await ApiClient.delete<{ status: string; message?: string }>(`${getApiBase()}/knowledge_base/categories/${id}`)
       if (result.status === 'success') {
         logger.info('Category deleted successfully: %s', id)
         return result
@@ -473,7 +473,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function loadSystemDocs() {
     try {
       systemDocsLoading.value = true
-      const result = await ApiClient.get<{ entries?: any[]; documents?: any[] }>(
+      const result = await ApiClient.get<{ entries?: SystemDoc[]; documents?: SystemDoc[] }>(
         `${getApiBase()}/knowledge_base/entries?collection=autobot-documentation`
       )
       systemDocs.value = result.entries || result.documents || []
@@ -494,7 +494,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function loadPrompts() {
     try {
       promptsLoading.value = true
-      const result = await ApiClient.get<{ prompts?: any[] }>(`${getApiBase()}/prompts`)
+      const result = await ApiClient.get<{ prompts?: Prompt[] }>(`${getApiBase()}/prompts`)
       prompts.value = result.prompts || []
       logger.info('Loaded %d prompts', prompts.value.length)
     } catch (error) {
@@ -507,7 +507,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   async function updatePrompt(id: string, content: string) {
     try {
-      const result = await ApiClient.put<any>(`${getApiBase()}/prompts/${id}`, { content })
+      const result = await ApiClient.put<{ status?: string; message?: string }>(`${getApiBase()}/prompts/${id}`, { content })
       // Update the prompt in local state
       const promptIndex = prompts.value.findIndex(p => p.id === id)
       if (promptIndex !== -1) {
@@ -527,7 +527,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   async function revertPrompt(id: string) {
     try {
-      const result = await ApiClient.post<any>(`${getApiBase()}/prompts/${id}/revert`, {})
+      const result = await ApiClient.post<{ status?: string; content?: string; message?: string }>(`${getApiBase()}/prompts/${id}/revert`, {})
       // Update the prompt in local state
       const promptIndex = prompts.value.findIndex(p => p.id === id)
       if (promptIndex !== -1 && result.content) {

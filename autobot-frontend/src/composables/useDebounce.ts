@@ -85,6 +85,7 @@ export function useDebounce<T>(value: Ref<T>, delay: number = 300): Ref<T> {
  * cancel()
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
 export function useDebouncedFn<T extends (...args: any[]) => any>(
   fn: T,
   delay: number = 300

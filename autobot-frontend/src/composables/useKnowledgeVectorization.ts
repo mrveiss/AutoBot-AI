@@ -17,6 +17,28 @@ import { getApiBase } from '@/config/ssot-config'
 import { useDebounce } from './useTimeout'
 
 // Create scoped logger for useKnowledgeVectorization
+
+/** Response shape from /knowledge_base/vectorization_status */
+interface VectorizationStatusResponse {
+  statuses: Record<string, { vectorized: boolean; [key: string]: unknown }>
+  [key: string]: unknown
+}
+
+/** Response shape from /knowledge_base/vectorize_fact/:id and /knowledge_base/vectorize_documents */
+interface VectorizationJobResponse {
+  job_id?: string
+  status?: string
+  [key: string]: unknown
+}
+
+/** Response shape from /knowledge_base/vectorize_job/:id */
+interface VectorizationJobStatusResponse {
+  status?: string
+  progress?: number
+  error?: string
+  [key: string]: unknown
+}
+
 const logger = createLogger('useKnowledgeVectorization')
 
 // Request cache for batch status API calls (Issue #4006)
@@ -136,7 +158,7 @@ export function useKnowledgeVectorization() {
   const fetchDocumentStatus = async (documentId: string): Promise<VectorizationStatus> => {
     try {
       // Query actual backend status
-      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
+      const data = await apiClient.post<VectorizationStatusResponse>(`${getApiBase()}/knowledge_base/vectorization_status`, {
         fact_ids: [documentId],
         use_cache: true
       })
@@ -196,14 +218,14 @@ export function useKnowledgeVectorization() {
         for (let i = 0; i < documentIds.length; i += batchSize) {
           const batch = documentIds.slice(i, i + batchSize)
 
-          const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorization_status`, {
+          const data = await apiClient.post<VectorizationStatusResponse>(`${getApiBase()}/knowledge_base/vectorization_status`, {
             fact_ids: batch,
             use_cache: true
           })
 
           if (data?.statuses) {
             // Update cache with all statuses, including document names if provided (Issue #165)
-            Object.entries(data.statuses).forEach(([docId, statusData]: [string, any]) => {
+            Object.entries(data.statuses).forEach(([docId, statusData]) => {
               const status: VectorizationStatus = statusData.vectorized ? 'vectorized' : 'pending'
               const name = documentNames?.get(docId)
               setDocumentStatus(docId, status, undefined, undefined, name)
@@ -338,7 +360,7 @@ export function useKnowledgeVectorization() {
       const knowledgeTimeout = appConfig.getTimeout('knowledge')
 
       // Call backend API to vectorize the fact with proper timeout
-      const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
+      const data = await apiClient.post<VectorizationJobResponse>(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
         timeout: knowledgeTimeout
       })
 
@@ -359,7 +381,7 @@ export function useKnowledgeVectorization() {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
         // Use knowledge timeout for job status polling as well
-        const jobData = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
+        const jobData = await apiClient.get<VectorizationJobStatusResponse>(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
 
@@ -406,7 +428,7 @@ export function useKnowledgeVectorization() {
   ): Promise<{ succeeded: string[], failed: string[] }> => {
     const knowledgeTimeout = appConfig.getTimeout('knowledge')
     const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
-    const data = await apiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_documents`, {
+    const data = await apiClient.post<VectorizationJobResponse>(`${getApiBase()}/knowledge_base/vectorize_documents`, {
       document_ids: documentIds
     }, {
       timeout: batchTimeout

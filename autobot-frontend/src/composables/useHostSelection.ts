@@ -27,7 +27,7 @@ export interface InfrastructureHost {
   capabilities?: string[];
   purpose?: string;
   os?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   _isLegacyHost?: boolean;
 }
 
@@ -73,7 +73,7 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
       const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`);
       const data = response.ok ? await response.json() : { hosts: [] };
 
-      hosts.value = (data.hosts || []).map((h: any) => ({
+      hosts.value = (data.hosts || []).map((h: Record<string, unknown>) => ({
         id: h.id,
         name: h.name,
         host: h.host,

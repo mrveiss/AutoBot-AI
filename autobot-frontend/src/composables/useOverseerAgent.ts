@@ -62,6 +62,17 @@ export interface OverseerPlan {
   }>
 }
 
+export interface OverseerPlanContent {
+  analysis?: string
+  steps?: Array<{
+    step_number: number
+    description: string
+    command?: string | null
+  }>
+  command?: string | null
+  [key: string]: unknown
+}
+
 export interface OverseerUpdate {
   update_type: 'plan' | 'step_start' | 'stream' | 'step_complete' | 'error' | 'status'
   plan_id?: string
@@ -69,7 +80,7 @@ export interface OverseerUpdate {
   step_number?: number
   total_steps?: number
   status?: string
-  content?: any
+  content?: OverseerPlanContent | StreamChunk | string
   timestamp?: string
 }
 
@@ -144,8 +155,8 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
       error.value = 'WebSocket connection error'
       onError?.('WebSocket connection error')
     },
-    onMessage: (data: string) => {
-      handleMessage(data)
+    onMessage: (data: unknown) => {
+      if (typeof data === 'string') handleMessage(data)
     },
   })
 
@@ -196,7 +207,9 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    * Handle plan creation update
    */
   const handlePlanUpdate = (update: OverseerUpdate): void => {
-    const content = update.content
+    const content = typeof update.content === 'object' && update.content !== null && !('chunk_type' in update.content)
+      ? update.content as OverseerPlanContent
+      : undefined
     currentPlan.value = {
       plan_id: update.plan_id || '',
       analysis: content?.analysis || '',
@@ -204,7 +217,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     }
 
     // Initialize steps array
-    steps.value = (content?.steps || []).map((s: any) => ({
+    steps.value = (content?.steps || []).map((s) => ({
       step_number: s.step_number,
       total_steps: update.total_steps || content?.steps?.length || 0,
       description: s.description,

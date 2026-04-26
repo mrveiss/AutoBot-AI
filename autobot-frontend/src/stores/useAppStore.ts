@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import type { Router } from 'vue-router'
 import { defineStore } from 'pinia'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
@@ -6,6 +7,18 @@ import { generateChatId } from '@/utils/ChatIdGenerator.js'
 // Issue #545: Added 'analytics' for consolidated analytics section
 // Issue #591: Added 'operations' for long-running operations tracker
 export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'operations' | 'analytics' | 'secrets' | 'settings' | 'automation'
+
+/** Shape of a message stored in the app store sessions */
+export interface AppSessionMessage {
+  id: string
+  content: string
+  sender: 'user' | 'assistant' | 'system'
+  timestamp: Date
+  status?: 'sending' | 'sent' | 'error'
+  type?: 'message' | 'command' | 'response' | 'error' | 'system' | 'file' | 'image' | 'code'
+  attachments?: { name: string; size: number; type: string; url?: string; data?: string }[]
+  metadata?: { model?: string; tokens?: number; processingTime?: number; reasoning?: string }
+}
 
 export interface BackendStatus {
   text: string
@@ -186,7 +199,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Router integration - updates active tab from navigation and handles route changes
-  const updateRoute = (tab: TabType, router?: any) => {
+  const updateRoute = (tab: TabType, router?: Router) => {
     // Update the active tab state
     setActiveTab(tab)
 
@@ -296,7 +309,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const addMessageToSession = (sessionId: string, message: any) => {
+  const addMessageToSession = (sessionId: string, message: Omit<AppSessionMessage, 'id'> & { id?: string }) => {
     const session = sessions.value.find(s => s.id === sessionId)
     if (session) {
       session.messages.push({
@@ -307,7 +320,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const updateMessageInSession = (sessionId: string, messageId: string, updates: any) => {
+  const updateMessageInSession = (sessionId: string, messageId: string, updates: Partial<AppSessionMessage>) => {
     const session = sessions.value.find(s => s.id === sessionId)
     if (session) {
       const messageIndex = session.messages.findIndex(m => m.id === messageId)
