@@ -27,6 +27,7 @@ from api.schemas_agent import (
     AgentConfigOverviewResponse,
     AgentConfigUpdateModelResponse,
 )
+from api.schemas_common import DataResponse
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission

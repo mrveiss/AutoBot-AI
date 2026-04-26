@@ -19,6 +19,7 @@ from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     ValidationDashboardAlertsResponse,
     ValidationDashboardGenerateResponse,
