@@ -82,15 +82,11 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
-import { useLoadingState } from '@/composables/useLoadingState'
+import { useResourceMetrics } from '@/composables/visualizations/useResourceMetrics'
 
 const { t } = useI18n()
 
 const apexchart = VueApexCharts
-const logger = createLogger('ResourceHeatmap')
 
 // Props
 interface Props {
@@ -112,15 +108,10 @@ const emit = defineEmits<{
   (e: 'cell-click', data: { machine: string; time: string; value: number }): void
 }>()
 
-// State
-const { isLoading, wrap } = useLoadingState()
-const error = ref<string | null>(null)
-const selectedMetric = ref('cpu')
-const timeRange = ref('1h')
+// State — fetching and metrics state delegated to composable
+const { isLoading, error, selectedMetric, timeRange, heatmapData, fetchData, updateData } =
+  useResourceMetrics(() => props.machine)
 const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
-
-// Data
-const heatmapData = ref<Array<{ name: string; data: Array<{ x: string; y: number }> }>>([])
 
 // Computed
 const chartSeries = computed(() => heatmapData.value)
@@ -283,132 +274,6 @@ function getValueClass(value: number): string {
   if (value >= 60) return 'high'
   if (value >= 40) return 'medium'
   return 'low'
-}
-
-async function fetchData() {
-  error.value = null
-  await wrap(async () => {
-  try {
-    // Fetch historical metrics from backend
-    const response = await fetchWithAuth(`${getApiBase()}/monitoring/metrics/history?metric=${selectedMetric.value}&range=${timeRange.value}&machine=${props.machine}`)
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    processData(data)
-  } catch (err) {
-    logger.error('Failed to fetch heatmap data:', err)
-    error.value = err instanceof Error ? err.message : 'Failed to load data'
-
-    // Generate sample data for demo
-    generateSampleData()
-  }
-  })
-}
-
-function processData(data: { machines: Array<{ name: string; metrics: Array<{ time: string; value: number }> }> }) {
-  if (!data.machines || !Array.isArray(data.machines)) {
-    generateSampleData()
-    return
-  }
-
-  heatmapData.value = data.machines.map(machine => ({
-    name: machine.name,
-    data: machine.metrics.map(m => ({
-      x: m.time,
-      y: m.value
-    }))
-  }))
-}
-
-function generateSampleData() {
-  // Generate realistic sample data for the heatmap
-  const machines = ['Main (WSL)', 'Frontend VM', 'NPU Worker', 'Redis VM', 'AI Stack', 'Browser VM']
-  const now = new Date()
-  const intervals = getTimeIntervals()
-
-  heatmapData.value = machines.map((machine, machineIdx) => ({
-    name: machine,
-    data: intervals.map((interval, idx) => {
-      // Generate realistic patterns
-      let baseValue = 30 + Math.random() * 20
-
-      // Add time-based patterns (higher during work hours)
-      const hour = new Date(interval).getHours()
-      if (hour >= 9 && hour <= 17) {
-        baseValue += 20
-      }
-
-      // Add machine-specific patterns
-      if (machineIdx === 0) baseValue += 10 // Main machine higher
-      if (machineIdx === 2) baseValue += Math.sin(idx / 5) * 15 // NPU varies
-
-      // Add some random spikes
-      if (Math.random() > 0.9) baseValue += 30
-
-      return {
-        x: formatTimeLabel(interval),
-        y: Math.min(100, Math.max(0, Math.round(baseValue)))
-      }
-    })
-  }))
-}
-
-function getTimeIntervals(): Date[] {
-  const intervals: Date[] = []
-  const now = new Date()
-  let count: number
-  let step: number
-
-  switch (timeRange.value) {
-    case '1h':
-      count = 12
-      step = 5 * 60 * 1000 // 5 minutes
-      break
-    case '6h':
-      count = 24
-      step = 15 * 60 * 1000 // 15 minutes
-      break
-    case '24h':
-      count = 24
-      step = 60 * 60 * 1000 // 1 hour
-      break
-    case '7d':
-      count = 28
-      step = 6 * 60 * 60 * 1000 // 6 hours
-      break
-    default:
-      count = 12
-      step = 5 * 60 * 1000
-  }
-
-  for (let i = count - 1; i >= 0; i--) {
-    intervals.push(new Date(now.getTime() - i * step))
-  }
-
-  return intervals
-}
-
-function formatTimeLabel(date: Date): string {
-  switch (timeRange.value) {
-    case '1h':
-    case '6h':
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    case '24h':
-      return date.toLocaleTimeString('en-US', { hour: '2-digit' }) + 'h'
-    case '7d':
-      return date.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' +
-             date.toLocaleTimeString('en-US', { hour: '2-digit' })
-    default:
-      return date.toLocaleTimeString()
-  }
-}
-
-function updateData() {
-  // Data will be refetched when metric changes
-  fetchData()
 }
 
 // Lifecycle
