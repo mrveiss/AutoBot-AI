@@ -267,6 +267,8 @@ export function useVoiceOutput() {
       if (language) {
         formData.append('language', language)
       }
+      // fetchWithAuth retained: binary audio response (blob → arrayBuffer) and FormData
+      // body cannot be handled by apiClient.post(). Exempt per composable-weakness-remediation design.
       const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, {
         method: 'POST',
         body: formData,
