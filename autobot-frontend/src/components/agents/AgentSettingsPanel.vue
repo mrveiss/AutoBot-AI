@@ -12,6 +12,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const { t } = useI18n()
 const logger = createLogger('AgentSettingsPanel')
@@ -43,8 +44,8 @@ interface AgentSettings {
 
 // ===== State =====
 
-const isLoading = ref(false)
-const isSaving = ref(false)
+const { isLoading, wrap } = useLoadingState()
+const { isLoading: isSaving, wrap: wrapSaving } = useLoadingState()
 const saveStatus = ref<'idle' | 'success' | 'error'>('idle')
 const saveError = ref<string | null>(null)
 const hasChanges = ref(false)
@@ -88,7 +89,7 @@ function markChanged(): void {
 }
 
 async function loadSettings(): Promise<void> {
-  isLoading.value = true
+  await wrap(async () => {
   try {
     const data = await ApiClient.getSettings()
     const stored = data.agentSettings as Partial<AgentSettings> | undefined
@@ -105,18 +106,16 @@ async function loadSettings(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to load agent settings: %s', msg)
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 async function saveSettings(): Promise<void> {
   if (!isValid.value) return
 
-  isSaving.value = true
   saveStatus.value = 'idle'
   saveError.value = null
-
+  await wrapSaving(async () => {
   try {
     await ApiClient.saveSettings({ agentSettings: structuredClone(settings) })
     saveStatus.value = 'success'
@@ -127,9 +126,8 @@ async function saveSettings(): Promise<void> {
     saveStatus.value = 'error'
     saveError.value = msg
     logger.error('Failed to save agent settings: %s', msg)
-  } finally {
-    isSaving.value = false
   }
+  })
 }
 
 function resetToDefaults(): void {

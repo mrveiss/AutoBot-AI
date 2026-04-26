@@ -85,6 +85,7 @@ import type { ApexOptions } from 'apexcharts'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 const { t } = useI18n()
 
@@ -112,7 +113,7 @@ const emit = defineEmits<{
 }>()
 
 // State
-const isLoading = ref(false)
+const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const selectedMetric = ref('cpu')
 const timeRange = ref('1h')
@@ -285,9 +286,8 @@ function getValueClass(value: number): string {
 }
 
 async function fetchData() {
-  isLoading.value = true
   error.value = null
-
+  await wrap(async () => {
   try {
     // Fetch historical metrics from backend
     const response = await fetchWithAuth(`${getApiBase()}/monitoring/metrics/history?metric=${selectedMetric.value}&range=${timeRange.value}&machine=${props.machine}`)
@@ -304,9 +304,8 @@ async function fetchData() {
 
     // Generate sample data for demo
     generateSampleData()
-  } finally {
-    isLoading.value = false
   }
+  })
 }
 
 function processData(data: { machines: Array<{ name: string; metrics: Array<{ time: string; value: number }> }> }) {
