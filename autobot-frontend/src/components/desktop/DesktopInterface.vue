@@ -176,7 +176,7 @@ import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import { useVncControls } from '@/composables/useVncControls'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
@@ -185,8 +185,10 @@ const { t } = useI18n()
 const logger = createLogger('DesktopInterface')
 
 // Async operation composables
-const { execute: executeLoadVnc, loading: loadingVnc, error: errorVnc } = useAsyncOperation()
-const { execute: executeCheckConnection, loading: loadingCheck, error: errorCheck } = useAsyncOperation()
+const { isLoading: loadingVnc, wrap: wrapLoadVnc } = useLoadingState()
+const { isLoading: loadingCheck, wrap: wrapCheckConnection } = useLoadingState()
+const errorVnc = ref<Error | null>(null)
+const errorCheck = ref<Error | null>(null)
 
 // VNC controls (Issue #74)
 const vncControls = useVncControls()
@@ -229,7 +231,8 @@ const loadVncUrlFn = async () => {
 }
 
 const loadVncUrl = async () => {
-  await executeLoadVnc(loadVncUrlFn).catch(err => {
+  errorVnc.value = null
+  await wrapLoadVnc(loadVncUrlFn).catch(err => {
     logger.error('Failed to load VNC URL from config:', err);
 
     // CRITICAL: No fallbacks - config failure is real failure
@@ -324,7 +327,8 @@ const checkConnectionFn = async () => {
 }
 
 const checkConnection = async () => {
-  await executeCheckConnection(checkConnectionFn).catch(err => {
+  errorCheck.value = null
+  await wrapCheckConnection(checkConnectionFn).catch(err => {
     connectionStatus.value = 'Disconnected'
 
     if (err.name === 'AbortError') {
