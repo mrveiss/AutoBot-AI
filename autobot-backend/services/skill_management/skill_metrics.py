@@ -11,10 +11,10 @@ auto-deprecation of underperforming skills.
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
@@ -26,20 +26,10 @@ REDIS_SKILL_ERROR_PREFIX = "skill_error:"
 REDIS_SKILL_HEALTH_PREFIX = "skill_health:"
 
 
-class SkillMetrics:
+class SkillMetrics(AsyncRedisClientMixin):
     """Tracks and stores skill invocation metrics in Redis."""
 
-    def __init__(self) -> None:
-        self._redis: Optional[Any] = None
-
-    async def _get_redis(self) -> Optional[Any]:
-        """Get Redis client (analytics database)."""
-        if self._redis is None:
-            try:
-                self._redis = get_redis_client(RedisDatabase.ANALYTICS)
-            except Exception as e:
-                logger.error("Failed to get Redis client: %s", e)
-        return self._redis
+    _redis_database = "analytics"
 
     async def log_invocation(
         self,
@@ -71,19 +61,19 @@ class SkillMetrics:
 
         try:
             # Increment invocation counter
-            redis.incr(f"{day_prefix}:total")
+            await redis.incr(f"{day_prefix}:total")
 
             if success:
-                redis.incr(f"{day_prefix}:success")
+                await redis.incr(f"{day_prefix}:success")
             else:
-                redis.incr(f"{day_prefix}:failures")
+                await redis.incr(f"{day_prefix}:failures")
 
             # Track error type
             if error_type:
-                redis.incr(f"{day_prefix}:error:{error_type}")
+                await redis.incr(f"{day_prefix}:error:{error_type}")
 
             # Record duration (for percentile calculations)
-            redis.lpush(f"{day_prefix}:durations", str(duration_ms))
+            await redis.lpush(f"{day_prefix}:durations", str(duration_ms))
 
             # Store feedback if provided
             if user_feedback:
@@ -93,21 +83,21 @@ class SkillMetrics:
                     "success": success,
                     "feedback": user_feedback,
                 }
-                redis.lpush(
+                await redis.lpush(
                     f"{day_prefix}:feedback",
                     json.dumps(feedback_entry, default=str),
                 )
 
             # Trim old data (keep last 100 feedbacks per day)
-            redis.ltrim(f"{day_prefix}:feedback", 0, 99)
-            redis.ltrim(f"{day_prefix}:durations", 0, 999)
+            await redis.ltrim(f"{day_prefix}:feedback", 0, 99)
+            await redis.ltrim(f"{day_prefix}:durations", 0, 999)
 
             # Set key expiry (keep 90 days of metrics)
-            redis.expire(f"{day_prefix}:total", 90 * 86400)
-            redis.expire(f"{day_prefix}:success", 90 * 86400)
-            redis.expire(f"{day_prefix}:failures", 90 * 86400)
-            redis.expire(f"{day_prefix}:feedback", 90 * 86400)
-            redis.expire(f"{day_prefix}:durations", 90 * 86400)
+            await redis.expire(f"{day_prefix}:total", 90 * 86400)
+            await redis.expire(f"{day_prefix}:success", 90 * 86400)
+            await redis.expire(f"{day_prefix}:failures", 90 * 86400)
+            await redis.expire(f"{day_prefix}:feedback", 90 * 86400)
+            await redis.expire(f"{day_prefix}:durations", 90 * 86400)
 
         except Exception as e:
             logger.error("Failed to log skill metrics: %s", e)
@@ -147,21 +137,21 @@ class SkillMetrics:
                 day_prefix = f"{REDIS_SKILL_METRICS_PREFIX}{skill_id}:{date}"
 
                 # Get counts for this day
-                invocations = int(redis.get(f"{day_prefix}:total") or 0)
-                successes = int(redis.get(f"{day_prefix}:success") or 0)
+                invocations = int(await redis.get(f"{day_prefix}:total") or 0)
+                successes = int(await redis.get(f"{day_prefix}:success") or 0)
                 total_invocations += invocations
                 total_successes += successes
 
                 # Aggregate error patterns
-                error_keys = redis.keys(f"{day_prefix}:error:*")
+                error_keys = await redis.keys(f"{day_prefix}:error:*")
                 for key in error_keys:
                     key_str = key.decode() if isinstance(key, bytes) else key
                     error_type = key_str.split(":")[-1]
-                    count = int(redis.get(key) or 0)
+                    count = int(await redis.get(key) or 0)
                     error_patterns[error_type] = error_patterns.get(error_type, 0) + count
 
                 # Collect durations
-                durations_raw = redis.lrange(f"{day_prefix}:durations", 0, -1)
+                durations_raw = await redis.lrange(f"{day_prefix}:durations", 0, -1)
                 for d in durations_raw:
                     try:
                         duration_str = d.decode() if isinstance(d, bytes) else d
@@ -262,12 +252,12 @@ class SkillMetrics:
             for i in range(30):
                 date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
                 day_prefix = f"{REDIS_SKILL_METRICS_PREFIX}{skill_id}:{date}"
-                count = int(redis.get(f"{day_prefix}:total") or 0)
+                count = int(await redis.get(f"{day_prefix}:total") or 0)
                 recent_invocations += count
 
             if recent_invocations == 0:
                 # Mark as stale
-                redis.set(
+                await redis.set(
                     f"{REDIS_SKILL_HEALTH_PREFIX}{skill_id}:stale",
                     "true",
                     ex=90 * 86400,
@@ -291,7 +281,7 @@ class SkillMetrics:
             return []
 
         try:
-            stale_keys = redis.keys(f"{REDIS_SKILL_HEALTH_PREFIX}*:stale")
+            stale_keys = await redis.keys(f"{REDIS_SKILL_HEALTH_PREFIX}*:stale")
             return [
                 key.decode().replace(f"{REDIS_SKILL_HEALTH_PREFIX}", "").replace(
                     ":stale", ""

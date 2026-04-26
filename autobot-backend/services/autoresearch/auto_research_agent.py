@@ -45,6 +45,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 
 from .config import AutoResearchConfig
@@ -192,7 +193,7 @@ class CheckpointResult:
     redirect_instructions: Optional[str] = None
 
 
-class ResearchCheckpointGate:
+class ResearchCheckpointGate(AsyncRedisClientMixin):
     """
     Redis-backed gate that pauses a research session at defined checkpoints
     and waits for a human to approve, redirect, or cancel.
@@ -217,17 +218,7 @@ class ResearchCheckpointGate:
         from .config import AutoResearchConfig as _Cfg
 
         self.config = config or _Cfg()
-        self._redis = None
-
-    async def _get_redis(self):
-        if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self._redis = get_redis_client(
-                async_client=True,
-                database=self.config.redis_database,
-            )
-        return self._redis
+        self._redis_database = self.config.redis_database
 
     def _keys(self, session_id: str, cp_type: str):
         ctx_key = self._CONTEXT_KEY.format(session_id=session_id, cp_type=cp_type)
@@ -327,7 +318,7 @@ class ResearchCheckpointGate:
 # ---------------------------------------------------------------------------
 
 
-class ApprovalGate:
+class ApprovalGate(AsyncRedisClientMixin):
     """
     Lightweight Redis-backed gate for autoresearch significant improvements.
 
@@ -346,17 +337,7 @@ class ApprovalGate:
 
     def __init__(self, config: Optional[AutoResearchConfig] = None):
         self.config = config or AutoResearchConfig()
-        self._redis = None
-
-    async def _get_redis(self):
-        if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self._redis = get_redis_client(
-                async_client=True,
-                database=self.config.redis_database,
-            )
-        return self._redis
+        self._redis_database = self.config.redis_database
 
     def check_approval_needed(
         self, improvement_pct: Optional[float], threshold: float
@@ -578,7 +559,7 @@ def _parse_github_results(data: Dict[str, Any]) -> List[SearchResult]:
 # ---------------------------------------------------------------------------
 
 
-class AutoResearchAgent:
+class AutoResearchAgent(AsyncRedisClientMixin):
     """
     Orchestrator for the AutoResearch M2 loop.
 
@@ -606,13 +587,13 @@ class AutoResearchAgent:
         http_client: Optional[httpx.AsyncClient] = None,
     ):
         self.config = config or AutoResearchConfig()
+        self._redis_database = self.config.redis_database
         self.store = store or ExperimentStore(self.config)
         self.runner = runner or ExperimentRunner(config=self.config, store=self.store)
         self.approval_gate = approval_gate or ApprovalGate(self.config)
         self.checkpoint_gate = checkpoint_gate or ResearchCheckpointGate(self.config)
         self._http_client = http_client
         self._cancel_event: asyncio.Event = asyncio.Event()
-        self._redis = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -1201,16 +1182,6 @@ class AutoResearchAgent:
     # ------------------------------------------------------------------
     # Private: session persistence
     # ------------------------------------------------------------------
-
-    async def _get_redis(self):
-        if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
-
-            self._redis = get_redis_client(
-                async_client=True,
-                database=self.config.redis_database,
-            )
-        return self._redis
 
     async def _save_session(self, session: ExperimentSession) -> None:
         """Persist an ExperimentSession to Redis.

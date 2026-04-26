@@ -25,7 +25,7 @@ from typing import Any, List, Optional
 
 from redis.exceptions import RedisError
 
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ class SecurityAssessment:
         )
 
 
-class SecurityWorkflowManager:
+class SecurityWorkflowManager(AsyncRedisClientMixin):
     """
     Manages security assessment workflows with Redis persistence.
 
@@ -298,16 +298,7 @@ class SecurityWorkflowManager:
     REDIS_KEY_PREFIX = "workflow:assessment"
     REDIS_ACTIVE_INDEX = "workflow:assessments:active"
     REDIS_TTL_DAYS = 30  # Keep assessments for 30 days
-
-    def __init__(self) -> None:
-        """Initialize security workflow manager with Redis client placeholder."""
-        self._redis_client: Any = None
-
-    async def _get_redis(self) -> Any:
-        """Get Redis client for workflow database."""
-        if self._redis_client is None:
-            self._redis_client = await get_async_redis_client(database="workflows")
-        return self._redis_client
+    _redis_database = "workflows"
 
     def _assessment_key(self, assessment_id: str) -> str:
         """Generate Redis key for an assessment."""
