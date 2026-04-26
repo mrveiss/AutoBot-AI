@@ -819,5 +819,18 @@ class LogFileMetadata(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# intelligent_agent.py reload schema  (Issue #5985)
+# ---------------------------------------------------------------------------
+
+
+
+class AgentReloadResponse(BaseModel):
+    """Response for POST /intelligent-agent/reload."""
+
+    status: str
+    message: str
+
+
+# ---------------------------------------------------------------------------
 # voice.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------

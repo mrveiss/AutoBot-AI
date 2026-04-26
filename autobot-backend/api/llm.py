@@ -14,6 +14,7 @@ from api.schemas_agent import (
     LLMEmbeddingModelsResponse,
     LLMModelsResponse,
 )
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as ssot_config
@@ -566,7 +567,7 @@ async def get_comprehensive_llm_status(
     operation="get_llm_status",
     error_code_prefix="LLM",
 )
-@router.get("/status", response_model=None)
+@router.get("/status", response_model=DataResponse)
 async def get_llm_status(
     current_user: dict = Depends(get_current_user),
 ):

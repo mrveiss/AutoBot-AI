@@ -879,7 +879,7 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     operation="stream_log",
     error_code_prefix="LOGS",
 )
-@router.get("/stream/{filename}", response_model=None)
+@router.get("/stream/{filename}", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_log(
     filename: str,
     admin_check: bool = Depends(check_admin_permission),
