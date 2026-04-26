@@ -352,8 +352,8 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import apiClient from '@/utils/ApiClient.ts'
+import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
+import type { PlaywrightNavigationResponse } from '@/composables/desktop/useBrowserSessionData'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -370,15 +370,6 @@ interface ConsoleLogEntry {
   timestamp: string
   level: string
   message: string
-}
-
-// Type for Playwright navigation response
-interface PlaywrightNavigationResponse {
-  final_url?: string
-  url?: string
-  title?: string
-  status?: string
-  [key: string]: unknown
 }
 
 export default {
@@ -409,6 +400,9 @@ export default {
   },
   emits: ['close', 'navigate', 'interact', 'popout', 'dock'],
   setup(props: any, { emit }: any) {
+    // Browser session data composable (replaces inline fetchWithAuth/apiClient calls)
+    const browserApi = useBrowserSessionData()
+
     // Core state
     const loading = ref(false)
     const browserStatus = ref('initializing')
@@ -485,34 +479,18 @@ export default {
       async () => {
         browserStatus.value = 'connecting'
 
-        let sessionData = null
-        if (props.sessionId &&
-            props.sessionId !== 'manual-browser' &&
-            props.sessionId !== 'unified-browser') {
-          try {
-            // ApiClient.get() returns parsed JSON directly, throws on error
-            // Issue #552: Fixed path to match backend /api/research-browser/
-            sessionData = await apiClient.get(`${getApiBase()}/research-browser/browser/${props.sessionId}`)
-          } catch (sessionError) {
-            logger.warn('Could not get session info, using manual mode')
-          }
-        }
+        // Issue #552: Fixed path to match backend /api/research-browser/
+        const sessionData = await browserApi.fetchSession(props.sessionId)
 
         // Second API call - try to connect to Playwright service
-        let healthResponse = null
-        try {
-          healthResponse = await fetchWithAuth(`${playwrightApiUrl.value}/health`)
-        } catch (playwrightError) {
-          // Will be handled in onSuccess
-        }
+        const healthResponse = await browserApi.fetchPlaywrightHealth(playwrightApiUrl.value)
 
         return { sessionData, healthResponse }
       },
       {
         onSuccess: (result) => {
           if (result.sessionData) {
-            const sessionResponse = result.sessionData as unknown as PlaywrightNavigationResponse
-            currentUrl.value = sessionResponse.url || props.initialUrl
+            currentUrl.value = result.sessionData.url || props.initialUrl
             addressBarUrl.value = currentUrl.value
           }
 
@@ -563,15 +541,11 @@ export default {
         // Try Playwright navigation if available
         let playwrightResult: PlaywrightNavigationResponse | null = null
         if (playwrightStatus.value === 'connected') {
-          try {
-            // ApiClient.post() returns parsed JSON directly, throws on error
-            playwrightResult = await apiClient.post(`${playwrightApiUrl.value}/navigate`, {
-              url: targetUrl,
-              session_id: props.sessionId
-            }) as unknown as PlaywrightNavigationResponse
-          } catch (navError) {
-            logger.warn('Playwright navigation failed, relying on VNC')
-          }
+          playwrightResult = await browserApi.navigateTo(
+            playwrightApiUrl.value,
+            targetUrl,
+            props.sessionId
+          )
         }
 
         return {
@@ -622,8 +596,7 @@ export default {
           return null
         }
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${getApiBase()}/playwright/back`) as unknown as PlaywrightNavigationResponse
+        return await browserApi.navigateBack()
       },
       {
         onSuccess: (result) => {
@@ -657,8 +630,7 @@ export default {
           return null
         }
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${getApiBase()}/playwright/forward`) as unknown as PlaywrightNavigationResponse
+        return await browserApi.navigateForward()
       },
       {
         onSuccess: (result) => {
@@ -691,8 +663,7 @@ export default {
           return 'navigate-fallback'
         }
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${getApiBase()}/playwright/reload`) as unknown as PlaywrightNavigationResponse
+        return await browserApi.reloadPage()
       },
       {
         onSuccess: async (result) => {
@@ -725,11 +696,7 @@ export default {
 
         addConsoleLog('info', `Starting web search for: ${searchQuery.value}`)
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${playwrightApiUrl.value}/search`, {
-          query: searchQuery.value,
-          search_engine: 'duckduckgo'
-        })
+        return await browserApi.webSearch(playwrightApiUrl.value, searchQuery.value)
       },
       {
         onSuccess: (data) => {
@@ -751,10 +718,7 @@ export default {
       async () => {
         addConsoleLog('info', 'Starting frontend tests...')
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
-          frontend_url: window.location.origin
-        })
+        return await browserApi.runFrontendTests(playwrightApiUrl.value)
       },
       {
         onSuccess: (data) => {
@@ -780,11 +744,7 @@ export default {
       async () => {
         addConsoleLog('info', 'Sending test message...')
 
-        // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
-          message: 'Test message from browser automation',
-          frontend_url: window.location.origin
-        })
+        return await browserApi.sendTestMessage(playwrightApiUrl.value)
       },
       {
         onSuccess: (data) => {
