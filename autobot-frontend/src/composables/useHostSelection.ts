@@ -126,6 +126,13 @@ const _terminalHostsEndpoint = useFetchEndpoint<HostsApiRaw, HostConfig[]>({
 
 const terminalHostsLoading = _terminalHostsEndpoint.loading;
 
+// AbortControllers for in-flight loadHosts / loadTerminalHosts requests.
+// Abort-prior is already handled inside useFetchEndpoint/useApiResource, but
+// these module-scope refs let external callers (e.g. onUnmounted hooks) cancel
+// a pending fetch when no component is left waiting for the result (#6136).
+let _loadController: AbortController | null = null;
+let _terminalLoadController: AbortController | null = null;
+
 // Promise resolvers for async request handling
 let resolveHostSelection: ((result: HostSelectionResult | null) => void) | null = null;
 
@@ -133,8 +140,17 @@ let resolveHostSelection: ((result: HostSelectionResult | null) => void) | null 
  * Load infrastructure hosts from the secrets API (Issue #1310, #6089)
  */
 const loadHosts = async (): Promise<InfrastructureHost[]> => {
+  _loadController?.abort();
+  _loadController = new AbortController();
+  const signal = _loadController.signal;
   error.value = null;
-  await _hostsEndpoint.load();
+  try {
+    await _hostsEndpoint.load();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return hosts.value;
+    throw err;
+  }
+  if (signal.aborted) return hosts.value;
   return hosts.value;
 };
 
@@ -143,7 +159,16 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
  * HostSelector component (Issue #6089).
  */
 const loadTerminalHosts = async (): Promise<HostConfig[]> => {
-  await _terminalHostsEndpoint.load();
+  _terminalLoadController?.abort();
+  _terminalLoadController = new AbortController();
+  const signal = _terminalLoadController.signal;
+  try {
+    await _terminalHostsEndpoint.load();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return terminalHosts.value;
+    throw err;
+  }
+  if (signal.aborted) return terminalHosts.value;
   return terminalHosts.value;
 };
 
@@ -366,6 +391,10 @@ export function useHostSelection() {
     handleDialogClose,
     isHostAvailable,
     getHostById,
+    /** Cancel any in-flight loadHosts request (call from onUnmounted if needed). */
+    abortLoadHosts: () => { _loadController?.abort(); _loadController = null; },
+    /** Cancel any in-flight loadTerminalHosts request (call from onUnmounted if needed). */
+    abortLoadTerminalHosts: () => { _terminalLoadController?.abort(); _terminalLoadController = null; },
 
     // For direct state access in dialog component
     _showDialog: showDialog,
