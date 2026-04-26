@@ -158,7 +158,7 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     operation="analyze_codebase_get",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/analyze", response_model=None)
+@router.get("/analyze", response_model=DataResponse)
 async def analyze_codebase_get(
     path: str = Query(..., description="Root path to analyze"),
     type: str = Query("comprehensive", description="Analysis type"),
