@@ -1128,6 +1128,12 @@ class PathConfig(BaseSettings):
     # of what AUTOBOT_BASE_DIR is set to.
     code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
 
+    # VNC password file — absolute path, not relative to base_dir.
+    # Override via AUTOBOT_VNC_PASSWD_FILE env var.
+    vnc_passwd_file: str = Field(
+        default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE"
+    )
+
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
         p = Path(relative)
@@ -1164,6 +1170,11 @@ class PathConfig(BaseSettings):
     def code_source_path(self) -> Path:
         """Absolute path to the code source directory (git repo root on deployment)."""
         return self.resolve(self.code_source_dir)
+
+    @property
+    def vnc_passwd_path(self) -> Path:
+        """Absolute path to the x11vnc password file."""
+        return Path(self.vnc_passwd_file)
 
 
 class FeatureConfig(BaseSettings):

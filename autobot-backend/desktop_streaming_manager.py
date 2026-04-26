@@ -26,6 +26,7 @@ from typing import Any, Optional
 
 import websockets
 
+from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from task_execution_tracker import TaskPriority, task_tracker
@@ -41,11 +42,6 @@ ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset(
     {"novnc_process", "vnc_process", "xvfb_process"}
 )
 CORE_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"xvfb_process", "vnc_process"})
-
-# VNC password file path — override with AUTOBOT_VNC_PASSWD_FILE env var (#5956)
-VNC_PASSWD_FILE: str = os.environ.get(
-    "AUTOBOT_VNC_PASSWD_FILE", "/home/autobot/.vnc/x11vnc.passwd"
-)
 
 
 def _get_x_lock_directory() -> Path:
@@ -553,7 +549,7 @@ class VNCServerManager:
             "-rfbport",
             str(vnc_port),
             "-rfbauth",
-            VNC_PASSWD_FILE,
+            str(config.path.vnc_passwd_path),
             "-shared",
             "-forever",
             "-noxdamage",
