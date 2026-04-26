@@ -112,6 +112,22 @@ repos:
         stages: [pre-commit]
         description: "Use kb.redis() instead of reaching into KB internals (#5225)"
 
+  # AutoBot custom: regression-prevention for #5913 response_model=DataResponse safety check.
+  # Blocks any FastAPI route decorated with response_model=DataResponse unless its body
+  # calls create_success_response(), returns a dict literal with a 'success' key, or
+  # returns a bypass response type (JSONResponse, StreamingResponse, etc.).
+  # Background: #5843 → #5896 → #5904 cascade where 52 endpoints got DataResponse
+  # annotations but returned plain dicts without 'success', causing HTTP 500 at runtime.
+  - repo: local
+    hooks:
+      - id: response-model-data-response
+        name: Verify response_model=DataResponse endpoints return success-compatible shapes (#5913)
+        entry: tools/lint/check_response_models.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use create_success_response() or a named schema when annotating with response_model=DataResponse (#5913)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
