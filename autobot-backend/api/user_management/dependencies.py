@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import auth_middleware
+from autobot_shared.ssot_config import config as ssot_config
 from user_management.config import DeploymentMode, get_deployment_config
 from user_management.database import get_async_session
 from user_management.services import (
@@ -54,7 +55,7 @@ def get_current_user(request: Request) -> dict:
     if config.mode == DeploymentMode.SINGLE_USER:
         return {
             "username": "admin",
-            "email": "admin@autobot.local",
+            "email": f"admin@{ssot_config.auth.domain}",
             "role": "admin",
             "is_platform_admin": True,
             "auth_disabled": True,

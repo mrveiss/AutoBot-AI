@@ -18,6 +18,7 @@ from pydantic import BaseModel, validator
 
 from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
@@ -277,11 +278,11 @@ async def login(request: Request, login_data: LoginRequest):
                 "username": "admin",
                 "user_id": "admin",
                 "role": "admin",
-                "email": "admin@autobot.local",
+                "email": f"admin@{ssot_config.auth.domain}",
                 "last_login": None,
             }
             jwt_token = auth_middleware.create_jwt_token(
-                {"username": "admin", "role": "admin", "email": "admin@autobot.local"}
+                {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
             )
             session_id = auth_middleware.create_session(
                 {"username": "admin", "role": "admin"}, request
@@ -373,7 +374,7 @@ async def get_current_user_info(request: Request):
             return {
                 "username": "admin",
                 "role": "admin",
-                "email": "admin@autobot.local",
+                "email": f"admin@{ssot_config.auth.domain}",
                 "auth_method": "single_user",
                 "authenticated": True,
                 "deployment_mode": "single_user",

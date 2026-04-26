@@ -188,7 +188,7 @@ class AuthenticationMiddleware:
         return {
             "username": "admin",
             "role": "admin",
-            "email": "admin@autobot.local",
+            "email": f"admin@{ssot_config.auth.domain}",
             "auth_disabled": True,
         }
 
@@ -241,7 +241,7 @@ class AuthenticationMiddleware:
         return {
             "username": username,
             "role": user_config.get("role", "user"),
-            "email": user_config.get("email", f"{username}@autobot.local"),
+            "email": user_config.get("email", f"{username}@{ssot_config.auth.domain}"),
             "last_login": user_config["last_login"],
         }
 
@@ -474,7 +474,7 @@ class AuthenticationMiddleware:
         return {
             "username": f"dev_{user_role}",
             "role": user_role,
-            "email": f"dev_{user_role}@autobot.local",
+            "email": f"dev_{user_role}@{ssot_config.auth.domain}",
             "auth_method": "development",
         }
 
@@ -744,7 +744,7 @@ async def authenticate_websocket(websocket) -> Optional[dict]:
             return {
                 "username": "admin",
                 "role": "admin",
-                "email": "admin@autobot.local",
+                "email": f"admin@{ssot_config.auth.domain}",
                 "source": "single_user_mode",
             }
     except Exception:
