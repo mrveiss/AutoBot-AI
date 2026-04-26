@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
+from api.schemas_agent import AgentSystemCapabilitiesResponse
 from api.schemas_common import DataResponse
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
@@ -123,16 +124,6 @@ class GoalResponse(BaseModel):
     metadata: Metadata = {}
 
 
-class SystemInfoResponse(BaseModel):
-    """Response model for system information."""
-
-    os_type: str
-    distro: str = ""
-    user: str
-    capabilities: List[str]
-    available_tools: List[str]
-
-
 class HealthResponse(BaseModel):
     """Response model for health check."""
 
@@ -208,7 +199,7 @@ async def process_natural_language_goal(
     operation="get_system_info",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.get("/system-info", response_model=SystemInfoResponse)
+@router.get("/system-info", response_model=AgentSystemCapabilitiesResponse)
 async def get_system_info(
     current_user: dict = Depends(get_current_user),
 ):
@@ -222,7 +213,7 @@ async def get_system_info(
 
     # Handle both initialized and uninitialized states
     if system_info.get("status") == "not_initialized":
-        return SystemInfoResponse(
+        return AgentSystemCapabilitiesResponse(
             os_type="unknown",
             distro="",
             user="",
@@ -234,7 +225,7 @@ async def get_system_info(
     os_info = system_info.get("os_info", {})
     capabilities_info = system_info.get("capabilities", {})
 
-    return SystemInfoResponse(
+    return AgentSystemCapabilitiesResponse(
         os_type=os_info.get("os_type", "unknown"),
         distro=os_info.get("distro", ""),
         user=os_info.get("user", ""),

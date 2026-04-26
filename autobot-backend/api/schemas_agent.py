@@ -14,13 +14,6 @@ from pydantic import BaseModel
 # Agent schemas
 # ---------------------------------------------------------------------------
 
-class AgentMessageResponse(BaseModel):
-    """Response for /goal, /pause, /resume — plain {"message": str}."""
-
-    message: str
-
-
-
 class AgentCommandApprovalResponse(BaseModel):
     """Response for POST /command_approval."""
 
@@ -675,6 +668,22 @@ class LLMPatternsCostBreakdownResponse(BaseModel):
     by_model: List[Any]
     by_category: List[Any]
     daily_trend: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# intelligent_agent.py schemas  (Issue #5937)
+# ---------------------------------------------------------------------------
+
+
+
+class AgentSystemCapabilitiesResponse(BaseModel):
+    """Response for GET /intelligent-agent/system-info — OS, user, and tool capabilities."""
+
+    os_type: str
+    distro: str = ""
+    user: str
+    capabilities: List[str]
+    available_tools: List[str]
 
 
 # ---------------------------------------------------------------------------

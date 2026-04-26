@@ -36,8 +36,8 @@ from type_defs.common import Metadata
 from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
-from api.schemas_common import DataResponse
-from api.schemas_agent import AgentCommandApprovalResponse, AgentHealthResponse, AgentMessageResponse
+from api.schemas_common import AgentMessageResponse, DataResponse
+from api.schemas_agent import AgentCommandApprovalResponse, AgentHealthResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
