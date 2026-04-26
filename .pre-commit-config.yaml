@@ -128,6 +128,19 @@ repos:
         stages: [pre-commit]
         description: "Use create_success_response() or a named schema when annotating with response_model=DataResponse (#5913)"
 
+  # AutoBot custom: prevent re-introduction of local BaseModel definitions in
+  # non-schema API endpoint files. Schema migration (#5799, #5996) moved
+  # 375+ classes to domain schemas_*.py files. This hook blocks new ones.
+  - repo: local
+    hooks:
+      - id: no-local-schemas
+        name: Block local BaseModel definitions in non-schema API files (#6056)
+        entry: tools/lint/check_no_local_schemas.py
+        language: python
+        files: ^autobot-backend/api/(?!schemas_).*\.py$
+        stages: [pre-commit]
+        description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
