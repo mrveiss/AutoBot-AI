@@ -35,6 +35,13 @@ from auth_middleware import check_admin_permission
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    CodeGenerationHealthResponse,
+    CodeGenerationValidateResponse,
+    CodeGenerationVersionsResponse,
+    CodeGenerationStatsResponse,
+    CodeGenerationRefactoringTypesResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # LLM Interface for real code generation
@@ -960,7 +967,7 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
     operation="get_health",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=CodeGenerationHealthResponse)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Get code generation service health status.
 
@@ -1038,7 +1045,7 @@ async def refactor_code(
     operation="validate_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.post("/validate", response_model=None)
+@router.post("/validate", response_model=CodeGenerationValidateResponse)
 async def validate_code(
     admin_check: bool = Depends(check_admin_permission),
     request: ValidationRequest = None,
@@ -1066,7 +1073,7 @@ async def validate_code(
     operation="get_versions",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/versions/{file_path:path}", response_model=None)
+@router.get("/versions/{file_path:path}", response_model=CodeGenerationVersionsResponse)
 async def get_versions(
     admin_check: bool = Depends(check_admin_permission), file_path: str = None
 ):
@@ -1124,7 +1131,7 @@ async def rollback_code(
     operation="get_stats",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/stats", response_model=None)
+@router.get("/stats", response_model=CodeGenerationStatsResponse)
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1150,7 +1157,7 @@ async def get_stats(
     operation="get_refactoring_types",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/refactoring-types", response_model=None)
+@router.get("/refactoring-types", response_model=CodeGenerationRefactoringTypesResponse)
 async def get_refactoring_types(admin_check: bool = Depends(check_admin_permission)):
     """
     Get available refactoring types with descriptions.

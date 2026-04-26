@@ -1163,3 +1163,309 @@ class RealTimeEvent(BaseModel):
     timestamp: str
     data: Metadata
     severity: str = "info"
+
+
+# ---------------------------------------------------------------------------
+# analytics_bug_prediction.py — GET endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class BugPredictionAnalysisResponse(BaseModel):
+    """Response for GET /bug-prediction/analyze — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionCachedResponse(BaseModel):
+    """Response for GET /bug-prediction/cached — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionHighRiskResponse(BaseModel):
+    """Response for GET /bug-prediction/high-risk — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionFileResponse(BaseModel):
+    """Response for GET /bug-prediction/file/{file_path} — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionHeatmapResponse(BaseModel):
+    """Response for GET /bug-prediction/heatmap — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionTrendsResponse(BaseModel):
+    """Response for GET /bug-prediction/trends — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class BugPredictionSummaryResponse(BaseModel):
+    """Response for GET /bug-prediction/summary — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_generation.py — endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class CodeGenerationHealthResponse(BaseModel):
+    """Response for GET /code-generation/health."""
+
+    status: str
+    service: str
+    deprecated: bool
+    use_instead: str
+    features: List[str]
+    supported_languages: List[str]
+    refactoring_types: List[str]
+
+
+class CodeGenerationValidateResponse(BaseModel):
+    """Response for POST /code-generation/validate."""
+
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    ast_info: Optional[Metadata] = None
+    language: str
+
+
+class CodeGenerationVersionsResponse(BaseModel):
+    """Response for GET /code-generation/versions/{file_path}."""
+
+    file_path: str
+    versions: List[Metadata]
+    count: int
+
+
+class CodeGenerationStatsResponse(BaseModel):
+    """Response for GET /code-generation/stats — dual shape (success vs error)."""
+
+    model_config = {"extra": "allow"}
+
+
+class RefactoringTypeItem(BaseModel):
+    """Individual refactoring type entry."""
+
+    id: str
+    name: str
+    description: str
+
+
+class CodeGenerationRefactoringTypesResponse(BaseModel):
+    """Response for GET /code-generation/refactoring-types."""
+
+    types: List[RefactoringTypeItem]
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_review.py — list endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class CodeReviewPatternItem(BaseModel):
+    """Individual code review pattern entry."""
+
+    id: str
+    name: str
+    category: str
+    severity: str
+    message: str
+    suggestion: str
+    has_regex: bool
+
+
+class CodeReviewCategoryItem(BaseModel):
+    """Individual code review category entry."""
+
+    id: str
+    name: str
+    description: str
+    icon: str
+
+
+# ---------------------------------------------------------------------------
+# analytics_conversation.py — endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class ConversationIntentsResponse(BaseModel):
+    """Response for GET /conversation/intents."""
+
+    model_config = {"extra": "allow"}
+
+
+class ConversationFlowsResponse(BaseModel):
+    """Response for GET /conversation/flows."""
+
+    model_config = {"extra": "allow"}
+
+
+class ConversationBottlenecksResponse(BaseModel):
+    """Response for GET /conversation/bottlenecks."""
+
+    model_config = {"extra": "allow"}
+
+
+class ConversationDistributionResponse(BaseModel):
+    """Response for GET /conversation/distribution."""
+
+    model_config = {"extra": "allow"}
+
+
+class ConversationDetectIntentResponse(BaseModel):
+    """Response for POST /conversation/detect-intent."""
+
+    message: str
+    detected_intent: str
+    intent_name: str
+    confidence: float
+
+
+# ---------------------------------------------------------------------------
+# analytics_dfa.py — endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class DfaVulnerabilityItem(BaseModel):
+    """Individual vulnerability entry in DFA analysis."""
+
+    model_config = {"extra": "allow"}
+
+
+class DfaVulnerabilitiesResponse(BaseModel):
+    """Response for POST /dfa/vulnerabilities."""
+
+    file_path: str
+    total_vulnerabilities: int
+    vulnerabilities: List[DfaVulnerabilityItem]
+
+
+class DfaSourceItem(BaseModel):
+    """Individual taint source entry."""
+
+    name: str
+    source_type: str
+    taint_level: str
+
+
+class DfaSourcesResponse(BaseModel):
+    """Response for GET /dfa/sources."""
+
+    sources: List[DfaSourceItem]
+
+
+class DfaSinkItem(BaseModel):
+    """Individual taint sink entry."""
+
+    name: str
+    sink_type: str
+    vulnerability_type: str
+    severity: str
+
+
+class DfaSinksResponse(BaseModel):
+    """Response for GET /dfa/sinks."""
+
+    sinks: List[DfaSinkItem]
+
+
+class DfaSanitizersResponse(BaseModel):
+    """Response for GET /dfa/sanitizers."""
+
+    sanitizers: List[str]
+
+
+class DfaHealthResponse(BaseModel):
+    """Response for GET /dfa/health."""
+
+    status: str
+    service: str
+    deprecated: bool
+    use_instead: str
+    features: List[str]
+
+
+# ---------------------------------------------------------------------------
+# analytics_log_patterns.py — endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class LogPatternDetailResponse(BaseModel):
+    """Response for GET /log-patterns/pattern/{pattern_id}."""
+
+    model_config = {"extra": "allow"}
+
+
+class LogPatternHotspotsResponse(BaseModel):
+    """Response for GET /log-patterns/hotspots."""
+
+    model_config = {"extra": "allow"}
+
+
+class LogPatternStatsResponse(BaseModel):
+    """Response for GET /log-patterns/stats."""
+
+    model_config = {"extra": "allow"}
+
+
+class LogPatternRealtimeResponse(BaseModel):
+    """Response for GET /log-patterns/realtime."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_quality.py — endpoint schemas (Issue #5983)
+# ---------------------------------------------------------------------------
+
+
+class QualityHealthScoreResponse(BaseModel):
+    """Response for GET /quality/health-score — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualityMetricsResponse(BaseModel):
+    """Response for GET /quality/metrics — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualityPatternsResponse(BaseModel):
+    """Response for GET /quality/patterns — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualityComplexityResponse(BaseModel):
+    """Response for GET /quality/complexity — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualityTrendsResponse(BaseModel):
+    """Response for GET /quality/trends — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualitySnapshotResponse(BaseModel):
+    """Response for GET /quality/snapshot — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}
+
+
+class QualityDrillDownResponse(BaseModel):
+    """Response for GET /quality/drill-down/{category} — dual shape (success vs no_data)."""
+
+    model_config = {"extra": "allow"}

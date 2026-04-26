@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -40,6 +40,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
+from api.schemas_analytics import CodeReviewPatternItem, CodeReviewCategoryItem
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -691,7 +692,7 @@ async def review_file(
     operation="get_review_patterns",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/patterns", response_model=None)
+@router.get("/patterns", response_model=List[CodeReviewPatternItem])
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -888,7 +889,7 @@ async def get_review_summary(
     operation="get_review_categories",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/categories", response_model=None)
+@router.get("/categories", response_model=List[CodeReviewCategoryItem])
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
