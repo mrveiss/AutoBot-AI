@@ -26,7 +26,13 @@ from integrations.project_management_integration import (
     JiraIntegration,
     TrelloIntegration,
 )
-from api.schemas_common import DataResponse
+from api.schemas_code import (
+    PMIssueCreateResponse,
+    PMIssueSearchResponse,
+    PMIssueUpdateResponse,
+    PMIssuesResponse,
+    PMProjectsResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -217,7 +223,7 @@ async def list_providers() -> List[ProviderInfo]:
     operation="list_projects",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/projects", response_model=None)
+@router.get("/{provider}/projects", response_model=PMProjectsResponse)
 async def list_projects(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -262,7 +268,7 @@ async def list_projects(
     operation="list_issues",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/issues", response_model=None)
+@router.get("/{provider}/issues", response_model=PMIssuesResponse)
 async def list_issues(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -366,7 +372,7 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
     operation="create_issue",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.post("/{provider}/issues", response_model=None)
+@router.post("/{provider}/issues", response_model=PMIssueCreateResponse)
 async def create_issue(
     provider: str,
     request: IssueCreateRequest,
@@ -433,7 +439,7 @@ def _build_update_params(
     operation="update_issue",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.patch("/{provider}/issues/{issue_id}", response_model=None)
+@router.patch("/{provider}/issues/{issue_id}", response_model=PMIssueUpdateResponse)
 async def update_issue(
     provider: str,
     issue_id: str,
@@ -465,7 +471,7 @@ async def update_issue(
     operation="search_issues",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/search", response_model=None)
+@router.get("/{provider}/search", response_model=PMIssueSearchResponse)
 async def search_issues(
     provider: str,
     query: str = Query(..., description="Search query or JQL"),

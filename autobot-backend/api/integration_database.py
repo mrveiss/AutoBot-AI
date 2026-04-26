@@ -23,7 +23,14 @@ from integrations.database_integration import (
     MySQLIntegration,
     PostgreSQLIntegration,
 )
-from api.schemas_common import DataResponse
+from api.schemas_code import (
+    IntegrationDatabaseConnectionTestResponse,
+    IntegrationDatabaseProvidersResponse,
+    IntegrationDatabaseQueryResponse,
+    IntegrationMongoQueryResponse,
+    IntegrationDatabaseListResponse,
+    IntegrationTablesListResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +179,7 @@ def _get_integration_class(provider: str):
     operation="test_database_connection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/test-connection", response_model=None)
+@router.post("/test-connection", response_model=IntegrationDatabaseConnectionTestResponse)
 async def test_database_connection(request: DatabaseConnectionRequest):
     """
     Test connection to a database.
@@ -217,7 +224,7 @@ async def test_database_connection(request: DatabaseConnectionRequest):
     operation="list_database_providers",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.get("/providers", response_model=None)
+@router.get("/providers", response_model=IntegrationDatabaseProvidersResponse)
 async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     """
     List all supported database providers.
@@ -259,7 +266,7 @@ async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     operation="execute_database_query",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/query", response_model=None)
+@router.post("/{provider}/query", response_model=IntegrationDatabaseQueryResponse)
 async def execute_database_query(provider: str, request: QueryRequest):
     """
     Execute a read-only query on a database.
@@ -317,7 +324,7 @@ async def execute_database_query(provider: str, request: QueryRequest):
     operation="query_mongodb_collection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/mongodb/query-collection", response_model=None)
+@router.post("/mongodb/query-collection", response_model=IntegrationMongoQueryResponse)
 async def query_mongodb_collection(request: MongoQueryRequest):
     """
     Query a MongoDB collection.
@@ -370,7 +377,7 @@ async def query_mongodb_collection(request: MongoQueryRequest):
     operation="list_databases",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/databases", response_model=None)
+@router.post("/{provider}/databases", response_model=IntegrationDatabaseListResponse)
 async def list_databases(provider: str, request: DatabaseListRequest):
     """
     List all databases for a provider.
@@ -416,7 +423,7 @@ async def list_databases(provider: str, request: DatabaseListRequest):
     operation="list_tables",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/tables", response_model=None)
+@router.post("/{provider}/tables", response_model=IntegrationTablesListResponse)
 async def list_tables(provider: str, request: DatabaseListRequest):
     """
     List all tables/collections in a database.

@@ -844,3 +844,388 @@ class ResearchBrowserHealthResponse(BaseModel):
     browser_service_url: Optional[str] = None
     detail: Optional[str] = None
     timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# integration_cicd.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class CICDConnectionTestResponse(BaseModel):
+    """Response for POST /test-connection (CI/CD)."""
+
+    status: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+
+class CICDProvidersListResponse(BaseModel):
+    """Response for GET /providers (CI/CD) — list returned directly."""
+
+    model_config = {"extra": "allow"}
+
+
+class CICDPipelinesResponse(BaseModel):
+    """Response for GET /{provider}/pipelines — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class CICDPipelineStatusResponse(BaseModel):
+    """Response for GET /{provider}/pipelines/{pipeline_id}/status — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+class CICDPipelineTriggerResponse(BaseModel):
+    """Response for POST /{provider}/pipelines/{pipeline_id}/trigger — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+class CICDPipelineLogsResponse(BaseModel):
+    """Response for GET /{provider}/pipelines/{pipeline_id}/logs — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# integration_database.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class IntegrationDatabaseConnectionTestResponse(BaseModel):
+    """Response for POST /test-connection (database integration).
+
+    Returns health.dict() from integration.test_connection().
+    Extra fields allowed for provider-specific fields.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class IntegrationDatabaseProvidersResponse(BaseModel):
+    """Response for GET /providers (database integration)."""
+
+    providers: List[Any]
+    count: int
+
+
+class IntegrationDatabaseQueryResponse(BaseModel):
+    """Response for POST /{provider}/query — opaque integration payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class IntegrationMongoQueryResponse(BaseModel):
+    """Response for POST /mongodb/query-collection — opaque payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class IntegrationDatabaseListResponse(BaseModel):
+    """Response for POST /{provider}/databases — opaque list payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class IntegrationTablesListResponse(BaseModel):
+    """Response for POST /{provider}/tables — opaque list payload."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# integration_monitoring.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class MonitoringConnectionTestResponse(BaseModel):
+    """Response for POST /test-connection (monitoring)."""
+
+    provider: str
+    status: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+
+class MonitoringProviderItem(BaseModel):
+    """Single provider entry in monitoring providers list."""
+
+    name: str
+    display_name: str
+    required_credentials: List[str]
+
+
+class MonitoringProvidersResponse(BaseModel):
+    """Response for GET /providers (monitoring)."""
+
+    providers: List[MonitoringProviderItem]
+
+
+class MonitoringHostsResponse(BaseModel):
+    """Response for GET /{provider}/hosts — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class MonitoringMetricsResponse(BaseModel):
+    """Response for POST /{provider}/metrics — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class MonitoringAlertsResponse(BaseModel):
+    """Response for GET /{provider}/alerts — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class MonitoringEventsResponse(BaseModel):
+    """Response for POST /{provider}/events — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# integration_project_management.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class PMProjectsResponse(BaseModel):
+    """Response for GET /{provider}/projects — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class PMIssuesResponse(BaseModel):
+    """Response for GET /{provider}/issues — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class PMIssueCreateResponse(BaseModel):
+    """Response for POST /{provider}/issues — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class PMIssueUpdateResponse(BaseModel):
+    """Response for PATCH /{provider}/issues/{issue_id} — opaque payload."""
+
+    model_config = {"extra": "allow"}
+
+
+class PMIssueSearchResponse(BaseModel):
+    """Response for GET /{provider}/search — opaque provider payload."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# integration_cloud.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class CloudConnectionTestResponse(BaseModel):
+    """Response for POST /test-connection (cloud) — provider health dict."""
+
+    provider: str
+    status: str
+    latency_ms: Optional[float] = None
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    last_checked: str
+
+
+class CloudResourcesResponse(BaseModel):
+    """Response for GET /{provider}/resources — opaque compute resource list."""
+
+    model_config = {"extra": "allow"}
+
+
+class CloudStorageResponse(BaseModel):
+    """Response for GET /{provider}/storage — opaque storage resource list."""
+
+    model_config = {"extra": "allow"}
+
+
+class CloudAccountInfoResponse(BaseModel):
+    """Response for GET /{provider}/account — opaque account info payload."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# integration_version_control.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class VCSRepositoriesResponse(BaseModel):
+    """Response for GET /{provider}/repositories — opaque provider list."""
+
+    model_config = {"extra": "allow"}
+
+
+class VCSBranchesResponse(BaseModel):
+    """Response for GET /{provider}/repositories/{repo_id}/branches — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+class VCSPullRequestsResponse(BaseModel):
+    """Response for GET /{provider}/repositories/{repo_id}/pull-requests — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+class VCSCommitInfoResponse(BaseModel):
+    """Response for GET /{provider}/repositories/{repo_id}/commits — opaque."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# sandbox.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class SandboxExecutionResponse(BaseModel):
+    """Response for POST /execute, /execute/script, /execute/batch.
+
+    Returns success_response() or error_response() envelope — opaque.
+    Extra fields allowed to handle both success and error paths.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class SandboxStatsResponse(BaseModel):
+    """Response for GET /stats — sandbox stats envelope."""
+
+    model_config = {"extra": "allow"}
+
+
+class SandboxSecurityLevelsResponse(BaseModel):
+    """Response for GET /security-levels — security level descriptions."""
+
+    model_config = {"extra": "allow"}
+
+
+class SandboxExamplesResponse(BaseModel):
+    """Response for GET /examples — sandbox usage examples."""
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# code_intelligence.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class CodeReportResponse(BaseModel):
+    """Response for GET /security/report and GET /performance/report.
+
+    Delegates to _generate_report_response() which returns a JSONResponse
+    with status, timestamp, path, format, and report fields.
+    Extra fields allowed for both json and markdown formats.
+    """
+
+    model_config = {"extra": "allow"}
+
+    status: str
+    path: str
+    format: str
+
+
+# ---------------------------------------------------------------------------
+# code_search.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class CodeSearchGetResponse(BaseModel):
+    """Response for GET /search — delegates to search_code() POST handler.
+
+    Shape mirrors SearchResponse: results, stats, query, search_type.
+    Extra fields allowed for language_filter and dynamic stats.
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# skills.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class SkillToggleResponse(BaseModel):
+    """Response for POST /skills/{name}/enable and /skills/{name}/disable.
+
+    Registry returns {success, name, enabled, ...}; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class SkillConfigUpdateResponse(BaseModel):
+    """Response for PUT /skills/{name}/config."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class SkillExecuteResponse(BaseModel):
+    """Response for POST /skills/{name}/execute."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+# ---------------------------------------------------------------------------
+# skills_repos.py schemas  (Issue #5987)
+# ---------------------------------------------------------------------------
+
+
+class SkillRepoAddResponse(BaseModel):
+    """Response for POST /skill-repos/ — register a repository."""
+
+    id: str
+    name: str
+    status: str
+
+
+class SkillRepoItem(BaseModel):
+    """Single skill repository entry in the list response."""
+
+    id: str
+    name: str
+    url: str
+    repo_type: Any
+    auto_sync: bool
+    sync_interval: int
+    last_synced: Optional[Any] = None
+    skill_count: Optional[int] = None
+    status: Optional[str] = None
+
+
+class SkillRepoSyncResponse(BaseModel):
+    """Response for POST /skill-repos/{repo_id}/sync."""
+
+    synced: int
+    repo: str
+
+
+class SkillRepoBrowseResponse(BaseModel):
+    """Response for GET /skill-repos/{repo_id}/browse."""
+
+    packages: List[str]
+    count: int
+
+
+# permissions.py schemas are defined in schemas_system.py (PermissionRuleMutateResponse,
+# PermissionClearApprovalsResponse, PermissionStoreApprovalResponse,
+# PermissionMemoryStatsResponse) — already wired in permissions.py.
