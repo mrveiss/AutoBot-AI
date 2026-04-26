@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
 from api.schemas_common import DataResponse
@@ -58,6 +59,11 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     return repo
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.post("/", summary="Register a new skill repository", response_model=None)
 async def add_repo(
     body: AddRepoRequest,
@@ -87,6 +93,11 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_repos",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.get("", summary="List all registered skill repositories", response_model=None)
 @router.get("/", include_in_schema=False, response_model=None)
 async def list_repos() -> List[Dict[str, Any]]:
@@ -111,6 +122,11 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=None)
 async def sync_repo(
     repo_id: str,
@@ -135,6 +151,11 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browse_repo",
+    error_code_prefix="SKILLS_REPOS",
+)
 @router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=None)
 async def browse_repo(repo_id: str) -> Dict[str, Any]:
     """List the skill package names available in the specified repository."""
