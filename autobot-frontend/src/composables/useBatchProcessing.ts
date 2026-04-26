@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   BatchJob,
   BatchTemplate,
@@ -291,7 +292,7 @@ export function useBatchProcessingState() {
   const runningCount = ref(0)
   const completedCount = ref(0)
   const failedCount = ref(0)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -309,11 +310,11 @@ export function useBatchProcessingState() {
 
   // Templates state
   const templates = ref<BatchTemplate[]>([])
-  const templatesLoading = ref(false)
+  const { isLoading: templatesLoading, wrap: wrapTemplates } = useLoadingState()
 
   // Schedules state
   const schedules = ref<BatchSchedule[]>([])
-  const schedulesLoading = ref(false)
+  const { isLoading: schedulesLoading, wrap: wrapSchedules } = useLoadingState()
 
   // Polling state
   const isPolling = ref(false)
@@ -342,26 +343,24 @@ export function useBatchProcessingState() {
    * Load batch jobs list
    */
   async function loadJobs() {
-    loading.value = true
     errors.value = []
-
-    try {
-      const result = await batchApi.listJobs(filter.value)
-      if (result) {
-        jobs.value = result.jobs
-        totalCount.value = result.total_count
-        pendingCount.value = result.pending_count
-        runningCount.value = result.running_count
-        completedCount.value = result.completed_count
-        failedCount.value = result.failed_count
+    await wrap(async () => {
+      try {
+        const result = await batchApi.listJobs(filter.value)
+        if (result) {
+          jobs.value = result.jobs
+          totalCount.value = result.total_count
+          pendingCount.value = result.pending_count
+          runningCount.value = result.running_count
+          completedCount.value = result.completed_count
+          failedCount.value = result.failed_count
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error'
+        errors.value = [...errors.value, msg]
+        logger.error('Failed to load batch jobs:', e)
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      errors.value = [...errors.value, msg]
-      logger.error('Failed to load batch jobs:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
@@ -476,15 +475,12 @@ export function useBatchProcessingState() {
    * Load templates
    */
   async function loadTemplates() {
-    templatesLoading.value = true
-    try {
+    await wrapTemplates(async () => {
       const result = await batchApi.listTemplates()
       if (result) {
         templates.value = result.templates
       }
-    } finally {
-      templatesLoading.value = false
-    }
+    })
   }
 
   /**
@@ -513,15 +509,12 @@ export function useBatchProcessingState() {
    * Load schedules
    */
   async function loadSchedules() {
-    schedulesLoading.value = true
-    try {
+    await wrapSchedules(async () => {
       const result = await batchApi.listSchedules()
       if (result) {
         schedules.value = result.schedules
       }
-    } finally {
-      schedulesLoading.value = false
-    }
+    })
   }
 
   /**

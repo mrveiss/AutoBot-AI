@@ -11,6 +11,7 @@ import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { getApiBase } from '@/config/ssot-config'
+import { useLoadingState } from '@/composables/useLoadingState'
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
@@ -64,7 +65,7 @@ export function useConversationFiles(sessionId: string) {
     uploads_count: 0,
     generated_count: 0
   })
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
   const uploadProgress = ref<number>(0)
   const searchQuery = ref('')
@@ -112,27 +113,25 @@ export function useConversationFiles(sessionId: string) {
       return
     }
 
-    loading.value = true
     error.value = null
+    await wrap(async () => {
+      try {
+        const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
 
-    try {
-      const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
-
-      if (data) {
-        files.value = data.files || []
-        stats.value = data.stats || {
-          total_files: 0,
-          total_size_bytes: 0,
-          uploads_count: 0,
-          generated_count: 0
+        if (data) {
+          files.value = data.files || []
+          stats.value = data.stats || {
+            total_files: 0,
+            total_size_bytes: 0,
+            uploads_count: 0,
+            generated_count: 0
+          }
         }
+      } catch (err: unknown) {
+        error.value = extractApiErrorMessage(err, 'Failed to load files')
+        logger.error('Load error:', err)
       }
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Failed to load files')
-      logger.error('Load error:', err)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   const uploadFiles = async (fileList: FileList | File[]): Promise<boolean> => {
@@ -146,54 +145,54 @@ export function useConversationFiles(sessionId: string) {
       return false
     }
 
-    loading.value = true
     error.value = null
     uploadProgress.value = 0
 
-    try {
-      const formData = new FormData()
+    return wrap(async () => {
+      try {
+        const formData = new FormData()
 
-      // Add all files to FormData
-      Array.from(fileList).forEach((file) => {
-        formData.append('files', file)
-      })
+        // Add all files to FormData
+        Array.from(fileList).forEach((file) => {
+          formData.append('files', file)
+        })
 
-      const data = await api.post<{ success: boolean }>(
-        `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          onUploadProgress: (progressEvent: UploadProgressEvent) => {
-            if (progressEvent.total) {
-              uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        const data = await api.post<{ success: boolean }>(
+          `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            },
+            onUploadProgress: (progressEvent: UploadProgressEvent) => {
+              if (progressEvent.total) {
+                uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              }
             }
           }
+        )
+
+        if (data?.success) {
+          // Reload files to get updated list
+          await loadFiles()
+          uploadProgress.value = 100
+          return true
         }
-      )
 
-      if (data?.success) {
-        // Reload files to get updated list
-        await loadFiles()
-        uploadProgress.value = 100
-        return true
+        error.value = 'Upload failed'
+        return false
+
+      } catch (err: unknown) {
+        error.value = extractApiErrorMessage(err, 'Upload failed')
+        logger.error('Upload error:', err)
+        return false
+      } finally {
+        // Reset progress after a short delay
+        setTimeout(() => {
+          uploadProgress.value = 0
+        }, 2000)
       }
-
-      error.value = 'Upload failed'
-      return false
-
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Upload failed')
-      logger.error('Upload error:', err)
-      return false
-    } finally {
-      loading.value = false
-      // Reset progress after a short delay
-      setTimeout(() => {
-        uploadProgress.value = 0
-      }, 2000)
-    }
+    })
   }
 
   const deleteFile = async (fileId: string): Promise<boolean> => {
@@ -202,27 +201,26 @@ export function useConversationFiles(sessionId: string) {
       return false
     }
 
-    loading.value = true
     error.value = null
 
-    try {
-      await api.delete(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
+    return wrap(async () => {
+      try {
+        await api.delete(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
 
-      // Remove file from local state
-      files.value = files.value.filter(f => f.file_id !== fileId)
+        // Remove file from local state
+        files.value = files.value.filter(f => f.file_id !== fileId)
 
-      // Update stats
-      await loadFiles()
+        // Update stats
+        await loadFiles()
 
-      return true
+        return true
 
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Failed to delete file')
-      logger.error('Delete error:', err)
-      return false
-    } finally {
-      loading.value = false
-    }
+      } catch (err: unknown) {
+        error.value = extractApiErrorMessage(err, 'Failed to delete file')
+        logger.error('Delete error:', err)
+        return false
+      }
+    })
   }
 
   const downloadFile = async (fileId: string, filename?: string): Promise<void> => {
@@ -331,18 +329,19 @@ export function useConversationFiles(sessionId: string) {
 
   const createFile = async (filename: string, content: string = '', mimeType: string = 'text/plain'): Promise<boolean> => {
     if (!sessionId) { error.value = 'No session ID'; return false }
-    loading.value = true
     error.value = null
-    try {
-      const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
-      if (data?.success) { await loadFiles(); return true }
-      error.value = 'Failed to create file'
-      return false
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Failed to create file')
-      logger.error('Create file error:', err)
-      return false
-    } finally { loading.value = false }
+    return wrap(async () => {
+      try {
+        const data = await api.post<{ success: boolean }>(`${API}/files/create`, { filename, content, mime_type: mimeType })
+        if (data?.success) { await loadFiles(); return true }
+        error.value = 'Failed to create file'
+        return false
+      } catch (err: unknown) {
+        error.value = extractApiErrorMessage(err, 'Failed to create file')
+        logger.error('Create file error:', err)
+        return false
+      }
+    })
   }
 
   const renameFile = async (fileId: string, newFilename: string): Promise<boolean> => {
@@ -393,18 +392,19 @@ export function useConversationFiles(sessionId: string) {
 
   const copyFile = async (fileId: string, newFilename?: string): Promise<boolean> => {
     if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
-    loading.value = true
     error.value = null
-    try {
-      const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
-      if (data?.success) { await loadFiles(); return true }
-      error.value = 'Copy failed'
-      return false
-    } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Copy failed')
-      logger.error('Copy error:', err)
-      return false
-    } finally { loading.value = false }
+    return wrap(async () => {
+      try {
+        const data = await api.post<{ success: boolean }>(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
+        if (data?.success) { await loadFiles(); return true }
+        error.value = 'Copy failed'
+        return false
+      } catch (err: unknown) {
+        error.value = extractApiErrorMessage(err, 'Copy failed')
+        logger.error('Copy error:', err)
+        return false
+      }
+    })
   }
 
   const isEditable = (mimeType: string): boolean => {
@@ -429,15 +429,15 @@ export function useConversationFiles(sessionId: string) {
   const deleteSelectedFiles = async (): Promise<boolean> => {
     const ids = Array.from(fileSelection.selected.value)
     if (ids.length === 0) return false
-    loading.value = true
     error.value = null
-    for (const fid of ids) {
-      try { await api.delete(`${API}/files/${fid}`) } catch { /* continue */ }
-    }
-    fileSelection.clear()
-    await loadFiles()
-    loading.value = false
-    return true
+    return wrap(async () => {
+      for (const fid of ids) {
+        try { await api.delete(`${API}/files/${fid}`) } catch { /* continue */ }
+      }
+      fileSelection.clear()
+      await loadFiles()
+      return true
+    })
   }
 
   const setSort = (field: SortField) => {

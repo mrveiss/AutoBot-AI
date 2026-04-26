@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useLoadingState } from '@/composables/useLoadingState'
 import type {
   Operation,
   OperationsListResponse,
@@ -145,7 +146,7 @@ export function useOperationsState() {
   const activeCount = ref(0)
   const completedCount = ref(0)
   const failedCount = ref(0)
-  const loading = ref(false)
+  const { isLoading: loading, wrap } = useLoadingState()
   const errors = ref<string[]>([])
   const error = computed<string | null>(() =>
     errors.value.length > 0 ? errors.value.join('; ') : null,
@@ -187,25 +188,23 @@ export function useOperationsState() {
    * Load operations list
    */
   async function loadOperations() {
-    loading.value = true
     errors.value = []
-
-    try {
-      const result = await operationsApi.listOperations(filter.value)
-      if (result) {
-        operations.value = result.operations
-        totalCount.value = result.total_count
-        activeCount.value = result.active_count
-        completedCount.value = result.completed_count
-        failedCount.value = result.failed_count
+    await wrap(async () => {
+      try {
+        const result = await operationsApi.listOperations(filter.value)
+        if (result) {
+          operations.value = result.operations
+          totalCount.value = result.total_count
+          activeCount.value = result.active_count
+          completedCount.value = result.completed_count
+          failedCount.value = result.failed_count
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Unknown error'
+        errors.value = [...errors.value, msg]
+        logger.error('Failed to load operations:', e)
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      errors.value = [...errors.value, msg]
-      logger.error('Failed to load operations:', e)
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   /**
