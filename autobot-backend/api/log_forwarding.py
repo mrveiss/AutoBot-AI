@@ -349,7 +349,7 @@ def _destination_to_response(dest) -> DestinationResponse:
     operation="list_destinations",
     error_code_prefix="LOGFWD",
 )
-@router.get("/destinations", response_model=DataResponse)
+@router.get("/destinations", response_model=None)
 async def list_destinations(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Dict[str, Any]]:

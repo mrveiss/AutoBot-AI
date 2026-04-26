@@ -85,7 +85,7 @@ async def index_codebase(
     operation="get_code_analysis_status",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/code/status", response_model=DataResponse)
+@router.get("/code/status", response_model=None)
 async def get_code_analysis_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -141,7 +141,7 @@ async def get_code_analysis_status(
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/quality/assessment", response_model=DataResponse)
+@router.get("/quality/assessment", response_model=None)
 async def get_code_quality_assessment(
     admin_check: bool = Depends(check_admin_permission),
 ):

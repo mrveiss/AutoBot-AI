@@ -1059,7 +1059,7 @@ async def get_learning_engine() -> PatternLearningEngine:
 # =============================================================================
 
 
-@router.post("/feedback", response_model=DataResponse, summary="Submit pattern feedback")
+@router.post("/feedback", response_model=None, summary="Submit pattern feedback")
 async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
     """
     Submit developer feedback for a pattern match.
@@ -1112,7 +1112,7 @@ async def get_active_learning_queries(
     }
 
 
-@router.post("/patterns", response_model=DataResponse, summary="Register a new pattern")
+@router.post("/patterns", response_model=None, summary="Register a new pattern")
 async def register_pattern(pattern: PatternDefinition) -> Dict[str, Any]:
     """Register a new pattern for learning."""
     engine = await get_learning_engine()
@@ -1138,7 +1138,7 @@ async def get_pattern_history(
     }
 
 
-@router.post("/learn", response_model=DataResponse, summary="Run learning cycle")
+@router.post("/learn", response_model=None, summary="Run learning cycle")
 async def run_learning_cycle() -> Dict[str, Any]:
     """
     Trigger a learning cycle to analyze feedback and update patterns.

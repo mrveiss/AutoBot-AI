@@ -1179,7 +1179,7 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/message", response_model=DataResponse)
+@router.post("/chats/{chat_id}/message", response_model=None)
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1254,7 +1254,7 @@ async def _stream_graph_resume(
     operation="resume_chat_graph",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/resume", response_model=DataResponse)
+@router.post("/chats/{chat_id}/resume", response_model=None)
 async def resume_chat_graph(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1491,7 +1491,7 @@ async def delete_chat_by_id(
     operation="send_direct_chat_response",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/direct", response_model=DataResponse)
+@router.post("/chat/direct", response_model=None)
 async def send_direct_chat_response(
     current_user: dict = Depends(get_current_user),
     request: Request = None,

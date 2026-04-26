@@ -346,7 +346,7 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     operation="navigate",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/navigate", response_model=DataResponse)
+@router.post("/navigate", response_model=None)
 async def navigate_to_url(request: NavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
@@ -391,7 +391,7 @@ async def navigate_to_url(request: NavigateRequest):
     operation="reload",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/reload", response_model=DataResponse)
+@router.post("/reload", response_model=None)
 async def reload_page(request: ReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
@@ -432,7 +432,7 @@ async def reload_page(request: ReloadRequest):
     operation="go_back",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/back", response_model=DataResponse)
+@router.post("/back", response_model=None)
 async def go_back():
     """
     Navigate back in browser history using Playwright on Browser VM
@@ -474,7 +474,7 @@ async def go_back():
     operation="go_forward",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/forward", response_model=DataResponse)
+@router.post("/forward", response_model=None)
 async def go_forward():
     """
     Navigate forward in browser history using Playwright on Browser VM
@@ -551,7 +551,7 @@ async def get_worker_status():
     operation="worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/worker-screenshot", response_model=DataResponse)
+@router.post("/worker-screenshot", response_model=None)
 async def take_worker_screenshot():
     """
     Take screenshot of the persistent navigation page on Browser VM (#1130)
@@ -589,7 +589,7 @@ async def take_worker_screenshot():
     operation="interact",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/interact", response_model=DataResponse)
+@router.post("/interact", response_model=None)
 async def interact_with_page(request: InteractRequest):
     """Proxy interactive browser actions to Browser VM (#1416)"""
     allowed = {"click", "scroll", "type", "hover"}

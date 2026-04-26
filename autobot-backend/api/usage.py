@@ -134,7 +134,7 @@ async def get_usage_by_user_all(
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user/{user_id}", response_model=DataResponse)
+@router.get("/by-user/{user_id}", response_model=None)
 async def get_usage_by_user_single(
     user_id: str,
     admin_check: bool = Depends(check_admin_permission),

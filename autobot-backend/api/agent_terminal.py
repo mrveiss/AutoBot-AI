@@ -595,7 +595,7 @@ async def execute_agent_command(
     operation="approve_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/approve", response_model=DataResponse)
+@router.post("/sessions/{session_id}/approve", response_model=None)
 async def approve_agent_command(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -675,7 +675,7 @@ async def submit_tool_approval(
     operation="interrupt_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/interrupt", response_model=DataResponse)
+@router.post("/sessions/{session_id}/interrupt", response_model=None)
 async def interrupt_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -706,7 +706,7 @@ async def interrupt_agent_session(
     operation="resume_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/resume", response_model=DataResponse)
+@router.post("/sessions/{session_id}/resume", response_model=None)
 async def resume_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),

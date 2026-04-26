@@ -1060,7 +1060,7 @@ async def start_bug_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
-@router.get("/status/{task_id}", response_model=DataResponse)
+@router.get("/status/{task_id}", response_model=None)
 async def get_bug_prediction_status(
     task_id: str,
     admin_check: bool = Depends(check_admin_permission),

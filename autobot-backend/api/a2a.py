@@ -146,7 +146,7 @@ def _remote_addr(request: Request) -> str:
     "/agent-card",
     summary="A2A Agent Card",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_agent_card(request: Request) -> Dict[str, Any]:
     """
@@ -162,7 +162,7 @@ async def get_agent_card(request: Request) -> Dict[str, Any]:
     "/agent-card/signed",
     summary="Signed A2A Agent Card",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     """
@@ -262,7 +262,7 @@ async def submit_task(
     "/tasks",
     summary="List A2A tasks",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def list_tasks() -> list:
     """Return all A2A tasks with their current state and artifacts."""
@@ -274,7 +274,7 @@ async def list_tasks() -> list:
     "/tasks/{task_id}",
     summary="Get A2A task",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def get_task(task_id: str) -> Dict[str, Any]:
     """Return a specific task by ID, including state and any artifacts."""
@@ -471,7 +471,7 @@ async def task_stats() -> Dict[str, Any]:
     "/capabilities",
     summary="Verify local capability claims",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def local_capabilities() -> Dict[str, Any]:
     """
@@ -489,7 +489,7 @@ async def local_capabilities() -> Dict[str, Any]:
     "/capabilities/verify",
     summary="Verify a remote agent's capabilities",
     tags=["a2a"],
-    response_model=DataResponse,
+    response_model=None,
 )
 async def verify_remote_capabilities(body: RemoteVerifyRequest) -> Dict[str, Any]:
     """

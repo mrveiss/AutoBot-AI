@@ -1056,7 +1056,7 @@ async def get_engine() -> ContinuousLearningEngine:
 # =============================================================================
 
 
-@router.post("/start", summary="Start continuous learning", response_model=DataResponse)
+@router.post("/start", summary="Start continuous learning", response_model=None)
 async def start_learning(
     admin_check: bool = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = None,
@@ -1070,7 +1070,7 @@ async def start_learning(
     return await engine.start()
 
 
-@router.post("/stop", summary="Stop continuous learning", response_model=DataResponse)
+@router.post("/stop", summary="Stop continuous learning", response_model=None)
 async def stop_learning(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1083,7 +1083,7 @@ async def stop_learning(
     return await engine.stop()
 
 
-@router.get("/status", summary="Get learning status", response_model=DataResponse)
+@router.get("/status", summary="Get learning status", response_model=None)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1109,7 +1109,7 @@ async def get_metrics(
     return engine.get_metrics()
 
 
-@router.post("/feedback", summary="Submit pattern feedback", response_model=DataResponse)
+@router.post("/feedback", summary="Submit pattern feedback", response_model=None)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     pattern_id: str = None,
@@ -1125,7 +1125,7 @@ async def submit_feedback(
     return await engine.submit_feedback(pattern_id, is_correct, details)
 
 
-@router.post("/retrain", summary="Trigger model retraining", response_model=DataResponse)
+@router.post("/retrain", summary="Trigger model retraining", response_model=None)
 async def trigger_retrain(
     admin_check: bool = Depends(check_admin_permission),
     request: RetrainingRequest = None,

@@ -50,7 +50,7 @@ def _get_llm_interface():
     operation="get_llm_config",
     error_code_prefix="LLM",
 )
-@router.get("/config", response_model=DataResponse)
+@router.get("/config", response_model=None)
 async def get_llm_config(
     current_user: dict = Depends(get_current_user),
 ):
@@ -515,7 +515,7 @@ async def get_comprehensive_llm_status(
     operation="get_llm_status",
     error_code_prefix="LLM",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=None)
 async def get_llm_status(
     current_user: dict = Depends(get_current_user),
 ):

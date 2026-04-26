@@ -595,7 +595,7 @@ async def analyze_path(
     return result
 
 
-@router.post("/analyze-content", response_model=DataResponse)
+@router.post("/analyze-content", response_model=None)
 async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
@@ -619,7 +619,7 @@ async def analyze_content(
     return issues
 
 
-@router.get("/patterns", response_model=DataResponse)
+@router.get("/patterns", response_model=None)
 async def list_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[PatternDefinition]:
@@ -630,7 +630,7 @@ async def list_patterns(
     return list(PERFORMANCE_PATTERNS.values())
 
 
-@router.get("/patterns/{pattern_id}", response_model=DataResponse)
+@router.get("/patterns/{pattern_id}", response_model=None)
 async def get_pattern(
     pattern_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -665,7 +665,7 @@ async def toggle_pattern(
     }
 
 
-@router.get("/history", response_model=DataResponse)
+@router.get("/history", response_model=None)
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -738,7 +738,7 @@ async def get_summary(
         }
 
 
-@router.get("/categories", response_model=DataResponse)
+@router.get("/categories", response_model=None)
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
@@ -779,7 +779,7 @@ async def get_categories(
     ]
 
 
-@router.get("/hotspots", response_model=DataResponse)
+@router.get("/hotspots", response_model=None)
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=50),
     admin_check: bool = Depends(check_admin_permission),

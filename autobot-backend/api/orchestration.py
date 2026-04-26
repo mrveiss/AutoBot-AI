@@ -104,7 +104,7 @@ def _build_single_task_response(result: dict) -> JSONResponse:
     )
 
 
-@router.post("/workflow/execute", response_model=DataResponse)
+@router.post("/workflow/execute", response_model=None)
 async def execute_workflow(
     request: WorkflowRequest,
     current_user: dict = Depends(get_current_user),

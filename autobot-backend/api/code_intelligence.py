@@ -1523,7 +1523,7 @@ async def get_security_score(
     operation="security_report",
     error_code_prefix="SECURITY",
 )
-@router.get("/security/report", response_model=DataResponse)
+@router.get("/security/report", response_model=None)
 async def get_security_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1798,7 +1798,7 @@ async def get_performance_score(
     operation="performance_report",
     error_code_prefix="PERFORMANCE",
 )
-@router.get("/performance/report", response_model=DataResponse)
+@router.get("/performance/report", response_model=None)
 async def get_performance_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),

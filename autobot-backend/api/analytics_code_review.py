@@ -670,7 +670,7 @@ async def review_file(
     }
 
 
-@router.get("/patterns", response_model=DataResponse)
+@router.get("/patterns", response_model=None)
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -842,7 +842,7 @@ async def get_review_summary(
     )
 
 
-@router.get("/categories", response_model=DataResponse)
+@router.get("/categories", response_model=None)
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
