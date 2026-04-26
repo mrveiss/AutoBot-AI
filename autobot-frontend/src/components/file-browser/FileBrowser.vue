@@ -86,9 +86,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { useUserStore } from '@/stores/useUserStore'
+import { useFileBrowser } from '@/composables/file-browser/useFileBrowser'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 
@@ -116,16 +115,27 @@ const props = withDefaults(defineProps<Props>(), {
 // Template refs
 const fileUploadRef = ref<InstanceType<typeof FileUpload>>()
 
-// State
-const files = ref<any[]>([])
-const directoryTree = ref<any[]>([])
+// Composable for all file browser API calls
+const {
+  files,
+  directoryTree,
+  previewFile,
+  fetchFiles,
+  fetchTree,
+  uploadFiles: composableUploadFiles,
+  fetchPreview,
+  deleteFileOrFolder,
+  renameFileOrFolder,
+  createDirectory
+} = useFileBrowser()
+
+// UI state (not managed by composable)
 const currentPath = ref('/')
 const selectedPath = ref('')
 const viewMode = ref<'tree' | 'list'>('tree')
 const sortField = ref('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const showPreview = ref(false)
-const previewFile = ref<any>(null)
 
 const userStore = useUserStore()
 
@@ -163,19 +173,13 @@ const sortedFiles = computed(() => {
 // Methods
 const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
   async () => {
-    // ApiClient.get() returns parsed JSON directly, not a Response object
-    // Use type assertion since ApiClient is JavaScript
-    const data = await apiClient.get(`${getApiBase()}/files/list?path=${encodeURIComponent(currentPath.value)}`) as any
-    files.value = (data as any).files || []
+    await fetchFiles(currentPath.value)
 
     if (viewMode.value === 'tree') {
       await loadDirectoryTree()
     }
   },
   {
-    onError: () => {
-      files.value = []
-    },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
   }
@@ -183,15 +187,9 @@ const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
 
 const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
   async () => {
-    // ApiClient.get() returns parsed JSON directly, not a Response object
-    // Use type assertion since ApiClient is JavaScript
-    const data = await apiClient.get(`${getApiBase()}/files/tree`) as any
-    directoryTree.value = (data as any).tree || []
+    await fetchTree()
   },
   {
-    onError: () => {
-      directoryTree.value = []
-    },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
   }
@@ -234,15 +232,7 @@ const triggerFileUpload = () => {
 
 const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
   async (fileList: FileList) => {
-    const formData = new FormData()
-
-    Array.from(fileList).forEach((file) => {
-      formData.append('files', file)
-    })
-
-    formData.append('path', currentPath.value)
-
-    await apiClient.post(`${getApiBase()}/files/upload`, formData)
+    await composableUploadFiles(fileList, currentPath.value)
     await refreshFiles()
 
     // Issue #608: Log file upload activity
@@ -271,17 +261,7 @@ const handleFileSelected = async (fileList: FileList) => {
 
 const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
   async (file: any) => {
-    // ApiClient.get() returns parsed JSON directly, not a Response object
-    // Use type assertion since ApiClient is JavaScript
-    const data = await apiClient.get(`${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`) as any
-    previewFile.value = {
-      name: file.name,
-      type: (data as any).type,
-      url: (data as any).url,
-      content: (data as any).content,
-      fileType: getFileType(file.name),
-      size: file.size
-    }
+    await fetchPreview(file, getFileType)
     showPreview.value = true
 
     // Issue #608: Log file view activity
@@ -302,7 +282,7 @@ const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
 const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
   async (file: any) => {
     const itemType = file.is_dir ? 'folder' : 'file'
-    await apiClient.delete(`${getApiBase()}/files/delete?path=${encodeURIComponent(file.path)}`)
+    await deleteFileOrFolder(file.path)
     await refreshFiles()
 
     // Issue #608: Log file/folder delete activity
@@ -334,11 +314,7 @@ const deleteFile = async (file: any) => {
 
 const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
   async (file: any, newName: string) => {
-    const formData = new FormData()
-    formData.append('path', file.path)
-    formData.append('new_name', newName)
-
-    await apiClient.post(`${getApiBase()}/files/rename`, formData)
+    await renameFileOrFolder(file.path, newName)
     await refreshFiles()
 
     // Issue #608: Log file/folder rename activity
@@ -369,11 +345,7 @@ const renameFile = async (file: any) => {
 
 const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHandler(
   async (folderName: string) => {
-    const formData = new FormData()
-    formData.append('path', currentPath.value)
-    formData.append('name', folderName)
-
-    await apiClient.post(`${getApiBase()}/files/create_directory`, formData)
+    await createDirectory(currentPath.value, folderName)
     await refreshFiles()
 
     // Issue #608: Log folder creation activity
