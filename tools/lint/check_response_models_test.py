@@ -303,3 +303,63 @@ async def clean():
 """,
     )
     assert hook.main(["hook", str(f)]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Variable-assignment pattern (#5926) — single-assignment tracking
+# ---------------------------------------------------------------------------
+
+
+def test_safe_variable_assigned_dict_with_success(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/var", response_model=DataResponse)
+async def get_var():
+    result = {"success": True, "data": []}
+    return result
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+def test_detects_variable_assigned_dict_missing_success(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.get("/var", response_model=DataResponse)
+async def get_var():
+    result = {"data": [], "count": 0}
+    return result
+""",
+    )
+    violations = hook._check_file(f, tmp_path)
+    assert len(violations) == 1
+    assert violations[0][1] == "get_var"
+
+
+def test_safe_success_message_response_variable_assignment(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/msg", response_model=SuccessMessageResponse)
+async def post_msg():
+    response = {"success": True, "message": "done"}
+    return response
+""",
+    )
+    assert hook._check_file(f, tmp_path) == []
+
+
+def test_detects_success_message_response_variable_missing_message(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        """
+@router.post("/msg", response_model=SuccessMessageResponse)
+async def post_msg():
+    response = {"success": True}
+    return response
+""",
+    )
+    violations = hook._check_file(f, tmp_path)
+    assert len(violations) == 1
