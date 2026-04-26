@@ -18,6 +18,7 @@
 import { ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
@@ -121,6 +122,7 @@ export function useCommandApproval() {
         const backendUrl = await appConfig.getApiUrl(
           `${getApiBase()}/agent-terminal/commands/${command_id}`
         )
+        // fetchWithAuth retained: AbortController signal required for polling abort. Exempt.
         const response = await fetchWithAuth(backendUrl, { signal })
 
         if (!response.ok) {
@@ -218,27 +220,17 @@ export function useCommandApproval() {
     }
 
     try {
-      // Get backend URL from appConfig
-      const backendUrl = await appConfig.getApiUrl(
-        `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`
-      )
-
-      const response = await fetchWithAuth(backendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      const result = await apiClient.post(
+        `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`,
+        {
           approved,
           user_id: currentUserId.value,
           comment: comment || null,
           auto_approve_future: autoApproveFuture.value, // Send auto-approve preference
           remember_for_project: rememberForProject.value, // Permission v2
-          project_path: currentProjectPath.value // Permission v2
-        })
-      })
-
-      const result = await response.json()
+          project_path: currentProjectPath.value, // Permission v2
+        }
+      )
       logger.debug('Approval response:', result)
 
       if (result.status === 'approved' || result.status === 'denied') {
