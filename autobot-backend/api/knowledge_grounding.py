@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 
-from api.knowledge_models import SearchRequest
+from api.schemas_knowledge import SearchRequest
 from api.schemas_knowledge import (
     KnowledgeConflictsListResponse,
     KnowledgeGroundResponseResponse,

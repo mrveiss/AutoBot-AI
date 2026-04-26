@@ -50,7 +50,7 @@ from knowledge.schemas import (
     SynthesisLogResponse,
     UpdateFactResponse,
 )
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     BackupRequest,
     BulkCategoryUpdateRequest,
     BulkDeleteRequest,

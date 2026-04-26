@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     AddTagsRequest,
     BulkTagRequest,
     FactIdValidator,

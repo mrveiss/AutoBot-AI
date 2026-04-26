@@ -18,7 +18,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.knowledge_models import (
+from api.schemas_knowledge import (
     CompareVersionsRequest,
     CreateMetadataTemplateRequest,
     RevertToVersionRequest,

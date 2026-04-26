@@ -21,7 +21,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.knowledge_models import ConsolidatedSearchRequest, EnhancedSearchRequest
+from api.schemas_knowledge import ConsolidatedSearchRequest, EnhancedSearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge.schemas import (
     EnhancedSearchResponse,
