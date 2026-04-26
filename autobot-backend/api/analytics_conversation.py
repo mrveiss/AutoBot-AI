@@ -842,7 +842,7 @@ async def analyze_conversations(
     operation="get_intent_stats",
     error_code_prefix="CONVFLOW",
 )
-@router.get("/intents", response_model=DataResponse)
+@router.get("/intents", response_model=None)
 async def get_intent_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -905,7 +905,7 @@ async def get_intent_stats(
     operation="get_flow_paths",
     error_code_prefix="CONVFLOW",
 )
-@router.get("/flows", response_model=DataResponse)
+@router.get("/flows", response_model=None)
 async def get_flow_paths(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     min_frequency: int = Query(2, ge=1, description="Minimum flow frequency"),
@@ -973,7 +973,7 @@ async def get_flow_paths(
     operation="get_bottlenecks",
     error_code_prefix="CONVFLOW",
 )
-@router.get("/bottlenecks", response_model=DataResponse)
+@router.get("/bottlenecks", response_model=None)
 async def get_bottlenecks(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1012,7 +1012,7 @@ async def get_bottlenecks(
     operation="get_hourly_distribution",
     error_code_prefix="CONVFLOW",
 )
-@router.get("/distribution", response_model=DataResponse)
+@router.get("/distribution", response_model=None)
 async def get_hourly_distribution(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1056,7 +1056,7 @@ async def get_hourly_distribution(
     operation="detect_intent",
     error_code_prefix="CONVFLOW",
 )
-@router.post("/detect-intent", response_model=DataResponse)
+@router.post("/detect-intent", response_model=None)
 async def detect_intent(
     message: str = Query(..., description="Message to analyze"),
     admin_check: bool = Depends(check_admin_permission),

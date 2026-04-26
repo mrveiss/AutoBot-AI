@@ -126,7 +126,7 @@ async def broadcast_startup_message(message: StartupMessage):
     operation="get_startup_status",
     error_code_prefix="STARTUP",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=None)
 async def get_startup_status():
     """Get current startup status"""
     with _startup_lock:

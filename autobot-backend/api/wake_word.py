@@ -99,7 +99,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     operation="get_wake_words",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/words", response_model=DataResponse)
+@router.get("/words", response_model=None)
 async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
     detector = get_wake_word_detector()
@@ -168,7 +168,7 @@ async def remove_wake_word(wake_word: str) -> Metadata:
     operation="get_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/config", response_model=DataResponse)
+@router.get("/config", response_model=None)
 async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
     detector = get_wake_word_detector()
@@ -216,7 +216,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     operation="get_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=None)
 async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
     detector = get_wake_word_detector()
@@ -349,7 +349,7 @@ async def stop_listening() -> Metadata:
     operation="get_listening_status",
     error_code_prefix="WAKE_WORD",
 )
-@router.get("/listening/status", response_model=DataResponse)
+@router.get("/listening/status", response_model=None)
 async def get_listening_status() -> Metadata:
     """
     Get background listening status including real-time CPU metrics.

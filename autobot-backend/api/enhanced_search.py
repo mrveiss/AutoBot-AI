@@ -197,7 +197,7 @@ async def enhanced_semantic_search(request: SearchRequest):
     operation="get_hardware_status",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/hardware/status", response_model=DataResponse)
+@router.get("/hardware/status", response_model=None)
 async def get_hardware_status():
     """
     Get current hardware status and utilization metrics.
@@ -226,7 +226,7 @@ async def get_hardware_status():
     operation="benchmark_search_performance",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/benchmark", response_model=DataResponse)
+@router.post("/benchmark", response_model=None)
 async def benchmark_search_performance(request: BenchmarkRequest):
     """
     Benchmark search performance across different hardware configurations.
@@ -257,7 +257,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/optimize", response_model=DataResponse)
+@router.post("/optimize", response_model=None)
 async def optimize_search_engine(request: OptimizationRequest):
     """
     Optimize search engine for specific workload types.
@@ -289,7 +289,7 @@ async def optimize_search_engine(request: OptimizationRequest):
     operation="get_performance_analytics",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/performance/analytics", response_model=DataResponse)
+@router.get("/performance/analytics", response_model=None)
 async def get_performance_analytics():
     """
     Get comprehensive performance analytics and recommendations.
@@ -337,7 +337,7 @@ async def get_performance_analytics():
     operation="test_npu_connectivity",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/test/connectivity", response_model=DataResponse)
+@router.get("/test/connectivity", response_model=None)
 async def test_npu_connectivity():
     """
     Test NPU Worker connectivity and capabilities.
@@ -532,7 +532,7 @@ def _generate_system_recommendations(
     operation="health_check",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check for enhanced search service."""
     try:

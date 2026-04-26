@@ -98,7 +98,7 @@ class CompleteTaskRequest(BaseModel):
     operation="get_all_agents_performance",
     error_code_prefix="AGENT",
 )
-@router.get("/performance", response_model=DataResponse)
+@router.get("/performance", response_model=None)
 async def get_all_agents_performance(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -176,7 +176,7 @@ async def get_agent_performance(
     operation="get_agent_history",
     error_code_prefix="AGENT",
 )
-@router.get("/{agent_id}/history", response_model=DataResponse)
+@router.get("/{agent_id}/history", response_model=None)
 async def get_agent_history(
     agent_id: str,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
@@ -204,7 +204,7 @@ async def get_agent_history(
     operation="get_recent_tasks",
     error_code_prefix="AGENT",
 )
-@router.get("/tasks/recent", response_model=DataResponse)
+@router.get("/tasks/recent", response_model=None)
 async def get_recent_tasks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -235,7 +235,7 @@ async def get_recent_tasks(
     operation="compare_agents",
     error_code_prefix="AGENT",
 )
-@router.get("/comparison", response_model=DataResponse)
+@router.get("/comparison", response_model=None)
 async def compare_agents(
     agent_ids: Optional[str] = Query(
         None, description="Comma-separated agent IDs to compare (all if not specified)"
@@ -326,7 +326,7 @@ def _check_agent_metrics(metrics) -> list:
     operation="get_agent_recommendations",
     error_code_prefix="AGENT",
 )
-@router.get("/recommendations", response_model=DataResponse)
+@router.get("/recommendations", response_model=None)
 async def get_agent_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -379,7 +379,7 @@ async def get_agent_recommendations(
     operation="get_performance_trends",
     error_code_prefix="AGENT",
 )
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=None)
 async def get_performance_trends(
     agent_id: Optional[str] = Query(
         None, description="Specific agent ID (all if not specified)"
@@ -405,7 +405,7 @@ async def get_performance_trends(
     operation="get_agent_types",
     error_code_prefix="AGENT",
 )
-@router.get("/types", response_model=DataResponse)
+@router.get("/types", response_model=None)
 async def get_agent_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -432,7 +432,7 @@ async def get_agent_types(
     operation="track_task_start",
     error_code_prefix="AGENT",
 )
-@router.post("/tasks/start", response_model=DataResponse)
+@router.post("/tasks/start", response_model=None)
 async def track_task_start(
     request: TrackTaskRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -465,7 +465,7 @@ async def track_task_start(
     operation="track_task_complete",
     error_code_prefix="AGENT",
 )
-@router.post("/tasks/complete", response_model=DataResponse)
+@router.post("/tasks/complete", response_model=None)
 async def track_task_complete(
     request: CompleteTaskRequest,
     admin_check: bool = Depends(check_admin_permission),

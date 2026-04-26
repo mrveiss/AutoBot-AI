@@ -67,7 +67,7 @@ class AlertManagerWebhook(BaseModel):
     alerts: List[AlertInstance]
 
 
-@router.post("/alertmanager", response_model=DataResponse)
+@router.post("/alertmanager", response_model=None)
 async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
     """
     Receive alerts from Prometheus AlertManager
@@ -161,7 +161,7 @@ async def _process_alert(alert: AlertInstance, group_status: str):
         logger.error("Failed to process individual alert: %s", e, exc_info=True)
 
 
-@router.get("/alertmanager/health", response_model=DataResponse)
+@router.get("/alertmanager/health", response_model=None)
 async def alertmanager_webhook_health():
     """Health check endpoint for AlertManager webhook"""
     return {

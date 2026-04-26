@@ -227,7 +227,7 @@ async def _collect_prompt_files(
     operation="get_prompts",
     error_code_prefix="PROMPTS",
 )
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=None)
 async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
     """Get all prompts from filesystem with caching.
 
@@ -289,7 +289,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
     operation="clear_prompts_cache",
     error_code_prefix="PROMPTS",
 )
-@router.post("/cache/clear", response_model=DataResponse)
+@router.post("/cache/clear", response_model=None)
 async def clear_prompts_cache(admin_check: bool = Depends(check_admin_permission)):
     """Clear the prompts cache to force reload on next request.
 
@@ -331,8 +331,8 @@ def _build_prompt_save_response(
     operation="save_prompt",
     error_code_prefix="PROMPTS",
 )
-@router.post("/{prompt_id}", response_model=DataResponse)
-@router.put("/{prompt_id}", response_model=DataResponse)  # Issue #570: Support PUT for frontend compatibility
+@router.post("/{prompt_id}", response_model=None)
+@router.put("/{prompt_id}", response_model=None)  # Issue #570: Support PUT for frontend compatibility
 async def save_prompt(
     prompt_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -438,7 +438,7 @@ async def _write_prompt_from_default(
     operation="revert_prompt",
     error_code_prefix="PROMPTS",
 )
-@router.post("/{prompt_id}/revert", response_model=DataResponse)
+@router.post("/{prompt_id}/revert", response_model=None)
 async def revert_prompt(
     prompt_id: str, admin_check: bool = Depends(check_admin_permission)
 ):

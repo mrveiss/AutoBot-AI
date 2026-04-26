@@ -368,7 +368,7 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     operation="process_thought_mcp",
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
-@router.post("/mcp/process_thought", response_model=DataResponse)
+@router.post("/mcp/process_thought", response_model=None)
 async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     Process and record a thought within the structured cognitive framework.

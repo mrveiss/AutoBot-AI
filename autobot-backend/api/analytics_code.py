@@ -456,7 +456,7 @@ def _generate_communication_chain_insights(
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/code/analyze/communication-chains", response_model=DataResponse)
+@router.post("/code/analyze/communication-chains", response_model=None)
 async def analyze_communication_chains_detailed(
     admin_check: bool = Depends(check_admin_permission),
 ):

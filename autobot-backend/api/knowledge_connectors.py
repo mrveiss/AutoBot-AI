@@ -398,7 +398,7 @@ async def update_connector(connector_id: str, request: UpdateConnectorRequest):
     return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
 
 
-@router.delete("/knowledge_base/connectors/{connector_id}", status_code=204, response_model=DataResponse)
+@router.delete("/knowledge_base/connectors/{connector_id}", status_code=204, response_model=None)
 async def delete_connector(connector_id: str):
     """Remove a connector, stop its schedule, and delete its Redis keys."""
     cfg = await _load_connector(connector_id)

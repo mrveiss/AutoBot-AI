@@ -858,7 +858,7 @@ async def update_batch_size(
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):

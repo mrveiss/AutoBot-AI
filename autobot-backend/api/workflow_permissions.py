@@ -174,7 +174,7 @@ async def grant_workflow_permission(
     "/workflows/{workflow_id}/permissions/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke a workflow permission",
-    response_model=DataResponse,
+    response_model=None,
 )
 async def revoke_workflow_permission(
     workflow_id: str,

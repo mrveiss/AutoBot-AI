@@ -303,7 +303,7 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/rules", response_model=DataResponse)
+@router.post("/rules", response_model=None)
 async def add_permission_rule(
     request: AddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -351,7 +351,7 @@ async def add_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/rules", response_model=DataResponse)
+@router.delete("/rules", response_model=None)
 async def remove_permission_rule(
     request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -442,7 +442,7 @@ async def get_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.delete("/memory/{project_path:path}", response_model=DataResponse)
+@router.delete("/memory/{project_path:path}", response_model=None)
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -478,7 +478,7 @@ async def clear_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/memory", response_model=DataResponse)
+@router.post("/memory", response_model=None)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
@@ -521,7 +521,7 @@ async def store_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/memory/stats", response_model=DataResponse)
+@router.get("/memory/stats", response_model=None)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.

@@ -1185,7 +1185,7 @@ async def parse_query(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/suggestions", response_model=DataResponse)
+@router.get("/suggestions", response_model=None)
 async def get_query_suggestions(query: str):
     """
     Get query suggestions for a given query.
@@ -1214,7 +1214,7 @@ async def get_query_suggestions(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/explain", response_model=DataResponse)
+@router.post("/explain", response_model=None)
 async def explain_code_snippet(
     code: str, file_path: str = "<unknown>", line_number: int = 0
 ):
@@ -1241,7 +1241,7 @@ async def explain_code_snippet(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/intents", response_model=DataResponse)
+@router.get("/intents", response_model=None)
 async def list_supported_intents():
     """List all supported query intents with examples."""
     return {
@@ -1282,7 +1282,7 @@ async def list_supported_intents():
     }
 
 
-@router.get("/domains", response_model=DataResponse)
+@router.get("/domains", response_model=None)
 async def list_supported_domains():
     """List all supported query domains with keywords."""
     return {
@@ -1293,7 +1293,7 @@ async def list_supported_domains():
     }
 
 
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint.
 

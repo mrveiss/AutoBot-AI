@@ -435,7 +435,7 @@ async def clear_rum_data():
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
-@router.get("/export", response_model=DataResponse)
+@router.get("/export", response_model=None)
 async def export_rum_data():
     """Export RUM data for analysis"""
 

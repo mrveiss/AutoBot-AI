@@ -231,7 +231,7 @@ async def update_workflow_secret(
     )
 
 
-@router.delete("/{name}", status_code=204, response_model=DataResponse)
+@router.delete("/{name}", status_code=204, response_model=None)
 async def delete_workflow_secret(
     name: str,
     current_user: dict = Depends(get_current_user),

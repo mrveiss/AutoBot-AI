@@ -848,7 +848,7 @@ async def get_chat_context(chat_id: str):
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check endpoint for chat knowledge system"""
     try:
@@ -875,7 +875,7 @@ class MarkFactsPreservedRequest(BaseModel):
     preserve: bool = True
 
 
-@router.get("/chat/sessions/{session_id}/facts", response_model=DataResponse)
+@router.get("/chat/sessions/{session_id}/facts", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_facts",
@@ -1000,7 +1000,7 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     return updated_count, failed_count, errors
 
 
-@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=DataResponse)
+@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preserve_session_facts",

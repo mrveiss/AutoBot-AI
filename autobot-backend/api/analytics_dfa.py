@@ -1181,7 +1181,7 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/vulnerabilities", response_model=DataResponse)
+@router.post("/vulnerabilities", response_model=None)
 async def get_vulnerabilities(
     request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1285,7 +1285,7 @@ async def get_taint_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/sources", response_model=DataResponse)
+@router.get("/sources", response_model=None)
 async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized taint sources.
@@ -1304,7 +1304,7 @@ async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)
     }
 
 
-@router.get("/sinks", response_model=DataResponse)
+@router.get("/sinks", response_model=None)
 async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized security-sensitive sinks.
@@ -1324,7 +1324,7 @@ async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
-@router.get("/sanitizers", response_model=DataResponse)
+@router.get("/sanitizers", response_model=None)
 async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized sanitizer functions.
@@ -1334,7 +1334,7 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     return {"sanitizers": sorted(SANITIZERS)}
 
 
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Health check endpoint.

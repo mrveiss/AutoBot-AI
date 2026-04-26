@@ -417,7 +417,7 @@ async def start_security_scan(
     operation="migrate_existing_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/migrate/existing", response_model=DataResponse)
+@router.post("/migrate/existing", response_model=None)
 async def migrate_existing_operation(
     operation_name: str,
     timeout_seconds: int,
@@ -462,7 +462,7 @@ async def migrate_existing_operation(
     operation="get_operation_status",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/{operation_id}", response_model=DataResponse)
+@router.get("/{operation_id}", response_model=None)
 async def get_operation_status(
     operation_id: str, manager=Depends(get_operation_manager)
 ):
@@ -483,7 +483,7 @@ async def get_operation_status(
     operation="list_operations",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=None)
 async def list_operations(
     status: Optional[str] = None,
     operation_type: Optional[str] = None,
@@ -537,7 +537,7 @@ async def list_operations(
     operation="cancel_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/cancel", response_model=DataResponse)
+@router.post("/{operation_id}/cancel", response_model=None)
 async def cancel_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Cancel a running operation"""
     try:
@@ -559,7 +559,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
     operation="resume_operation",
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
-@router.post("/{operation_id}/resume", response_model=DataResponse)
+@router.post("/{operation_id}/resume", response_model=None)
 async def resume_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Resume operation from latest checkpoint"""
     try:

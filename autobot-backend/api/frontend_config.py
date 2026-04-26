@@ -161,7 +161,7 @@ def _build_fallback_config() -> Dict[str, Any]:
     operation="get_frontend_config",
     error_code_prefix="FRONTEND_CONFIG",
 )
-@router.get("/frontend-config", response_model=DataResponse)
+@router.get("/frontend-config", response_model=None)
 async def get_frontend_config():
     """
     Get frontend-specific configuration.

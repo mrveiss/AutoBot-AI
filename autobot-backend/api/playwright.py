@@ -139,7 +139,7 @@ async def health_check():
     operation="web_search",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/search", response_model=DataResponse)
+@router.post("/search", response_model=None)
 async def web_search(request: SearchRequest):
     """
     Perform web search using embedded Playwright
@@ -180,7 +180,7 @@ async def web_search(request: SearchRequest):
     operation="test_frontend",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/test-frontend", response_model=DataResponse)
+@router.post("/test-frontend", response_model=None)
 async def test_frontend(request: FrontendTestRequest):
     """
     Test frontend functionality using embedded Playwright
@@ -214,7 +214,7 @@ async def test_frontend(request: FrontendTestRequest):
     operation="send_test_message",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/send-test-message", response_model=DataResponse)
+@router.post("/send-test-message", response_model=None)
 async def send_test_message(request: TestMessageRequest):
     """
     Send test message through frontend using embedded Playwright
@@ -252,7 +252,7 @@ async def send_test_message(request: TestMessageRequest):
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-@router.post("/screenshot", response_model=DataResponse)
+@router.post("/screenshot", response_model=None)
 async def capture_screenshot(request: ScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright

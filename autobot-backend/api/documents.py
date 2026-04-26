@@ -133,7 +133,7 @@ async def _assert_ownership(doc: AIDocument, user_id: str) -> None:
 # ============================================================================
 
 
-@router.post("/documents", status_code=201, response_model=DataResponse)
+@router.post("/documents", status_code=201, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_ai_document",
@@ -164,7 +164,7 @@ async def create_document(
     return doc.model_dump()
 
 
-@router.get("/documents", response_model=DataResponse)
+@router.get("/documents", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_documents",
@@ -205,7 +205,7 @@ async def list_documents(
     return {"documents": [d.model_dump() for d in page], "total": total}
 
 
-@router.get("/documents/{doc_id}", response_model=DataResponse)
+@router.get("/documents/{doc_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ai_document",
@@ -225,7 +225,7 @@ async def get_document(
     return doc.model_dump()
 
 
-@router.put("/documents/{doc_id}", response_model=DataResponse)
+@router.put("/documents/{doc_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_ai_document",
@@ -261,7 +261,7 @@ async def update_document(
     return doc.model_dump()
 
 
-@router.delete("/documents/{doc_id}", status_code=204, response_model=DataResponse)
+@router.delete("/documents/{doc_id}", status_code=204, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_ai_document",
@@ -286,7 +286,7 @@ async def delete_document(
     logger.info("Deleted AI document %s for user %s", doc_id, uid)
 
 
-@router.post("/documents/{doc_id}/refine", response_model=DataResponse)
+@router.post("/documents/{doc_id}/refine", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refine_ai_document",

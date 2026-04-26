@@ -64,7 +64,7 @@ class SandboxBatchRequest(BaseModel):
     operation="execute_command",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute", response_model=DataResponse)
+@router.post("/execute", response_model=None)
 async def execute_command(
     request: SandboxExecuteRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -125,7 +125,7 @@ async def execute_command(
     operation="execute_script",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute/script", response_model=DataResponse)
+@router.post("/execute/script", response_model=None)
 async def execute_script(
     request: SandboxScriptRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -186,7 +186,7 @@ async def execute_script(
     operation="execute_batch",
     error_code_prefix="SANDBOX",
 )
-@router.post("/execute/batch", response_model=DataResponse)
+@router.post("/execute/batch", response_model=None)
 async def execute_batch(
     request: SandboxBatchRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -316,7 +316,7 @@ def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]
     operation="get_sandbox_stats",
     error_code_prefix="SANDBOX",
 )
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=None)
 async def get_sandbox_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -371,7 +371,7 @@ async def get_sandbox_stats(
     operation="get_security_levels",
     error_code_prefix="SANDBOX",
 )
-@router.get("/security-levels", response_model=DataResponse)
+@router.get("/security-levels", response_model=None)
 async def get_security_levels(
     current_user: dict = Depends(get_current_user),
 ):
@@ -440,7 +440,7 @@ async def get_security_levels(
     operation="get_sandbox_examples",
     error_code_prefix="SANDBOX",
 )
-@router.get("/examples", response_model=DataResponse)
+@router.get("/examples", response_model=None)
 async def get_sandbox_examples(
     current_user: dict = Depends(get_current_user),
 ):

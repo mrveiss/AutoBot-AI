@@ -218,7 +218,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
         f"{TTL_5_MINUTES // 60}-minute TTL that resets on route changes."
     ),
     tags=["self", "capabilities"],
-    response_model=DataResponse,
+    response_model=None,
 )
 @with_error_handling(category=ErrorCategory.SYSTEM)
 async def get_capabilities(request: Request) -> Dict[str, Any]:

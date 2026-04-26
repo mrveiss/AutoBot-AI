@@ -137,7 +137,7 @@ async def terminate_streaming_session(
     operation="list_streaming_sessions",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/sessions", response_model=DataResponse)
+@router.get("/streaming/sessions", response_model=None)
 async def list_streaming_sessions(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -155,7 +155,7 @@ async def list_streaming_sessions(
     operation="get_streaming_capabilities",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/streaming/capabilities", response_model=DataResponse)
+@router.get("/streaming/capabilities", response_model=None)
 async def get_streaming_capabilities(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -368,7 +368,7 @@ async def complete_takeover_session(
     operation="get_pending_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/pending", response_model=DataResponse)
+@router.get("/takeover/pending", response_model=None)
 async def get_pending_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -386,7 +386,7 @@ async def get_pending_takeovers(
     operation="get_active_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/active", response_model=DataResponse)
+@router.get("/takeover/active", response_model=None)
 async def get_active_takeovers(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -404,7 +404,7 @@ async def get_active_takeovers(
     operation="get_takeover_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/takeover/status", response_model=DataResponse)
+@router.get("/takeover/status", response_model=None)
 async def get_takeover_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -503,7 +503,7 @@ async def emergency_system_stop(
     operation="get_system_health",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/system/health", response_model=DataResponse)
+@router.get("/system/health", response_model=None)
 async def get_system_health(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -599,7 +599,7 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     operation="advanced_control_info",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=None)
 async def advanced_control_info(
     admin_check: bool = Depends(check_admin_permission),
 ):

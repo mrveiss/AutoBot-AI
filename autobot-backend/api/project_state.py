@@ -302,7 +302,7 @@ async def auto_progress_phases():
     operation="health_check",
     error_code_prefix="PROJECT_STATE",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=None)
 async def health_check():
     """Health check for project state API"""
     try:

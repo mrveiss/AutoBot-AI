@@ -426,7 +426,7 @@ async def link_task(
 @router.delete(
     "/approval-gates/{approval_id}/tasks/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=DataResponse,
+    response_model=None,
 )
 async def unlink_task(
     approval_id: uuid.UUID,

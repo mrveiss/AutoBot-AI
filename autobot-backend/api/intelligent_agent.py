@@ -287,7 +287,7 @@ async def health_check(
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
-@router.post("/reload", response_model=DataResponse)
+@router.post("/reload", response_model=None)
 async def reload_agent(
     admin_check: bool = Depends(check_admin_permission),
 ):

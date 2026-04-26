@@ -161,7 +161,7 @@ def _get_integration_class(provider: str):
     return integration_class
 
 
-@router.post("/test-connection", response_model=DataResponse)
+@router.post("/test-connection", response_model=None)
 async def test_database_connection(request: DatabaseConnectionRequest):
     """
     Test connection to a database.
@@ -196,7 +196,7 @@ async def test_database_connection(request: DatabaseConnectionRequest):
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@router.get("/providers", response_model=DataResponse)
+@router.get("/providers", response_model=None)
 async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     """
     List all supported database providers.
@@ -228,7 +228,7 @@ async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     return {"providers": providers, "count": len(providers)}
 
 
-@router.post("/{provider}/query", response_model=DataResponse)
+@router.post("/{provider}/query", response_model=None)
 async def execute_database_query(provider: str, request: QueryRequest):
     """
     Execute a read-only query on a database.
@@ -276,7 +276,7 @@ async def execute_database_query(provider: str, request: QueryRequest):
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@router.post("/mongodb/query-collection", response_model=DataResponse)
+@router.post("/mongodb/query-collection", response_model=None)
 async def query_mongodb_collection(request: MongoQueryRequest):
     """
     Query a MongoDB collection.
@@ -319,7 +319,7 @@ async def query_mongodb_collection(request: MongoQueryRequest):
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@router.post("/{provider}/databases", response_model=DataResponse)
+@router.post("/{provider}/databases", response_model=None)
 async def list_databases(provider: str, request: DatabaseListRequest):
     """
     List all databases for a provider.
@@ -355,7 +355,7 @@ async def list_databases(provider: str, request: DatabaseListRequest):
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@router.post("/{provider}/tables", response_model=DataResponse)
+@router.post("/{provider}/tables", response_model=None)
 async def list_tables(provider: str, request: DatabaseListRequest):
     """
     List all tables/collections in a database.

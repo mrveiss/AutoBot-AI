@@ -146,7 +146,7 @@ async def get_skill(name: str) -> Dict[str, Any]:
     return detail
 
 
-@router.post("/{name}/enable", summary="Enable a skill", response_model=DataResponse)
+@router.post("/{name}/enable", summary="Enable a skill", response_model=None)
 async def enable_skill(name: str) -> Dict[str, Any]:
     """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -158,7 +158,7 @@ async def enable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/disable", summary="Disable a skill", response_model=DataResponse)
+@router.post("/{name}/disable", summary="Disable a skill", response_model=None)
 async def disable_skill(name: str) -> Dict[str, Any]:
     """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
@@ -170,7 +170,7 @@ async def disable_skill(name: str) -> Dict[str, Any]:
     return result
 
 
-@router.put("/{name}/config", summary="Update skill config", response_model=DataResponse)
+@router.put("/{name}/config", summary="Update skill config", response_model=None)
 async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     """Update a skill's configuration values."""
     registry = get_skill_registry()
@@ -185,7 +185,7 @@ async def update_config(name: str, body: SkillConfigUpdate) -> Dict[str, Any]:
     return result
 
 
-@router.post("/{name}/execute", summary="Execute a skill action", response_model=DataResponse)
+@router.post("/{name}/execute", summary="Execute a skill action", response_model=None)
 async def execute_skill(name: str, body: SkillActionRequest) -> Dict[str, Any]:
     """Execute a specific action on a skill."""
     manager = _get_manager()
