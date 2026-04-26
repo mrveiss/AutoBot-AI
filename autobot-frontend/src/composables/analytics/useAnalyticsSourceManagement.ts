@@ -4,7 +4,7 @@
 /**
  * Composable: useAnalyticsSourceManagement
  *
- * Encapsulates all fetchWithAuth API calls for the SourceManager panel:
+ * Encapsulates all API calls for the SourceManager panel:
  * - fetchSources: GET /api/analytics/codebase/sources
  * - fetchQueueStatus: GET /api/analytics/codebase/index/queue
  * - fetchSourcesForPolling: GET /api/analytics/codebase/sources (polling variant)
@@ -14,11 +14,13 @@
  * - cancelQueueItem: DELETE /api/analytics/codebase/index/queue/:sourceId
  *
  * Issue #6057: Extract fetchWithAuth calls from SourceManager.vue
+ * Migrated from bare fetchWithAuth to useFetchEndpoint (#6152) for GET calls,
+ * useApi for POST/DELETE mutations.
  */
 
 import { ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import appConfig from '@/config/AppConfig.js'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useApi } from '@/composables/useApi'
 import { createLogger } from '@/utils/debugUtils'
 import type { CodeSource } from '@/types/analytics'
 
@@ -35,99 +37,123 @@ interface QueueStatus {
   running: RunningTask | null
 }
 
-async function getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
+interface SourcesRaw {
+  sources?: CodeSource[]
+}
+
+interface QueueStatusRaw {
+  queue_length?: number
+  running?: RunningTask | null
 }
 
 export function useAnalyticsSourceManagement() {
   const isLoadingSources = ref(false)
   const sourcesError = ref<string | null>(null)
+  const api = useApi()
+
+  // ---- Sources endpoint ---------------------------------------------------
+
+  const sourcesEndpoint = useFetchEndpoint<SourcesRaw, CodeSource[]>(
+    {
+      path: '/api/analytics/codebase/sources',
+      pickData: (raw) => raw.sources ?? [],
+      onError: (message) => {
+        logger.error('Failed to load sources:', message)
+        sourcesError.value = `Failed to load sources: ${message}`
+      },
+      label: 'Sources',
+    },
+  )
 
   async function fetchSources(): Promise<CodeSource[]> {
     isLoadingSources.value = true
     sourcesError.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      return data.sources ?? []
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('Failed to load sources:', msg)
-      sourcesError.value = `Failed to load sources: ${msg}`
-      throw err
+      await sourcesEndpoint.load()
+      if (sourcesEndpoint.error.value) throw new Error(sourcesEndpoint.error.value)
+      return sourcesEndpoint.data.value ?? []
     } finally {
       isLoadingSources.value = false
     }
   }
 
+  // ---- Queue status endpoint ----------------------------------------------
+
+  const queueStatusEndpoint = useFetchEndpoint<QueueStatusRaw, QueueStatus>(
+    {
+      path: '/api/analytics/codebase/index/queue',
+      pickData: (raw) => ({
+        queue_length: raw.queue_length ?? 0,
+        running: raw.running ?? null,
+      }),
+      onError: (message) => {
+        logger.warn('Failed to load queue status:', message)
+      },
+      fallbackData: () => ({ queue_length: 0, running: null }),
+      label: 'Queue status',
+    },
+  )
+
   async function fetchQueueStatus(): Promise<QueueStatus | null> {
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/queue`)
-      if (!response.ok) return null
-      const data = await response.json()
-      return {
-        queue_length: data.queue_length ?? 0,
-        running: data.running ?? null,
-      }
-    } catch (err: unknown) {
-      logger.warn('Failed to load queue status:', err instanceof Error ? err.message : String(err))
+      await queueStatusEndpoint.load()
+      return queueStatusEndpoint.data.value
+    } catch {
       return null
     }
   }
 
+  // ---- Polling variants (separate endpoint instances) --------------------
+
+  const sourcesPollingEndpoint = useFetchEndpoint<SourcesRaw, CodeSource[]>(
+    {
+      path: '/api/analytics/codebase/sources',
+      pickData: (raw) => raw.sources ?? [],
+      label: 'Sources (polling)',
+    },
+  )
+
   async function fetchSourcesForPolling(): Promise<CodeSource[]> {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const data = await response.json()
-    return data.sources ?? []
+    await sourcesPollingEndpoint.load()
+    if (sourcesPollingEndpoint.error.value) throw new Error(sourcesPollingEndpoint.error.value)
+    return sourcesPollingEndpoint.data.value ?? []
   }
+
+  const queuePollingEndpoint = useFetchEndpoint<QueueStatusRaw, QueueStatus>(
+    {
+      path: '/api/analytics/codebase/index/queue',
+      pickData: (raw) => ({
+        queue_length: raw.queue_length ?? 0,
+        running: raw.running ?? null,
+      }),
+      label: 'Queue status (polling)',
+    },
+  )
 
   async function fetchQueueStatusForPolling(): Promise<QueueStatus> {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/queue`)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return response.json()
+    await queuePollingEndpoint.load()
+    if (queuePollingEndpoint.error.value) throw new Error(queuePollingEndpoint.error.value)
+    return queuePollingEndpoint.data.value ?? { queue_length: 0, running: null }
   }
 
+  // ---- Mutations (POST/DELETE via useApi) ---------------------------------
+
   async function syncSource(sourceId: string): Promise<void> {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${sourceId}/sync`,
-      { method: 'POST' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
+    await api.post(`/api/analytics/codebase/sources/${sourceId}/sync`)
   }
 
   async function deleteSource(sourceId: string): Promise<void> {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/sources/${sourceId}`,
-      { method: 'DELETE' }
-    )
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
+    await api.delete(`/api/analytics/codebase/sources/${sourceId}`)
   }
 
   async function cancelQueueItem(sourceId: string): Promise<boolean> {
-    const backendUrl = await getBackendUrl()
-    const response = await fetchWithAuth(
-      `${backendUrl}/api/analytics/codebase/index/queue/${sourceId}`,
-      { method: 'DELETE' }
-    )
-    if (!response.ok) {
+    try {
+      await api.delete(`/api/analytics/codebase/index/queue/${sourceId}`)
+      return true
+    } catch {
       logger.warn('Could not cancel queue item')
       return false
     }
-    return true
   }
 
   return {
