@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import get_current_user
 from services.nl_database_service import get_nl_database_service
 from api.schemas_common import DataResponse
+from api.schemas_agent import NLDatabaseSchemaResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -226,7 +227,7 @@ async def nl_query(
     summary="Get trained database schema information",
     description="Returns metadata about databases the NL service has been trained on.",
     tags=["nl-database"],
-    response_model=None,
+    response_model=NLDatabaseSchemaResponse,
 )
 async def get_schema(
     _auth=Depends(get_current_user),
@@ -284,7 +285,7 @@ async def train_on_db(
     summary="Get query history",
     description="Retrieve the history of natural language queries executed by the current user.",
     tags=["nl-database"],
-    response_model=None,
+    response_model=List[Dict[str, Any]],
 )
 async def get_history(
     request: Request,

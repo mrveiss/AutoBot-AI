@@ -33,6 +33,7 @@ from services.conversation_export import (
 from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
 from api.schemas_common import DataResponse
+from api.schemas_agent import ConversationImportResponse
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ async def export_all_conversations(
     operation="import_conversation_endpoint",
     error_code_prefix="CONVERSATION_EXPORT",
 )
-@router.post("/conversations/import", response_model=None)
+@router.post("/conversations/import", response_model=ConversationImportResponse)
 async def import_conversation_endpoint(
     body: ConversationImportRequest,
     request: Request,

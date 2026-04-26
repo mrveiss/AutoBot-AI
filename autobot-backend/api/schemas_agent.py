@@ -834,3 +834,96 @@ class AgentReloadResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # voice.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# bi_export_endpoints.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class SavedReportResponse(BaseModel):
+    """Response for POST /bi/reports/save — shape from SavedReportsService.create_report()."""
+
+    id: str
+    name: str
+    report_type: str
+    sections: List[str]
+    created_at: Any
+    updated_at: Any
+
+
+
+class SavedReportsListResponse(BaseModel):
+    """Response for GET /bi/reports/saved."""
+
+    reports: List[Any]
+
+
+# ---------------------------------------------------------------------------
+# conversation_export.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class ConversationImportResponse(BaseModel):
+    """Response for POST /conversations/import.
+
+    Shape from import_conversation() — includes success, session_id, and
+    optional conflict/rename_suffix fields; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+    session_id: str
+
+
+# ---------------------------------------------------------------------------
+# nl_database.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class NLDatabaseSchemaResponse(BaseModel):
+    """Response for GET /nl-database/schema.
+
+    Contains vanna_available flag, trained database summaries, and local db path.
+    trained_databases keys are db_id strings — opaque; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    vanna_available: bool
+    local_db_path: str
+
+
+# ---------------------------------------------------------------------------
+# triggers.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class WebhookAcceptedResponse(BaseModel):
+    """Response for POST /triggers/webhook/{trigger_id}."""
+
+    status: str
+
+
+# ---------------------------------------------------------------------------
+# self_capabilities.py schemas  (Issue #5991)
+# ---------------------------------------------------------------------------
+
+
+
+class SelfCapabilitiesResponse(BaseModel):
+    """Response for GET /api/self/capabilities.
+
+    Live endpoint discovery result with endpoint list, tag/operation-type
+    groupings — opaque; extra fields allowed.
+    """
+
+    model_config = {"extra": "allow"}
+
+    total_endpoints: int
+    unique_paths: int

@@ -30,6 +30,7 @@ from multimodal_processor import (
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
+from api.schemas_system import MultimodalHealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -918,7 +919,7 @@ async def update_batch_size(
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=MultimodalHealthResponse)
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):

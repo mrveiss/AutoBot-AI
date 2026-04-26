@@ -24,6 +24,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
 from api.schemas_common import DataResponse
+from api.schemas_code import ManualMCPToolItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -328,7 +329,7 @@ def _doc_index_tool_schema() -> dict:
     operation="get_manual_mcp_tools",
     error_code_prefix="MANUAL_MCP",
 )
-@router.get("/mcp/tools", response_model=None)
+@router.get("/mcp/tools", response_model=List[ManualMCPToolItem])
 async def get_manual_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[dict]:
