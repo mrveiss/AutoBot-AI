@@ -156,6 +156,46 @@ export const buildCategoryFilterOptions = (
 
 // ==================== Reactive composable ====================
 
+export interface MainCategoryItem {
+  id: string
+  name: string
+  description: string
+  examples: string
+  icon: string
+  color: string
+  count: number
+  [key: string]: unknown
+}
+
+export interface CategoryDocumentsResponse {
+  documents: Record<string, unknown>[]
+  [key: string]: unknown
+}
+
+/**
+ * Fetch the main category cards shown on the KnowledgeCategories landing page.
+ * Returns the validated categories array or throws.
+ */
+export const fetchMainCategories = async (): Promise<MainCategoryItem[]> => {
+  const data = await apiClient.get<Record<string, unknown>>(`${getApiBase()}/knowledge_base/categories/main`)
+  if (!data?.categories || !Array.isArray(data.categories)) {
+    throw new Error('Invalid main categories response format')
+  }
+  return data.categories as MainCategoryItem[]
+}
+
+/**
+ * Fetch all documents for a specific category path.
+ */
+export const fetchCategoryDocuments = async (
+  categoryPath: string
+): Promise<Record<string, unknown>[]> => {
+  const data = await apiClient.get<CategoryDocumentsResponse>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryPath)}`
+  )
+  return data?.documents ?? []
+}
+
 export interface UseKnowledgeCategoriesReturn {
   /** Latest categories list. */
   categories: Readonly<Ref<KnowledgeCategoryItem[]>>
@@ -175,6 +215,8 @@ export interface UseKnowledgeCategoriesReturn {
   // Imperative passthroughs — BC with pre-#5149 callers
   fetchCategories: typeof fetchCategories
   fetchCategory: typeof fetchCategory
+  fetchMainCategories: typeof fetchMainCategories
+  fetchCategoryDocuments: typeof fetchCategoryDocuments
   getCategorizedFacts: typeof getCategorizedFacts
   buildCategoryFilterOptions: typeof buildCategoryFilterOptions
   getCategoryIcon: typeof getCategoryIcon
@@ -226,6 +268,8 @@ export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
     refreshCategorizedFacts,
     fetchCategories,
     fetchCategory,
+    fetchMainCategories,
+    fetchCategoryDocuments,
     getCategorizedFacts,
     buildCategoryFilterOptions,
     getCategoryIcon,
