@@ -8,6 +8,9 @@
  * Encapsulates all fetchWithAuth calls for the Code Generation Dashboard.
  * Extracted from CodeGenerationDashboard.vue (Issue #6060).
  *
+ * Migrated from raw fetchWithAuth to useFetchEndpoint / useApi (#6152) for
+ * AbortController, race protection, and consistent error handling.
+ *
  * Endpoints (all under /api/code-generation/*):
  *   POST GET  /code-generation/generate
  *   POST      /code-generation/refactor
@@ -16,8 +19,8 @@
  *   GET       /code-generation/refactoring-types
  */
 
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getApiBase } from '@/config/ssot-config'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
+import { useApi } from '@/composables/useApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCodeGenerationData')
@@ -66,16 +69,42 @@ export interface RefactoringType {
   description: string
 }
 
+interface RefactoringTypesRaw {
+  types?: RefactoringType[]
+}
+
 export function useCodeGenerationData(withSourceId: (url: string) => string) {
+  const api = useApi()
+
+  // GET: /code-generation/stats — scoped to source via withSourceId (#3436)
+  const statsEndpoint = useFetchEndpoint<CodeGenerationStats, CodeGenerationStats>(
+    {
+      path: '/api/code-generation/stats',
+      scopeToSource: true,
+      pickData: (raw) => raw,
+      onError: (_message, err) => {
+        logger.error('Failed to fetch stats:', err)
+      },
+      label: 'Code generation stats',
+    },
+    { withSourceId },
+  )
+
+  // GET: /code-generation/refactoring-types
+  const refactoringTypesEndpoint = useFetchEndpoint<RefactoringTypesRaw, RefactoringType[]>(
+    {
+      path: '/api/code-generation/refactoring-types',
+      pickData: (raw) => raw.types ?? [],
+      onError: (_message, err) => {
+        logger.error('Failed to fetch refactoring types:', err)
+      },
+      label: 'Refactoring types',
+    },
+  )
+
   async function generateCode(request: GenerateRequest): Promise<GenerationResult | null> {
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/code-generation/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      })
-      if (!response.ok) throw new Error('Generation failed')
-      return (await response.json()) as GenerationResult
+      return await api.post<GenerationResult>('/api/code-generation/generate', request)
     } catch (err) {
       logger.error('Generation error:', err)
       return null
@@ -84,13 +113,7 @@ export function useCodeGenerationData(withSourceId: (url: string) => string) {
 
   async function refactorCode(request: RefactorRequest): Promise<GenerationResult | null> {
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      })
-      if (!response.ok) throw new Error('Refactoring failed')
-      return (await response.json()) as GenerationResult
+      return await api.post<GenerationResult>('/api/code-generation/refactor', request)
     } catch (err) {
       logger.error('Refactoring error:', err)
       return null
@@ -99,13 +122,7 @@ export function useCodeGenerationData(withSourceId: (url: string) => string) {
 
   async function validateCode(code: string, language: string): Promise<ValidationInfo | null> {
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/code-generation/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language }),
-      })
-      if (!response.ok) throw new Error('Validation failed')
-      return (await response.json()) as ValidationInfo
+      return await api.post<ValidationInfo>('/api/code-generation/validate', { code, language })
     } catch (err) {
       logger.error('Validation error:', err)
       return null
@@ -113,33 +130,14 @@ export function useCodeGenerationData(withSourceId: (url: string) => string) {
   }
 
   async function fetchStats(): Promise<CodeGenerationStats | null> {
-    try {
-      // Issue #3436: scope to project when sourceId is present
-      const response = await fetchWithAuth(withSourceId(`${getApiBase()}/code-generation/stats`))
-      if (!response.ok) {
-        logger.warn('Failed to fetch stats: HTTP', response.status)
-        return null
-      }
-      return (await response.json()) as CodeGenerationStats
-    } catch (err) {
-      logger.error('Failed to fetch stats:', err)
-      return null
-    }
+    // Issue #3436: scope to project when sourceId is present
+    await statsEndpoint.load()
+    return statsEndpoint.data.value
   }
 
   async function fetchRefactoringTypes(): Promise<RefactoringType[]> {
-    try {
-      const response = await fetchWithAuth(`${getApiBase()}/code-generation/refactoring-types`)
-      if (!response.ok) {
-        logger.warn('Failed to fetch refactoring types: HTTP', response.status)
-        return []
-      }
-      const data = await response.json()
-      return (data.types as RefactoringType[]) || []
-    } catch (err) {
-      logger.error('Failed to fetch refactoring types:', err)
-      return []
-    }
+    await refactoringTypesEndpoint.load()
+    return refactoringTypesEndpoint.data.value ?? []
   }
 
   return {

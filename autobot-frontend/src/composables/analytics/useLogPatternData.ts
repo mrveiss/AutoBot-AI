@@ -12,8 +12,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getApiBase } from '@/config/ssot-config'
+import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 
 const logger = createLogger('useLogPatternData')
 
@@ -74,32 +73,36 @@ export interface RealtimeData {
 }
 
 export function useLogPatternData() {
+  const mineEndpoint = useFetchEndpoint<MiningResult, MiningResult>(
+    {
+      path: '/api/log-patterns/mine',
+      pickData: (raw) => raw,
+      onError: (_message, err) => { logger.error('Failed to run log analysis:', err) },
+      label: 'Log pattern mining',
+    },
+  )
+
+  const realtimeEndpoint = useFetchEndpoint<RealtimeData, RealtimeData>(
+    {
+      path: '/api/log-patterns/realtime',
+      pickData: (raw) => raw,
+      onError: (_message, err) => { logger.error('Failed to fetch realtime data:', err) },
+      label: 'Log pattern realtime',
+    },
+  )
+
   async function fetchMiningResult(hours: number): Promise<MiningResult | null> {
-    try {
-      const response = await fetchWithAuth(
-        `${getApiBase()}/log-patterns/mine?hours=${hours}&include_anomalies=true&include_trends=true`
-      )
-      if (response.ok) {
-        return (await response.json()) as MiningResult
-      }
-      return null
-    } catch (error) {
-      logger.error('Failed to run log analysis:', error)
-      return null
-    }
+    await mineEndpoint.load({
+      hours: String(hours),
+      include_anomalies: 'true',
+      include_trends: 'true',
+    })
+    return mineEndpoint.data.value
   }
 
   async function fetchRealtimeData(): Promise<RealtimeData | null> {
-    try {
-      const response = await fetchWithAuth(`${getApiBase()}/log-patterns/realtime`)
-      if (response.ok) {
-        return (await response.json()) as RealtimeData
-      }
-      return null
-    } catch (error) {
-      logger.error('Failed to fetch realtime data:', error)
-      return null
-    }
+    await realtimeEndpoint.load()
+    return realtimeEndpoint.data.value
   }
 
   return { fetchMiningResult, fetchRealtimeData }
