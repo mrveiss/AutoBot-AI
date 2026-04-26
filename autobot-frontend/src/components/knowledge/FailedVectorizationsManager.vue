@@ -103,7 +103,7 @@ import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { formatDateTime } from '@/utils/formatHelpers'
-import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -125,7 +125,8 @@ const failedJobs = ref<FailedJob[]>([])
 const retryingJobs = ref<Set<string>>(new Set())
 
 // Use composable for async operations
-const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
+const { isLoading: loading, wrap: wrapFetchFailedJobs } = useLoadingState()
+const error = ref<string | null>(null)
 
 // Fetch failed jobs
 const fetchFailedJobsFn = async () => {
@@ -140,7 +141,10 @@ const fetchFailedJobsFn = async () => {
 
 // Refresh failed jobs
 const refreshFailedJobs = async () => {
-  await fetchFailedJobs(fetchFailedJobsFn)
+  error.value = null
+  await wrapFetchFailedJobs(fetchFailedJobsFn).catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
+  })
 }
 
 // Retry a single job
@@ -172,7 +176,8 @@ const deleteJob = async (jobId: string) => {
     return
   }
 
-  await fetchFailedJobs(async () => {
+  error.value = null
+  await wrapFetchFailedJobs(async () => {
     const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
 
     if (data.status === 'success') {
@@ -181,6 +186,8 @@ const deleteJob = async (jobId: string) => {
     } else {
       throw new Error(data.message || 'Failed to delete job')
     }
+  }).catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
   })
 }
 
@@ -190,7 +197,8 @@ const clearAllFailed = async () => {
     return
   }
 
-  await fetchFailedJobs(async () => {
+  error.value = null
+  await wrapFetchFailedJobs(async () => {
     const data = await apiClient.delete<Record<string, any>>(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
 
     if (data.status === 'success') {
@@ -199,6 +207,8 @@ const clearAllFailed = async () => {
     } else {
       throw new Error(data.message || 'Failed to clear jobs')
     }
+  }).catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
   })
 }
 
@@ -207,7 +217,10 @@ const formatTime = formatDateTime
 
 // Load on mount
 onMounted(() => {
-  fetchFailedJobs(fetchFailedJobsFn)
+  error.value = null
+  wrapFetchFailedJobs(fetchFailedJobsFn).catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
+  })
 })
 </script>
 
