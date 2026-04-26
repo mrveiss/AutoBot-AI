@@ -15,12 +15,13 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
+from api.schemas_agent import LogFileMetadata
 from api.schemas_common import AgentMessageResponse
 from api.schemas_code import (
     LogContainerResponse,
@@ -530,7 +531,7 @@ async def get_recent_logs(
     operation="list_logs",
     error_code_prefix="LOGS",
 )
-@router.get("/list", response_model=None)
+@router.get("/list", response_model=List[LogFileMetadata])
 async def list_logs(
     admin_check: bool = Depends(check_admin_permission),
 ) -> List[Metadata]:

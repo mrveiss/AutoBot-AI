@@ -9,6 +9,9 @@ import tempfile
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
+from typing import Any, Dict, List
+
+from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
     VoiceDeleteResponse,
     VoiceListenResponse,
@@ -217,7 +220,7 @@ async def voice_clone_api(
     operation="voice_list_api",
     error_code_prefix="VOICE",
 )
-@router.get("/voices", response_model=None)
+@router.get("/voices", response_model=List[Dict[str, Any]])
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
@@ -235,7 +238,7 @@ async def voice_list_api():
     operation="voice_create_api",
     error_code_prefix="VOICE",
 )
-@router.post("/voices/create", response_model=None)
+@router.post("/voices/create", response_model=VoiceCreateResponse)
 async def voice_create_api(
     name: str = Form(...),
     audio: UploadFile = File(...),

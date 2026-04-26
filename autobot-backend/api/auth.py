@@ -22,6 +22,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
+from api.schemas_agent import AuthCheckResponse, AuthPermissionResponse, AuthUserInfoResponse
 from api.schemas_common import DataResponse
 
 router = APIRouter()
@@ -373,7 +374,7 @@ async def logout(request: Request, logout_data: LogoutRequest):
     operation="get_current_user_info",
     error_code_prefix="AUTH",
 )
-@router.get("/me", response_model=None)
+@router.get("/me", response_model=AuthUserInfoResponse)
 async def get_current_user_info(request: Request):
     """
     Get current authenticated user information.
@@ -427,7 +428,7 @@ async def get_current_user_info(request: Request):
     operation="check_authentication",
     error_code_prefix="AUTH",
 )
-@router.get("/check", response_model=None)
+@router.get("/check", response_model=AuthCheckResponse)
 async def check_authentication(request: Request):
     """
     Quick authentication check endpoint.
@@ -476,7 +477,7 @@ async def check_authentication(request: Request):
     operation="check_permission",
     error_code_prefix="AUTH",
 )
-@router.get("/permissions/{operation}", response_model=None)
+@router.get("/permissions/{operation}", response_model=AuthPermissionResponse)
 async def check_permission(request: Request, operation: str):
     """
     Check if current user has permission for specific operation

@@ -37,7 +37,7 @@ from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 from api.schemas_common import AgentMessageResponse, DataResponse
-from api.schemas_agent import AgentCommandApprovalResponse, AgentHealthResponse
+from api.schemas_agent import AgentCommandApprovalResponse, AgentCommandExecuteResponse, AgentHealthResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1011,7 +1011,7 @@ async def command_approval(
     operation="execute_command",
     error_code_prefix="AGENT",
 )
-@router.post("/execute_command", response_model=None)
+@router.post("/execute_command", response_model=AgentCommandExecuteResponse)
 async def execute_command(
     request: Request,
     command_data: dict,

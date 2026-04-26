@@ -238,6 +238,12 @@ from autobot_shared.redis_client import get_redis_client
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
+from api.schemas_agent import (
+    AgentTerminalApproveResponse,
+    AgentTerminalExecuteResponse,
+    AgentTerminalInterruptResponse,
+    AgentTerminalResumeResponse,
+)
 from api.schemas_terminal import (
     AgentTerminalCommandStateResponse,
     AgentTerminalHostSelectionCancelResponse,
@@ -582,7 +588,7 @@ async def delete_agent_terminal_session(
     operation="execute_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/execute", response_model=None)
+@router.post("/execute", response_model=AgentTerminalExecuteResponse)
 async def execute_agent_command(
     current_user: dict = Depends(get_current_user),
     session_id: str = None,
@@ -625,7 +631,7 @@ async def execute_agent_command(
     operation="approve_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/approve", response_model=None)
+@router.post("/sessions/{session_id}/approve", response_model=AgentTerminalApproveResponse)
 async def approve_agent_command(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -715,7 +721,7 @@ async def submit_tool_approval(
     operation="interrupt_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/interrupt", response_model=None)
+@router.post("/sessions/{session_id}/interrupt", response_model=AgentTerminalInterruptResponse)
 async def interrupt_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -751,7 +757,7 @@ async def interrupt_agent_session(
     operation="resume_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
-@router.post("/sessions/{session_id}/resume", response_model=None)
+@router.post("/sessions/{session_id}/resume", response_model=AgentTerminalResumeResponse)
 async def resume_agent_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),

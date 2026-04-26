@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
+    LLMConfigResponse,
     LLMConnectionTestResponse,
     LLMCurrentResponse,
     LLMEmbeddingModelsResponse,
@@ -55,7 +56,7 @@ def _get_llm_interface():
     operation="get_llm_config",
     error_code_prefix="LLM",
 )
-@router.get("/config", response_model=None)
+@router.get("/config", response_model=LLMConfigResponse)
 async def get_llm_config(
     current_user: dict = Depends(get_current_user),
 ):
