@@ -118,43 +118,25 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useKnowledgeOrphans } from '@/composables/knowledge/useKnowledgeOrphans'
 
 const { t } = useI18n()
 
 const logger = createLogger('SessionOrphanManager')
 
 // Types
-interface OrphanedFact {
-  fact_id: string
-  session_id: string
-  category: string
-  content_preview: string
-  important: boolean
-}
-
-interface OrphanScanResult {
-  total_facts_checked: number
-  facts_with_session_tracking: number
-  orphaned_count: number
-  orphaned_sessions: number
-  session_breakdown: Record<string, number>
-  orphaned_facts: OrphanedFact[]
-}
-
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
   icon: string
 }
 
+// Composable
+const { orphanScanResult, isScanning, isCleaningOrphans, scanSessionOrphans: doScan, cleanupSessionOrphans: doCleanup } = useKnowledgeOrphans()
+
 // State
-const orphanScanResult = ref<OrphanScanResult | null>(null)
-const isScanning = ref(false)
-const isCleaningOrphans = ref(false)
 const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
@@ -179,40 +161,21 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 
 const scanSessionOrphans = async () => {
   if (isScanning.value || isCleaningOrphans.value) return
+  statusMessage.value = null
 
   try {
-    isScanning.value = true
-    orphanScanResult.value = null
-    statusMessage.value = null
+    const data = await doScan()
 
-    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await apiClient.get<Response>(`${getApiBase()}/knowledge-maintenance/session-orphans`)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.status === 'success') {
-      orphanScanResult.value = data.data as OrphanScanResult
-
-      if (data.data.orphaned_count > 0) {
-        showStatus('warning',
-          t('knowledge.sessionOrphan.foundOrphans', { count: data.data.orphaned_count, sessions: data.data.orphaned_sessions }))
-      } else {
-        showStatus('success',
-          t('knowledge.sessionOrphan.allActive', { count: data.data.total_facts_checked }))
-      }
+    if (data.orphaned_count > 0) {
+      showStatus('warning',
+        t('knowledge.sessionOrphan.foundOrphans', { count: data.orphaned_count, sessions: data.orphaned_sessions }))
     } else {
-      throw new Error(data.message || 'Failed to scan for orphans')
+      showStatus('success',
+        t('knowledge.sessionOrphan.allActive', { count: data.total_facts_checked }))
     }
   } catch (error: any) {
     logger.error('Failed to scan for session orphans:', error)
     showStatus('error', error.message || t('knowledge.sessionOrphan.scanError'))
-  } finally {
-    isScanning.value = false
   }
 }
 
@@ -228,34 +191,15 @@ const cleanupSessionOrphans = async () => {
   if (!confirmed) return
 
   try {
-    isCleaningOrphans.value = true
+    const data = await doCleanup()
 
-    // Issue #552: Fixed path to match backend /api/knowledge-maintenance/session-orphans
-    const response = await apiClient.delete<Response>(`${getApiBase()}/knowledge-maintenance/session-orphans?dry_run=false&preserve_important=true`)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(errorText || `Server error: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (data.status === 'success') {
-      const preserved = data.data.facts_preserved > 0
-        ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.data.facts_preserved })
-        : ''
-      showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.data.facts_removed, preserved }))
-
-      // Clear the scan result after cleanup
-      orphanScanResult.value = null
-    } else {
-      throw new Error(data.message || 'Failed to cleanup orphans')
-    }
+    const preserved = data.facts_preserved > 0
+      ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.facts_preserved })
+      : ''
+    showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.facts_removed, preserved }))
   } catch (error: any) {
     logger.error('Failed to cleanup session orphans:', error)
     showStatus('error', error.message || t('knowledge.sessionOrphan.cleanupError'))
-  } finally {
-    isCleaningOrphans.value = false
   }
 }
 </script>
