@@ -27,6 +27,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 from api.schemas_common import DataResponse
+from api.schemas_analytics import UsageRecentResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
@@ -314,7 +315,7 @@ async def get_cost_forecast(
     operation="get_recent_usage",
     error_code_prefix="COST",
 )
-@router.get("/usage/recent", response_model=None)
+@router.get("/usage/recent", response_model=UsageRecentResponse)
 async def get_recent_usage(
     limit: int = Query(
         default=100, ge=1, le=1000, description="Number of records to return"
