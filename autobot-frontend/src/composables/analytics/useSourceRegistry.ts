@@ -15,6 +15,8 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
 
@@ -23,6 +25,68 @@ const logger = createLogger('useSourceRegistry')
 // Issue #1133 / #2238: CodeSource type extracted to shared types
 import type { CodeSource } from '@/types/analytics'
 export type { CodeSource }
+
+/** Secret credential entry returned by GET /api/secrets */
+export interface RegistrySecret {
+  id: string
+  name: string
+  type: string
+  scope: string
+}
+
+/** Payload shape for POST/PUT /api/analytics/codebase/sources */
+export interface SourceSavePayload {
+  name: string
+  source_type: 'github' | 'local'
+  repo: string
+  branch: string
+  access: 'private' | 'shared' | 'public'
+  credential_id: string | null
+}
+
+async function _getBackendUrl(): Promise<string> {
+  return appConfig.getServiceUrl('backend')
+}
+
+/**
+ * Load credentials available for source authentication.
+ * Extracted from AddSourceModal.vue (#6069).
+ */
+export async function fetchSourceSecrets(): Promise<RegistrySecret[]> {
+  const backendUrl = await _getBackendUrl()
+  const response = await fetchWithAuth(`${backendUrl}/api/secrets`)
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+  const data = await response.json()
+  return (data.secrets ?? []) as RegistrySecret[]
+}
+
+/**
+ * Create or update a code source entry in the registry.
+ * Uses POST for new entries, PUT for existing ones (when `id` is provided).
+ * Extracted from AddSourceModal.vue (#6069).
+ */
+export async function saveCodeSource(
+  payload: SourceSavePayload,
+  id?: string,
+): Promise<CodeSource> {
+  const backendUrl = await _getBackendUrl()
+  const url = id
+    ? `${backendUrl}/api/analytics/codebase/sources/${id}`
+    : `${backendUrl}/api/analytics/codebase/sources`
+  const method = id ? 'PUT' : 'POST'
+  const response = await fetchWithAuth(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`HTTP ${response.status}: ${text}`)
+  }
+  return (await response.json()) as CodeSource
+}
 
 export interface UseSourceRegistryDeps {
   t: (key: string, params?: Record<string, unknown>) => string
