@@ -3192,3 +3192,335 @@ class PendingSourceResponse(BaseModel):
     domain: Optional[str] = None
     title: Optional[str] = None
     url: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# chat_knowledge.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class ChatKnowledgeHealthResponse(BaseModel):
+    """Health check response for the chat knowledge service."""
+
+    status: str
+    service: str
+    manager_initialized: bool
+    timestamp: str
+
+
+class SessionFactItem(BaseModel):
+    """Single fact returned in a session-facts listing."""
+
+    id: Optional[str] = None
+    content: str
+    full_content: str
+    category: str
+    tags: List[str]
+    important: bool
+    preserve: bool
+    created_at: Optional[str] = None
+
+
+class SessionFactsResponse(BaseModel):
+    """Response for GET /chat/sessions/{session_id}/facts."""
+
+    status: str
+    session_id: str
+    fact_count: int
+    facts: List[SessionFactItem]
+
+
+class PreserveSessionFactsResponse(BaseModel):
+    """Response for POST /chat/sessions/{session_id}/facts/preserve."""
+
+    status: str
+    session_id: str
+    updated_count: int
+    failed_count: int
+    errors: Optional[List[str]] = None
+
+
+# ---------------------------------------------------------------------------
+# code_search.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class CodeSearchGetResponse(BaseModel):
+    """Response for GET /search (delegates to POST search_code).
+
+    Shape is service-delegated; uses extra=allow to pass through all fields.
+    """
+
+    model_config = {"extra": "allow"}
+
+    success: bool = True
+
+
+# ---------------------------------------------------------------------------
+# documents.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class AIDocumentResponse(BaseModel):
+    """Single AI document (mirrors AIDocument.model_dump() fields)."""
+
+    id: str
+    title: str
+    content: str
+    source_facts: List[str]
+    source_session_id: Optional[str] = None
+    source_message_id: Optional[str] = None
+    user_id: str
+    tags: List[str]
+    metadata: Dict[str, Any]
+    created_at: str
+    updated_at: str
+
+
+class AIDocumentListResponse(BaseModel):
+    """Response for GET /documents."""
+
+    documents: List[AIDocumentResponse]
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# enhanced_search.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class EnhancedSearchHardwareStatusResponse(BaseModel):
+    """Response for GET /hardware/status.
+
+    hardware_status, cache_stats, and configuration are service-delegated dicts.
+    """
+
+    model_config = {"extra": "allow"}
+
+    hardware_status: Dict[str, Any]
+    knowledge_base_ready: bool
+    cache_stats: Dict[str, Any]
+    configuration: Dict[str, Any]
+    timestamp: float
+
+
+class EnhancedSearchBenchmarkResponse(BaseModel):
+    """Response for POST /benchmark.
+
+    benchmark_results shape is service-delegated.
+    """
+
+    model_config = {"extra": "allow"}
+
+    benchmark_results: Dict[str, Any]
+    timestamp: float
+    recommendations: List[str]
+
+
+class EnhancedSearchOptimizeResponse(BaseModel):
+    """Response for POST /optimize."""
+
+    model_config = {"extra": "allow"}
+
+    optimization_applied: str
+    configuration: Dict[str, Any]
+    timestamp: float
+
+
+class EnhancedSearchPerformanceAnalyticsResponse(BaseModel):
+    """Response for GET /performance/analytics.
+
+    search_statistics, hardware_status, and performance_analysis are
+    service-delegated dicts.
+    """
+
+    model_config = {"extra": "allow"}
+
+    search_statistics: Dict[str, Any]
+    hardware_status: Dict[str, Any]
+    performance_analysis: Dict[str, Any]
+    recommendations: List[str]
+    timestamp: float
+
+
+class EnhancedSearchConnectivityResponse(BaseModel):
+    """Response for GET /test/connectivity."""
+
+    connectivity: str
+    timestamp: float
+    npu_worker_url: Optional[str] = None
+    test_search_results: Optional[int] = None
+    test_device_used: Optional[str] = None
+    test_time_ms: Optional[float] = None
+    error: Optional[str] = None
+    fallback_available: Optional[bool] = None
+
+
+class EnhancedSearchHealthResponse(BaseModel):
+    """Response for GET /health (enhanced search service)."""
+
+    status: str
+    service: str
+    timestamp: float
+    npu_search_engine_ready: Optional[bool] = None
+    knowledge_base_ready: Optional[bool] = None
+    cache_size: Optional[int] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# kb_librarian.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class KbLibrarianStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    enabled: bool
+    similarity_threshold: float
+    max_results: int
+    auto_summarize: bool
+    knowledge_base_active: bool
+
+
+class KbLibrarianConfigureResponse(BaseModel):
+    """Response for PUT /configure."""
+
+    message: str
+    enabled: bool
+    similarity_threshold: float
+    max_results: int
+    auto_summarize: bool
+
+
+# ---------------------------------------------------------------------------
+# knowledge_graph_routes.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeGraphEntitiesResponse(BaseModel):
+    """Response for GET /entities."""
+
+    entities: List[Dict[str, Any]]
+    total: int
+
+
+class KnowledgeGraphEntityRelationshipsResponse(BaseModel):
+    """Response for GET /entities/{entity_id}/relationships."""
+
+    entity_id: str
+    relationships: List[Dict[str, Any]]
+    total: int
+
+
+class KnowledgeGraphEventsResponse(BaseModel):
+    """Response for GET /events."""
+
+    events: List[Dict[str, Any]]
+    total: int
+
+
+class KnowledgeGraphEventTimelineResponse(BaseModel):
+    """Response for GET /events/{entity_name}/timeline."""
+
+    entity_name: str
+    events: List[Dict[str, Any]]
+    total: int
+
+
+class KnowledgeGraphSummariesResponse(BaseModel):
+    """Response for GET /summaries/search."""
+
+    summaries: List[Dict[str, Any]]
+    total: int
+
+
+class KnowledgeGraphDocumentOverviewResponse(BaseModel):
+    """Response for GET /documents/{document_id}/overview.
+
+    Shape is service-delegated (SummarySearchService.get_document_overview).
+    """
+
+    model_config = {"extra": "allow"}
+
+
+class KnowledgeGraphDrillDownResponse(BaseModel):
+    """Response for GET /summaries/{summary_id}/drill-down.
+
+    Shape is service-delegated (SummarySearchService.drill_down).
+    """
+
+    model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# natural_language_search.py schemas (#5984)
+# ---------------------------------------------------------------------------
+
+
+class NLSuggestionItem(BaseModel):
+    """Single query suggestion."""
+
+    suggestion: str
+    reason: str
+    intent: str
+    relevance_score: float
+
+
+class NLQuerySuggestionsResponse(BaseModel):
+    """Response for GET /suggestions."""
+
+    original_query: str
+    parsed_intent: str
+    suggestions: List[NLSuggestionItem]
+
+
+class NLCodeExplanationResponse(BaseModel):
+    """Response for POST /explain."""
+
+    code_snippet: str
+    file_path: str
+    line_number: int
+    summary: str
+    detailed_explanation: str
+    purpose: str
+    key_concepts: List[str]
+    related_code: List[str]
+
+
+class NLIntentItem(BaseModel):
+    """Single supported query intent entry."""
+
+    intent: str
+    description: str
+    example_queries: List[str]
+
+
+class NLIntentsResponse(BaseModel):
+    """Response for GET /intents."""
+
+    intents: List[NLIntentItem]
+
+
+class NLDomainItem(BaseModel):
+    """Single supported query domain entry."""
+
+    domain: str
+    keywords: List[str]
+
+
+class NLDomainsResponse(BaseModel):
+    """Response for GET /domains."""
+
+    domains: List[NLDomainItem]
+
+
+class NLSearchHealthResponse(BaseModel):
+    """Response for GET /health (natural language search service)."""
+
+    status: str
+    service: str
+    deprecated: bool
+    use_instead: str
+    features: List[str]
+    llm_available: bool

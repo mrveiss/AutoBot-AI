@@ -36,6 +36,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_365_DAYS
 from models.document import AIDocument
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import AIDocumentListResponse, AIDocumentResponse
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ async def _assert_ownership(doc: AIDocument, user_id: str) -> None:
     operation="create_document",
     error_code_prefix="DOCUMENTS",
 )
-@router.post("/documents", status_code=201, response_model=None)
+@router.post("/documents", status_code=201, response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_ai_document",
@@ -174,7 +175,7 @@ async def create_document(
     operation="list_documents",
     error_code_prefix="DOCUMENTS",
 )
-@router.get("/documents", response_model=None)
+@router.get("/documents", response_model=AIDocumentListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_documents",
@@ -220,7 +221,7 @@ async def list_documents(
     operation="get_document",
     error_code_prefix="DOCUMENTS",
 )
-@router.get("/documents/{doc_id}", response_model=None)
+@router.get("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ai_document",
@@ -245,7 +246,7 @@ async def get_document(
     operation="update_document",
     error_code_prefix="DOCUMENTS",
 )
-@router.put("/documents/{doc_id}", response_model=None)
+@router.put("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_ai_document",
@@ -316,7 +317,7 @@ async def delete_document(
     operation="refine_document",
     error_code_prefix="DOCUMENTS",
 )
-@router.post("/documents/{doc_id}/refine", response_model=None)
+@router.post("/documents/{doc_id}/refine", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refine_ai_document",

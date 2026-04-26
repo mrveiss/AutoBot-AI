@@ -56,6 +56,11 @@ from llm_interface import LLMInterface
 from type_defs.common import Metadata
 
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    ChatKnowledgeHealthResponse,
+    PreserveSessionFactsResponse,
+    SessionFactsResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -898,7 +903,7 @@ async def get_chat_context(chat_id: str):
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/health", response_model=None)
+@router.get("/health", response_model=ChatKnowledgeHealthResponse)
 async def health_check():
     """Health check endpoint for chat knowledge system"""
     try:
@@ -930,7 +935,7 @@ class MarkFactsPreservedRequest(BaseModel):
     operation="get_session_facts",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/chat/sessions/{session_id}/facts", response_model=None)
+@router.get("/chat/sessions/{session_id}/facts", response_model=SessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_facts",
@@ -1060,7 +1065,7 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     operation="preserve_session_facts",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=None)
+@router.post("/chat/sessions/{session_id}/facts/preserve", response_model=PreserveSessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preserve_session_facts",
