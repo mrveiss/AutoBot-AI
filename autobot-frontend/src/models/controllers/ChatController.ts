@@ -6,6 +6,7 @@ import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
 import type { ChatMessageDisplayType } from '@/types/api'
+import { requestQueue } from '@/composables/useRequestQueue'
 
 const logger = createLogger('ChatController')
 
@@ -114,11 +115,17 @@ export class ChatController {
       for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
         try {
           // Send to backend with timeout and retry logic
-          const response = await this.sendMessageWithRetry({
-            message: content,
-            chatId: this.chatStore.currentSessionId!,
-            options: options || {}
-          }, attempt)
+          // Issue #6313: Route through requestQueue for concurrency backpressure
+          const chatId = this.chatStore.currentSessionId!
+          const response = await requestQueue.enqueue({
+            fn: () => this.sendMessageWithRetry({
+              message: content,
+              chatId,
+              options: options || {}
+            }, attempt),
+            priority: 'high',
+            dedupeKey: `chat-send-${chatId}-${attempt}`,
+          })
 
           // Update user message status to sent
           this.chatStore.updateMessage(userMessageId, { status: 'sent' })
