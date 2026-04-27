@@ -14,40 +14,42 @@ Functions:
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypeVar
 
 from autobot_shared.time_utils import utc_timestamp
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from type_defs.common import Metadata
+from api.schemas_common import DataResponse
 
 if TYPE_CHECKING:
     from services.ai_stack_client import AIStackError
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
 
 def create_success_response(
-    data: Any = None,
+    data: T = None,
     message: str = "Operation successful",
-) -> Metadata:
+) -> DataResponse[T]:
     """
-    Create standardized success response dictionary.
+    Create standardized success response.
 
     Args:
         data: The response payload data
         message: Human-readable success message
 
     Returns:
-        Dict with success status, data, message, and timestamp
+        DataResponse with success status, data, message, and timestamp
     """
-    return {
-        "success": True,
-        "data": data,
-        "message": message,
-        "timestamp": utc_timestamp(),
-    }
+    return DataResponse(
+        success=True,
+        data=data,
+        message=message,
+        timestamp=utc_timestamp(),
+    )
 
 
 def create_error_response(

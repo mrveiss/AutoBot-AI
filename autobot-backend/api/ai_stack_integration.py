@@ -155,7 +155,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
             status_code=200 if health_status["status"] == "healthy" else 503,
             content=create_success_response(
                 health_status, "AI Stack health check completed"
-            ),
+            ).model_dump(),
         )
     except Exception as e:
         logger.error("AI Stack health check failed: %s: %s", type(e).__name__, e)
