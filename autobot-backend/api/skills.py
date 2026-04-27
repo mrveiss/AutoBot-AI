@@ -25,6 +25,7 @@ from api.schemas_code import (
 )
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    MCPSpanResponse,
     SkillsListResponse,
     SkillsCategoriesResponse,
     SkillsAllHealthResponse,
@@ -34,6 +35,7 @@ from api.schemas_workflows import (
     SkillActionsResponse,
     SkillMetricsResponse,
     SkillSuggestionsResponse,
+    SkillTracesResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -160,6 +162,63 @@ async def initialize_skills() -> Dict[str, Any]:
     manager = _get_manager()
     result = await manager.initialize()
     return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_skill_traces",
+    error_code_prefix="SKILLS",
+)
+@router.get("/traces", summary="Get recent MCP tool-call traces", response_model=SkillTracesResponse)
+async def get_skill_traces(
+    skill: Optional[str] = Query(None, description="Filter by skill name"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of traces to return"),
+) -> Dict[str, Any]:
+    """Return recent MCP tool-call spans from Redis (Issue #4413).
+
+    Queries ``mcp_trace_idx:{skill}`` (sorted set, newest first) when a skill
+    name is provided, or iterates all ``mcp_trace_idx:*`` keys otherwise.
+    """
+    import json as _json
+
+    from autobot_shared.redis_client import get_async_redis_client
+
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        return {"skill": skill, "traces": [], "total": 0}
+
+    if skill:
+        idx_keys = [f"mcp_trace_idx:{skill}"]
+    else:
+        idx_keys = [k.decode() if isinstance(k, bytes) else k async for k in redis.scan_iter("mcp_trace_idx:*")]
+
+    trace_ids: list = []
+    for idx_key in idx_keys:
+        ids = await redis.zrevrange(idx_key, 0, limit - 1)
+        trace_ids.extend(ids)
+
+    # Deduplicate while preserving insertion order
+    seen: set = set()
+    unique_ids = []
+    for tid in trace_ids:
+        tid_str = tid.decode() if isinstance(tid, bytes) else tid
+        if tid_str not in seen:
+            seen.add(tid_str)
+            unique_ids.append(tid_str)
+    unique_ids = unique_ids[:limit]
+
+    traces: list = []
+    for tid in unique_ids:
+        raw = await redis.get(f"mcp_trace:{tid}")
+        if raw is None:
+            continue
+        try:
+            data = _json.loads(raw)
+            traces.append(MCPSpanResponse(**data))
+        except Exception as exc:
+            logger.debug("mcp_trace: failed to deserialise span %s: %s", tid, exc)
+
+    return {"skill": skill, "traces": traces, "total": len(traces)}
 
 
 @with_error_handling(
