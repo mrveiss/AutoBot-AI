@@ -357,11 +357,17 @@ async def logout(request: Request, logout_data: LogoutRequest):
     Logout user and invalidate session
     """
     try:
+        ip_address = request.client.host if request.client else "unknown"
+
         # Get session ID from request body or header
         session_id = logout_data.session_id or request.headers.get("X-Session-ID")
 
         if session_id:
             get_auth_middleware().invalidate_session(session_id)
+
+        user_data = get_auth_middleware().get_user_from_request(request)
+        user_id = user_data.get("user_id", user_data.get("username", "unknown")) if user_data else "unknown"
+        _emit_event(EventType.USER_LOGOUT, user_id=user_id, ip_address=ip_address)
 
         return {"success": True, "message": "Logged out successfully"}
 
