@@ -24,7 +24,22 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    AlertCheckResponse,
+    AlertManagerResponse,
+    ClaudeApiStatusResponse,
+    CurrentMetricsResponse,
+    GitHubStatusResponse,
+    MetricsQuery,
+    MonitoringActionResponse,
+    MonitoringStatus,
+    OptimizationRecommendation,
+    PerformanceAlert,
+    ServicesSummaryResponse,
+    TestPerformanceResponse,
+    ThresholdUpdate,
+    ThresholdUpdateResponse,
+)
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 from api.monitoring_hardware import hardware_monitor
@@ -257,177 +272,6 @@ router = APIRouter(tags=["AutoBot Monitoring"])
 # Performance optimization: O(1) lookup for critical service statuses (Issue #326)
 CRITICAL_SERVICE_STATUSES = {"critical", "offline"}
 
-
-class ServicesSummaryResponse(BaseModel):
-    """Response for GET /services/health."""
-
-    total_services: int
-    healthy_services: int
-    degraded_services: int
-    critical_services: int
-    overall_status: str
-    health_percentage: float
-    services: List[Dict[str, Any]]
-
-
-class MonitoringActionResponse(BaseModel):
-    """Response for monitoring start/stop endpoints."""
-
-    status: str
-    message: str
-    collection_interval: Optional[float] = None
-
-
-class CurrentMetricsResponse(BaseModel):
-    """Response for GET /metrics/current."""
-
-    timestamp: float
-    metrics: Dict[str, Any]
-    collection_successful: bool
-
-
-class ThresholdUpdateResponse(BaseModel):
-    """Response for POST /thresholds/update."""
-
-    status: str
-    threshold_key: str
-    new_value: float
-    comparison: str
-    old_value: Optional[float] = None
-
-
-class TestPerformanceResponse(BaseModel):
-    """Response for POST /test/performance."""
-
-    message: str
-    metrics_collected: bool
-    timestamp: float
-
-
-class ClaudeApiDetails(BaseModel):
-    """Claude API metrics from Prometheus."""
-
-    rate_limit_remaining: Optional[float] = None
-    requests_per_minute: Optional[float] = None
-    p95_latency_seconds: Optional[float] = None
-    failure_rate: Optional[float] = None
-
-
-class ClaudeApiStatusResponse(BaseModel):
-    """Response for GET /claude-api/status."""
-
-    success: bool
-    claude_api_status: ClaudeApiDetails
-    timestamp: str
-
-
-class GitHubApiDetails(BaseModel):
-    """GitHub API metrics from Prometheus."""
-
-    rate_limit_remaining: Optional[float] = None
-    total_operations: Optional[float] = None
-    p95_latency_seconds: Optional[float] = None
-
-
-class GitHubStatusResponse(BaseModel):
-    """Response for GET /github/status."""
-
-    success: bool
-    github_status: GitHubApiDetails
-    timestamp: str
-
-
-class AlertSources(BaseModel):
-    """Alert source counts."""
-
-    alertmanager: int
-    performance_monitor: int
-
-
-class AlertCheckResponse(BaseModel):
-    """Response for GET /alerts/check."""
-
-    timestamp: float
-    alerts: List[Dict[str, Any]]
-    total_count: int
-    critical_count: int
-    warning_count: int
-    high_count: int
-    sources: AlertSources
-
-
-class AlertManagerSeverityCounts(BaseModel):
-    """Severity breakdown for alertmanager response."""
-
-    critical: int
-    high: int
-    warning: int
-    info: int
-
-
-class AlertManagerResponse(BaseModel):
-    """Response for GET /alerts/alertmanager."""
-
-    timestamp: float
-    source: str
-    alertmanager_url: str
-    alerts: List[Dict[str, Any]]
-    total_count: int
-    by_severity: AlertManagerSeverityCounts
-    active_alerts: Dict[str, List[Dict[str, Any]]]
-
-
-class MonitoringStatus(BaseModel):
-    """Monitoring system status"""
-
-    active: bool
-    uptime_seconds: float
-    collection_interval: float
-    hardware_acceleration: Dict[str, bool]
-    metrics_collected: int
-    alerts_count: int
-
-
-class PerformanceAlert(BaseModel):
-    """Performance alert model"""
-
-    category: str
-    severity: str
-    message: str
-    recommendation: str
-    timestamp: float
-
-
-class OptimizationRecommendation(BaseModel):
-    """Performance optimization recommendation"""
-
-    category: str
-    priority: str
-    recommendation: str
-    action: str
-    expected_improvement: str
-
-
-class MetricsQuery(BaseModel):
-    """Query parameters for metrics retrieval"""
-
-    categories: Optional[List[str]] = Field(
-        None, description="Metric categories to include"
-    )
-    time_range_minutes: int = Field(
-        10, ge=1, le=1440, description="Time range in minutes"
-    )
-    include_trends: bool = Field(True, description="Include trend analysis")
-    include_alerts: bool = Field(True, description="Include recent alerts")
-
-
-class ThresholdUpdate(BaseModel):
-    """Performance threshold update"""
-
-    category: str
-    metric: str
-    threshold: float
-    comparison: str = Field(..., pattern="^(gt|lt|eq)$")
 
 
 # WebSocket connection manager for real-time updates

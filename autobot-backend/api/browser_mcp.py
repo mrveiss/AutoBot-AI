@@ -28,19 +28,41 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List
 from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
-from type_defs.common import JSONObject, Metadata
+from type_defs.common import Metadata
+from api.schemas_code import MCPTool
+from api.schemas_system import (
+    BrowserClickRequest,
+    BrowserClickResponse,
+    BrowserEvaluateRequest,
+    BrowserEvaluateResponse,
+    BrowserFillRequest,
+    BrowserFillResponse,
+    BrowserGetAttributeRequest,
+    BrowserGetAttributeResponse,
+    BrowserGetTextRequest,
+    BrowserGetTextResponse,
+    BrowserHoverRequest,
+    BrowserHoverResponse,
+    BrowserMcpStatusResponse,
+    BrowserNavigateRequest,
+    BrowserNavigateResponse,
+    BrowserScreenshotRequest,
+    BrowserScreenshotResponse,
+    BrowserSelectRequest,
+    BrowserSelectResponse,
+    BrowserWaitForSelectorRequest,
+    BrowserWaitForSelectorResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -170,201 +192,6 @@ async def check_rate_limit() -> bool:
 
         request_counter["count"] += 1
         return True
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
-
-
-# Request Models
-
-
-class NavigateRequest(BaseModel):
-    """Request model for browser navigation"""
-
-    url: str = Field(..., description="URL to navigate to")
-    wait_until: Optional[str] = Field(
-        "load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'"
-    )
-    timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-
-
-class ClickRequest(BaseModel):
-    """Request model for clicking elements"""
-
-    selector: str = Field(..., description="CSS selector for element to click")
-    timeout: Optional[int] = Field(5000, description="Timeout in milliseconds")
-
-
-class FillRequest(BaseModel):
-    """Request model for filling form fields"""
-
-    selector: str = Field(..., description="CSS selector for input field")
-    value: str = Field(..., description="Value to fill")
-    timeout: Optional[int] = Field(5000, description="Timeout in milliseconds")
-
-
-class ScreenshotRequest(BaseModel):
-    """Request model for taking screenshots"""
-
-    selector: Optional[str] = Field(
-        None, description="CSS selector for element (full page if omitted)"
-    )
-    full_page: Optional[bool] = Field(False, description="Capture full scrollable page")
-
-
-class EvaluateRequest(BaseModel):
-    """Request model for executing JavaScript"""
-
-    script: str = Field(..., description="JavaScript code to execute")
-
-
-class WaitForSelectorRequest(BaseModel):
-    """Request model for waiting for elements"""
-
-    selector: str = Field(..., description="CSS selector to wait for")
-    timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-    state: Optional[str] = Field(
-        "visible", description="State: 'attached', 'detached', 'visible', 'hidden'"
-    )
-
-
-class GetTextRequest(BaseModel):
-    """Request model for extracting text content"""
-
-    selector: str = Field(..., description="CSS selector for element")
-
-
-class GetAttributeRequest(BaseModel):
-    """Request model for getting element attributes"""
-
-    selector: str = Field(..., description="CSS selector for element")
-    attribute: str = Field(..., description="Attribute name to retrieve")
-
-
-class SelectRequest(BaseModel):
-    """Request model for selecting dropdown options"""
-
-    selector: str = Field(..., description="CSS selector for select element")
-    value: str = Field(..., description="Value to select")
-
-
-class HoverRequest(BaseModel):
-    """Request model for hovering over elements"""
-
-    selector: str = Field(..., description="CSS selector for element to hover")
-
-
-# Response models for Browser MCP endpoints
-class BrowserNavigateResponse(BaseModel):
-    """Response for navigate MCP action"""
-    success: bool
-    action: str
-    url: str
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserClickResponse(BaseModel):
-    """Response for click MCP action"""
-    success: bool
-    action: str
-    selector: str
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserFillResponse(BaseModel):
-    """Response for fill MCP action"""
-    success: bool
-    action: str
-    selector: str
-    value_length: int
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserScreenshotResponse(BaseModel):
-    """Response for screenshot MCP action"""
-    success: bool
-    action: str
-    selector: Optional[str] = None
-    full_page: Optional[bool] = None
-    base64_image: Optional[str] = None
-    mime_type: str
-    timestamp: str
-
-
-class BrowserEvaluateResponse(BaseModel):
-    """Response for evaluate MCP action"""
-    success: bool
-    action: str
-    script_preview: str
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserWaitForSelectorResponse(BaseModel):
-    """Response for wait_for_selector MCP action"""
-    success: bool
-    action: str
-    selector: str
-    state: Optional[str] = None
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserGetTextResponse(BaseModel):
-    """Response for get_text MCP action"""
-    success: bool
-    action: str
-    selector: str
-    text: Optional[str] = None
-    timestamp: str
-
-
-class BrowserGetAttributeResponse(BaseModel):
-    """Response for get_attribute MCP action"""
-    success: bool
-    action: str
-    selector: str
-    attribute: str
-    value: Optional[str] = None
-    timestamp: str
-
-
-class BrowserSelectResponse(BaseModel):
-    """Response for select MCP action"""
-    success: bool
-    action: str
-    selector: str
-    value: str
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserHoverResponse(BaseModel):
-    """Response for hover MCP action"""
-    success: bool
-    action: str
-    selector: str
-    result: Optional[Any] = None
-    timestamp: str
-
-
-class BrowserMcpStatusResponse(BaseModel):
-    """Response for Browser MCP status endpoint"""
-    success: bool
-    bridge: str
-    browser_vm: Dict[str, str]
-    security: Dict[str, Any]
-    rate_limit_status: Dict[str, Any]
-    tools_available: int
-    timestamp: str
 
 
 
@@ -715,7 +542,7 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
-async def navigate_mcp(request: NavigateRequest) -> Metadata:
+async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -757,7 +584,7 @@ async def navigate_mcp(request: NavigateRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/click", response_model=BrowserClickResponse)
-async def click_mcp(request: ClickRequest) -> Metadata:
+async def click_mcp(request: BrowserClickRequest) -> Metadata:
     """Click on element by selector"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -789,7 +616,7 @@ async def click_mcp(request: ClickRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/fill", response_model=BrowserFillResponse)
-async def fill_mcp(request: FillRequest) -> Metadata:
+async def fill_mcp(request: BrowserFillRequest) -> Metadata:
     """Fill form field with value"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -826,7 +653,7 @@ async def fill_mcp(request: FillRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
-async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
+async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -862,7 +689,7 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
-async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
+async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -897,7 +724,7 @@ async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/wait_for_selector", response_model=BrowserWaitForSelectorResponse)
-async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
+async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metadata:
     """Wait for element to reach specified state"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -934,7 +761,7 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
-async def get_text_mcp(request: GetTextRequest) -> Metadata:
+async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
     """Extract text content from element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -963,7 +790,7 @@ async def get_text_mcp(request: GetTextRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/get_attribute", response_model=BrowserGetAttributeResponse)
-async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
+async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     """Get attribute value from element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -996,7 +823,7 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/select", response_model=BrowserSelectResponse)
-async def select_mcp(request: SelectRequest) -> Metadata:
+async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     """Select option from dropdown"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -1029,7 +856,7 @@ async def select_mcp(request: SelectRequest) -> Metadata:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/hover", response_model=BrowserHoverResponse)
-async def hover_mcp(request: HoverRequest) -> Metadata:
+async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     """Hover mouse over element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")

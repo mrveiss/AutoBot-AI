@@ -15,10 +15,34 @@ import subprocess  # nosec B404
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    ClipboardSyncRequest,
+    ConnectionSettings,
+    KeyboardTypeRequest,
+    MacroListResponse,
+    MacroRecording,
+    MacroStopResponse,
+    MouseClickRequest,
+    MouseDragRequest,
+    MouseScrollRequest,
+    RestoreStateResponse,
+    SessionActionLogResponse,
+    SessionScreenshotSaveResponse,
+    SessionScreenshotsResponse,
+    SpecialKeyRequest,
+    VncDesktopContextResponse,
+    VncFindImageResponse,
+    VncOcrResponse,
+    VncQualityMetricsResponse,
+    VncRunningResponse,
+    VncScreenshotResponse,
+    VncStatusMessageResponse,
+    WaitForImageResponse,
+    WaitForTextResponse,
+)
 
 # Issue #74 - Area 5: Human-like behavior helpers
 from api.vnc_humanization import (
@@ -38,192 +62,6 @@ from autobot_shared.error_boundaries import ErrorCategory
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Response models
-class VncRunningResponse(BaseModel):
-    """Response for VNC running status check"""
-    running: bool
-
-
-class VncStatusMessageResponse(BaseModel):
-    """Generic status + message response"""
-    status: str
-    message: str
-
-
-class VncScreenshotResponse(BaseModel):
-    """Response for screenshot capture"""
-    status: str
-    message: str
-    image_data: str
-
-
-class MacroStopResponse(BaseModel):
-    """Response for stop-macro-recording"""
-    status: str
-    message: str
-    action_count: int
-
-
-class MacroListResponse(BaseModel):
-    """Response for list-macros"""
-    macros: List[Dict[str, Any]]
-
-
-class VncQualityMetricsResponse(BaseModel):
-    """Response for connection quality metrics"""
-    vnc_running: bool
-    timestamp: str
-    vnc_port_reachable: Optional[bool] = None
-    latency_ms: Optional[float] = None
-    websockify_running: Optional[bool] = None
-    websockify_processes: Optional[int] = None
-
-
-class VncDesktopContextResponse(BaseModel):
-    """Response for desktop context info"""
-    system: Dict[str, str]
-    desktop: Dict[str, str]
-    processes: List[Dict[str, str]]
-    timestamp: str
-
-
-class VncOcrResponse(BaseModel):
-    """Response for OCR text recognition"""
-    status: str
-    text: str
-    message: str
-
-
-class VncFindImageResponse(BaseModel):
-    """Response for image template matching"""
-    status: str
-    found: bool
-    message: str
-    x: Optional[int] = None
-    y: Optional[int] = None
-    confidence: Optional[float] = None
-
-
-class WaitForTextResponse(BaseModel):
-    """Response for wait-for-text"""
-    status: str
-    found: bool
-    message: str
-
-
-class WaitForImageResponse(BaseModel):
-    """Response for wait-for-image"""
-    status: str
-    found: bool
-    message: str
-    x: Optional[int] = None
-    y: Optional[int] = None
-    confidence: Optional[float] = None
-
-
-class RestoreStateResponse(BaseModel):
-    """Response for restore-session-desktop-state"""
-    status: str
-    message: str
-    state: Optional[Dict[str, Any]] = None
-
-
-class SessionActionLogResponse(BaseModel):
-    """Response for get-session-action-log"""
-    status: str
-    actions: List[Dict[str, Any]]
-    message: str
-
-
-class SessionScreenshotsResponse(BaseModel):
-    """Response for get-session-screenshots"""
-    status: str
-    screenshots: List[str]
-    message: str
-
-
-class SessionScreenshotSaveResponse(BaseModel):
-    """Response for save-session-screenshot"""
-    status: str
-    message: str
-    screenshot_path: Optional[str] = None
-
-
-# Pydantic models for request bodies (Issue #74)
-class MouseClickRequest(BaseModel):
-    """Mouse click action request"""
-
-    x: int = Field(..., ge=0, description="X coordinate")
-    y: int = Field(..., ge=0, description="Y coordinate")
-    button: str = Field(default="left", description="Mouse button: left, middle, right")
-
-
-class KeyboardTypeRequest(BaseModel):
-    """Keyboard typing action request"""
-
-    text: str = Field(..., description="Text to type")
-
-
-class SpecialKeyRequest(BaseModel):
-    """Special key press request"""
-
-    key: str = Field(..., description="Special key name (e.g., Return, Escape, ctrl+c)")
-
-
-class MouseScrollRequest(BaseModel):
-    """Mouse scroll action request"""
-
-    direction: str = Field(..., description="Scroll direction: up or down")
-    amount: int = Field(default=3, ge=1, le=10, description="Scroll amount (1-10)")
-
-
-class MouseDragRequest(BaseModel):
-    """Mouse drag action request"""
-
-    x1: int = Field(..., ge=0, description="Start X coordinate")
-    y1: int = Field(..., ge=0, description="Start Y coordinate")
-    x2: int = Field(..., ge=0, description="End X coordinate")
-    y2: int = Field(..., ge=0, description="End Y coordinate")
-
-
-class ClipboardSyncRequest(BaseModel):
-    """Clipboard sync request"""
-
-    content: str = Field(..., description="Text content to copy to clipboard")
-
-
-# Issue #74 - Area 4: Advanced Session Management
-class ConnectionQualitySettings(BaseModel):
-    """VNC connection quality settings"""
-
-    compression_level: int = Field(
-        default=6, ge=0, le=9, description="Compression level (0=none, 9=max)"
-    )
-    quality: int = Field(
-        default=6, ge=0, le=9, description="JPEG quality (0=poor, 9=best)"
-    )
-    encoding: str = Field(
-        default="tight", description="Encoding method: tight, hextile, raw"
-    )
-
-
-class ConnectionSettings(BaseModel):
-    """VNC connection configuration"""
-
-    auto_reconnect: bool = Field(
-        default=True, description="Enable auto-reconnect on disconnect"
-    )
-    reconnect_delay_ms: int = Field(
-        default=3000, ge=1000, le=30000, description="Delay before reconnect"
-    )
-    max_reconnect_attempts: int = Field(
-        default=10, ge=1, le=100, description="Max reconnect attempts"
-    )
-    quality: ConnectionQualitySettings = Field(
-        default_factory=ConnectionQualitySettings
-    )
-
 
 # Global connection settings storage (in-memory for now)
 _connection_settings: Dict[str, ConnectionSettings] = {}
@@ -1128,24 +966,6 @@ async def get_desktop_context(
 
 
 # Area 5: Automation Features - Macro Recording/Playback
-
-
-class MacroAction(BaseModel):
-    """Single macro action"""
-
-    action_type: str = Field(
-        ..., description="Action type: click, type, key, scroll, drag"
-    )
-    params: Dict = Field(default_factory=dict, description="Action parameters")
-    timestamp: float = Field(..., description="Timestamp when action was recorded")
-
-
-class MacroRecording(BaseModel):
-    """Recorded macro sequence"""
-
-    name: str = Field(..., description="Macro name")
-    actions: List[MacroAction] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
 
 # Global macro storage (in-memory for now)

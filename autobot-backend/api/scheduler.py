@@ -10,184 +10,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from datetime import datetime
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND, ERR_WORKFLOW_NOT_FOUND
-from constants.threshold_constants import RetryConfig
-from type_defs.common import Metadata
 from workflow_scheduler import WorkflowPriority
 from workflow_scheduler import WorkflowScheduleRequest as InternalScheduleRequest
 from workflow_scheduler import WorkflowStatus, get_workflow_scheduler
+from api.schemas_system import (
+    QueueControlRequest,
+    RescheduleRequest,
+    ScheduleWorkflowRequest,
+    SchedulerBatchScheduleResponse,
+    SchedulerCancelResponse,
+    SchedulerQueueControlResponse,
+    SchedulerQueueResponse,
+    SchedulerRescheduleResponse,
+    SchedulerStartResponse,
+    SchedulerStatsResponse,
+    SchedulerStatusResponse,
+    SchedulerStopResponse,
+    SchedulerTemplateScheduleResponse,
+    SchedulerWorkflowCreateResponse,
+    SchedulerWorkflowDetailResponse,
+    SchedulerWorkflowListResponse,
+)
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
-
-# ---------------------------------------------------------------------------
-# Response models for scheduler endpoints
-# ---------------------------------------------------------------------------
-
-from typing import Any, Dict  # noqa: E402 — after logger init
-
-
-class SchedulerWorkflowCreateResponse(BaseModel):
-    """Response for POST /schedule."""
-
-    success: bool
-    workflow_id: str
-    scheduled_workflow: Any
-
-
-class SchedulerWorkflowListResponse(BaseModel):
-    """Response for GET /workflows."""
-
-    success: bool
-    workflows: List[Any]
-    total: int
-
-
-class SchedulerWorkflowDetailResponse(BaseModel):
-    """Response for GET /workflows/{workflow_id}."""
-
-    success: bool
-    workflow: Any
-
-
-class SchedulerRescheduleWorkflowItem(BaseModel):
-    id: str
-    scheduled_time: str
-    priority: str
-    status: str
-    complexity: str
-
-
-class SchedulerRescheduleResponse(BaseModel):
-    """Response for PUT /workflows/{workflow_id}/reschedule."""
-
-    success: bool
-    message: str
-    workflow: SchedulerRescheduleWorkflowItem
-
-
-class SchedulerCancelResponse(BaseModel):
-    """Response for DELETE /workflows/{workflow_id}."""
-
-    success: bool
-    message: str
-    workflow_id: str
-
-
-class SchedulerStatusResponse(BaseModel):
-    """Response for GET /status."""
-
-    success: bool
-    scheduler_status: Any
-
-
-class SchedulerQueueWorkflowItem(BaseModel):
-    id: str
-    name: str
-    priority: str
-    complexity: str
-    estimated_duration_minutes: int
-
-
-class SchedulerQueueResponse(BaseModel):
-    """Response for GET /queue."""
-
-    success: bool
-    queue_status: Any
-    queued_workflows: List[SchedulerQueueWorkflowItem]
-    running_workflows: List[SchedulerQueueWorkflowItem]
-
-
-class SchedulerQueueControlResponse(BaseModel):
-    """Response for POST /queue/control."""
-
-    success: bool
-    message: str
-    queue_status: Any
-
-
-class SchedulerStartResponse(BaseModel):
-    """Response for POST /start."""
-
-    success: bool
-    message: str
-    status: Any
-
-
-class SchedulerStopResponse(BaseModel):
-    """Response for POST /stop."""
-
-    success: bool
-    message: str
-
-
-class SchedulerTemplateWorkflowItem(BaseModel):
-    id: str
-    name: str
-    scheduled_time: str
-    priority: str
-    status: str
-    complexity: str
-
-
-class SchedulerTemplateScheduleResponse(BaseModel):
-    """Response for GET /templates/schedule/{template_id}."""
-
-    success: bool
-    workflow_id: str
-    template_info: Dict[str, Any]
-    scheduled_workflow: SchedulerTemplateWorkflowItem
-
-
-class SchedulerStatsResponse(BaseModel):
-    """Response for GET /stats."""
-
-    success: bool
-    statistics: Dict[str, Any]
-
-
-class SchedulerBatchScheduleResponse(BaseModel):
-    """Response for POST /batch-schedule."""
-
-    success: bool
-    scheduled_workflows: List[str]
-    errors: List[str]
-    total_scheduled: int
-    total_errors: int
-
-
-class ScheduleWorkflowRequest(BaseModel):
-    user_message: str
-    scheduled_time: Union[str, datetime]
-    priority: str = "normal"
-    complexity: str = "simple"
-    template_id: Optional[str] = None
-    variables: Optional[Metadata] = None
-    auto_approve: bool = False
-    tags: Optional[List[str]] = None
-    dependencies: Optional[List[str]] = None
-    user_id: Optional[str] = None
-    estimated_duration_minutes: int = 30
-    timeout_minutes: int = 120
-    max_retries: int = RetryConfig.DEFAULT_RETRIES
-
-
-class RescheduleRequest(BaseModel):
-    new_scheduled_time: Union[str, datetime]
-    new_priority: Optional[str] = None
-
-
-class QueueControlRequest(BaseModel):
-    action: str  # "pause", "resume", "set_max_concurrent"
-    value: Optional[int] = None
 
 
 @with_error_handling(

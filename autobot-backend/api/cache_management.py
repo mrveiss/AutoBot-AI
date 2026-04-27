@@ -10,11 +10,23 @@ Consolidates all cache-related endpoints (Issue #1286).
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
+from api.schemas_system import (
+    CacheClearTypeResponse,
+    CacheConfigResponse,
+    CacheHealthResponse,
+    CacheStatsResponse,
+    CacheWarmingRequest,
+    CacheWarmupResponse,
+    ClearAllResponse,
+    InvalidateCacheResponse,
+    RedisClearResponse,
+    RedisStatsResponse,
+    WarmCacheResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
@@ -90,118 +102,6 @@ def _clear_single_redis_database(db_name: str, db_number: int) -> dict:
             "keys_cleared": 0,
         }
 
-
-class CacheStatsResponse(BaseModel):
-    status: str
-    total_cache_keys: Optional[int] = None
-    total_hits: Optional[int] = None
-    total_misses: Optional[int] = None
-    global_hit_rate: Optional[str] = None
-    memory_usage: Optional[str] = None
-    configured_data_types: Optional[List[str]] = None
-    data_type_stats: Optional[Dict[str, Dict]] = None
-
-
-class CacheWarmingRequest(BaseModel):
-    data_types: List[str]
-    force_refresh: bool = False
-
-
-class RedisDbInfo(BaseModel):
-    """Per-database Redis info."""
-
-    database: int
-    key_count: int
-    memory_usage: str
-    connected: bool
-    error: Optional[str] = None
-
-
-class RedisClearEntry(BaseModel):
-    """Result for a single cleared database."""
-
-    name: str
-    database: int
-    keys_cleared: int
-    error: Optional[str] = None
-
-
-class RedisStatsResponse(BaseModel):
-    """Response for GET /stats."""
-
-    status: str
-    stats: Dict[str, Any]
-
-
-class RedisClearResponse(BaseModel):
-    """Response for POST /redis/clear/{database}."""
-
-    status: str
-    message: str
-    cleared_databases: List[Dict[str, Any]]
-
-
-class CacheClearTypeResponse(BaseModel):
-    """Response for POST /clear/{cache_type}."""
-
-    status: str
-    message: str
-    cache_type: str
-
-
-class CacheConfigResponse(BaseModel):
-    """Response for GET/POST /config."""
-
-    status: str
-    message: Optional[str] = None
-    config: Dict[str, Any]
-    source: Optional[str] = None
-
-
-class CacheWarmupResponse(BaseModel):
-    """Response for POST /warmup."""
-
-    status: str
-    message: str
-    warmed_caches: List[Dict[str, Any]]
-
-
-class WarmCacheResponse(BaseModel):
-    """Response for POST /warm."""
-
-    success: bool
-    warmed_types: List[str]
-    failed_types: List[str]
-    total_warmed: int
-
-
-class InvalidateCacheResponse(BaseModel):
-    """Response for DELETE /invalidate/{data_type}."""
-
-    success: bool
-    data_type: str
-    key_pattern: str
-    user_id: Optional[str] = None
-    deleted_count: int
-
-
-class ClearAllResponse(BaseModel):
-    """Response for POST /clear-all."""
-
-    success: bool
-    message: str
-    total_deleted: int
-
-
-class CacheHealthResponse(BaseModel):
-    """Response for GET /health."""
-
-    status: str
-    redis_status: Optional[str] = None
-    total_keys: Optional[int] = None
-    memory_usage: Optional[str] = None
-    global_hit_rate: Optional[str] = None
-    error: Optional[str] = None
 
 
 def _process_data_type_stats_results(
