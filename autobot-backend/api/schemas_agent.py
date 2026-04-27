@@ -964,15 +964,20 @@ class AgentStatusData(BaseModel):
     development_tools: bool
 
 
-class EnhancedGoalData(BaseModel):
+class AgentTaskData(BaseModel):
+    """Base for agent execution payload models that invoke AI Stack multi-agent queries."""
+
+    agents_used: List[str]
+    result: Optional[Dict[str, Any]] = None
+
+
+class EnhancedGoalData(AgentTaskData):
     """data payload for POST /agent/goal/enhanced."""
 
     goal: str
-    agents_used: List[str]
     coordination_mode: str
     execution_time: float
     priority: Optional[str] = None
-    result: Optional[Dict[str, Any]] = None
     enhanced_context_used: bool
     knowledge_base_integrated: bool
     timestamp: str
@@ -991,27 +996,23 @@ class MultiAgentCoordinationData(BaseModel):
     timestamp: str
 
 
-class AgentResearchData(BaseModel):
+class AgentResearchData(AgentTaskData):
     """data payload for POST /agent/research/comprehensive."""
 
     research_query: str
     research_depth: Optional[str] = None
-    agents_used: List[str]
     include_web: bool
     include_code_search: bool
     sources: Optional[List[str]] = None
-    result: Optional[Dict[str, Any]] = None
 
 
-class DevelopmentAnalysisData(BaseModel):
+class DevelopmentAnalysisData(AgentTaskData):
     """data payload for POST /agent/development/analyze."""
 
     analysis_type: str
     target_path: str
     include_performance: bool
     include_optimization: bool
-    agents_used: List[str]
-    result: Optional[Dict[str, Any]] = None
 
 
 class MultiAgentQueryData(BaseModel):
