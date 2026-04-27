@@ -54,6 +54,21 @@ def _log_connection_error(attempt: int, exc: Exception) -> None:
         logger.debug("AI Stack client error (attempt %s, suppressed): %s", attempt, exc)
 
 
+async def _handle_transient_error(
+    e: Exception,
+    attempt: int,
+    retry_attempts: int,
+    retry_delay: float,
+    final_error: "AIStackError",
+) -> None:
+    """Log and sleep on transient connection errors; raise on final attempt."""
+    _log_connection_error(attempt + 1, e)
+    if attempt < retry_attempts - 1:
+        await asyncio.sleep(retry_delay * (attempt + 1))
+    else:
+        raise final_error from e
+
+
 class AIStackError(Exception):
     """Base exception for AI Stack communication errors."""
 
@@ -252,32 +267,37 @@ class AIStackClient:
                     return result
 
             except asyncio.TimeoutError as e:
-                _log_connection_error(attempt + 1, e)
-                if attempt < self.retry_attempts - 1:
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                    continue
-                raise AIStackError(
-                    f"AI Stack unreachable: connection timed out ({self.timeout.total}s) to {url}",
-                    details={"error": type(e).__name__, "url": url},
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack unreachable: connection timed out"
+                        f" ({self.timeout.total}s) to {url}",
+                        details={"error": type(e).__name__, "url": url},
+                    ),
                 )
+                continue
             except aiohttp.ClientConnectorError as e:
-                _log_connection_error(attempt + 1, e)
-                if attempt < self.retry_attempts - 1:
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                    continue
-                raise AIStackError(
-                    f"AI Stack unreachable: connection refused at {url}",
-                    details={"error": type(e).__name__, "url": url, "os_error": str(e.os_error) if e.os_error else None},
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack unreachable: connection refused at {url}",
+                        details={
+                            "error": type(e).__name__,
+                            "url": url,
+                            "os_error": str(e.os_error) if e.os_error else None,
+                        },
+                    ),
                 )
+                continue
             except aiohttp.ClientError as e:
-                _log_connection_error(attempt + 1, e)
-                if attempt < self.retry_attempts - 1:
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))
-                    continue
-                raise AIStackError(
-                    f"AI Stack connection error: {type(e).__name__}: {e}",
-                    details={"error": type(e).__name__, "url": url},
+                await _handle_transient_error(
+                    e, attempt, self.retry_attempts, self.retry_delay,
+                    AIStackError(
+                        f"AI Stack connection error: {type(e).__name__}: {e}",
+                        details={"error": type(e).__name__, "url": url},
+                    ),
                 )
+                continue
             except Exception as e:
                 logger.warning("Unexpected error in AI Stack request: %s: %s", type(e).__name__, e)
                 raise AIStackError(
