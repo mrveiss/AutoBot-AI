@@ -18,6 +18,8 @@ Usage::
         some_optional_lib = _MissingDep("some_optional_lib", e)
 """
 
+from typing import NoReturn
+
 
 class MissingDep:
     """Sentinel for optional dependencies that are not installed.
@@ -30,13 +32,13 @@ class MissingDep:
         self._name = name
         self._error = error
 
-    def __call__(self, *args: object, **kwargs: object) -> None:
+    def __call__(self, *args: object, **kwargs: object) -> NoReturn:
         raise ImportError(
             f"{self._name} is not available — install the optional dependencies "
             f"(original error: {self._error})"
         )
 
-    def __getattr__(self, item: str) -> None:  # type: ignore[override]
+    def __getattr__(self, item: str) -> NoReturn:
         raise ImportError(
             f"{self._name} is not available — install the optional dependencies "
             f"(original error: {self._error})"
