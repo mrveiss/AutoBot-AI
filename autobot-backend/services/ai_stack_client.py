@@ -258,13 +258,13 @@ class AIStackClient:
                     continue
 
                 raise AIStackError(
-                    "Failed to connect to AI Stack",
+                    f"AI Stack unreachable: {type(e).__name__} connecting to {url}",
                     details={"error": type(e).__name__, "url": url},
                 )
             except Exception as e:
                 logger.warning("Unexpected error in AI Stack request: %s", e)
                 raise AIStackError(
-                    "Unexpected error during AI Stack request",
+                    f"AI Stack error: {type(e).__name__}: {e}",
                     details={"error": type(e).__name__, "url": url},
                 )
 
