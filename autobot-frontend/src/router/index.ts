@@ -718,12 +718,25 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-puzzle-piece',
       description: 'Browse, install, and manage AutoBot plugins',
       requiresAuth: true
-    }
+    },
+    children: [
+      // Issue #1803: Marketplace as sub-route of plugins
+      {
+        path: 'marketplace',
+        name: 'plugins-marketplace',
+        component: () => import('@/views/MarketplaceView.vue'),
+        meta: {
+          title: 'Marketplace',
+          parent: 'plugins',
+          requiresAuth: true
+        }
+      }
+    ]
   },
-  // Issue #1803: Marketplace merged into /plugins — redirect for backwards compatibility
+  // Issue #1803: /marketplace redirects to /plugins/marketplace for backwards compatibility
   {
     path: '/marketplace',
-    redirect: '/plugins'
+    redirect: '/plugins/marketplace'
   },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {

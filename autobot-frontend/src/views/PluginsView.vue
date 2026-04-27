@@ -7,7 +7,7 @@
           <h1 class="page-title">{{ $t('views.plugins.title') }}</h1>
           <p class="page-subtitle">{{ $t('views.plugins.subtitle') }}</p>
         </div>
-        <button class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
+        <button v-if="!isMarketplaceActive" class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"
@@ -71,11 +71,11 @@
           {{ $t('views.plugins.discover') }}
           <span class="tab-badge">{{ discovered.length }}</span>
         </button>
-        <!-- Issue #1803: Marketplace tab merged from standalone /marketplace -->
-        <button
+        <!-- Issue #1803: Marketplace sub-route tab -->
+        <router-link
+          to="/plugins/marketplace"
           class="tab-btn"
-          :class="{ active: activeTab === 'marketplace' }"
-          @click="activeTab = 'marketplace'"
+          :class="{ active: isMarketplaceActive }"
         >
           <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -86,11 +86,11 @@
             />
           </svg>
           {{ $t('views.plugins.marketplace') }}
-        </button>
+        </router-link>
       </div>
 
       <!-- Installed Tab -->
-      <div v-if="activeTab === 'installed'">
+      <div v-if="!isMarketplaceActive && activeTab === 'installed'">
         <div v-if="loading" class="loading-state">
           <svg class="spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -206,7 +206,7 @@
       </div>
 
       <!-- Discover Tab -->
-      <div v-if="activeTab === 'discover'">
+      <div v-if="!isMarketplaceActive && activeTab === 'discover'">
         <div v-if="loading" class="loading-state">
           <svg class="spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -285,10 +285,8 @@
         </div>
       </div>
 
-      <!-- Marketplace Tab — Issue #1803 -->
-      <div v-if="activeTab === 'marketplace'" class="marketplace-embed">
-        <MarketplaceView />
-      </div>
+      <!-- Marketplace sub-route — Issue #1803 -->
+      <router-view v-if="isMarketplaceActive" />
     </div>
 
     <!-- Plugin Detail Modal -->
@@ -377,15 +375,17 @@
 // Issue #929 - Plugin Manager UI
 // Issue #1359: i18n string extraction
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
-import MarketplaceView from '@/views/MarketplaceView.vue'
 
 const { t } = useI18n()
+const route = useRoute()
+const isMarketplaceActive = computed(() => route.path.startsWith('/plugins/marketplace'))
 
 const {
   plugins,
@@ -403,7 +403,7 @@ const {
   updatePluginConfig,
 } = usePlugins()
 
-const activeTab = ref<'installed' | 'discover' | 'marketplace'>('installed')
+const activeTab = ref<'installed' | 'discover'>('installed')
 const actionLoading = ref<Record<string, boolean>>({})
 
 // Modal state
@@ -542,12 +542,6 @@ onMounted(async () => {
  * Issue #929 — Plugin Manager UI
  * ============================================ */
 
-/* Marketplace embedded as tab — prevent nested scroll container */
-.marketplace-embed :deep(.marketplace-view.view-container) {
-  min-height: unset;
-  max-height: unset;
-  overflow: visible;
-}
 
 .plugins-content {
   width: 100%;
