@@ -83,6 +83,7 @@ import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { useResourceMetrics } from '@/composables/visualizations/useResourceMetrics'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
 
