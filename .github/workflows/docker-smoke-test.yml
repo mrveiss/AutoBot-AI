@@ -35,11 +35,21 @@ jobs:
             attempt=$((attempt + 1))
             echo "Attempt $attempt/$max_attempts: Checking service health..."
 
-            # Check if frontend is responding
-            if curl -s -f http://localhost > /dev/null 2>&1; then
+            # Both frontend (nginx) and backend must be healthy
+            frontend_ok=false
+            backend_ok=false
+
+            curl -s -f http://localhost > /dev/null 2>&1 && frontend_ok=true
+            curl -s -f http://localhost/api/system/health > /dev/null 2>&1 && backend_ok=true
+
+            if $frontend_ok && $backend_ok; then
               echo "✓ Frontend responding on port 80"
+              echo "✓ Backend health check passed"
               exit 0
             fi
+
+            $frontend_ok || echo "  waiting: frontend not yet responding"
+            $backend_ok  || echo "  waiting: backend not yet responding"
 
             sleep 10
           done
@@ -58,6 +68,10 @@ jobs:
           echo ""
           echo "=== Frontend Health Check ==="
           curl -v http://localhost 2>&1 | head -20
+
+          echo ""
+          echo "=== Backend Health Check ==="
+          curl -v http://localhost/api/system/health 2>&1 | head -20
 
       - name: Collect logs on failure
         if: failure()

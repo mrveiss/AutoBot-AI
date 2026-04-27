@@ -330,8 +330,10 @@ services:
       # Generate dev certs: bash docker/certs/generate-self-signed.sh
       - ./docker/certs:/etc/nginx/certs:ro
     depends_on:
-      - autobot-backend
-      - autobot-slm
+      autobot-backend:
+        condition: service_healthy
+      autobot-slm:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
       interval: 30s
