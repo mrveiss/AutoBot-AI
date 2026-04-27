@@ -219,7 +219,7 @@ class NetworkConstants:
     @classmethod
     def get_websocket_url(cls) -> str:
         """Get WebSocket URL for frontend (Issue #372 - reduces feature envy)."""
-        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/ws"
+        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/api/ws"
 
 
 class ServiceURLs:
