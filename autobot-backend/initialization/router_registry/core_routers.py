@@ -59,8 +59,10 @@ from api.knowledge_search_aggregator import (
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
 from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
+from api.live_events import router as live_events_router  # Issue #6229
 from api.long_running_operations import router as long_running_operations_router  # Issue #6227
 from api.llm_providers import router as llm_providers_router
+from api.websockets import router as websockets_router  # Issue #6229
 from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
@@ -304,6 +306,8 @@ def _get_service_routers() -> list:
         (voice_router, "/voice", ["voice"], "voice"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
+        (websockets_router, "", ["websockets"], "websockets"),  # Issue #6229
+        (live_events_router, "", ["live-events"], "live_events"),  # Issue #6229
         (vnc_router, "/vnc", ["vnc"], "vnc"),
         (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
         # Issue #729: infrastructure_hosts removed - now served by slm-server
