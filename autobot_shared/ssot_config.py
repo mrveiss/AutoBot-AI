@@ -1412,8 +1412,14 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def websocket_url(self) -> str:
-        """Get the WebSocket URL for real-time communication."""
-        return f"ws://{self.vm.main}:{self.port.backend}/ws"
+        """Get the WebSocket URL for real-time communication.
+
+        Issue #6232: Path corrected to /api/ws to match backend route /api/ws/live.
+        Uses wss:// when backend TLS is enabled.
+        """
+        if self.tls.backend_tls_enabled:
+            return f"wss://{self.vm.main}:{self.tls.backend_tls_port}/api/ws"
+        return f"ws://{self.vm.main}:{self.port.backend}/api/ws"
 
     @property
     def aistack_url(self) -> str:
