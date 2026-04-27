@@ -60,6 +60,14 @@
       <button @click="reconnect" class="control-btn">
         {{ $t('desktop.interface.reconnect') }}
       </button>
+      <button
+        v-if="vncUrl"
+        class="control-btn"
+        :title="$t('desktop.interface.openInNewWindow')"
+        @click="window.open(vncUrl, '_blank', 'noopener')"
+      >
+        {{ $t('desktop.interface.openInNewWindow') }}
+      </button>
       <button @click="showContextPanel = !showContextPanel" class="control-btn" :title="$t('desktop.contextPanel.title')">
         ℹ️
       </button>

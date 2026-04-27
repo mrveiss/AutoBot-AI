@@ -4036,7 +4036,8 @@
       "statusNetworkError": "Network Error",
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
-      "connecting": "Connecting to desktop..."
+      "connecting": "Connecting to desktop...",
+      "openInNewWindow": "Open in new window"
     },
     "contextPanel": {
       "pid": "PID {pid}",
