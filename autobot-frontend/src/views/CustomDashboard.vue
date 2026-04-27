@@ -237,6 +237,7 @@
 import { ref, computed, onMounted, shallowRef, markRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 
 // Import visualization components
 import ResourceHeatmap from '@/components/visualizations/ResourceHeatmap.vue'
@@ -609,13 +610,29 @@ function handleDragEnd() {
 }
 
 // ============================================================================
+// Polling — auto-refresh widgets on a 30-second cycle
+// ============================================================================
+
+const { start: startDashboardPolling, stop: stopDashboardPolling } = usePollingJob<void>(
+  async () => {
+    // Tick all widgets so child components re-fetch their data
+    widgets.value = widgets.value.map(w => ({ ...w, refreshKey: (w.refreshKey ?? 0) + 1 }))
+  },
+  { intervalMs: 30_000, maxAttempts: Number.MAX_SAFE_INTEGER }
+)
+
+// ============================================================================
 // Lifecycle
 // ============================================================================
 
 onMounted(() => {
   loadDashboards()
   loadDashboard()
+  startDashboardPolling('')
 })
+
+// expose stop for tests / external teardown
+defineExpose({ stopDashboardPolling })
 </script>
 
 <style scoped>
