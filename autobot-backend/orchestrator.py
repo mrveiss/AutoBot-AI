@@ -58,6 +58,8 @@ from enhanced_orchestration.types import (
     ExecutionStrategy,
     WorkflowPlan,
 )
+from enhanced_orchestration.agent_router import AgentRouter
+from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
 from enhanced_orchestration.workflow_planning import (
     WorkflowPlanner as StrategyPlanner,
 )
@@ -251,12 +253,24 @@ class Orchestrator:
         # Unified performance tracker — replaces the three separate update methods (#5058)
         self._perf = PerformanceTracker(self.agent_capabilities)
 
+        # Agent router — selection, resolution, capability coverage (#6393/#6392)
+        from agents.agent_client import AgentRegistry as _AgentClientRegistry
+        self._agent_router = AgentRouter(
+            agent_capabilities=self.agent_capabilities,
+            performance_tracker=self._perf,
+            agent_registry=_AgentClientRegistry(),
+        )
+
+        # Collaboration coordinator — Redis pub/sub between agents (#6393)
+        self._collab = CollaborationCoordinator()
+
         # Execution engine collaborator
         self._runner = WorkflowRunner(
             strategy_planner=self._strategy_planner,
-            agent_capabilities=self.agent_capabilities,
             performance_tracker=self._perf,
             active_workflows=self.active_workflows,
+            collaboration=self._collab,
+            agent_router=self._agent_router,
             max_parallel_tasks=self.max_parallel_tasks,
         )
 
@@ -748,7 +762,7 @@ class Orchestrator:
             "queued_tasks": len(self.task_queue),
             "metrics": self.metrics,
             "workflow_metrics": self.workflow_metrics,
-            "capabilities_coverage": self._runner._calculate_capability_coverage(),
+            "capabilities_coverage": self._runner.get_performance_report()["capabilities_coverage"],
             "configuration": {
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
