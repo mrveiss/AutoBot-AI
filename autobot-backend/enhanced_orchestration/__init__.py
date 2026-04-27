@@ -33,6 +33,7 @@ from .types import (
     WorkflowPlan,
 )
 from .workflow_planning import WorkflowPlanner
+from .workflow_runner import WorkflowRunner
 
 # Backward compatibility alias
 _FALLBACK_TIERS = FALLBACK_TIERS
@@ -55,4 +56,6 @@ __all__ = [
     "CriteriaResult",
     "EvaluationResult",
     "SuccessCriteriaEvaluator",
+    # Execution engine (#5058)
+    "WorkflowRunner",
 ]
