@@ -647,6 +647,16 @@ const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
+  // Issue #4977: Standalone noVNC view at /slm/tools/novnc (driven by HostSelector)
+  {
+    path: '/slm/tools/novnc',
+    name: 'SlmNoVnc',
+    component: () => import('@/views/SlmNoVncView.vue'),
+    meta: {
+      title: 'Remote Desktop',
+      requiresAuth: true,
+    },
+  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin
