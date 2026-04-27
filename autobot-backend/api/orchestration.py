@@ -303,9 +303,7 @@ async def recommend_agents(
             )
 
         # Get recommendations
-        recommendations = await orchestrator.get_agent_recommendations(
-            request.task_type, capabilities_needed
-        )
+        recommendations = await orchestrator.get_agent_recommendations(capabilities_needed)
 
         return JSONResponse(
             status_code=200,

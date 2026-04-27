@@ -74,7 +74,7 @@ class WorkflowRunner:
 
     # ----------------------------------------------------------------- public
 
-    async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
+    async def execute_workflow(self, plan: WorkflowPlan, _depth: int = 0) -> Dict[str, Any]:
         """Execute a WorkflowPlan through the strategy handler."""
         logger.info("Executing workflow %s strategy=%s", plan.plan_id, plan.strategy.value)
         start_time = time.time()
@@ -88,10 +88,10 @@ class WorkflowRunner:
             results = await self._get_strategy_handler().execute_by_strategy(plan)
             return await self._handle_workflow_execution_success(plan, results, start_time)
         except Exception as e:
-            return await self._handle_workflow_execution_failure(plan, e, results)
+            return await self._handle_workflow_execution_failure(plan, e, results, _depth)
 
     async def get_agent_recommendations(
-        self, task_type: str, capabilities_needed: Set
+        self, capabilities_needed: Set
     ) -> List[str]:
         suitable = []
         for agent, caps in self.agent_capabilities.items():
@@ -162,12 +162,15 @@ class WorkflowRunner:
         }
 
     async def _handle_workflow_execution_failure(
-        self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any]
+        self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any], _depth: int = 0
     ) -> Dict[str, Any]:
         logger.error("Workflow execution failed: %s", error)
+        if _depth >= 5:
+            logger.error("Max fallback depth (5) reached, aborting fallback chain")
+            return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
         for fallback in (plan.fallback_plans or []):
             try:
-                return await self.execute_workflow(fallback)
+                return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
@@ -183,7 +186,7 @@ class WorkflowRunner:
                 task.task_id, task.retry_count, task.max_retries,
             )
             return await self._execute_single_agent_task(task, context)
-        self._perf.update(task.agent_type, False, task.timeout)
+        self._perf.update(task.agent_type, False, time.time() - (task.start_time or time.time()))
         return task.to_failed_result("Task execution timed out")
 
     def _handle_task_exception(self, task: AgentTask, error: Exception) -> Dict[str, Any]:
@@ -227,14 +230,15 @@ class WorkflowRunner:
                     continue
                 try:
                     data = json.loads(message["data"])
-                    if data.get("type") == "share_insight":
-                        shared_context[f"{data.get('agent')}_insight"] = data.get("insight")
-                        await self._broadcast_to_agents(
-                            collab_channel,
-                            {"type": "context_update", "shared_context": shared_context},
-                        )
-                except Exception as e:
-                    logger.error("Collaboration coordination error: %s", e)
+                except json.JSONDecodeError as e:
+                    logger.error("Collaboration message decode error: %s", e)
+                    continue
+                if data.get("type") == "share_insight":
+                    shared_context[f"{data.get('agent')}_insight"] = data.get("insight")
+                    await self._broadcast_to_agents(
+                        collab_channel,
+                        {"type": "context_update", "shared_context": shared_context},
+                    )
         except asyncio.CancelledError:
             await pubsub.unsubscribe(collab_channel)
             raise
