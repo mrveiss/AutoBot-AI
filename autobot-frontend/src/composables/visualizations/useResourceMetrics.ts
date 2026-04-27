@@ -18,7 +18,7 @@
  */
 
 import { ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -136,13 +136,9 @@ export function useResourceMetrics(machine: () => string) {
     error.value = null
     await wrap(async () => {
       try {
-        const response = await fetchWithAuth(
+        const data = await apiClient.get<MetricsApiResponse>(
           `${getApiBase()}/monitoring/metrics/history?metric=${selectedMetric.value}&range=${timeRange.value}&machine=${machine()}`
         )
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-        const data: MetricsApiResponse = await response.json()
         processData(data)
       } catch (err) {
         logger.error('Failed to fetch heatmap data:', err)

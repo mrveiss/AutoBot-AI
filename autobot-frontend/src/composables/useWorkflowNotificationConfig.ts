@@ -11,8 +11,7 @@
 import { ref } from 'vue';
 import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
-import type { ApiResponse } from '@/types/api';
+import apiClient from '@/utils/ApiClient';
 
 const logger = createLogger('useWorkflowNotificationConfig');
 
@@ -70,48 +69,6 @@ export const ALL_CHANNELS: NotificationChannel[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// API helpers
-// ---------------------------------------------------------------------------
-
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<ApiResponse<T>> {
-  const url = endpoint;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
-  try {
-    const response = await fetchWithAuth(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return {
-        success: false,
-        error: (err as Record<string, string>).detail || `HTTP ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    clearTimeout(timeoutId);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Notification config API request failed: %s', message);
-    return { success: false, error: message };
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Composable
 // ---------------------------------------------------------------------------
 
@@ -127,16 +84,18 @@ export function useWorkflowNotificationConfig() {
     loadingConfig.value = true;
     configError.value = null;
     try {
-      const res = await apiRequest<{
-        success: boolean;
+      const data = await apiClient.get<{
         notification_config: NotificationConfig | null;
-      }>(`${getApiBase()}/workflow-automation/notification_config/${workflowId}`);
-
-      if (!res.success || !res.data) {
-        configError.value = res.error ?? 'Failed to load config';
-        return null;
-      }
-      return res.data.notification_config;
+      }>(
+        `${getApiBase()}/workflow-automation/notification_config/${workflowId}`,
+        { timeout: 30_000 },
+      );
+      return data.notification_config;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load config';
+      logger.error('Notification config fetch failed: %s', message);
+      configError.value = message;
+      return null;
     } finally {
       loadingConfig.value = false;
     }
@@ -150,15 +109,17 @@ export function useWorkflowNotificationConfig() {
     saving.value = true;
     configError.value = null;
     try {
-      const res = await apiRequest<{ success: boolean }>(
+      await apiClient.put(
         `${getApiBase()}/workflow-automation/notification_config/${workflowId}`,
-        { method: 'PUT', body: JSON.stringify(payload) },
+        payload,
+        { timeout: 30_000 },
       );
-      if (!res.success) {
-        configError.value = res.error ?? 'Failed to save config';
-        return false;
-      }
       return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save config';
+      logger.error('Notification config save failed: %s', message);
+      configError.value = message;
+      return false;
     } finally {
       saving.value = false;
     }

@@ -57,10 +57,12 @@ export function useBrowserSessionData() {
   /**
    * Probe the Playwright health endpoint.
    * Returns the raw Response so callers can inspect `.ok`.
+   * fetchWithAuth retained: caller inspects raw Response.ok to distinguish
+   * healthy vs. unavailable — apiClient throws on non-2xx losing that distinction — exempt from Wave 5 (#6224)
    */
   async function fetchPlaywrightHealth(playwrightApiUrl: string): Promise<Response | null> {
     try {
-      return await fetchWithAuth(`${playwrightApiUrl}/health`)
+      return await fetchWithAuth(`${playwrightApiUrl}/health`) // fetchWithAuth retained: raw Response.ok needed by caller — exempt from Wave 5 (#6224)
     } catch (err) {
       logger.warn('Playwright health check failed', err)
       return null

@@ -17,6 +17,7 @@
 
 import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -82,12 +83,7 @@ export function useCodeEvolutionData() {
         metrics: metrics.join(','),
       })
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      const response = await fetchWithAuth(`${getApiBase()}/evolution/timeline?${params}`)
-      if (!response.ok) {
-        logger.warn('Failed to load evolution timeline: HTTP', response.status)
-        return null
-      }
-      return await response.json()
+      return await apiClient.get<TimelineResult>(`${getApiBase()}/evolution/timeline?${params}`)
     } catch (e) {
       logger.error('Failed to load evolution timeline:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -99,12 +95,7 @@ export function useCodeEvolutionData() {
     error.value = null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      const response = await fetchWithAuth(`${getApiBase()}/evolution/trends?days=${days}`)
-      if (!response.ok) {
-        logger.warn('Failed to load evolution trends: HTTP', response.status)
-        return null
-      }
-      return await response.json()
+      return await apiClient.get<TrendsResult>(`${getApiBase()}/evolution/trends?days=${days}`)
     } catch (e) {
       logger.error('Failed to load evolution trends:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -116,12 +107,7 @@ export function useCodeEvolutionData() {
     error.value = null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      const response = await fetchWithAuth(`${getApiBase()}/evolution/patterns`)
-      if (!response.ok) {
-        logger.warn('Failed to load evolution patterns: HTTP', response.status)
-        return null
-      }
-      return await response.json()
+      return await apiClient.get<PatternsResult>(`${getApiBase()}/evolution/patterns`)
     } catch (e) {
       logger.error('Failed to load evolution patterns:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -133,7 +119,7 @@ export function useCodeEvolutionData() {
     error.value = null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      const response = await fetchWithAuth(
+      const response = await fetchWithAuth( // fetchWithAuth retained: binary blob response — exempt from Wave 5 (#6224)
         `${getApiBase()}/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
       )
       if (!response.ok) {

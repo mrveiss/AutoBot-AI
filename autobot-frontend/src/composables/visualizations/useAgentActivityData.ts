@@ -17,7 +17,7 @@
  */
 
 import { ref } from 'vue'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -170,13 +170,10 @@ export function useAgentActivityData() {
 
   async function fetchAgents(): Promise<void> {
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/agents/status`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.agents) {
-          agents.value = data.agents
-          return
-        }
+      const data = await apiClient.get<{ agents?: Agent[] }>(`${getApiBase()}/agents/status`)
+      if (data.agents) {
+        agents.value = data.agents
+        return
       }
     } catch (err) {
       logger.warn('Failed to fetch agents, using sample data')
@@ -189,35 +186,34 @@ export function useAgentActivityData() {
     try {
       // Issue #552: Fixed path - backend uses /api/analytics/agents/tasks/recent
       // (analytics_agents.py has prefix="/agents" and is included into analytics.py router)
-      const response = await fetchWithAuth(`${getApiBase()}/analytics/agents/tasks/recent?limit=10`)
-      if (response.ok) {
-        const data = await response.json()
-        // Backend returns tasks, not events - adapt response structure
-        if (data.tasks || data.data?.tasks) {
-          const tasks = data.tasks || data.data?.tasks
-          recentEvents.value = tasks.map((task: {
-            id?: string
-            task_id?: string
-            status?: string
-            agent_id?: string
-            completed_at?: string
-            started_at?: string
-            details?: string
-            description?: string
-          }) => ({
-            id: task.id || task.task_id,
-            type: task.status === 'completed' ? 'task_completed' : 'task_started',
-            agentId: task.agent_id,
-            agentName: task.agent_id ?? '',
-            message: task.details || task.description || '',
-            timestamp: task.completed_at
-              ? new Date(task.completed_at).getTime()
-              : task.started_at
-                ? new Date(task.started_at).getTime()
-                : Date.now()
-          }))
-          return
-        }
+      const data = await apiClient.get<{ tasks?: unknown[]; data?: { tasks?: unknown[] } }>(
+        `${getApiBase()}/analytics/agents/tasks/recent?limit=10`
+      )
+      // Backend returns tasks, not events - adapt response structure
+      if (data.tasks || data.data?.tasks) {
+        const tasks = data.tasks || data.data?.tasks
+        recentEvents.value = tasks.map((task: {
+          id?: string
+          task_id?: string
+          status?: string
+          agent_id?: string
+          completed_at?: string
+          started_at?: string
+          details?: string
+          description?: string
+        }) => ({
+          id: task.id || task.task_id,
+          type: task.status === 'completed' ? 'task_completed' : 'task_started',
+          agentId: task.agent_id,
+          agentName: task.agent_id ?? '',
+          message: task.details || task.description || '',
+          timestamp: task.completed_at
+            ? new Date(task.completed_at).getTime()
+            : task.started_at
+              ? new Date(task.started_at).getTime()
+              : Date.now()
+        }))
+        return
       }
     } catch (err) {
       logger.warn('Failed to fetch events, using sample data')

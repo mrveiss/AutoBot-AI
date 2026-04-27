@@ -12,7 +12,7 @@ import { ref } from 'vue';
 import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { useLoadingState } from '@/composables/useLoadingState';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
+import apiClient from '@/utils/ApiClient';
 
 const logger = createLogger('NotificationConfig');
 
@@ -65,11 +65,7 @@ export function useNotificationConfig() {
     await wrap(async () => {
       try {
         const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-        const resp = await fetchWithAuth(url);
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-        const data = await resp.json();
+        const data = await apiClient.get<{ notification_config?: NotificationConfigData }>(url);
         config.value = data.notification_config ?? emptyConfig();
         logger.info('Fetched notification config for workflow', workflowId);
       } catch (err) {
@@ -85,14 +81,7 @@ export function useNotificationConfig() {
     return wrapSaving(async () => {
       try {
         const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
-        const resp = await fetchWithAuth(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(config.value),
-        });
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
+        await apiClient.put(url, config.value);
         logger.info('Saved notification config for workflow', workflowId);
         return true;
       } catch (err) {

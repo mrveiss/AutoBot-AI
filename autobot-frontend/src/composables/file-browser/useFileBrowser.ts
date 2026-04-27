@@ -11,6 +11,7 @@
 
 import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
@@ -51,11 +52,9 @@ export function useFileBrowser() {
   // ---- GET /files/list ----
   const { execute: fetchFiles, loading: isLoadingFiles } = useAsyncHandler(
     async (path: string) => {
-      const response = await fetchWithAuth(
+      const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
         `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      const data = await response.json() as { files?: FileBrowserItem[] }
       files.value = data.files ?? []
     },
     {
@@ -68,9 +67,7 @@ export function useFileBrowser() {
   // ---- GET /files/tree ----
   const { execute: fetchTree, loading: isLoadingTree } = useAsyncHandler(
     async () => {
-      const response = await fetchWithAuth(`${getApiBase()}/files/tree`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      const data = await response.json() as { tree?: FileBrowserTreeNode[] }
+      const data = await apiClient.get<{ tree?: FileBrowserTreeNode[] }>(`${getApiBase()}/files/tree`)
       directoryTree.value = data.tree ?? []
     },
     {
@@ -86,7 +83,7 @@ export function useFileBrowser() {
       const formData = new FormData()
       Array.from(fileList).forEach((file) => { formData.append('files', file) })
       formData.append('path', path)
-      const response = await fetchWithAuth(`${getApiBase()}/files/upload`, {
+      const response = await fetchWithAuth(`${getApiBase()}/files/upload`, { // fetchWithAuth retained: FormData body — exempt from Wave 5 (#6224)
         method: 'POST',
         body: formData,
       })
@@ -101,11 +98,9 @@ export function useFileBrowser() {
   // ---- GET /files/preview ----
   const { execute: fetchPreview, loading: isLoadingPreview } = useAsyncHandler(
     async (file: FileBrowserItem, getFileType: (name: string) => string) => {
-      const response = await fetchWithAuth(
+      const data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
         `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      const data = await response.json() as { type?: string; url?: string; content?: string }
       previewFile.value = {
         name: file.name,
         type: data.type ?? '',
@@ -124,11 +119,7 @@ export function useFileBrowser() {
   // ---- DELETE /files/delete ----
   const { execute: deleteFileOrFolder, loading: isDeletingFile } = useAsyncHandler(
     async (path: string) => {
-      const response = await fetchWithAuth(
-        `${getApiBase()}/files/delete?path=${encodeURIComponent(path)}`,
-        { method: 'DELETE' }
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      await apiClient.delete(`${getApiBase()}/files/delete?path=${encodeURIComponent(path)}`)
     },
     {
       logErrors: true,
@@ -142,7 +133,7 @@ export function useFileBrowser() {
       const formData = new FormData()
       formData.append('path', path)
       formData.append('new_name', newName)
-      const response = await fetchWithAuth(`${getApiBase()}/files/rename`, {
+      const response = await fetchWithAuth(`${getApiBase()}/files/rename`, { // fetchWithAuth retained: FormData body — exempt from Wave 5 (#6224)
         method: 'POST',
         body: formData,
       })
@@ -160,7 +151,7 @@ export function useFileBrowser() {
       const formData = new FormData()
       formData.append('path', parentPath)
       formData.append('name', name)
-      const response = await fetchWithAuth(`${getApiBase()}/files/create_directory`, {
+      const response = await fetchWithAuth(`${getApiBase()}/files/create_directory`, { // fetchWithAuth retained: FormData body — exempt from Wave 5 (#6224)
         method: 'POST',
         body: formData,
       })

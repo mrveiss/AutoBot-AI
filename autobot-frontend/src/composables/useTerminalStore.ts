@@ -5,7 +5,7 @@ import type { BackendConfig } from '@/types/app-config'
 // FIXED: Import NetworkConstants for default host IPs
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for TerminalStore
@@ -339,11 +339,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     const sessionsUrl = await appConfig.getApiUrl(
       `${getApiBase()}/agent-terminal/sessions?conversation_id=${conversationId}`
     )
-    const response = await fetchWithAuth(sessionsUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`)
-    }
-    const data = await response.json() as { sessions?: Record<string, unknown>[] }
+    const data = await apiClient.get<{ sessions?: Record<string, unknown>[] }>(sessionsUrl)
     return data.sessions ?? []
   }
 
@@ -360,16 +356,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     metadata: Record<string, unknown>
   }): Promise<string> => {
     const createUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions`)
-    const createResponse = await fetchWithAuth(createUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
-    })
-    if (!createResponse.ok) {
-      throw new Error(`Failed to create session: ${createResponse.status} ${createResponse.statusText}`)
-    }
-    const createData = await createResponse.json() as { session_id: string }
-    return createData.session_id
+    const data = await apiClient.post<{ session_id: string }>(createUrl, params)
+    return data.session_id
   }
 
   return {
