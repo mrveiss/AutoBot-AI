@@ -281,7 +281,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
         {
           path: `/api/quality/drill-down/${encodeURIComponent(category)}`,
           scopeToSource: true,
-          pickData: (raw) => raw as QualityDrillDown,
+          pickData: (raw) => raw as unknown as QualityDrillDown,
           onError: (message, err) => {
             logger.warn('Failed to load drill-down data:', err)
             error.value = message
