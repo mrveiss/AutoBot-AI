@@ -45,8 +45,8 @@ from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from utils.chat_utils import (
+    create_chat_response,
     create_error_response,
-    create_success_response,
     generate_chat_session_id,
     generate_message_id,
     generate_request_id,
@@ -832,7 +832,7 @@ async def list_chats(
     # Get sessions directly - decorator handles all errors
     # list_sessions_fast is async (uses asyncio.to_thread internally)
     sessions = await chat_history_manager.list_sessions_fast()
-    return create_success_response(
+    return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",
         request_id=request_id,
@@ -1071,7 +1071,7 @@ async def chat_statistics(
     # Get basic statistics
     stats = await chat_history_manager.get_statistics()
 
-    return create_success_response(
+    return create_chat_response(
         data=stats,
         message="Statistics retrieved successfully",
         request_id=request_id,
@@ -2062,7 +2062,7 @@ async def enhanced_chat(
             preferences,
         )
 
-        return create_success_response(
+        return create_chat_response(
             response_data,
             "Enhanced chat message processed successfully",
             request_id,
@@ -2220,14 +2220,14 @@ async def get_enhanced_chat_capabilities(
             "context_window": 10,
         }
 
-        return create_success_response(
+        return create_chat_response(
             capabilities, "Enhanced chat capabilities retrieved successfully"
         )
 
     except Exception as e:
         logger.warning("Failed to get full capabilities: %s", e)
         # Return basic capabilities as fallback
-        return create_success_response(
+        return create_chat_response(
             {
                 "enhanced_chat": True,
                 "ai_stack_integration": False,
