@@ -256,7 +256,7 @@ class Orchestrator:
             agent_capabilities=self.agent_capabilities,
             performance_tracker=self._perf,
             active_workflows=self.active_workflows,
-            max_parallel_tasks=5,
+            max_parallel_tasks=self.max_parallel_tasks,
         )
 
     def __init__(self, config_mgr=None):

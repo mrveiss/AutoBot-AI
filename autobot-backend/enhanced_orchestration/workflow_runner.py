@@ -55,6 +55,8 @@ class WorkflowRunner:
         """Lazy-init async Redis client for collaboration channels (#2725)."""
         if self._redis_async is None:
             self._redis_async = await get_async_redis_client()
+        if self._redis_async is None:
+            raise RuntimeError("Redis unavailable — collaboration channel requires Redis")
 
     def _get_strategy_handler(self) -> ExecutionStrategyHandler:
         if self._strategy_handler is None:
