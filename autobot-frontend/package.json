@@ -75,6 +75,12 @@
     "uuid": "^14.0.0",
     "openapi-typescript": {
       "typescript": "$typescript"
+    },
+    "@typescript-eslint/utils": {
+      "typescript": "$typescript"
+    },
+    "@vue/eslint-config-typescript": {
+      "typescript": "$typescript"
     }
   },
   "devDependencies": {
