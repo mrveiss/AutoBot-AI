@@ -138,4 +138,8 @@ __all__ = [
     "DryRunValidator",
     "ExecutionMode",
     "StepPlan",
+    # Performance tracking (#5058)
+    "PerformanceTracker",
 ]
+
+from .performance_tracker import PerformanceTracker

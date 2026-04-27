@@ -10,6 +10,12 @@ implementations:
 - src/enhanced_orchestrator.py (enhanced features, merged in #3393)
 - chat_workflow/graph.py (LangGraph StateGraph — Issue #1043, replaces legacy LangChain)
 - enhanced_orchestration/EnhancedMultiAgentOrchestrator (merged in #5040)
+
+Refactored in #5058: god-class decomposed into collaborators.
+  - WorkflowRunner  (enhanced_orchestration/workflow_runner.py) — execution engine
+  - PerformanceTracker (orchestration/performance_tracker.py) — metrics
+  - Three execution entry points unified: process_user_request → execute_enhanced_workflow
+    → create_workflow_plan + WorkflowRunner.execute_workflow
 """
 
 import asyncio
@@ -27,9 +33,7 @@ from constants.threshold_constants import LLMDefaults, TimingConstants
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
 
-# Issue #381: Import shared types from orchestration package
-# Issue #3393: Added WorkflowDocumenter, WorkflowExecutor, WorkflowPlanner for
-# execute_enhanced_workflow (merged from enhanced_orchestrator.py).
+# Issue #381: shared orchestration types
 from orchestration import (
     AgentCapability,
     AgentInteraction,
@@ -37,24 +41,16 @@ from orchestration import (
     DocumentationType,
     WorkflowDocumentation,
     WorkflowDocumenter,
-    WorkflowExecutor,
-    WorkflowPlanner,
 )
-from orchestration.primitives import bounded_gather
+from orchestration.performance_tracker import PerformanceTracker
 from task_execution_tracker import Priority, TaskType, get_task_tracker
 
-# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+# Shared agent selection utilities (Issue #292)
 from utils.agent_selection import find_best_agent_for_task as _find_best_agent
 from utils.agent_selection import release_agent as _release_agent
 from utils.agent_selection import reserve_agent as _reserve_agent
-from utils.agent_selection import update_agent_performance as _update_performance
 
-# Issue #5040: Imports for merged EnhancedMultiAgentOrchestrator functionality
-from autobot_shared.redis_client import get_async_redis_client, get_redis_client
-from event_manager import get_event_manager as _get_event_manager
-
-from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
+# Issue #5040: multi-agent imports
 from enhanced_orchestration.types import (
     FALLBACK_TIERS,
     AgentPerformance,
@@ -63,8 +59,9 @@ from enhanced_orchestration.types import (
     WorkflowPlan,
 )
 from enhanced_orchestration.workflow_planning import (
-    WorkflowPlanner as MultiAgentWorkflowPlanner,
+    WorkflowPlanner as StrategyPlanner,
 )
+from enhanced_orchestration.workflow_runner import WorkflowRunner
 
 logger = get_logger("orchestrator")
 
@@ -80,21 +77,15 @@ except ImportError:
     KNOWLEDGE_BASE_AVAILABLE = False
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
-# Import TaskComplexity from correct location (always available)
 from autobot_types import TaskComplexity
 
-# Import task classification (optional)
 try:
     from agents.gemma_classification_agent import GemmaClassificationAgent
-
-    # Note: TaskClassificationResult doesn't exist yet, using quoted type annotations
-    # from task_classification import TaskClassificationResult
 
     CLASSIFICATION_AVAILABLE = True
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
 
-# Import agent manager
 try:
     from agents.agent_manager import AgentManager
 
@@ -102,10 +93,7 @@ try:
 except ImportError:
     AGENT_MANAGER_AVAILABLE = False
 
-    # Create a fallback AgentManager class
     class AgentManager:
-        """Fallback AgentManager when the real one is not available"""
-
         async def initialize(self):
             """Initialize placeholder - no operation when unavailable."""
 
@@ -113,11 +101,9 @@ except ImportError:
             """Cleanup placeholder - no operation when unavailable."""
 
         async def execute_agent_task(self, agent_name, task, context=None):
-            """Return error indicating agent manager is not available."""
             return {"error": "Agent manager not available", "agent_name": agent_name}
 
 
-# Import workflow types for backward compatibility
 try:
     from workflow_scheduler import WorkflowStatus
     from workflow_templates import WorkflowStep
@@ -126,7 +112,6 @@ try:
 except ImportError:
     WORKFLOW_TYPES_AVAILABLE = False
 
-    # Define minimal fallback types (dataclass and Enum already imported above)
     class WorkflowStatus(Enum):
         SCHEDULED = "scheduled"
         RUNNING = "running"
@@ -142,8 +127,6 @@ except ImportError:
 
 
 class TaskPriority(Enum):
-    """Task priority levels"""
-
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -151,97 +134,66 @@ class TaskPriority(Enum):
 
 
 class OrchestrationMode(Enum):
-    """Orchestration operation modes"""
-
     SIMPLE = "simple"
     ENHANCED = "enhanced"
     PARALLEL = "parallel"
     SEQUENTIAL = "sequential"
 
 
-# Issue #381: AgentCapability, DocumentationType, AgentProfile, WorkflowDocumentation,
-# and AgentInteraction are now imported from orchestration
-
-
 class OrchestratorConfig:
     """Configuration for the Orchestrator"""
 
     def __init__(self, config_manager):
-        """Initialize orchestrator config from config manager."""
         self.config_manager = config_manager
         self._load_config()
 
     def _load_config(self):
-        """Load orchestrator configuration"""
-        # Get LLM configuration
         llm_config = self.config_manager.get_llm_config()
-
-        # Use selected_model from config, no hardcoding
         self.orchestrator_llm_model = llm_config.get(
             "orchestrator_llm",
             llm_config.get("ollama", {}).get("selected_model"),
         )
         default_model = llm_config.get("ollama", {}).get("selected_model")
-        self.task_llm_model = llm_config.get(
-            "task_llm",
-            f"ollama_{default_model}",
-        )
+        self.task_llm_model = llm_config.get("task_llm", f"ollama_{default_model}")
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})
-        self.phi2_enabled = False  # This will be driven by config if needed
+        self.phi2_enabled = False
 
-        # Task configuration
-        self.max_parallel_tasks = self.config_manager.get(
-            "orchestrator.max_parallel_tasks", 3
-        )
+        self.max_parallel_tasks = self.config_manager.get("orchestrator.max_parallel_tasks", 3)
         self.task_timeout = self.config_manager.get("orchestrator.task_timeout", 300)
         self.retry_attempts = self.config_manager.get("orchestrator.retry_attempts", 3)
-
-        # Agent configuration
         self.agent_timeout = self.config_manager.get("orchestrator.agent_timeout", 120)
         self.max_agents = self.config_manager.get("orchestrator.max_agents", 5)
+        self.enable_caching = self.config_manager.get("orchestrator.enable_caching", True)
+        self.enable_streaming = self.config_manager.get("orchestrator.enable_streaming", True)
 
-        # Performance settings
-        self.enable_caching = self.config_manager.get(
-            "orchestrator.enable_caching", True
-        )
-        self.enable_streaming = self.config_manager.get(
-            "orchestrator.enable_streaming", True
-        )
-
-        logger.info(
-            "Orchestrator configured with model: %s", self.orchestrator_llm_model
-        )
+        logger.info("Orchestrator configured with model: %s", self.orchestrator_llm_model)
 
 
 class Orchestrator:
     """
     Orchestrator for AutoBot — single conductor.
 
-    Issue #5040: Renamed from Orchestrator. Integrates all orchestrator
-    features into a single, comprehensive system including multi-agent workflow
-    planning and execution (merged from EnhancedMultiAgentOrchestrator).
+    Issue #5040: Merged all orchestrator implementations into one class.
+    Issue #5058: Decomposed into collaborators; one workflow execution path via
+    WorkflowRunner; one PerformanceTracker; no _ma_ prefixes.
     """
 
+    # ------------------------------------------------------------------ init
+
     def _init_core_components(self, config_mgr) -> None:
-        """Initialize core orchestrator components. Issue #620."""
-        # Use module-level singleton; avoid re-importing through the lazy alias
         self.config_manager = config_mgr or _get_config_manager()
         self.config = OrchestratorConfig(self.config_manager)
-
         self.llm_interface = LLMInterface()
         self.memory_manager = LongTermMemoryManager()
         self.agent_manager = AgentManager()
 
     def _init_task_state(self) -> None:
-        """Initialize task and state management attributes. Issue #620."""
-        self.active_tasks = {}
-        self.task_queue = []
-        self.completed_tasks = {}
-
+        self.active_tasks: Dict[str, Any] = {}
+        self.task_queue: List[Any] = []
+        self.completed_tasks: Dict[str, Any] = {}
         self.is_running = False
         self.session_id = str(uuid.uuid4())
         self.start_time = None
-
         self.metrics = {
             "tasks_completed": 0,
             "tasks_failed": 0,
@@ -250,27 +202,18 @@ class Orchestrator:
         }
 
     def _init_enhanced_components(self) -> None:
-        """Initialize enhanced orchestrator components. Issue #620."""
         self.agent_registry: Dict[str, AgentProfile] = {}
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
-
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
-
-        self.auto_doc_enabled = True
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
-
         self.workflow_metrics = {
             "total_workflows": 0,
             "successful_workflows": 0,
             "average_execution_time": 0.0,
-            "agent_utilization": {},
-            "documentation_generated": 0,
-            "knowledge_extracted": 0,
         }
 
     def _init_classification_agent(self) -> None:
-        """Initialize classification agent if available. Issue #620."""
         self.classification_agent = None
         if CLASSIFICATION_AVAILABLE:
             try:
@@ -279,12 +222,8 @@ class Orchestrator:
             except Exception as e:
                 logger.warning("Failed to initialize classification agent: %s", e)
 
-    def _init_multi_agent_state(self) -> None:
-        """Initialize state for merged EnhancedMultiAgentOrchestrator. Issue #5040."""
-        # Redis clients (lazy-init on first use)
-        self._ma_redis_sync = get_redis_client(async_client=False)
-        self._ma_redis_async = None
-
+    def _init_strategy_components(self) -> None:
+        """Initialize multi-agent strategy components. Renamed from _init_multi_agent_state (#5058)."""
         # Agent capabilities registry (task-routing layer distinct from agent_registry)
         self.agent_capabilities: Dict[str, Set] = {
             "research_agent": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
@@ -298,138 +237,107 @@ class Orchestrator:
             "llm_failsafe": {AgentCapability.SYNTHESIS},
         }
 
-        # Performance tracking (AgentPerformance objects, distinct from AgentProfile registry)
-        self.agent_performance: Dict[str, AgentPerformance] = {}
-        for agent in self.agent_capabilities:
-            self.agent_performance[agent] = AgentPerformance(agent_type=agent)
-
         # Workflow tracking
         self.active_workflows: Dict[str, WorkflowPlan] = {}
-        self.task_queue: asyncio.Queue = asyncio.Queue()
-        self.running_tasks: Dict[str, AgentTask] = {}
 
-        # Coordination channels
+        # Coordination prefixes
         self.coordination_prefix = "autobot:orchestrator:coord:"
         self.result_prefix = "autobot:orchestrator:results:"
 
-        # Resource management
-        self.max_parallel_tasks: int = 5
-        self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(self.max_parallel_tasks)
+        # Strategy planner (was _ma_planner)
+        self._strategy_planner = StrategyPlanner(self.agent_capabilities)
 
-        # Multi-agent planner and strategy handler (lazy)
-        self._ma_planner = MultiAgentWorkflowPlanner(self.agent_capabilities)
-        self._ma_strategy_handler: Optional[ExecutionStrategyHandler] = None
+        # Unified performance tracker — replaces the three separate update methods (#5058)
+        self._perf = PerformanceTracker(self.agent_capabilities)
 
-        # Agent client registry for actual agent instances
-        from agents.agent_client import AgentRegistry as AgentClientRegistry
-        self._agent_client_registry = AgentClientRegistry()
+        # Execution engine collaborator
+        self._runner = WorkflowRunner(
+            strategy_planner=self._strategy_planner,
+            agent_capabilities=self.agent_capabilities,
+            performance_tracker=self._perf,
+            active_workflows=self.active_workflows,
+            max_parallel_tasks=self.max_parallel_tasks,
+        )
 
     def __init__(self, config_mgr=None):
-        """Initialize orchestrator with all core and multi-agent components."""
         self._init_core_components(config_mgr)
         self._init_task_state()
         self._init_enhanced_components()
         self._init_classification_agent()
         self._initialize_default_agents()
-        self._init_multi_agent_state()
+        self._init_strategy_components()
+        logger.info("Orchestrator initialized with session: %s", self.session_id)
 
-        logger.info(
-            "Orchestrator initialized with session: %s", self.session_id
-        )
+    # ------------------------------------------------------- agent registration
 
-    def _create_research_agent_profile(self) -> AgentProfile:
-        """Create the research agent profile. Issue #620."""
-        return AgentProfile(
-            agent_id="research_agent",
-            agent_type="research",
-            capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            specializations=["web_search", "data_analysis", "information_synthesis"],
-            max_concurrent_tasks=5,
-            preferred_task_types=["research", "information_gathering", "analysis"],
-        )
-
-    def _create_documentation_agent_profile(self) -> AgentProfile:
-        """Create the documentation agent profile. Issue #620."""
-        return AgentProfile(
-            agent_id="documentation_agent",
-            agent_type="librarian",
-            capabilities={
-                AgentCapability.DOCUMENTATION,
-                AgentCapability.KNOWLEDGE_MANAGEMENT,
-            },
-            specializations=[
-                "auto_documentation",
-                "knowledge_extraction",
-                "content_organization",
-            ],
-            max_concurrent_tasks=3,
-            preferred_task_types=["documentation", "knowledge_management"],
-        )
-
-    def _create_system_agent_profile(self) -> AgentProfile:
-        """Create the system agent profile. Issue #620."""
-        return AgentProfile(
-            agent_id="system_agent",
-            agent_type="system_commands",
-            capabilities={
-                AgentCapability.SYSTEM_OPERATIONS,
-                AgentCapability.CODE_GENERATION,
-            },
-            specializations=[
-                "command_execution",
-                "system_administration",
-                "automation",
-            ],
-            max_concurrent_tasks=2,
-            preferred_task_types=["system_operations", "command_execution"],
-        )
-
-    def _create_coordination_agent_profile(self) -> AgentProfile:
-        """Create the coordination agent profile. Issue #620."""
-        return AgentProfile(
-            agent_id="coordination_agent",
-            agent_type="orchestrator",
-            capabilities={
-                AgentCapability.WORKFLOW_COORDINATION,
-                AgentCapability.ANALYSIS,
-            },
-            specializations=[
-                "workflow_management",
-                "resource_allocation",
-                "decision_making",
-            ],
-            max_concurrent_tasks=10,
-            preferred_task_types=["coordination", "planning", "optimization"],
-        )
-
-    def _initialize_default_agents(self):
-        """Initialize default agent profiles."""
-        default_agents = [
-            self._create_research_agent_profile(),
-            self._create_documentation_agent_profile(),
-            self._create_system_agent_profile(),
-            self._create_coordination_agent_profile(),
+    def _initialize_default_agents(self) -> None:
+        profiles = [
+            AgentProfile(
+                agent_id="research_agent", agent_type="research",
+                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
+                specializations=["web_search", "data_analysis", "information_synthesis"],
+                max_concurrent_tasks=5,
+                preferred_task_types=["research", "information_gathering", "analysis"],
+            ),
+            AgentProfile(
+                agent_id="documentation_agent", agent_type="librarian",
+                capabilities={AgentCapability.DOCUMENTATION, AgentCapability.KNOWLEDGE_MANAGEMENT},
+                specializations=["auto_documentation", "knowledge_extraction", "content_organization"],
+                max_concurrent_tasks=3,
+                preferred_task_types=["documentation", "knowledge_management"],
+            ),
+            AgentProfile(
+                agent_id="system_agent", agent_type="system_commands",
+                capabilities={AgentCapability.SYSTEM_OPERATIONS, AgentCapability.CODE_GENERATION},
+                specializations=["command_execution", "system_administration", "automation"],
+                max_concurrent_tasks=2,
+                preferred_task_types=["system_operations", "command_execution"],
+            ),
+            AgentProfile(
+                agent_id="coordination_agent", agent_type="orchestrator",
+                capabilities={AgentCapability.WORKFLOW_COORDINATION, AgentCapability.ANALYSIS},
+                specializations=["workflow_management", "resource_allocation", "decision_making"],
+                max_concurrent_tasks=10,
+                preferred_task_types=["coordination", "planning", "optimization"],
+            ),
         ]
+        for profile in profiles:
+            self.agent_registry[profile.agent_id] = profile
+        logger.info("Initialized %d default agent profiles", len(profiles))
 
-        for agent in default_agents:
-            self.agent_registry[agent.agent_id] = agent
+    async def register_agent(self, agent_profile: AgentProfile) -> bool:
+        try:
+            if agent_profile.agent_id in self.agent_registry:
+                logger.warning("Agent %s already registered, updating profile", agent_profile.agent_id)
+            self.agent_registry[agent_profile.agent_id] = agent_profile
+            logger.info("Agent %s registered with capabilities: %s", agent_profile.agent_id, agent_profile.capabilities)
+            return True
+        except Exception as e:
+            logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
+            return False
 
-        logger.info("Initialized %d default agent profiles", len(default_agents))
+    def find_best_agent_for_task(
+        self, task_type: str, required_capabilities: Set[AgentCapability] = None
+    ) -> Optional[str]:
+        """Find the best agent for a task. Uses shared utility (Issue #292)."""
+        return _find_best_agent(
+            agent_registry=self.agent_registry,
+            task_type=task_type,
+            required_capabilities=required_capabilities,
+        )
+
+    def _reserve_agent(self, agent_id: str) -> None:
+        _reserve_agent(self.agent_registry, agent_id)
+
+    def _release_agent(self, agent_id: str) -> None:
+        _release_agent(self.agent_registry, agent_id)
+
+    # -------------------------------------------------------- LLM / init / shutdown
 
     async def _validate_llm_model(self, model_name: str) -> bool:
-        """Test if an LLM model is available and working (Issue #315: extracted).
-
-        Args:
-            model_name: The model name to test
-
-        Returns:
-            True if model works, False otherwise
-        """
         try:
             test_response = await self.llm_interface.generate_response(
-                "Test connection",
-                model=model_name,
-                max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS,
+                "Test connection", model=model_name, max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS
             )
             return bool(test_response)
         except Exception as e:
@@ -437,111 +345,59 @@ class Orchestrator:
             return False
 
     async def _ensure_working_llm_model(self) -> None:
-        """Ensure we have a working LLM model (Issue #315: depth reduction).
-
-        Tries the configured orchestrator model first, then falls back to default.
-
-        Raises:
-            Exception: If no working model is found
-        """
-        # Try primary model
         if await self._validate_llm_model(self.config.orchestrator_llm_model):
-            logger.info(
-                "✅ Orchestrator model '%s' is working",
-                self.config.orchestrator_llm_model,
-            )
+            logger.info("✅ Orchestrator model '%s' is working", self.config.orchestrator_llm_model)
             return
-
-        logger.warning(
-            "⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model
-        )
-
-        # Try fallback model
+        logger.warning("⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model)
         fallback_model = config_manager.get_default_llm_model()
         if await self._validate_llm_model(fallback_model):
             logger.info("✅ Using fallback model: %s", fallback_model)
             self.config.orchestrator_llm_model = fallback_model
             return
-
         logger.error("❌ Fallback model '%s' also failed", fallback_model)
         raise Exception("No working LLM models available")
 
     async def initialize(self) -> None:
-        """Initialize orchestrator components.
-
-        Issue #315: Refactored to use helper methods for reduced nesting depth.
-        """
         logger.info("Initializing Consolidated Orchestrator...")
-
         try:
-            # Issue #379: Initialize core components in parallel
-            # Note: llm_interface is initialized in __init__, no async init needed
             await asyncio.gather(
                 self.memory_manager.initialize(),
                 self.agent_manager.initialize(),
             )
-
-            # Validate LLM connection
             ollama_connected = await self.llm_interface.check_ollama_connection()
             if not ollama_connected:
-                logger.error("❌ Failed to connect to Ollama")
-                raise Exception(
-                    "Failed to connect to Ollama or configured models not found."
-                )
-
+                raise Exception("Failed to connect to Ollama or configured models not found.")
             logger.info("✅ Ollama connection established")
-
-            # Issue #315: Use helper for model validation (reduces nesting)
             await self._ensure_working_llm_model()
-
             self.is_running = True
             self.start_time = datetime.now(tz=timezone.utc)
             logger.info("✅ Consolidated Orchestrator initialization complete")
-
         except Exception as e:
             logger.error("❌ Orchestrator initialization failed: %s", e)
             raise
 
     async def shutdown(self) -> None:
-        """Shutdown orchestrator gracefully"""
         logger.info("Shutting down Consolidated Orchestrator...")
-
         self.is_running = False
-
-        # Complete pending tasks
         if self.active_tasks:
-            logger.info(
-                "Waiting for %d active tasks to complete...", len(self.active_tasks)
-            )
-            await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Brief wait for tasks
-
-        # Issue #379: Cleanup components in parallel
+            logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         try:
             await asyncio.gather(
                 self.llm_interface.cleanup(),
                 self.memory_manager.cleanup(),
                 self.agent_manager.cleanup(),
-                return_exceptions=True,  # Don't fail if one cleanup fails
+                return_exceptions=True,
             )
         except Exception as e:
             logger.warning("Cleanup warning: %s", e)
-
-        # Log final metrics
         uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
-        logger.info("Orchestrator session %s completed:", self.session_id)
-        logger.info("  Uptime: %s", uptime)
-        logger.info("  Tasks completed: %s", self.metrics["tasks_completed"])
-        logger.info("  Tasks failed: %s", self.metrics["tasks_failed"])
-        logger.info("✅ Orchestrator shutdown complete")
+        logger.info("Orchestrator session %s completed (uptime %s)", self.session_id, uptime)
+        logger.info("  Tasks completed: %s  failed: %s", self.metrics["tasks_completed"], self.metrics["tasks_failed"])
 
-    def _start_request_tracking(
-        self,
-        task_id: str,
-        user_message: str,
-        priority: TaskPriority,
-        context: Optional[Dict[str, Any]],
-    ) -> None:
-        """Start task tracking for user request. Issue #620."""
+    # ----------------------------------------------------- process_user_request
+
+    def _start_request_tracking(self, task_id, user_message, priority, context) -> None:
         get_task_tracker().start_task(
             task_id=task_id,
             task_type=TaskType.USER_REQUEST,
@@ -551,7 +407,6 @@ class Orchestrator:
         )
 
     def _update_success_metrics(self, processing_time: float) -> None:
-        """Update metrics after successful request processing. Issue #620."""
         self.metrics["tasks_completed"] += 1
         self.metrics["total_processing_time"] += processing_time
         self.metrics["average_response_time"] = (
@@ -566,7 +421,11 @@ class Orchestrator:
         priority: TaskPriority = TaskPriority.NORMAL,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Process user request with enhanced orchestration. Issue #281, #620."""
+        """Process user request. Issue #281, #620, #5058.
+
+        SIMPLE mode: direct LLM call (fast path, no workflow planning).
+        All other modes: delegate to execute_enhanced_workflow (unified path).
+        """
         start_time = time.time()
         task_id = str(uuid.uuid4())
         logger.info("Processing user request %s: %s...", task_id, user_message[:100])
@@ -576,40 +435,40 @@ class Orchestrator:
             classification_result = await self._classify_task(user_message)
             target_llm_model = self._select_model_for_task(classification_result)
 
-            result = await self._execute_mode_request(
-                mode,
-                user_message,
-                task_id,
-                target_llm_model,
-                classification_result,
-                context,
-            )
+            if mode == OrchestrationMode.SIMPLE:
+                result = await self._process_simple_request(user_message, task_id, target_llm_model, context)
+            else:
+                result = await self.execute_enhanced_workflow(
+                    user_request=user_message, context=context or {}
+                )
 
             processing_time = time.time() - start_time
             self._update_success_metrics(processing_time)
             get_task_tracker().complete_task(task_id, result)
             logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
-
-            return self._build_success_response(
-                task_id,
-                result,
-                processing_time,
-                classification_result,
-                target_llm_model,
-                mode,
-            )
-
+            return {
+                "task_id": task_id,
+                "success": True,
+                "result": result,
+                "processing_time": processing_time,
+                "classification": classification_result.to_dict() if classification_result else None,
+                "model_used": target_llm_model,
+                "mode": mode.value,
+            }
         except Exception as e:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
             get_task_tracker().fail_task(task_id, str(e))
-            logger.error(
-                "❌ Request %s failed after %.2fs: %s", task_id, processing_time, e
-            )
-            return self._build_failure_response(task_id, e, processing_time, mode)
+            logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
+            return {
+                "task_id": task_id,
+                "success": False,
+                "error": str(e),
+                "processing_time": processing_time,
+                "mode": mode.value,
+            }
 
     async def _classify_task(self, user_message: str) -> Optional[Any]:
-        """Classify user request if classification agent is available (Issue #281 - extracted helper)."""
         if not self.classification_agent:
             return None
         try:
@@ -621,410 +480,23 @@ class Orchestrator:
             return None
 
     def _select_model_for_task(self, classification_result: Optional[Any]) -> str:
-        """Select appropriate LLM model based on task classification (Issue #281 - extracted helper)."""
-        if (
-            classification_result
-            and classification_result.complexity == TaskComplexity.SIMPLE
-        ):
+        if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
             model = config_manager.get_default_llm_model()
             logger.info("Using fast model for simple task: %s", model)
             return model
-        logger.info(
-            "Generating plan using Orchestrator LLM: %s",
-            self.config.orchestrator_llm_model,
-        )
         return self.config.orchestrator_llm_model
-
-    async def _execute_mode_request(
-        self,
-        mode: OrchestrationMode,
-        user_message: str,
-        task_id: str,
-        target_llm_model: str,
-        classification_result: Optional[Any],
-        context: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        """Execute request based on orchestration mode (Issue #281 - extracted helper)."""
-        if mode == OrchestrationMode.SIMPLE:
-            return await self._process_simple_request(
-                user_message, task_id, target_llm_model, context
-            )
-        elif mode == OrchestrationMode.ENHANCED:
-            return await self._process_enhanced_request(
-                user_message, task_id, target_llm_model, classification_result, context
-            )
-        elif mode == OrchestrationMode.PARALLEL:
-            return await self._process_parallel_request(
-                user_message, task_id, target_llm_model, context
-            )
-        else:  # SEQUENTIAL
-            return await self._process_sequential_request(
-                user_message, task_id, target_llm_model, context
-            )
-
-    def _build_success_response(
-        self,
-        task_id: str,
-        result: Dict[str, Any],
-        processing_time: float,
-        classification_result: Optional[Any],
-        target_llm_model: str,
-        mode: OrchestrationMode,
-    ) -> Dict[str, Any]:
-        """Build success response for process_user_request (Issue #281 - extracted helper)."""
-        return {
-            "task_id": task_id,
-            "success": True,
-            "result": result,
-            "processing_time": processing_time,
-            "classification": (
-                classification_result.to_dict() if classification_result else None
-            ),
-            "model_used": target_llm_model,
-            "mode": mode.value,
-        }
-
-    def _build_failure_response(
-        self,
-        task_id: str,
-        error: Exception,
-        processing_time: float,
-        mode: OrchestrationMode,
-    ) -> Dict[str, Any]:
-        """Build failure response for process_user_request (Issue #281 - extracted helper)."""
-        return {
-            "task_id": task_id,
-            "success": False,
-            "error": str(error),
-            "processing_time": processing_time,
-            "mode": mode.value,
-        }
 
     async def _process_simple_request(
         self, user_message: str, task_id: str, model: str, context: Optional[Dict]
     ) -> Dict[str, Any]:
-        """Process simple request with minimal orchestration"""
         response = await self.llm_interface.generate_response(
-            user_message,
-            model=model,
-            max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS,
-            context=context,
+            user_message, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS, context=context
         )
+        return {"type": "simple_response", "content": response, "sources": [{"type": "llm", "model": model}]}
 
-        return {
-            "type": "simple_response",
-            "content": response,
-            "sources": [{"type": "llm", "model": model}],
-        }
-
-    async def _process_enhanced_request(
-        self,
-        user_message: str,
-        task_id: str,
-        model: str,
-        classification: Optional[Any],
-        context: Optional[Dict],
-    ) -> Dict[str, Any]:
-        """Process request with enhanced orchestration features"""
-
-        # Determine optimal agents based on classification
-        suggested_agents = []
-        if classification and classification.suggested_agents:
-            suggested_agents = classification.suggested_agents
-        else:
-            # Default agent selection
-            suggested_agents = ["general"]
-
-        # Execute with appropriate agents
-        if len(suggested_agents) == 1:
-            # Single agent execution
-            agent_result = await self.agent_manager.execute_agent_task(
-                agent_name=suggested_agents[0], task=user_message, context=context
-            )
-
-            return {
-                "type": "agent_response",
-                "content": agent_result.get("response", ""),
-                "agent_used": suggested_agents[0],
-                "execution_details": agent_result,
-                "classification": classification.to_dict() if classification else None,
-            }
-        else:
-            # Multi-agent coordination
-            return await self._coordinate_multiple_agents(
-                user_message, suggested_agents, context, classification
-            )
-
-    async def _process_parallel_request(
-        self, user_message: str, task_id: str, model: str, context: Optional[Dict]
-    ) -> Dict[str, Any]:
-        """Process request with parallel execution"""
-
-        # Create parallel tasks
-        tasks = [
-            self.llm_interface.generate_response(
-                user_message, model=model, max_tokens=LLMDefaults.STANDARD_MAX_TOKENS
-            ),
-            self.memory_manager.search_relevant_context(user_message),
-            # Add more parallel tasks as needed
-        ]
-
-        # Execute in parallel
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
-        llm_response = results[0] if not isinstance(results[0], Exception) else None
-        context_results = results[1] if not isinstance(results[1], Exception) else []
-
-        return {
-            "type": "parallel_response",
-            "content": llm_response,
-            "context": context_results,
-            "execution_method": "parallel",
-        }
-
-    async def _process_sequential_request(
-        self, user_message: str, task_id: str, model: str, context: Optional[Dict]
-    ) -> Dict[str, Any]:
-        """Process request with sequential execution"""
-
-        # Step 1: Context retrieval
-        relevant_context = await self.memory_manager.search_relevant_context(
-            user_message
-        )
-
-        # Step 2: Enhanced prompt with context
-        enhanced_prompt = f"Context: {relevant_context}\n\nUser Request: {user_message}"
-
-        # Step 3: Generate response
-        response = await self.llm_interface.generate_response(
-            enhanced_prompt, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS
-        )
-
-        return {
-            "type": "sequential_response",
-            "content": response,
-            "context_used": relevant_context,
-            "execution_method": "sequential",
-        }
-
-    async def _execute_agents_sequentially(
-        self,
-        user_message: str,
-        agent_names: List[str],
-        context: Optional[Dict],
-    ) -> tuple[Dict[str, Any], List[str]]:
-        """Execute agents sequentially for complex tasks. Issue #620."""
-        agent_results = {}
-        execution_order = []
-
-        for agent_name in agent_names:
-            try:
-                result = await self.agent_manager.execute_agent_task(
-                    agent_name=agent_name,
-                    task=user_message,
-                    context={**(context or {}), "previous_results": agent_results},
-                )
-                agent_results[agent_name] = result
-                execution_order.append(agent_name)
-            except Exception as e:
-                logger.warning("Agent %s failed: %s", agent_name, e)
-                agent_results[agent_name] = {"error": "Agent execution failed"}
-
-        return agent_results, execution_order
-
-    async def _execute_agents_in_parallel(
-        self,
-        user_message: str,
-        agent_names: List[str],
-        context: Optional[Dict],
-    ) -> tuple[Dict[str, Any], List[str]]:
-        """Execute agents in parallel for simpler tasks. Issue #620.
-
-        Concurrency note: The bound here is intentionally set to len(coros) — unbounded
-        dispatch — because self.resource_semaphore (acquired per-agent in _run_agent)
-        already limits concurrent execution to max_parallel_tasks.
-        """
-        tasks = [
-            (
-                agent_name,
-                self.agent_manager.execute_agent_task(
-                    agent_name=agent_name, task=user_message, context=context
-                ),
-            )
-            for agent_name in agent_names
-        ]
-
-        coros = [coro for _, coro in tasks]
-        # Intentionally unbounded at the dispatch level: resource_semaphore (initialized
-        # to max_parallel_tasks=5) is acquired inside each agent's execution path and
-        # provides the actual concurrency cap. Capping here too would add a redundant
-        # outer limit without benefit. Issue #5114.
-        results = await bounded_gather(coros, max(len(coros), 1))
-
-        agent_results = {}
-        execution_order = []
-        for i, (agent_name, _) in enumerate(tasks):
-            if isinstance(results[i], Exception):
-                agent_results[agent_name] = {"error": str(results[i])}
-            else:
-                agent_results[agent_name] = results[i]
-            execution_order.append(agent_name)
-
-        return agent_results, execution_order
-
-    async def _coordinate_multiple_agents(
-        self,
-        user_message: str,
-        agent_names: List[str],
-        context: Optional[Dict],
-        classification: Optional[Any],
-    ) -> Dict[str, Any]:
-        """Coordinate execution across multiple agents."""
-        is_complex = (
-            classification and classification.complexity == TaskComplexity.COMPLEX
-        )
-
-        if is_complex:
-            agent_results, execution_order = await self._execute_agents_sequentially(
-                user_message, agent_names, context
-            )
-        else:
-            agent_results, execution_order = await self._execute_agents_in_parallel(
-                user_message, agent_names, context
-            )
-
-        synthesis = await self._synthesize_agent_results(user_message, agent_results)
-
-        return {
-            "type": "multi_agent_response",
-            "content": synthesis,
-            "agent_results": agent_results,
-            "execution_order": execution_order,
-            "classification": classification.to_dict() if classification else None,
-        }
-
-    async def _synthesize_agent_results(
-        self, user_message: str, agent_results: Dict[str, Any]
-    ) -> str:
-        """Synthesize results from multiple agents"""
-
-        # Create synthesis prompt
-        synthesis_prompt = f"""
-        User Request: {user_message}
-
-        Agent Results:
-        {json.dumps(agent_results, indent=2)}
-
-        Please provide a comprehensive response that synthesizes the information from all agents.
-        Focus on providing a clear, actionable answer to the user's request.
-        """
-
-        # Generate synthesis
-        synthesis = await self.llm_interface.generate_response(
-            synthesis_prompt,
-            model=self.config.orchestrator_llm_model,
-            max_tokens=LLMDefaults.EXTENDED_MAX_TOKENS,
-        )
-
-        return synthesis
-
-    # ========================================================================
-    # Enhanced Agent Management Methods (from enhanced_orchestrator)
-    # ========================================================================
-
-    async def register_agent(self, agent_profile: AgentProfile) -> bool:
-        """Register a new agent with the orchestrator"""
-        try:
-            if agent_profile.agent_id in self.agent_registry:
-                logger.warning(
-                    "Agent %s already registered, updating profile",
-                    agent_profile.agent_id,
-                )
-
-            self.agent_registry[agent_profile.agent_id] = agent_profile
-            logger.info(
-                "Agent %s registered with capabilities: %s",
-                agent_profile.agent_id,
-                agent_profile.capabilities,
-            )
-
-            return True
-
-        except Exception as e:
-            logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
-            return False
-
-    def find_best_agent_for_task(
-        self, task_type: str, required_capabilities: Set[AgentCapability] = None
-    ) -> Optional[str]:
-        """
-        Find the best agent for a specific task based on capabilities and current workload.
-
-        Uses shared utility from utils.agent_selection (Issue #292).
-        """
-        return _find_best_agent(
-            agent_registry=self.agent_registry,
-            task_type=task_type,
-            required_capabilities=required_capabilities,
-        )
-
-    def _reserve_agent(self, agent_id: str):
-        """Reserve an agent for task execution.
-
-        Uses shared utility from utils.agent_selection (Issue #292).
-        """
-        _reserve_agent(self.agent_registry, agent_id)
-
-    def _release_agent(self, agent_id: str):
-        """Release an agent after task completion.
-
-        Uses shared utility from utils.agent_selection (Issue #292).
-        """
-        _release_agent(self.agent_registry, agent_id)
-
-    def _update_agent_performance(
-        self, agent_id: str, success: bool, execution_time: float
-    ):
-        """Update agent performance metrics.
-
-        Uses shared utility from utils.agent_selection (Issue #292).
-        """
-        _update_performance(
-            agent_registry=self.agent_registry,
-            agent_id=agent_id,
-            success=success,
-            execution_time=execution_time,
-        )
-
-    # ========================================================================
-    # Enhanced Workflow Execution Methods (merged from enhanced_orchestrator #3393)
-    # ========================================================================
-
-    def _get_enhanced_planner(self) -> WorkflowPlanner:
-        """Lazy-initialize the enhanced workflow planner."""
-        if not hasattr(self, "_enh_planner") or self._enh_planner is None:
-            self._enh_planner = WorkflowPlanner(
-                base_orchestrator=self,
-                agent_registry=self.agent_registry,
-                find_best_agent_callback=self.find_best_agent_for_task,
-            )
-        return self._enh_planner
-
-    def _get_enhanced_executor(self) -> WorkflowExecutor:
-        """Lazy-initialize the enhanced workflow executor."""
-        if not hasattr(self, "_enh_executor") or self._enh_executor is None:
-            self._enh_executor = WorkflowExecutor(
-                agent_registry=self.agent_registry,
-                agent_interactions=self.agent_interactions,
-                reserve_agent_callback=self._reserve_agent,
-                release_agent_callback=self._release_agent,
-                update_performance_callback=self._update_agent_performance,
-            )
-        return self._enh_executor
+    # ------------------------------------------------- execute_enhanced_workflow
 
     def _get_enhanced_documenter(self) -> WorkflowDocumenter:
-        """Lazy-initialize the workflow documenter."""
         if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
             self._enh_documenter = WorkflowDocumenter(
                 knowledge_base=self.knowledge_base,
@@ -1040,80 +512,48 @@ class Orchestrator:
         require_plan_approval: bool = False,
         plan_approval_callback=None,
     ) -> Dict[str, Any]:
-        """Execute workflow with enhanced orchestration and auto-documentation.
+        """Execute workflow via create_workflow_plan + WorkflowRunner.execute_workflow.
 
-        Issue #3393: Merged from enhanced_orchestrator.py into Orchestrator.
+        Issue #3393: merged from enhanced_orchestrator.py.
+        Issue #5058: unified — delegates to the canonical WorkflowPlan/execute_workflow path;
+        the old orchestration.WorkflowPlanner/WorkflowExecutor path has been removed.
+        The require_plan_approval parameter is retained for API compatibility but is not
+        implemented (no callers pass True).
         """
-        workflow_id = str(uuid.uuid4())
         start_time = time.time()
         context = context or {}
+        workflow_id = str(uuid.uuid4())
+        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request[:80])
 
-        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request)
+        if auto_document:
+            documenter = self._get_enhanced_documenter()
+            doc = documenter.create_workflow_doc(
+                workflow_id=workflow_id,
+                title=f"Workflow: {user_request[:50]}...",
+                description=user_request,
+            )
+            doc.content.update({"request": user_request, "context": context, "start_time": start_time})
+            self.workflow_documentation[workflow_id] = doc
 
         try:
-            if auto_document:
-                documenter = self._get_enhanced_documenter()
-                doc = documenter.create_workflow_doc(
-                    workflow_id=workflow_id,
-                    title=f"Workflow: {user_request[:50]}...",
-                    description=user_request,
-                )
-                doc.content.update(
-                    {"request": user_request, "context": context, "start_time": start_time}
-                )
-                self.workflow_documentation[workflow_id] = doc
+            plan = await self.create_workflow_plan(user_request, context)
+            exec_result = await self._runner.execute_workflow(plan)
 
-            complexity = await self.classify_request_complexity(user_request)
-            planner = self._get_enhanced_planner()
-            enhanced_steps = await planner.plan_enhanced_workflow_steps(
-                user_request, complexity, context
-            )
-
-            if require_plan_approval and plan_approval_callback is not None:
-                plan_summary = planner.create_plan_summary_for_approval(
-                    workflow_id, user_request, enhanced_steps
-                )
-                executor = self._get_enhanced_executor()
-                approval_result = await executor.request_plan_approval(
-                    workflow_id, user_request, plan_summary, plan_approval_callback
-                )
-                if not approval_result.get("approved", False):
-                    logger.info(
-                        "Workflow %s plan rejected: %s",
-                        workflow_id,
-                        approval_result.get("reason", "No reason provided"),
-                    )
-                    return {
-                        "workflow_id": workflow_id,
-                        "status": "plan_rejected",
-                        "reason": approval_result.get("reason"),
-                        "plan": approval_result.get("plan"),
-                        "execution_time": time.time() - start_time,
-                    }
-
-            executor = self._get_enhanced_executor()
-            execution_result = await executor.execute_coordinated_workflow(
-                workflow_id,
-                enhanced_steps,
-                context,
-                notification_config=context.get("notification_config"),
-            )
-
-            succeeded = execution_result["status"] == "completed"
+            succeeded = exec_result.get("success", False)
+            status = "completed" if succeeded else "failed"
             self.workflow_metrics["total_workflows"] += 1
             if succeeded:
                 self.workflow_metrics["successful_workflows"] += 1
             total = self.workflow_metrics["total_workflows"]
-            current_avg = self.workflow_metrics["average_execution_time"]
+            elapsed = time.time() - start_time
+            cur_avg = self.workflow_metrics["average_execution_time"]
             self.workflow_metrics["average_execution_time"] = (
-                (current_avg * (total - 1)) + (time.time() - start_time)
+                (cur_avg * (total - 1)) + elapsed
             ) / total
 
             if auto_document:
                 documenter = self._get_enhanced_documenter()
-                await documenter.generate_workflow_documentation(
-                    workflow_id, execution_result
-                )
+                await documenter.generate_workflow_documentation(workflow_id, exec_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
@@ -1121,15 +561,15 @@ class Orchestrator:
             if self.knowledge_extraction_enabled:
                 documenter = self._get_enhanced_documenter()
                 await documenter.extract_workflow_knowledge(
-                    workflow_id, user_request, execution_result, self.agent_registry
+                    workflow_id, user_request, exec_result, self.agent_registry
                 )
 
             return {
                 "workflow_id": workflow_id,
-                "status": execution_result["status"],
-                "result": execution_result,
-                "execution_time": time.time() - start_time,
-                "agents_involved": execution_result.get("agents_involved", []),
+                "status": status,
+                "result": exec_result,
+                "execution_time": elapsed,
+                "agents_involved": list(exec_result.get("results", {}).keys()),
                 "documentation_generated": auto_document,
                 "knowledge_extracted": self.knowledge_extraction_enabled,
             }
@@ -1149,215 +589,62 @@ class Orchestrator:
                 "execution_time": time.time() - start_time,
             }
 
-    def set_phi2_enabled(self, enabled: bool):
-        """Set Phi-2 model enabled status"""
-        self.config.phi2_enabled = enabled
-        logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
-
-        # Publish configuration change
-        try:
-            from utils.event_manager import event_manager
-
-            event_manager.publish("settings_update", {"phi2_enabled": enabled})
-        except ImportError:
-            logger.debug("Event manager not available for settings update")
-
-    async def get_status(self) -> Dict[str, Any]:
-        """Get comprehensive orchestrator status and metrics (enhanced version)"""
-        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
-
-        return {
-            "session_id": self.session_id,
-            "is_running": self.is_running,
-            "uptime": str(uptime),
-            "active_tasks": len(self.active_tasks),
-            "queued_tasks": len(self.task_queue),
-            "metrics": self.metrics,
-            "workflow_metrics": self.workflow_metrics,
-            "configuration": {
-                "orchestrator_model": self.config.orchestrator_llm_model,
-                "task_model": self.config.task_llm_model,
-                "max_parallel_tasks": self.config.max_parallel_tasks,
-                "classification_enabled": self.classification_agent is not None,
-                "auto_doc_enabled": self.auto_doc_enabled,
-                "knowledge_extraction_enabled": self.knowledge_extraction_enabled,
-            },
-            "agent_registry": {
-                agent_id: {
-                    "agent_type": agent.agent_type,
-                    "capabilities": [cap.value for cap in agent.capabilities],
-                    "availability_status": agent.availability_status,
-                    "current_workload": agent.current_workload,
-                    "max_concurrent_tasks": agent.max_concurrent_tasks,
-                    "success_rate": agent.success_rate,
-                    "average_completion_time": agent.average_completion_time,
-                }
-                for agent_id, agent in self.agent_registry.items()
-            },
-            "active_workflows": len(
-                [
-                    doc
-                    for doc in self.workflow_documentation.values()
-                    if doc.content.get("status") == "in_progress"
-                ]
-            ),
-            "total_documentation": len(self.workflow_documentation),
-            "total_interactions": len(self.agent_interactions),
-        }
-
-    async def update_configuration(self, new_config: Dict[str, Any]) -> bool:
-        """Update orchestrator configuration dynamically"""
-        try:
-            # Update configuration
-            for key, value in new_config.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, value)
-                    logger.info("Updated configuration: %s = %s", key, value)
-
-            # Reinitialize components if needed
-            if "orchestrator_llm_model" in new_config:
-                logger.info("LLM interface model update requires restart")
-                # Note: LLMInterface is stateless after init, model change requires service restart
-
-            return True
-
-        except Exception as e:
-            logger.error("Failed to update configuration: %s", e)
-            return False
+    # --------------------------------- backward-compat: WorkflowStep-based planning API
 
     async def classify_request_complexity(self, user_request: str) -> TaskComplexity:
-        """
-        Classify request complexity (backward compatibility method).
+        """Classify request complexity.
 
-        This method provides backward compatibility for code that expects
-        the old orchestrator interface.
+        Retained for callers in orchestration/workflow_planner.py,
+        services/workflow_automation/, services/advanced_workflow/, and tests.
         """
         if not CLASSIFICATION_AVAILABLE:
-            logger.warning("Classification agent not available, defaulting to COMPLEX")
             return TaskComplexity.COMPLEX
-
         try:
             if self.classification_agent:
-                result = await self.classification_agent.classify_user_request(
-                    user_request
-                )
+                result = await self.classification_agent.classify_user_request(user_request)
                 return result.complexity
-            else:
-                logger.warning(
-                    "Classification agent not initialized, defaulting to COMPLEX"
-                )
-                return TaskComplexity.COMPLEX
         except Exception as e:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
-            return TaskComplexity.COMPLEX
-
-    def _create_simple_workflow_step(self, user_request: str) -> WorkflowStep:
-        """Create a single workflow step for simple requests. Issue #620."""
-        return WorkflowStep(
-            id="step_1",
-            agent_type="llm",
-            action="generate_response",
-            description="Generate direct response to user query",
-            requires_approval=False,
-            dependencies=[],
-            inputs={"query": user_request},
-            expected_duration_ms=2000,
-        )
-
-    def _create_complex_workflow_steps(self, user_request: str) -> List[WorkflowStep]:
-        """Create multi-step workflow for complex requests. Issue #620."""
-        return [
-            WorkflowStep(
-                id="step_1",
-                agent_type="analyzer",
-                action="analyze_request",
-                description="Analyze user request and determine requirements",
-                requires_approval=False,
-                dependencies=[],
-                inputs={"query": user_request},
-                expected_duration_ms=3000,
-            ),
-            WorkflowStep(
-                id="step_2",
-                agent_type="executor",
-                action="execute_plan",
-                description="Execute the planned actions",
-                requires_approval=True,
-                dependencies=["step_1"],
-                inputs={"query": user_request},
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="step_3",
-                agent_type="synthesizer",
-                action="synthesize_results",
-                description="Synthesize results and generate final response",
-                requires_approval=False,
-                dependencies=["step_2"],
-                inputs={"query": user_request},
-                expected_duration_ms=2000,
-            ),
-        ]
+        return TaskComplexity.COMPLEX
 
     async def plan_workflow_steps(
         self, user_request: str, complexity: TaskComplexity
     ) -> List[WorkflowStep]:
-        """
-        Plan workflow steps based on request complexity (backward compatibility method).
+        """Plan WorkflowStep objects based on complexity.
 
-        This method provides backward compatibility for code that expects
-        the old orchestrator interface.
+        Retained for callers in orchestration/workflow_planner.py,
+        services/workflow_automation/, services/advanced_workflow/, and tests.
         """
         if not WORKFLOW_TYPES_AVAILABLE:
-            logger.warning("Workflow types not available, returning empty step list")
             return []
-
         try:
             if complexity == TaskComplexity.SIMPLE:
-                steps = [self._create_simple_workflow_step(user_request)]
-            else:
-                steps = self._create_complex_workflow_steps(user_request)
-
-            logger.info(
-                "Generated %d workflow steps for %s task", len(steps), complexity.value
-            )
-            return steps
-
+                return [WorkflowStep(
+                    id="step_1", agent_type="llm", action="generate_response",
+                    description="Generate direct response to user query",
+                    requires_approval=False, dependencies=[],
+                    inputs={"query": user_request}, expected_duration_ms=2000,
+                )]
+            return [
+                WorkflowStep(id="step_1", agent_type="analyzer", action="analyze_request",
+                             description="Analyze user request", requires_approval=False,
+                             dependencies=[], inputs={"query": user_request}, expected_duration_ms=3000),
+                WorkflowStep(id="step_2", agent_type="executor", action="execute_plan",
+                             description="Execute the planned actions", requires_approval=True,
+                             dependencies=["step_1"], inputs={"query": user_request}, expected_duration_ms=10000),
+                WorkflowStep(id="step_3", agent_type="synthesizer", action="synthesize_results",
+                             description="Synthesize results", requires_approval=False,
+                             dependencies=["step_2"], inputs={"query": user_request}, expected_duration_ms=2000),
+            ]
         except Exception as e:
             logger.error("Failed to plan workflow steps: %s", e)
             return []
 
-    # ========================================================================
-    # Multi-Agent Orchestration Methods (merged from EnhancedMultiAgentOrchestrator #5040)
-    # ========================================================================
-
-    async def _ensure_ma_redis(self) -> None:
-        """Lazy-init async Redis client for multi-agent coordination (#2725)."""
-        if self._ma_redis_async is None:
-            self._ma_redis_async = await get_async_redis_client()
-
-    def _get_ma_strategy_handler(self) -> ExecutionStrategyHandler:
-        """Lazy initialization of multi-agent strategy handler."""
-        if self._ma_strategy_handler is None:
-            self._ma_strategy_handler = ExecutionStrategyHandler(
-                max_parallel_tasks=self.max_parallel_tasks,
-                resource_semaphore=self.resource_semaphore,
-                execute_single_task=self._execute_single_agent_task,
-                topological_sort_tasks=self._ma_planner.topological_sort_tasks,
-                dependencies_met=self._ma_planner.dependencies_met,
-                group_pipeline_stages=self._ma_planner.group_pipeline_stages,
-                enhance_task_for_collaboration=self._ma_planner.enhance_task_for_collaboration,
-                coordinate_collaboration=self._coordinate_collaboration,
-            )
-        return self._ma_strategy_handler
+    # ------------------------------------------ workflow planning (canonical path)
 
     def _build_planning_prompt(self, goal: str) -> str:
-        """Build LLM prompt for multi-agent workflow planning."""
         capabilities_json = json.dumps(
-            {
-                agent: [cap.value for cap in caps]
-                for agent, caps in self.agent_capabilities.items()
-            },
+            {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
         return f"""
@@ -1395,21 +682,20 @@ class Orchestrator:
         """
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
-        """Parse LLM planning response with fallback."""
         if response.tier_used.value in FALLBACK_TIERS:
-            return self._ma_planner.create_fallback_plan(goal)
+            return self._strategy_planner.create_fallback_plan(goal)
         from agents.json_formatter_agent import json_formatter
         parse_result = json_formatter.parse_llm_response(response.content)
         if parse_result.success:
             return parse_result.data
-        return self._ma_planner.create_fallback_plan(goal)
+        return self._strategy_planner.create_fallback_plan(goal)
 
     async def create_workflow_plan(
         self, goal: str, context: Optional[Dict[str, Any]] = None
     ) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
-        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
+        Issue #5040: merged from EnhancedMultiAgentOrchestrator.
         """
         logger.info("Creating workflow plan for: %s", goal)
         try:
@@ -1417,305 +703,89 @@ class Orchestrator:
             planning_prompt = self._build_planning_prompt(goal)
             response = await get_robust_llm_response(planning_prompt, context)
             plan_data = self._parse_planning_response(response, goal)
-            plan = self._ma_planner.build_workflow_plan(goal, plan_data)
+            plan = self._strategy_planner.build_workflow_plan(goal, plan_data)
             self.active_workflows[plan.plan_id] = plan
             return plan
         except Exception as e:
             logger.error("Failed to create workflow plan: %s", e)
-            return self._ma_planner.create_simple_workflow_plan(goal)
+            return self._strategy_planner.create_simple_workflow_plan(goal)
 
-    async def _evaluate_workflow_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Evaluate structured success criteria for a workflow."""
-        if plan.structured_criteria:
-            evaluator = SuccessCriteriaEvaluator()
-            eval_result = await evaluator.evaluate(plan.structured_criteria, results)
-            return eval_result.to_dict()
-        binary_pass = self._ma_planner.check_success_criteria(plan, results)
-        return {
-            "overall": "full" if binary_pass else "failed",
-            "score": 1.0 if binary_pass else 0.0,
-            "results": [],
-        }
-
-    async def _handle_workflow_execution_success(
-        self,
-        plan: WorkflowPlan,
-        results: Dict[str, Any],
-        start_time: float,
-    ) -> Dict[str, Any]:
-        """Handle successful workflow completion including metrics and event publishing."""
-        criteria_eval = await self._evaluate_workflow_criteria(plan, results)
-        success = criteria_eval["overall"] in ("full", "partial")
-        execution_time = time.time() - start_time
-        await self._update_workflow_performance_metrics(plan, results, execution_time)
-        await self._publish_workflow_event(
-            plan.plan_id,
-            "workflow_completed",
-            {
-                "success": success,
-                "execution_time": execution_time,
-                "results_summary": self._ma_planner.summarize_results(results),
-                "criteria_evaluation": criteria_eval,
-            },
-        )
-        return {
-            "plan_id": plan.plan_id,
-            "success": success,
-            "results": results,
-            "execution_time": execution_time,
-            "strategy_used": plan.strategy.value,
-            "criteria_evaluation": criteria_eval,
-        }
-
-    async def _handle_workflow_execution_failure(
-        self,
-        plan: WorkflowPlan,
-        error: Exception,
-        results: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Handle workflow failure including fallback plan execution."""
-        logger.error("Workflow execution failed: %s", error)
-        if plan.fallback_plans:
-            logger.info("Attempting fallback plan...")
-            for fallback in plan.fallback_plans:
-                try:
-                    return await self.execute_workflow(fallback)
-                except Exception as fallback_error:
-                    logger.error("Fallback plan failed: %s", fallback_error)
-        return {
-            "plan_id": plan.plan_id,
-            "success": False,
-            "error": str(error),
-            "results": results,
-        }
+    # ---------------------------------------------- delegation to WorkflowRunner
 
     async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute a WorkflowPlan with intelligent multi-agent coordination.
-
-        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
-        """
-        logger.info(
-            "Executing workflow %s with strategy: %s",
-            plan.plan_id,
-            plan.strategy.value,
-        )
-        start_time = time.time()
-        results: Dict[str, Any] = {}
-        try:
-            await self._publish_workflow_event(
-                plan.plan_id,
-                "workflow_started",
-                {
-                    "goal": plan.goal,
-                    "strategy": plan.strategy.value,
-                    "task_count": len(plan.tasks),
-                },
-            )
-            results = await self._get_ma_strategy_handler().execute_by_strategy(plan)
-            return await self._handle_workflow_execution_success(plan, results, start_time)
-        except Exception as e:
-            return await self._handle_workflow_execution_failure(plan, e, results)
-
-    async def _handle_task_timeout(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Handle task timeout with retry logic."""
-        task.fail_execution("Timeout")
-        if task.can_retry():
-            task.increment_retry()
-            logger.warning(
-                "Task %s timed out, retrying (%d/%d)",
-                task.task_id,
-                task.retry_count,
-                task.max_retries,
-            )
-            return await self._execute_single_agent_task(task, context)
-        self._update_task_agent_performance(task.agent_type, False, task.timeout)
-        return task.to_failed_result("Task execution timed out")
-
-    def _handle_task_exception(
-        self, task: AgentTask, error: Exception
-    ) -> Dict[str, Any]:
-        """Handle task execution exception."""
-        task.fail_execution(str(error))
-        execution_time = time.time() - (task.start_time or time.time())
-        self._update_task_agent_performance(task.agent_type, False, execution_time)
-        return task.to_failed_result(str(error))
-
-    async def _execute_single_agent_task(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Execute a single AgentTask via the agent client registry."""
-        task.start_execution()
-        try:
-            async with self.resource_semaphore:
-                agent = await self._get_agent_instance(task.agent_type)
-                if not agent:
-                    raise Exception(f"Agent {task.agent_type} not available")
-                enhanced_inputs = task.get_enhanced_inputs(context)
-                result = await asyncio.wait_for(
-                    agent.process_request(
-                        {"action": task.action, "payload": enhanced_inputs}
-                    ),
-                    timeout=task.timeout,
-                )
-                task.complete_execution(result)
-                self._update_task_agent_performance(
-                    task.agent_type, True, task.get_execution_time()
-                )
-                return task.to_completed_result(result)
-        except asyncio.TimeoutError:
-            return await self._handle_task_timeout(task, context)
-        except Exception as e:
-            return self._handle_task_exception(task, e)
+        """Execute a WorkflowPlan. Delegates to WorkflowRunner (#5058)."""
+        return await self._runner.execute_workflow(plan)
 
     async def get_agent_recommendations(
         self, task_type: str, capabilities_needed: Set
     ) -> List[str]:
-        """Get recommended agents for a task based on capabilities and performance.
-
-        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
-        """
-        suitable_agents = []
-        for agent, caps in self.agent_capabilities.items():
-            if capabilities_needed.issubset(caps):
-                performance = self.agent_performance[agent]
-                reliability = performance.reliability_score
-                capability_match = len(capabilities_needed.intersection(caps)) / len(
-                    capabilities_needed
-                )
-                experience_boost = min(performance.total_tasks / 100, 1.0)
-                score = (
-                    (reliability * 0.5) + (capability_match * 0.3) + (experience_boost * 0.2)
-                )
-                suitable_agents.append((agent, score))
-        suitable_agents.sort(key=lambda x: x[1], reverse=True)
-        return [agent for agent, _ in suitable_agents]
-
-    async def _coordinate_collaboration(
-        self, plan: WorkflowPlan, collab_channel: str
-    ) -> None:
-        """Coordinate inter-agent collaboration via Redis pubsub."""
-        await self._ensure_ma_redis()
-        try:
-            pubsub = self._ma_redis_async.pubsub()
-            await pubsub.subscribe(collab_channel)
-            shared_context: Dict[str, Any] = {}
-            async for message in pubsub.listen():
-                if message["type"] != "message":
-                    continue
-                try:
-                    data = json.loads(message["data"])
-                    if data.get("type") == "share_insight":
-                        agent = data.get("agent")
-                        insight = data.get("insight")
-                        shared_context[f"{agent}_insight"] = insight
-                        await self._broadcast_to_agents(
-                            collab_channel,
-                            {"type": "context_update", "shared_context": shared_context},
-                        )
-                except Exception as e:
-                    logger.error("Collaboration coordination error: %s", e)
-        except asyncio.CancelledError:
-            await pubsub.unsubscribe(collab_channel)
-            raise
-
-    async def _broadcast_to_agents(self, channel: str, data: Dict[str, Any]) -> None:
-        """Broadcast data to agents on collaboration channel."""
-        await self._ensure_ma_redis()
-        await self._ma_redis_async.publish(channel, json.dumps(data))
-
-    async def _update_workflow_performance_metrics(
-        self, plan: WorkflowPlan, results: Dict[str, Any], execution_time: float
-    ) -> None:
-        """Update agent performance metrics for all tasks in a completed workflow."""
-        for task in plan.tasks:
-            result = results.get(task.task_id, {})
-            if result:
-                success = result.get("status") == "completed"
-                task_time = result.get("execution_time", 0)
-                self._update_task_agent_performance(task.agent_type, success, task_time)
-
-    def _update_task_agent_performance(
-        self, agent_type: str, success: bool, execution_time: float
-    ) -> None:
-        """Update AgentPerformance metrics for multi-agent task execution.
-
-        Issue #5040: Renamed from _update_agent_performance (EnhancedMultiAgentOrchestrator)
-        to avoid collision with Orchestrator._update_agent_performance which
-        operates on AgentProfile objects. This method operates on AgentPerformance objects.
-        """
-        if agent_type in self.agent_performance:
-            perf = self.agent_performance[agent_type]
-            perf.total_tasks += 1
-            if success:
-                perf.successful_tasks += 1
-            else:
-                perf.failed_tasks += 1
-            perf.average_execution_time = (
-                perf.average_execution_time * (perf.total_tasks - 1) + execution_time
-            ) / perf.total_tasks
-            perf.reliability_score = perf.successful_tasks / perf.total_tasks
-            perf.last_update = time.time()
-
-    async def _publish_workflow_event(
-        self, workflow_id: str, event_type: str, data: Dict[str, Any]
-    ) -> None:
-        """Publish a workflow lifecycle event via the event manager."""
-        await _get_event_manager().publish(
-            "workflow_event",
-            {
-                "workflow_id": workflow_id,
-                "event_type": event_type,
-                "timestamp": time.time(),
-                "data": data,
-            },
-        )
-
-    async def _get_agent_instance(self, agent_type: str) -> Optional[Any]:
-        """Get an agent instance from the agent client registry."""
-        agent = self._agent_client_registry.get_agent(agent_type)
-        if agent is not None:
-            await self._agent_client_registry.update_agent_health(agent_type)
-            return agent
-        logger.warning(
-            "Agent '%s' not found in registry. Available agents: %s",
-            agent_type,
-            self._agent_client_registry.list_agents(),
-        )
-        return None
+        """Get recommended agents for a task. Delegates to WorkflowRunner (#5058)."""
+        return await self._runner.get_agent_recommendations(task_type, capabilities_needed)
 
     def get_performance_report(self) -> Dict[str, Any]:
-        """Get comprehensive performance report for all tracked agents.
+        """Performance report. Delegates to WorkflowRunner (#5058)."""
+        return self._runner.get_performance_report()
 
-        Issue #5040: Merged from EnhancedMultiAgentOrchestrator.
-        """
+    # ----------------------------------------------------------------- status / config
+
+    def set_phi2_enabled(self, enabled: bool) -> None:
+        self.config.phi2_enabled = enabled
+        logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
+        try:
+            from utils.event_manager import event_manager
+            event_manager.publish("settings_update", {"phi2_enabled": enabled})
+        except ImportError:
+            logger.debug("Event manager not available for settings update")
+
+    async def get_status(self) -> Dict[str, Any]:
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
         return {
-            "agent_performance": {
-                agent: {
-                    "total_tasks": perf.total_tasks,
-                    "success_rate": perf.reliability_score,
-                    "average_time": perf.average_execution_time,
-                    "last_update": perf.last_update,
+            "session_id": self.session_id,
+            "is_running": self.is_running,
+            "uptime": str(uptime),
+            "active_tasks": len(self.active_tasks),
+            "queued_tasks": len(self.task_queue),
+            "metrics": self.metrics,
+            "workflow_metrics": self.workflow_metrics,
+            "configuration": {
+                "orchestrator_model": self.config.orchestrator_llm_model,
+                "task_model": self.config.task_llm_model,
+                "max_parallel_tasks": self.config.max_parallel_tasks,
+                "classification_enabled": self.classification_agent is not None,
+                "knowledge_extraction_enabled": self.knowledge_extraction_enabled,
+            },
+            "agent_registry": {
+                agent_id: {
+                    "agent_type": agent.agent_type,
+                    "capabilities": [cap.value for cap in agent.capabilities],
+                    "availability_status": agent.availability_status,
+                    "current_workload": agent.current_workload,
+                    "max_concurrent_tasks": agent.max_concurrent_tasks,
+                    "success_rate": agent.success_rate,
+                    "average_completion_time": agent.average_completion_time,
                 }
-                for agent, perf in self.agent_performance.items()
+                for agent_id, agent in self.agent_registry.items()
             },
             "active_workflows": len(self.active_workflows),
-            "capabilities_coverage": self._calculate_capability_coverage(),
+            "total_documentation": len(self.workflow_documentation),
+            "total_interactions": len(self.agent_interactions),
         }
 
-    def _calculate_capability_coverage(self) -> Dict[str, float]:
-        """Calculate coverage for each capability across all tracked agents."""
-        coverage: Dict[str, float] = {}
-        for capability in AgentCapability:
-            agents_with_cap = sum(
-                1 for caps in self.agent_capabilities.values() if capability in caps
-            )
-            coverage[capability.value] = agents_with_cap / len(self.agent_capabilities)
-        return coverage
+    async def update_configuration(self, new_config: Dict[str, Any]) -> bool:
+        try:
+            for key, value in new_config.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+                    logger.info("Updated configuration: %s = %s", key, value)
+            return True
+        except Exception as e:
+            logger.error("Failed to update configuration: %s", e)
+            return False
 
+
+# ============================================================================
+# Module-level helpers
+# ============================================================================
 
 async def create_and_execute_workflow(
     goal: str, context: Optional[Dict[str, Any]] = None
@@ -1723,55 +793,42 @@ async def create_and_execute_workflow(
     """Create and execute a multi-agent workflow plan.
 
     Issue #5040: Replaces enhanced_orchestration.create_and_execute_workflow.
-    Uses the shared Orchestrator singleton.
     """
     orch = get_orchestrator_sync()
     plan = await orch.create_workflow_plan(goal, context)
     return await orch.execute_workflow(plan)
 
 
-# Global orchestrator instance (thread-safe)
 _orchestrator_instance = None
 _orchestrator_lock = asyncio.Lock()
 
 
 async def get_orchestrator() -> Orchestrator:
-    """Get or create global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
-
     if _orchestrator_instance is None:
         async with _orchestrator_lock:
-            # Double-check after acquiring lock
             if _orchestrator_instance is None:
                 _orchestrator_instance = Orchestrator()
                 await _orchestrator_instance.initialize()
-
     return _orchestrator_instance
 
 
 async def shutdown_orchestrator():
-    """Shutdown global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
-
     async with _orchestrator_lock:
         if _orchestrator_instance:
             await _orchestrator_instance.shutdown()
             _orchestrator_instance = None
 
 
-# Issue #3393: Sync accessor for callers that cannot await get_orchestrator().
-# Creates the singleton without calling initialize() — callers that need the
-# fully-initialised instance should use the async get_orchestrator() instead.
 _sync_instance_lock = __import__("threading").Lock()
 
 
 def get_orchestrator_sync() -> Orchestrator:
     """Return the shared Orchestrator singleton (sync-safe).
 
-    Issue #3393: Replaces the sync get_orchestrator() that was in
-    enhanced_orchestrator.py.  Use the async get_orchestrator() when you are
-    inside an async context and need the fully-initialized instance.
-    Issue #5040: Orchestrator is the single conductor.
+    Issue #3393: sync accessor.  Use async get_orchestrator() when inside an
+    async context and the fully-initialised instance is needed.
     """
     global _orchestrator_instance
     if _orchestrator_instance is None:
@@ -1787,27 +844,22 @@ def get_orchestrator_sync() -> Orchestrator:
 # ============================================================================
 
 __all__ = [
-    # Main orchestrator class
     "Orchestrator",
     "OrchestratorConfig",
-    # Enums
     "TaskPriority",
     "OrchestrationMode",
     "TaskComplexity",
     "WorkflowStatus",
     "AgentCapability",
     "DocumentationType",
-    # Data classes
     "WorkflowStep",
     "AgentProfile",
     "WorkflowDocumentation",
     "AgentInteraction",
-    # Multi-agent workflow types (Issue #5040: merged from enhanced_orchestration)
     "WorkflowPlan",
     "AgentTask",
     "AgentPerformance",
     "ExecutionStrategy",
-    # Functions
     "get_orchestrator",
     "get_orchestrator_sync",
     "shutdown_orchestrator",
