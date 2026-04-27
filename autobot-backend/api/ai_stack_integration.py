@@ -27,6 +27,11 @@ from type_defs.common import Metadata
 from utils.response_helpers import create_success_response
 
 from api.schemas_common import DataResponse
+from api.schemas_agent import (
+    ComprehensiveResearchData,
+    EnhancedKnowledgeSearchData,
+    MultiAgentQueryData,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +139,7 @@ class ContentClassificationRequest(BaseModel):
     operation="ai_stack_health_check",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/health", response_model=DataResponse)
+@router.get("/health", response_model=DataResponse[Dict[str, Any]])
 async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Check AI Stack health and connectivity.
@@ -174,7 +179,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
     operation="list_ai_agents",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/agents", response_model=DataResponse)
+@router.get("/agents", response_model=DataResponse[Dict[str, Any]])
 async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
     """
     List all available AI agents.
@@ -202,7 +207,7 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
     operation="rag_query",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/query", response_model=DataResponse)
+@router.post("/rag/query", response_model=DataResponse[Dict[str, Any]])
 async def rag_query(
     request: RAGQueryRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -251,7 +256,7 @@ async def rag_query(
     operation="reformulate_query",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/reformulate", response_model=DataResponse)
+@router.post("/rag/reformulate", response_model=DataResponse[Dict[str, Any]])
 async def reformulate_query(
     query: str,
     context: Optional[str] = None,
@@ -278,7 +283,7 @@ async def reformulate_query(
     operation="analyze_documents",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/rag/analyze-documents", response_model=DataResponse)
+@router.post("/rag/analyze-documents", response_model=DataResponse[Dict[str, Any]])
 async def analyze_documents(
     documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)
 ):
@@ -308,7 +313,7 @@ async def analyze_documents(
     operation="enhanced_chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/chat/enhanced", response_model=DataResponse)
+@router.post("/chat/enhanced", response_model=DataResponse[Dict[str, Any]])
 async def enhanced_chat(
     request: EnhancedChatRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -365,7 +370,7 @@ async def enhanced_chat(
     operation="extract_knowledge",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/knowledge/extract", response_model=DataResponse)
+@router.post("/knowledge/extract", response_model=DataResponse[Dict[str, Any]])
 async def extract_knowledge(
     request: KnowledgeExtractionRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -397,7 +402,7 @@ async def extract_knowledge(
     operation="enhanced_knowledge_search",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/knowledge/enhanced-search", response_model=DataResponse)
+@router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
 async def enhanced_knowledge_search(
     query: str,
     search_type: str = "comprehensive",
@@ -447,7 +452,7 @@ async def enhanced_knowledge_search(
     operation="get_system_knowledge",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.get("/knowledge/system", response_model=DataResponse)
+@router.get("/knowledge/system", response_model=DataResponse[Dict[str, Any]])
 async def get_system_knowledge(
     knowledge_category: Optional[str] = None,
     admin_check: bool = Depends(check_admin_permission),
@@ -478,7 +483,7 @@ async def get_system_knowledge(
     operation="comprehensive_research",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/research/comprehensive", response_model=DataResponse)
+@router.post("/research/comprehensive", response_model=DataResponse[ComprehensiveResearchData])
 async def comprehensive_research(
     request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -524,7 +529,7 @@ async def comprehensive_research(
     operation="web_research",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/research/web", response_model=DataResponse)
+@router.post("/research/web", response_model=DataResponse[Dict[str, Any]])
 async def web_research(
     query: str,
     max_pages: int = 10,
@@ -559,7 +564,7 @@ async def web_research(
     operation="search_code",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/development/search-code", response_model=DataResponse)
+@router.post("/development/search-code", response_model=DataResponse[Dict[str, Any]])
 async def search_code(
     request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -588,7 +593,7 @@ async def search_code(
     operation="analyze_development_speedup",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/development/analyze-speedup", response_model=DataResponse)
+@router.post("/development/analyze-speedup", response_model=DataResponse[Dict[str, Any]])
 async def analyze_development_speedup(
     request: DevelopmentAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -623,7 +628,7 @@ async def analyze_development_speedup(
     operation="classify_content",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/classification/classify", response_model=DataResponse)
+@router.post("/classification/classify", response_model=DataResponse[Dict[str, Any]])
 async def classify_content(
     request: ContentClassificationRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -755,7 +760,7 @@ async def _execute_sequential_agents(
     operation="multi_agent_query",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/orchestrate/multi-agent-query", response_model=DataResponse)
+@router.post("/orchestrate/multi-agent-query", response_model=DataResponse[MultiAgentQueryData])
 async def multi_agent_query(
     query: str,
     agents: List[str],
@@ -806,7 +811,7 @@ async def multi_agent_query(
     operation="legacy_rag_search",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/rag-search", response_model=DataResponse)
+@router.post("/legacy/rag-search", response_model=DataResponse[Dict[str, Any]])
 async def legacy_rag_search(
     query: str,
     max_results: int = 10,
@@ -831,7 +836,7 @@ async def legacy_rag_search(
     operation="legacy_enhanced_chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-@router.post("/legacy/enhanced-chat", response_model=DataResponse)
+@router.post("/legacy/enhanced-chat", response_model=DataResponse[Dict[str, Any]])
 async def legacy_enhanced_chat(
     message: str,
     context: Optional[str] = None,

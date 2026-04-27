@@ -927,3 +927,111 @@ class SelfCapabilitiesResponse(BaseModel):
 
     total_endpoints: int
     unique_paths: int
+
+
+# ---------------------------------------------------------------------------
+# agent.py / ai_stack_integration.py — DataResponse[T] payload models (#5772)
+# ---------------------------------------------------------------------------
+
+
+class AgentCapabilityInfo(BaseModel):
+    """Single agent entry in the /agents/available response."""
+
+    name: str
+    description: str
+    capabilities: List[str]
+    status: str
+
+
+class AgentAvailableData(BaseModel):
+    """data payload for GET /agent/agents/available."""
+
+    total_agents: int
+    agents: List[AgentCapabilityInfo]
+    coordination_modes: List[str]
+    multi_agent_support: bool
+
+
+class AgentStatusData(BaseModel):
+    """data payload for GET /agent/agents/status."""
+
+    ai_stack_status: str
+    total_agents: int
+    available_agents: List[str]
+    multi_agent_coordination: bool
+    npu_acceleration: bool
+    research_capabilities: bool
+    development_tools: bool
+
+
+class EnhancedGoalData(BaseModel):
+    """data payload for POST /agent/goal/enhanced."""
+
+    goal: str
+    agents_used: List[str]
+    coordination_mode: str
+    execution_time: float
+    priority: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    enhanced_context_used: bool
+    knowledge_base_integrated: bool
+    timestamp: str
+
+
+class MultiAgentCoordinationData(BaseModel):
+    """data payload for POST /agent/multi-agent/coordinate."""
+
+    task: str
+    agents: List[str]
+    coordination_strategy: str
+    coordination_time: float
+    subtasks_count: int
+    dependencies_count: int
+    result: Optional[Dict[str, Any]] = None
+    timestamp: str
+
+
+class AgentResearchData(BaseModel):
+    """data payload for POST /agent/research/comprehensive."""
+
+    research_query: str
+    research_depth: Optional[str] = None
+    agents_used: List[str]
+    include_web: bool
+    include_code_search: bool
+    sources: Optional[List[str]] = None
+    result: Optional[Dict[str, Any]] = None
+
+
+class DevelopmentAnalysisData(BaseModel):
+    """data payload for POST /agent/development/analyze."""
+
+    analysis_type: str
+    target_path: str
+    include_performance: bool
+    include_optimization: bool
+    agents_used: List[str]
+    result: Optional[Dict[str, Any]] = None
+
+
+class MultiAgentQueryData(BaseModel):
+    """data payload for POST /ai-stack/orchestrate/multi-agent-query."""
+
+    query: str
+    coordination_mode: str
+    agents_used: List[str]
+    results: Dict[str, Any]
+
+
+class EnhancedKnowledgeSearchData(BaseModel):
+    """data payload for POST /ai-stack/knowledge/enhanced-search."""
+
+    local_kb: List[Dict[str, Any]]
+    enhanced: Dict[str, Any]
+
+
+class ComprehensiveResearchData(BaseModel):
+    """data payload for POST /ai-stack/research/comprehensive."""
+
+    research: Dict[str, Any]
+    web_research: Optional[Dict[str, Any]] = None

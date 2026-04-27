@@ -37,7 +37,17 @@ from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 from api.schemas_common import AgentMessageResponse, DataResponse
-from api.schemas_agent import AgentCommandApprovalResponse, AgentCommandExecuteResponse, AgentHealthResponse
+from api.schemas_agent import (
+    AgentCommandApprovalResponse,
+    AgentCommandExecuteResponse,
+    AgentHealthResponse,
+    AgentAvailableData,
+    AgentResearchData,
+    AgentStatusData,
+    DevelopmentAnalysisData,
+    EnhancedGoalData,
+    MultiAgentCoordinationData,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1201,7 +1211,7 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT",
 )
-@router.post("/goal/enhanced", response_model=DataResponse)
+@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
 async def execute_enhanced_goal(
     payload: EnhancedGoalPayload,
     request: Request,
@@ -1270,7 +1280,7 @@ async def execute_enhanced_goal(
     operation="coordinate_multi_agent_task",
     error_code_prefix="AGENT",
 )
-@router.post("/multi-agent/coordinate", response_model=DataResponse)
+@router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
 async def coordinate_multi_agent_task(
     payload: MultiAgentTaskPayload,
     request: Request,
@@ -1341,7 +1351,7 @@ async def coordinate_multi_agent_task(
     operation="comprehensive_research_task",
     error_code_prefix="AGENT",
 )
-@router.post("/research/comprehensive", response_model=DataResponse)
+@router.post("/research/comprehensive", response_model=DataResponse[AgentResearchData])
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest,
     knowledge_base=Depends(get_knowledge_base),
@@ -1411,7 +1421,7 @@ async def comprehensive_research_task(
     operation="analyze_development_task",
     error_code_prefix="AGENT",
 )
-@router.post("/development/analyze", response_model=DataResponse)
+@router.post("/development/analyze", response_model=DataResponse[DevelopmentAnalysisData])
 async def analyze_development_task(
     request_data: AgentAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -1455,7 +1465,7 @@ async def analyze_development_task(
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/available", response_model=DataResponse)
+@router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 async def list_available_agents():
     """
     List all available AI Stack agents with their capabilities.
@@ -1508,7 +1518,7 @@ async def list_available_agents():
     operation="get_agents_status",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/status", response_model=DataResponse)
+@router.get("/agents/status", response_model=DataResponse[AgentStatusData])
 async def get_agents_status():
     """Get comprehensive status of all AI Stack agents.
 
