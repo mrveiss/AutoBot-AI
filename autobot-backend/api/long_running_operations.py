@@ -58,6 +58,7 @@ try:
         OperationMigrator,
         operation_integration_manager,
     )
+    _OPERATIONS_AVAILABLE = True
 except ImportError as _e:
     from autobot_shared.missing_dep import MissingDep as _MissingDep
 
@@ -67,6 +68,7 @@ except ImportError as _e:
     CreateOperationRequest = _MissingDep("CreateOperationRequest", _e)  # type: ignore[assignment]
     OperationMigrator = _MissingDep("OperationMigrator", _e)  # type: ignore[assignment]
     operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
+    _OPERATIONS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["long-running-operations"])
@@ -153,7 +155,7 @@ class SecurityScanRequest(BaseModel):
 
 async def get_operation_manager():
     """Dependency to get the operation integration manager"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         raise HTTPException(
             status_code=503, detail="Long-running operations service not available"
         )
@@ -652,7 +654,7 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 @router.websocket("/{operation_id}/progress")
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         await websocket.close(code=1003, reason="Service not available")
         return
 
@@ -718,7 +720,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 @router.get("/health", response_model=LongRunningOperationHealthResponse)
 async def operations_health():
     """Health check for long-running operations service"""
-    if operation_integration_manager is None:
+    if not _OPERATIONS_AVAILABLE:
         return JSONResponse(
             status_code=503,
             content={
