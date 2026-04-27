@@ -33,7 +33,7 @@ except ImportError as _e:
     logging.getLogger(__name__).warning("orchestrator module not available")
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
