@@ -240,12 +240,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "heartbeat",
     ),
     # Long-running and validation
-    (
-        "api.long_running_operations",
-        "/long-running",
-        ["long-running"],
-        "long_running_operations",
-    ),
+    # api.long_running_operations promoted to core_routers.py (Issue #6227)
     (
         "api.system_validation",
         "/system-validation",
