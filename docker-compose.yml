@@ -355,6 +355,8 @@ services:
       - /tmp
       - /var/run
       - /var/cache/nginx
+      - /var/lib/nginx
+      - /var/log/nginx
     security_opt:
       - no-new-privileges:true
     networks:
