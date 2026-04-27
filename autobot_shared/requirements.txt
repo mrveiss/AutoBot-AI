@@ -1,6 +1,6 @@
 redis>=7.4.0
 pyyaml>=6.0.3
-pydantic>=2.12.5
+pydantic>=2.13.3
 python-dotenv>=1.2.2
 
 # OpenTelemetry distributed tracing (Issue #697)
