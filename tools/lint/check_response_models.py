@@ -22,6 +22,10 @@ For each, at least one of the following must be true:
   4. A local variable is assigned a dict literal containing all required keys and
      that variable is returned (single-assignment pattern — #5926)
 
+Additionally, any schema name used in response_model= must be imported at a line
+that appears BEFORE the decorator line. Import-after-use causes NameError at startup
+(#6143).
+
 Known limitation: multi-step variable builds (e.g. result = {}; result["success"] = True)
 and pass-through returns of function-call results are not analyzed. Use
 create_success_response() for those cases to satisfy the hook.
@@ -34,13 +38,14 @@ Exit codes:
 Background: #5843 → #5896 → #5904 cascade — 52+61 runtime-500 bugs introduced by
 response_model=DataResponse on endpoints that returned plain dicts without 'success'.
 Extended in #5925 to cover SuccessMessageResponse and SuccessDataResponse.
+Extended in #6143 to catch import-after-decorator ordering bugs.
 """
 from __future__ import annotations
 
 import ast
 import sys
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -107,6 +112,48 @@ def _checked_schema(decorator: ast.expr) -> str | None:
             and kw.value.id in CHECKED_SCHEMAS
         ):
             return kw.value.id
+    return None
+
+
+def _collect_import_line_map(tree: ast.Module) -> Dict[str, int]:
+    """Return a mapping of imported name → first import line number.
+
+    Covers all standard import forms:
+      import foo                       → {"foo": line}
+      import foo.bar as baz            → {"baz": line}
+      from foo import Bar, Baz         → {"Bar": line, "Baz": line}
+      from foo import Bar as B         → {"B": line}
+    """
+    name_to_line: Dict[str, int] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bound_name = alias.asname if alias.asname else alias.name.split(".")[0]
+                if bound_name not in name_to_line:
+                    name_to_line[bound_name] = node.lineno
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                bound_name = alias.asname if alias.asname else alias.name
+                if bound_name not in name_to_line:
+                    name_to_line[bound_name] = node.lineno
+    return name_to_line
+
+
+def _import_order_violation(
+    schema: str, decorator_line: int, import_line_map: Dict[str, int]
+) -> Optional[str]:
+    """Return an error message if *schema* is not imported before *decorator_line*.
+
+    Returns None when the import is present and precedes the decorator.
+    """
+    if schema not in import_line_map:
+        return f"{schema} used in response_model= at line {decorator_line} but never imported"
+    import_line = import_line_map[schema]
+    if import_line > decorator_line:
+        return (
+            f"{schema} imported at line {import_line} but used in response_model= "
+            f"at line {decorator_line} (import must come first)"
+        )
     return None
 
 
@@ -181,8 +228,22 @@ def _returned_var_names(node: _FuncNode) -> set[str]:
     return names
 
 
-def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
-    """Return [(line_no, func_name)] for each DataResponse violation in *path*."""
+# Violation tuple: (line_no, func_name, error_message).
+# ``error_message`` is None for return-shape violations (message is assembled in main).
+_Violation = Tuple[int, str, Optional[str]]
+
+_SHAPE_VIOLATION_MSG = None  # sentinel: use the standard return-shape message in main
+
+
+def _check_file(path: Path, repo_root: Path) -> List[_Violation]:
+    """Return [_Violation] for each problem found in *path*.
+
+    Two classes of violations are detected:
+      1. Return-shape mismatch — endpoint body lacks required keys for the schema.
+         Tuple: (line_no, func_name, None)
+      2. Import-order — schema name is imported after (or never before) its decorator.
+         Tuple: (line_no, func_name, "<detail message>")
+    """
     try:
         rel = str(path.resolve().relative_to(repo_root)).replace("\\", "/")
     except ValueError:
@@ -195,7 +256,8 @@ def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     except (SyntaxError, UnicodeDecodeError, OSError):
         return []
 
-    violations: List[Tuple[int, str]] = []
+    import_line_map = _collect_import_line_map(tree)
+    violations: List[_Violation] = []
     for func_node in ast.walk(tree):
         if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -203,6 +265,12 @@ def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
             schema = _checked_schema(dec)
             if schema is None:
                 continue
+            # Check 1: import ordering — schema must be imported before the decorator.
+            order_err = _import_order_violation(schema, dec.lineno, import_line_map)
+            if order_err is not None:
+                violations.append((func_node.lineno, func_node.name, order_err))
+                break
+            # Check 2: return-shape — body must satisfy required keys.
             required_keys = CHECKED_SCHEMAS[schema]
             if _returns_bypass_type(func_node):
                 break
@@ -219,7 +287,7 @@ def _check_file(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
                 if name in var_keys
             ):
                 break
-            violations.append((func_node.lineno, func_node.name))
+            violations.append((func_node.lineno, func_node.name, _SHAPE_VIOLATION_MSG))
             break
     return violations
 
@@ -236,13 +304,21 @@ def main(argv: List[str]) -> int:
             rel = path.resolve().relative_to(repo_root)
         except ValueError:
             rel = path
-        for line_no, func_name in hits:
-            print(
-                f"[{HOOK_ID}] {rel}:{line_no}: {func_name}() uses a checked response_model "
-                f"but body lacks the required return keys or a safe bypass. "
-                f"Use create_success_response() or a named schema instead. (#5913)",
-                file=sys.stderr,
-            )
+        for line_no, func_name, detail in hits:
+            if detail is not None:
+                # Import-order violation — detail carries the specific message.
+                print(
+                    f"[{HOOK_ID}] {rel}:{line_no}: {func_name}(): {detail} (#6143)",
+                    file=sys.stderr,
+                )
+            else:
+                # Return-shape violation.
+                print(
+                    f"[{HOOK_ID}] {rel}:{line_no}: {func_name}() uses a checked response_model "
+                    f"but body lacks the required return keys or a safe bypass. "
+                    f"Use create_success_response() or a named schema instead. (#5913)",
+                    file=sys.stderr,
+                )
             total += 1
     if total:
         print(
