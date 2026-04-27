@@ -86,19 +86,6 @@ def _board_entry(board_id: str, name: str, description: str) -> dict:
     }
 
 
-async def _get_redis(req: Request):
-    """Return the async Redis client from the KB instance."""
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(status_code=503, detail="Knowledge base not available")
-    try:
-        return kb.redis()
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        ) from exc
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_boards",
@@ -119,7 +106,13 @@ async def list_boards(
     The implicit ``__global__`` board is always included at the top.
     Issue #3242.
     """
-    redis_client = await _get_redis(req)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    try:
+        redis_client = kb.redis()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge base not available") from exc
     raw = await redis_client.hgetall(_BOARDS_KEY)
 
     boards = [
@@ -160,7 +153,13 @@ async def create_board(
 
     Issue #3242.
     """
-    redis_client = await _get_redis(req)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    try:
+        redis_client = kb.redis()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge base not available") from exc
 
     board_id = request.board_id or str(uuid.uuid4()).replace("-", "")[:16]
 
@@ -200,7 +199,13 @@ async def delete_board(
     if board_id == GLOBAL_BOARD_ID:
         raise HTTPException(status_code=400, detail="Cannot delete the global board")
 
-    redis_client = await _get_redis(req)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+    try:
+        redis_client = kb.redis()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge base not available") from exc
     removed = await redis_client.hdel(_BOARDS_KEY, board_id)
 
     if not removed:
