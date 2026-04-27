@@ -8,6 +8,9 @@ Handles cloud API rate limits with automatic retry, exponential backoff,
 and jitter to prevent thundering herd problems.
 
 Issue #717: Efficient Inference Design implementation.
+
+Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
+core sliding-window logic (Issue #4460).
 """
 
 import asyncio
@@ -17,6 +20,8 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
+
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -377,4 +382,18 @@ __all__ = [
     "RetryStrategy",
     "RetryMetrics",
     "with_retry",
+    "llm_rate_limiter",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Shared delegate (Issue #4460)
+# ---------------------------------------------------------------------------
+# A pre-configured instance of the shared RateLimiter scoped to LLM providers.
+# RateLimitHandler handles *retry* logic after a rate-limit error is returned;
+# the shared limiter below adds a *proactive* sliding-window guard that callers
+# can use to check limits before dispatching a request.
+llm_rate_limiter = _SharedRateLimiter(
+    scope_prefix="llm",
+    default_tier="privileged",
+)

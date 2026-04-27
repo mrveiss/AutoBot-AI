@@ -7,6 +7,9 @@ Integration Rate Limiter (Issue #4162)
 Async-native sliding-window rate limiter for external API integrations.
 Tracks rate limit state per service key and supports header-based quota
 updates (X-RateLimit-*, Retry-After) from GitHub and Slack API responses.
+
+Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
+core sliding-window logic (Issue #4460).
 """
 
 import asyncio
@@ -15,6 +18,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, Optional
+
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -197,3 +202,17 @@ class IntegrationRateLimiter:
                     await asyncio.sleep(min(wait, 5.0))
                 finally:
                     await self._lock.acquire()
+
+
+# ---------------------------------------------------------------------------
+# Shared delegate (Issue #4460)
+# ---------------------------------------------------------------------------
+# A pre-configured instance of the shared RateLimiter scoped to integrations.
+# Callers that need only a simple allow/record check can use this directly
+# instead of importing the full IntegrationRateLimiter.
+integration_rate_limiter = _SharedRateLimiter(
+    scope_prefix="integration",
+    default_tier="privileged",
+    requests_per_minute=GITHUB_REQUESTS_PER_MINUTE,
+    requests_per_hour=GITHUB_REQUESTS_PER_HOUR,
+)

@@ -6,6 +6,9 @@ Message Queue with Per-Platform Rate Limiting
 
 Queues messages and respects platform-specific rate limits (Slack 1/sec, Discord 10/sec, etc).
 Provides async processing with burst support.
+
+Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
+sliding-window check available per gateway platform (Issue #4460).
 """
 
 import asyncio
@@ -15,7 +18,18 @@ from asyncio import Queue
 from dataclasses import dataclass, field
 from typing import Callable, Dict
 
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
+
 logger = logging.getLogger(__name__)
+
+# Shared delegate scoped to gateway operations (Issue #4460).
+# The local token-bucket ``RateLimiter`` dataclass handles per-message
+# burst/throughput control; the shared limiter below provides the sliding-
+# window check for the gateway scope, accessible to other gateway modules.
+gateway_rate_limiter = _SharedRateLimiter(
+    scope_prefix="gateway",
+    default_tier="privileged",
+)
 
 
 @dataclass
