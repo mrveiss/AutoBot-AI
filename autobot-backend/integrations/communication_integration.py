@@ -29,10 +29,14 @@ from integrations.rate_limiter import (
     SLACK_REQUESTS_PER_HOUR,
     SLACK_REQUESTS_PER_MINUTE,
     IntegrationRateLimiter,
+    integration_rate_limiter as _shared_rate_limiter,
 )
 
 logger = logging.getLogger(__name__)
 
+# In-memory limiter retained solely for apply_response_headers() (Retry-After
+# header parsing on HTTP 429).  Distributed acquire() uses _shared_rate_limiter
+# so quota state is shared across all backend workers (Issue #6311).
 _SLACK_RATE_LIMITER = IntegrationRateLimiter(
     requests_per_minute=SLACK_REQUESTS_PER_MINUTE,
     requests_per_hour=SLACK_REQUESTS_PER_HOUR,
@@ -233,12 +237,16 @@ class SlackIntegration(BaseIntegration):
         retried once after the prescribed wait.  Never raises; returns
         ``{"ok": False, "error": "<reason>"}`` on failure.
         """
-        # Acquire a rate-limit slot (waits up to 120 s if near limit)
-        try:
-            await self._rate_limiter.acquire(self._token_key)
-        except asyncio.TimeoutError:
-            self.logger.error("Slack rate limit wait exceeded 120 s for %s", url)
-            return {"ok": False, "error": "rate_limit_timeout"}
+        # Acquire rate-limit slot via the shared Redis-backed limiter (Issue #6311).
+        # Falls back to allow-all when Redis is unavailable.
+        allowed = await _shared_rate_limiter.acquire(
+            self._token_key,
+            requests_per_minute=SLACK_REQUESTS_PER_MINUTE,
+            requests_per_hour=SLACK_REQUESTS_PER_HOUR,
+        )
+        if not allowed:
+            self.logger.error("Slack rate limit exceeded for %s", url)
+            return {"ok": False, "error": "rate_limit_exceeded"}
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
