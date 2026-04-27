@@ -3524,3 +3524,131 @@ class NLSearchHealthResponse(BaseModel):
     use_instead: str
     features: List[str]
     llm_available: bool
+
+
+# ---------------------------------------------------------------------------
+# knowledge_tags schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeTagFactTagsResponse(BaseModel):
+    """Response for POST/DELETE/GET /fact/{fact_id}/tags."""
+
+    status: str
+    fact_id: str
+    tags: List[Any]
+    message: Optional[str] = None
+    added_count: Optional[int] = None
+    removed_count: Optional[int] = None
+
+
+class KnowledgeTagGetFactTagsResponse(BaseModel):
+    """Response for GET /fact/{fact_id}/tags."""
+
+    status: str
+    fact_id: str
+    tags: List[Any]
+
+
+class KnowledgeTagSearchResponse(BaseModel):
+    """Response for POST /tags/search."""
+
+    status: str
+    facts: List[Any]
+    total_count: int
+    tags_searched: List[str]
+    match_all: bool
+    limit: int
+    offset: int
+
+
+class KnowledgeTagListResponse(BaseModel):
+    """Response for GET /tags."""
+
+    status: str
+    tags: List[Any]
+    total_count: int
+
+
+class KnowledgeTagBulkResponse(BaseModel):
+    """Response for POST /tags/bulk."""
+
+    status: str
+    operation: str
+    processed_count: int
+    failed_count: int
+    results: List[Any]
+
+
+class KnowledgeTagRenameResponse(BaseModel):
+    """Response for PUT /tags/{tag_name}."""
+
+    status: str
+    old_tag: str
+    new_tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagDeleteResponse(BaseModel):
+    """Response for DELETE /tags/{tag_name}."""
+
+    status: str
+    tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagMergeResponse(BaseModel):
+    """Response for POST /tags/merge."""
+
+    status: str
+    source_tags: List[str]
+    target_tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagFactsByTagResponse(BaseModel):
+    """Response for GET /tags/{tag_name}/facts."""
+
+    status: str
+    tag: str
+    facts: List[Any]
+    total_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class KnowledgeTagInfoResponse(BaseModel):
+    """Response for GET /tags/{tag_name}/info."""
+
+    status: str
+    tag: str
+    fact_count: int
+
+
+class KnowledgeTagStyleInfo(BaseModel):
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool
+
+
+class KnowledgeTagStyleResponse(BaseModel):
+    """Response for PATCH/GET /tags/{tag_name}/style."""
+
+    status: str
+    tag: str
+    style: Dict[str, Any]
+    message: Optional[str] = None
+
+
+class KnowledgeTagDeleteStyleResponse(BaseModel):
+    """Response for DELETE /tags/{tag_name}/style."""
+
+    status: str
+    tag: str
+    message: str

@@ -5,6 +5,7 @@
 Analytics, cost, budget, usage, and metrics schemas.
 """
 
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -1469,3 +1470,205 @@ class QualityDrillDownResponse(BaseModel):
     """Response for GET /quality/drill-down/{category} — dual shape (success vs no_data)."""
 
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_precommit schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class CheckSeverity(str, Enum):
+    """Severity levels for pre-commit checks."""
+
+    BLOCK = "block"
+    WARN = "warn"
+    INFO = "info"
+
+
+class CheckCategory(str, Enum):
+    """Categories of pre-commit checks."""
+
+    SECURITY = "security"
+    QUALITY = "quality"
+    STYLE = "style"
+    DEBUG = "debug"
+    DOCS = "docs"
+
+
+class CheckResult(BaseModel):
+    """Result of a single check."""
+
+    check_id: str
+    name: str
+    category: CheckCategory
+    severity: CheckSeverity
+    passed: bool
+    message: str
+    file: Optional[str] = None
+    line: Optional[int] = None
+    snippet: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+class CommitCheckResult(BaseModel):
+    """Result of checking staged files."""
+
+    passed: bool
+    total_checks: int
+    passed_checks: int
+    failed_checks: int
+    warnings: int
+    blocked: bool
+    duration_ms: float
+    results: List[CheckResult]
+    files_checked: List[str]
+    timestamp: str
+
+
+class HookConfig(BaseModel):
+    """Configuration for pre-commit hooks."""
+
+    enabled: bool = True
+    fast_mode: bool = True
+    timeout_seconds: int = Field(default=5, ge=1, le=30)
+    bypass_keyword: str = "[skip-hooks]"
+    enabled_checks: List[str] = Field(default_factory=list)
+    disabled_checks: List[str] = Field(default_factory=list)
+
+
+class CheckDefinition(BaseModel):
+    """Definition of a check rule."""
+
+    id: str
+    name: str
+    category: CheckCategory
+    severity: CheckSeverity
+    pattern: str
+    description: str
+    suggestion: str
+    file_patterns: List[str] = Field(default_factory=lambda: ["*"])
+    enabled: bool = True
+
+
+class HookStatus(BaseModel):
+    """Status of installed hooks."""
+
+    installed: bool
+    path: Optional[str] = None
+    version: Optional[str] = None
+    last_run: Optional[str] = None
+    config: HookConfig
+
+
+class CheckToggleResponse(BaseModel):
+    """Response for POST /checks/{check_id}/toggle."""
+
+    check_id: str
+    enabled: bool
+    message: str
+
+
+class HookConfigUpdateResponse(BaseModel):
+    """Response for POST /config — echoes back the new config."""
+
+    message: str
+    config: HookConfig
+
+
+class HookInstallResponse(BaseModel):
+    """Response for POST /install and POST /uninstall."""
+
+    success: bool
+    message: str
+    path: Optional[str] = None
+
+
+class CommonIssueItem(BaseModel):
+    """Single issue entry in the summary common_issues list."""
+
+    check_id: str
+    count: int
+    name: str
+
+
+class PrecommitSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    total_runs: int
+    pass_rate: float
+    average_duration_ms: float
+    common_issues: List[CommonIssueItem]
+    checks_enabled: Optional[int] = None
+    total_checks: Optional[int] = None
+
+
+class PrecommitCategoryItem(BaseModel):
+    """Single category entry for GET /categories."""
+
+    category: str
+    enabled: int
+    disabled: int
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# error_monitoring schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class ErrorMonitoringDataResponse(BaseModel):
+    """Generic envelope for endpoints returning {"status": str, "data": Any}."""
+
+    status: str
+    data: Optional[Any] = None
+
+
+class ErrorMonitoringClearResponse(BaseModel):
+    """Response for POST /clear."""
+
+    status: str
+    message: str
+
+
+class ErrorMonitoringTestErrorResponse(BaseModel):
+    """Response for POST /test-error."""
+
+    status: str
+    message: str
+    error_caught: Optional[str] = None
+    error_type: Optional[str] = None
+
+
+class ErrorMonitoringResolveResponse(BaseModel):
+    """Response for POST /metrics/resolve/{trace_id}."""
+
+    status: str
+    message: str
+
+
+class ErrorMonitoringAlertThresholdResponse(BaseModel):
+    """Response for POST /metrics/alert-threshold."""
+
+    status: str
+    message: str
+    threshold_key: str
+    threshold: int
+
+
+class ErrorMonitoringCleanupResponse(BaseModel):
+    """Response for POST /metrics/cleanup."""
+
+    status: str
+    message: str
+    removed_count: int
+
+
+class TestErrorRequest(BaseModel):
+    error_type: str = "ValueError"
+    message: str = "Test error for error boundary system"
+
+
+class AlertThresholdRequest(BaseModel):
+    component: str
+    error_code: Optional[str] = None
+    threshold: int

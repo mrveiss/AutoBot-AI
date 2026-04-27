@@ -13,11 +13,20 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
 
+from api.schemas_analytics import (
+    AlertThresholdRequest,
+    ErrorMonitoringAlertThresholdResponse,
+    ErrorMonitoringClearResponse,
+    ErrorMonitoringCleanupResponse,
+    ErrorMonitoringDataResponse,
+    ErrorMonitoringResolveResponse,
+    ErrorMonitoringTestErrorResponse,
+    TestErrorRequest,
+)
 from autobot_shared.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,
@@ -27,7 +36,6 @@ from autobot_shared.error_boundaries import (
 from config.manager import get_config_manager
 from type_defs.common import Metadata
 from utils.error_metrics import get_metrics_collector
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 config = get_config_manager()
 
@@ -43,56 +51,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Error Monitoring"])
 
 
-# ---------------------------------------------------------------------------
-# Response models for error_monitoring endpoints
-# ---------------------------------------------------------------------------
-
-
-class ErrorMonitoringDataResponse(BaseModel):
-    """Generic envelope for endpoints returning {"status": str, "data": Any}."""
-
-    status: str
-    data: Optional[Any] = None
-
-
-class ErrorMonitoringClearResponse(BaseModel):
-    """Response for POST /clear."""
-
-    status: str
-    message: str
-
-
-class ErrorMonitoringTestErrorResponse(BaseModel):
-    """Response for POST /test-error."""
-
-    status: str
-    message: str
-    error_caught: Optional[str] = None
-    error_type: Optional[str] = None
-
-
-class ErrorMonitoringResolveResponse(BaseModel):
-    """Response for POST /metrics/resolve/{trace_id}."""
-
-    status: str
-    message: str
-
-
-class ErrorMonitoringAlertThresholdResponse(BaseModel):
-    """Response for POST /metrics/alert-threshold."""
-
-    status: str
-    message: str
-    threshold_key: str
-    threshold: int
-
-
-class ErrorMonitoringCleanupResponse(BaseModel):
-    """Response for POST /metrics/cleanup."""
-
-    status: str
-    message: str
-    removed_count: int
 
 
 @with_error_handling(
@@ -365,11 +323,6 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
         )
 
 
-class TestErrorRequest(BaseModel):
-    error_type: str = "ValueError"
-    message: str = "Test error for error boundary system"
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_error_system",
@@ -621,12 +574,6 @@ async def mark_error_resolved_endpoint(trace_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         )
-
-
-class AlertThresholdRequest(BaseModel):
-    component: str
-    error_code: Optional[str] = None
-    threshold: int
 
 
 @with_error_handling(
