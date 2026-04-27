@@ -29,11 +29,11 @@ import mimetypes
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiofiles
 
-from type_defs.common import JSONObject, Metadata
+from type_defs.common import Metadata
 from utils.io_executor import run_in_file_executor
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
@@ -61,8 +61,35 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
 
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_code import (
+    CreateDirectoryRequest,
+    DirectoryTreeRequest,
+    EditFileRequest,
+    FilesystemCreateDirectoryResponse,
+    FilesystemDirectoryTreeResponse,
+    FilesystemEditFileResponse,
+    FilesystemFileInfoResponse,
+    FilesystemListAllowedResponse,
+    FilesystemListDirectoryResponse,
+    FilesystemListDirectoryWithSizesResponse,
+    FilesystemMoveFileResponse,
+    FilesystemReadMediaResponse,
+    FilesystemReadMultipleResponse,
+    FilesystemReadTextResponse,
+    FilesystemSearchFilesResponse,
+    FilesystemWriteFileResponse,
+    GetFileInfoRequest,
+    ListDirectoryRequest,
+    ListDirectoryWithSizesRequest,
+    MCPTool,
+    MoveFileRequest,
+    ReadMediaFileRequest,
+    ReadMultipleFilesRequest,
+    ReadTextFileRequest,
+    SearchFilesRequest,
+    WriteFileRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
@@ -72,144 +99,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 
-# ---------------------------------------------------------------------------
-# Response models for filesystem_mcp endpoints
-# ---------------------------------------------------------------------------
-
-
-class FilesystemReadTextResponse(BaseModel):
-    """Response for POST /mcp/read_text_file."""
-
-    success: bool
-    path: str
-    content: str
-    lines: int
-    size_bytes: int
-
-
-class FilesystemReadMediaResponse(BaseModel):
-    """Response for POST /mcp/read_media_file."""
-
-    success: bool
-    path: str
-    mime_type: str
-    base64_data: str
-    size_bytes: int
-
-
-class FilesystemReadMultipleResponse(BaseModel):
-    """Response for POST /mcp/read_multiple_files."""
-
-    success: bool
-    files_read: int
-    files_failed: int
-    results: List[Dict]
-    errors: Optional[List[Dict]] = None
-
-
-class FilesystemWriteFileResponse(BaseModel):
-    """Response for POST /mcp/write_file."""
-
-    success: bool
-    path: str
-    size_bytes: int
-    message: str
-
-
-class FilesystemEditFileResponse(BaseModel):
-    """Response for POST /mcp/edit_file."""
-
-    success: bool
-    path: str
-    edits_applied: int
-    dry_run: bool
-    changes: List[Dict]
-    size_before: int
-    size_after: int
-
-
-class FilesystemCreateDirectoryResponse(BaseModel):
-    """Response for POST /mcp/create_directory."""
-
-    success: bool
-    path: str
-    message: str
-
-
-class FilesystemListDirectoryResponse(BaseModel):
-    """Response for POST /mcp/list_directory."""
-
-    success: bool
-    path: str
-    entry_count: int
-    entries: List[str]
-
-
-class FilesystemListDirectoryWithSizesResponse(BaseModel):
-    """Response for POST /mcp/list_directory_with_sizes."""
-
-    success: bool
-    path: str
-    entry_count: int
-    sorted_by: Optional[str] = None
-    entries: List[Dict]
-
-
-class FilesystemMoveFileResponse(BaseModel):
-    """Response for POST /mcp/move_file."""
-
-    success: bool
-    source: str
-    destination: str
-    message: str
-
-
-class FilesystemSearchFilesResponse(BaseModel):
-    """Response for POST /mcp/search_files."""
-
-    success: bool
-    search_path: str
-    pattern: str
-    matches_found: int
-    matches: List[str]
-
-
-class FilesystemDirectoryTreeResponse(BaseModel):
-    """Response for POST /mcp/directory_tree."""
-
-    success: bool
-    root_path: str
-    tree: Dict
-
-
-class FilesystemFileInfoResponse(BaseModel):
-    """Response for POST /mcp/get_file_info."""
-
-    success: bool
-    path: str
-    name: str
-    type: str
-    size_bytes: int
-    created: str
-    modified: str
-    accessed: str
-    permissions: str
-    mime_type: Optional[str] = None
-
-
-class FilesystemSecurityInfo(BaseModel):
-    path_traversal_blocked: bool
-    symlink_validation: bool
-    max_file_size_bytes: int
-
-
-class FilesystemListAllowedResponse(BaseModel):
-    """Response for GET /mcp/list_allowed_directories."""
-
-    success: bool
-    allowed_directories: List[str]
-    directory_count: int
-    security_info: FilesystemSecurityInfo
 
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
@@ -268,104 +157,6 @@ def _validated_path(path: str) -> str:
             status_code=403,
             detail="Access denied: Path not in allowed directories",
         )
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
-
-
-# Request Models
-
-
-class ReadTextFileRequest(BaseModel):
-    """Request model for reading text files"""
-
-    path: str = Field(..., description="Absolute path to file")
-    head: Optional[int] = Field(None, description="Read only first N lines")
-    tail: Optional[int] = Field(None, description="Read only last N lines")
-
-
-class ReadMediaFileRequest(BaseModel):
-    """Request model for reading media files (images, audio)"""
-
-    path: str = Field(..., description="Absolute path to media file")
-
-
-class ReadMultipleFilesRequest(BaseModel):
-    """Request model for reading multiple files"""
-
-    paths: List[str] = Field(..., description="List of absolute file paths")
-
-
-class WriteFileRequest(BaseModel):
-    """Request model for writing files"""
-
-    path: str = Field(..., description="Absolute path to file")
-    content: str = Field(..., description="File content to write")
-
-
-class EditFileRequest(BaseModel):
-    """Request model for editing files"""
-
-    path: str = Field(..., description="Absolute path to file")
-    edits: List[Dict[str, str]] = Field(
-        ..., description="List of {old_text, new_text} edits"
-    )
-    dry_run: Optional[bool] = Field(
-        False, description="Preview changes without applying"
-    )
-
-
-class CreateDirectoryRequest(BaseModel):
-    """Request model for creating directories"""
-
-    path: str = Field(..., description="Absolute path to directory")
-
-
-class ListDirectoryRequest(BaseModel):
-    """Request model for listing directory contents"""
-
-    path: str = Field(..., description="Absolute path to directory")
-
-
-class ListDirectoryWithSizesRequest(BaseModel):
-    """Request model for listing directory with sizes"""
-
-    path: str = Field(..., description="Absolute path to directory")
-    sort_by: Optional[str] = Field("name", description="Sort by 'name' or 'size'")
-
-
-class MoveFileRequest(BaseModel):
-    """Request model for moving/renaming files"""
-
-    source: str = Field(..., description="Source path")
-    destination: str = Field(..., description="Destination path")
-
-
-class SearchFilesRequest(BaseModel):
-    """Request model for searching files"""
-
-    path: str = Field(..., description="Directory to search")
-    pattern: str = Field(..., description="Search pattern (e.g., '*.py')")
-    exclude_patterns: Optional[List[str]] = Field(
-        None, description="Patterns to exclude"
-    )
-
-
-class DirectoryTreeRequest(BaseModel):
-    """Request model for directory tree"""
-
-    path: str = Field(..., description="Root directory path")
-
-
-class GetFileInfoRequest(BaseModel):
-    """Request model for file metadata"""
-
-    path: str = Field(..., description="File or directory path")
 
 
 def _create_read_text_file_tool() -> MCPTool:

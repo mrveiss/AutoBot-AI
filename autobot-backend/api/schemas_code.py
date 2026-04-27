@@ -7,7 +7,9 @@ Code review, git, skills, database, template, log, voice, access-control, MCP, a
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from type_defs.common import JSONObject
 
 from api.schemas_common import SuccessMessageResponse
 
@@ -1302,3 +1304,397 @@ class SkillExternalSyncResponse(BaseModel):
 # permissions.py schemas are defined in schemas_system.py (PermissionRuleMutateResponse,
 # PermissionClearApprovalsResponse, PermissionStoreApprovalResponse,
 # PermissionMemoryStatsResponse) — already wired in permissions.py.
+
+
+# ---------------------------------------------------------------------------
+# filesystem_mcp schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class FilesystemReadTextResponse(BaseModel):
+    """Response for POST /mcp/read_text_file."""
+
+    success: bool
+    path: str
+    content: str
+    lines: int
+    size_bytes: int
+
+
+class FilesystemReadMediaResponse(BaseModel):
+    """Response for POST /mcp/read_media_file."""
+
+    success: bool
+    path: str
+    mime_type: str
+    base64_data: str
+    size_bytes: int
+
+
+class FilesystemReadMultipleResponse(BaseModel):
+    """Response for POST /mcp/read_multiple_files."""
+
+    success: bool
+    files_read: int
+    files_failed: int
+    results: List[Dict]
+    errors: Optional[List[Dict]] = None
+
+
+class FilesystemWriteFileResponse(BaseModel):
+    """Response for POST /mcp/write_file."""
+
+    success: bool
+    path: str
+    size_bytes: int
+    message: str
+
+
+class FilesystemEditFileResponse(BaseModel):
+    """Response for POST /mcp/edit_file."""
+
+    success: bool
+    path: str
+    edits_applied: int
+    dry_run: bool
+    changes: List[Dict]
+    size_before: int
+    size_after: int
+
+
+class FilesystemCreateDirectoryResponse(BaseModel):
+    """Response for POST /mcp/create_directory."""
+
+    success: bool
+    path: str
+    message: str
+
+
+class FilesystemListDirectoryResponse(BaseModel):
+    """Response for POST /mcp/list_directory."""
+
+    success: bool
+    path: str
+    entry_count: int
+    entries: List[str]
+
+
+class FilesystemListDirectoryWithSizesResponse(BaseModel):
+    """Response for POST /mcp/list_directory_with_sizes."""
+
+    success: bool
+    path: str
+    entry_count: int
+    sorted_by: Optional[str] = None
+    entries: List[Dict]
+
+
+class FilesystemMoveFileResponse(BaseModel):
+    """Response for POST /mcp/move_file."""
+
+    success: bool
+    source: str
+    destination: str
+    message: str
+
+
+class FilesystemSearchFilesResponse(BaseModel):
+    """Response for POST /mcp/search_files."""
+
+    success: bool
+    search_path: str
+    pattern: str
+    matches_found: int
+    matches: List[str]
+
+
+class FilesystemDirectoryTreeResponse(BaseModel):
+    """Response for POST /mcp/directory_tree."""
+
+    success: bool
+    root_path: str
+    tree: Dict
+
+
+class FilesystemFileInfoResponse(BaseModel):
+    """Response for POST /mcp/get_file_info."""
+
+    success: bool
+    path: str
+    name: str
+    type: str
+    size_bytes: int
+    created: str
+    modified: str
+    accessed: str
+    permissions: str
+    mime_type: Optional[str] = None
+
+
+class FilesystemSecurityInfo(BaseModel):
+    path_traversal_blocked: bool
+    symlink_validation: bool
+    max_file_size_bytes: int
+
+
+class FilesystemListAllowedResponse(BaseModel):
+    """Response for GET /mcp/list_allowed_directories."""
+
+    success: bool
+    allowed_directories: List[str]
+    directory_count: int
+    security_info: FilesystemSecurityInfo
+
+
+class MCPTool(BaseModel):
+    """Standard MCP tool definition (shared across all MCP endpoint files)."""
+
+    name: str
+    description: str
+    input_schema: JSONObject
+
+
+class ReadTextFileRequest(BaseModel):
+    """Request model for reading text files."""
+
+    path: str = Field(..., description="Absolute path to file")
+    head: Optional[int] = Field(None, description="Read only first N lines")
+    tail: Optional[int] = Field(None, description="Read only last N lines")
+
+
+class ReadMediaFileRequest(BaseModel):
+    """Request model for reading media files (images, audio)."""
+
+    path: str = Field(..., description="Absolute path to media file")
+
+
+class ReadMultipleFilesRequest(BaseModel):
+    """Request model for reading multiple files."""
+
+    paths: List[str] = Field(..., description="List of absolute file paths")
+
+
+class WriteFileRequest(BaseModel):
+    """Request model for writing files."""
+
+    path: str = Field(..., description="Absolute path to file")
+    content: str = Field(..., description="File content to write")
+
+
+class EditFileRequest(BaseModel):
+    """Request model for editing files."""
+
+    path: str = Field(..., description="Absolute path to file")
+    edits: List[Dict[str, str]] = Field(
+        ..., description="List of {old_text, new_text} edits"
+    )
+    dry_run: Optional[bool] = Field(False, description="Preview changes without applying")
+
+
+class CreateDirectoryRequest(BaseModel):
+    """Request model for creating directories."""
+
+    path: str = Field(..., description="Absolute path to directory")
+
+
+class ListDirectoryRequest(BaseModel):
+    """Request model for listing directory contents."""
+
+    path: str = Field(..., description="Absolute path to directory")
+
+
+class ListDirectoryWithSizesRequest(BaseModel):
+    """Request model for listing directory with sizes."""
+
+    path: str = Field(..., description="Absolute path to directory")
+    sort_by: Optional[str] = Field("name", description="Sort by 'name' or 'size'")
+
+
+class MoveFileRequest(BaseModel):
+    """Request model for moving/renaming files."""
+
+    source: str = Field(..., description="Source path")
+    destination: str = Field(..., description="Destination path")
+
+
+class SearchFilesRequest(BaseModel):
+    """Request model for searching files."""
+
+    path: str = Field(..., description="Directory to search")
+    pattern: str = Field(..., description="Search pattern (e.g., '*.py')")
+    exclude_patterns: Optional[List[str]] = Field(None, description="Patterns to exclude")
+
+
+class DirectoryTreeRequest(BaseModel):
+    """Request model for directory tree."""
+
+    path: str = Field(..., description="Root directory path")
+
+
+class GetFileInfoRequest(BaseModel):
+    """Request model for file metadata."""
+
+    path: str = Field(..., description="File or directory path")
+
+
+# ---------------------------------------------------------------------------
+# code_intelligence response schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class SuggestionItem(BaseModel):
+    id: str
+    type: str
+    priority: str
+    title: str
+    description: str
+    impact: str
+
+
+class SuggestionsResponse(BaseModel):
+    suggestions: List[SuggestionItem]
+
+
+class FindingsPlaceholderResponse(BaseModel):
+    findings: List[Any]
+    score: Optional[float]
+    message: str
+
+
+class CodeIntelligenceTaskStatusResponse(BaseModel):
+    """Generic task status returned by BackgroundTaskManager (code_intelligence)."""
+
+    status: str
+    task_id: Optional[str] = None
+    progress: Optional[float] = None
+    message: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class StartTaskResponse(BaseModel):
+    task_id: str
+    status: str
+
+
+class ClearStuckResponse(BaseModel):
+    cleared_count: int
+    message: str
+
+
+class CachedSecurityScoreResponse(BaseModel):
+    status: str
+    from_cache: Optional[bool] = None
+    completed_at: Optional[str] = None
+    security_score: Optional[float] = None
+    grade: Optional[str] = None
+    risk_level: Optional[str] = None
+    status_message: Optional[str] = None
+    total_findings: Optional[int] = None
+    critical_issues: Optional[int] = None
+    high_issues: Optional[int] = None
+    files_analyzed: Optional[int] = None
+    severity_breakdown: Optional[Dict[str, Any]] = None
+    owasp_breakdown: Optional[Dict[str, Any]] = None
+    message: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# playwright request schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class PlaywrightSearchRequest(BaseModel):
+    query: str
+    search_engine: str = "duckduckgo"
+    max_results: int = 5
+
+
+class PlaywrightScreenshotRequest(BaseModel):
+    url: str
+    full_page: bool = True
+    wait_timeout: int = 5000
+
+
+class PlaywrightNavigateRequest(BaseModel):
+    url: str
+    wait_until: str = "networkidle"
+    timeout: int = 30000
+
+
+class PlaywrightReloadRequest(BaseModel):
+    wait_until: str = "networkidle"
+
+
+class PlaywrightInteractRequest(BaseModel):
+    action: str
+    x: Optional[float] = None
+    y: Optional[float] = None
+    deltaX: float = 0
+    deltaY: float = 0
+    text: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# ide_integration response schemas (#6042) — clean IDE-prefixed classes only
+# (Generic LSP types Position/Range/Diagnostic etc. deferred to follow-up PR)
+# ---------------------------------------------------------------------------
+
+
+class IDERulesResponse(BaseModel):
+    """Response for GET /rules."""
+
+    rules: List[Dict[str, Any]]
+    total: int
+    enabled: int
+
+
+class IDEConfigUpdateResponse(BaseModel):
+    """Response for PUT /config."""
+
+    updated: bool
+
+
+class IDECategoryItem(BaseModel):
+    """A single category entry."""
+
+    id: str
+    name: str
+
+
+class IDECategoriesResponse(BaseModel):
+    """Response for GET /categories."""
+
+    categories: List[IDECategoryItem]
+
+
+class IDESeverityItem(BaseModel):
+    """A single severity entry."""
+
+    id: str
+    name: str
+    lsp_code: int
+
+
+class IDESeveritiesResponse(BaseModel):
+    """Response for GET /severities."""
+
+    severities: List[IDESeverityItem]
+
+
+class IDEBatchAnalyzeResponse(BaseModel):
+    """Response for POST /batch-analyze."""
+
+    results: List[Any]
+    files_analyzed: int
+    total_issues: int
+    errors: int
+
+
+class IDEHealthResponse(BaseModel):
+    """Response for GET /health."""
+
+    status: str
+    rules_loaded: int
+    disabled_rules: int
+    cache_size: int

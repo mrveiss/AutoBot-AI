@@ -18,12 +18,20 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from api.schemas_code import (
+    CachedSecurityScoreResponse,
+    ClearStuckResponse,
+    CodeIntelligenceTaskStatusResponse,
+    FindingsPlaceholderResponse,
+    StartTaskResponse,
+    SuggestionsResponse,
+)
 from api.schemas_common import DataResponse, SuccessResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -50,66 +58,6 @@ from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_in
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Response models (#5317)
-# ---------------------------------------------------------------------------
-
-
-class SuggestionItem(BaseModel):
-    id: str
-    type: str
-    priority: str
-    title: str
-    description: str
-    impact: str
-
-
-class SuggestionsResponse(BaseModel):
-    suggestions: List[SuggestionItem]
-
-
-class FindingsPlaceholderResponse(BaseModel):
-    findings: List[Any]
-    score: Optional[float]
-    message: str
-
-
-class TaskStatusResponse(BaseModel):
-    """Generic task status returned by BackgroundTaskManager."""
-
-    status: str
-    task_id: Optional[str] = None
-    progress: Optional[float] = None
-    message: Optional[str] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-class StartTaskResponse(BaseModel):
-    task_id: str
-    status: str
-
-
-class ClearStuckResponse(BaseModel):
-    cleared_count: int
-    message: str
-
-
-class CachedSecurityScoreResponse(BaseModel):
-    status: str
-    from_cache: Optional[bool] = None
-    completed_at: Optional[str] = None
-    security_score: Optional[float] = None
-    grade: Optional[str] = None
-    risk_level: Optional[str] = None
-    status_message: Optional[str] = None
-    total_findings: Optional[int] = None
-    critical_issues: Optional[int] = None
-    high_issues: Optional[int] = None
-    files_analyzed: Optional[int] = None
-    severity_breakdown: Optional[Dict[str, Any]] = None
-    owasp_breakdown: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
 
 
 router = APIRouter()
@@ -2353,7 +2301,7 @@ async def start_security_analysis(
     operation="get_security_score_status",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/score/status/{task_id}", response_model=TaskStatusResponse)
+@router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
 async def get_security_score_status(task_id: str):
     """Get security score analysis task status (#1304)."""
     task = await _sec_manager.get_status(task_id)
