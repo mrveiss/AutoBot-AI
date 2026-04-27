@@ -239,7 +239,7 @@ class VLLMProvider:
 
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
-                except ImportError:
+                except (ImportError, RuntimeError):
                     pass
                 logger.info("vLLM model %s cleaned up", self.model_name)
             except Exception as e:

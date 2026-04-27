@@ -42,7 +42,7 @@ def _get_torch():
             import torch as _t
 
             _torch = _t
-        except ImportError:
+        except (ImportError, RuntimeError):
             _torch = None
     return _torch
 

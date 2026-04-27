@@ -121,7 +121,7 @@ def _probe_flash_attn() -> bool:
         _flash_attn_modules["pad_input"] = pad_input
         _flash_attn_available = True
         logger.info("Flash Attention v2 loaded successfully")
-    except ImportError:
+    except (ImportError, RuntimeError):
         _flash_attn_available = False
         logger.info("flash_attn not available, will use fallback backends")
 
@@ -136,7 +136,7 @@ def _try_load_fused_rope() -> None:
 
         _flash_attn_modules["fused_rope"] = fused_rope
         logger.info("Fused RoPE kernel loaded from flash_attn")
-    except ImportError:
+    except (ImportError, RuntimeError):
         logger.debug("Fused RoPE kernel not available, using standard implementation")
 
 

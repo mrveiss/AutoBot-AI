@@ -19,7 +19,7 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
     logger.warning("PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
 
