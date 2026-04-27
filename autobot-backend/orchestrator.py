@@ -207,6 +207,7 @@ class Orchestrator:
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
+        self.auto_doc_enabled = True
         self.workflow_metrics = {
             "total_workflows": 0,
             "successful_workflows": 0,
@@ -717,10 +718,10 @@ class Orchestrator:
         return await self._runner.execute_workflow(plan)
 
     async def get_agent_recommendations(
-        self, task_type: str, capabilities_needed: Set
+        self, capabilities_needed: Set
     ) -> List[str]:
         """Get recommended agents for a task. Delegates to WorkflowRunner (#5058)."""
-        return await self._runner.get_agent_recommendations(task_type, capabilities_needed)
+        return await self._runner.get_agent_recommendations(capabilities_needed)
 
     def get_performance_report(self) -> Dict[str, Any]:
         """Performance report. Delegates to WorkflowRunner (#5058)."""
@@ -747,12 +748,14 @@ class Orchestrator:
             "queued_tasks": len(self.task_queue),
             "metrics": self.metrics,
             "workflow_metrics": self.workflow_metrics,
+            "capabilities_coverage": self._runner._calculate_capability_coverage(),
             "configuration": {
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
                 "max_parallel_tasks": self.config.max_parallel_tasks,
                 "classification_enabled": self.classification_agent is not None,
                 "knowledge_extraction_enabled": self.knowledge_extraction_enabled,
+                "auto_doc_enabled": self.auto_doc_enabled,
             },
             "agent_registry": {
                 agent_id: {
