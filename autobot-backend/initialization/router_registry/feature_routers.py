@@ -238,7 +238,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "heartbeat",
     ),
     # Long-running and validation
-    # api.long_running_operations promoted to core_routers.py (Issue #6227)
+    # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
+    (
+        "api.long_running_operations",
+        "/long-running",
+        ["long-running-operations"],
+        "long_running_operations",
+    ),
     (
         "api.system_validation",
         "/system-validation",
