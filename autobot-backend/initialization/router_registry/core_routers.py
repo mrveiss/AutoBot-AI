@@ -60,7 +60,6 @@ from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Is
 from api.knowledge_vectorization import router as knowledge_vectorization_router
 from api.llm import router as llm_router
 from api.live_events import router as live_events_router  # Issue #6229
-from api.long_running_operations import router as long_running_operations_router  # Issue #6227
 from api.llm_providers import router as llm_providers_router
 from api.websockets import router as websockets_router  # Issue #6229
 from api.manual_mcp import router as manual_mcp_router
@@ -382,12 +381,6 @@ def _get_agent_routers() -> list:
             "",
             ["process-management"],
             "process_management",
-        ),
-        (  # Issue #6227: register long-running operations router
-            long_running_operations_router,
-            "/long-running",
-            ["long-running-operations"],
-            "long_running_operations",
         ),
     ]
 
