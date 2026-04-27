@@ -124,6 +124,11 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
                 ssot_config.llm.lmstudio_host,
             ),
         },
+        # Issue #6232: Expose canonical WebSocket base URL so the frontend
+        # can validate/override the build-time ssot-config value at runtime.
+        "websocket": {
+            "url": ssot_config.websocket_url,
+        },
     }
 
 
