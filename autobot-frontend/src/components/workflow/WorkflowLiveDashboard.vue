@@ -340,7 +340,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 8px 14px;
+  padding: var(--spacing-2) var(--spacing-3-5);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -366,7 +366,7 @@ onUnmounted(() => {
 
 .btn-reconnect {
   margin-left: auto;
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -398,7 +398,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -478,7 +478,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: var(--spacing-12) var(--spacing-6);
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -490,7 +490,7 @@ onUnmounted(() => {
 }
 
 .empty-state h4 {
-  margin: 0 0 6px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1-5);
   color: var(--text-primary);
   font-size: 15px;
 }
@@ -695,7 +695,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);

@@ -442,7 +442,7 @@ function resetEdit(): void {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
   color: var(--color-warning, #f59e0b);
   border-radius: var(--radius-full);
@@ -458,7 +458,7 @@ function resetEdit(): void {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm, 0.25rem);

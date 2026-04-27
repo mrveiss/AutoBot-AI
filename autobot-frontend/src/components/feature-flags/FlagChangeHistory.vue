@@ -169,7 +169,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .section-header h3 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -213,7 +213,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .empty-state h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -273,7 +273,7 @@ const formatRelativeTime = (timestamp: string) => {
   width: 2px;
   flex: 1;
   background: var(--border-default);
-  margin: 8px 0;
+  margin: var(--spacing-2) var(--spacing-0);
 }
 
 .timeline-content {
@@ -295,7 +295,7 @@ const formatRelativeTime = (timestamp: string) => {
 .mode-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -329,7 +329,7 @@ const formatRelativeTime = (timestamp: string) => {
 }
 
 .action-text {
-  margin: 0 0 10px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2-5);
   font-size: var(--text-sm);
   color: var(--text-primary);
 }

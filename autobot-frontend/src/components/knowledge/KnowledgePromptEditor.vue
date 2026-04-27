@@ -508,7 +508,7 @@ onBeforeUnmount(() => {
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
 }
 
 .category-filter {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-sm);
 }
 
@@ -582,7 +582,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 0;
+  padding: var(--spacing-2) var(--spacing-0);
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
@@ -593,7 +593,7 @@ onBeforeUnmount(() => {
 .category-header .count {
   margin-left: auto;
   background: var(--bg-card);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-2xl);
   font-weight: 500;
 }
@@ -605,7 +605,7 @@ onBeforeUnmount(() => {
 }
 
 .prompt-item {
-  padding: 0.625rem 0.75rem;
+  padding: var(--spacing-2-5) var(--spacing-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-150);
@@ -663,7 +663,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.875rem 1.5rem;
+  padding: var(--spacing-3-5) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -681,7 +681,7 @@ onBeforeUnmount(() => {
 }
 
 .version-badge {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -689,7 +689,7 @@ onBeforeUnmount(() => {
 }
 
 .unsaved-badge {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
   border-radius: var(--radius-default);
@@ -735,7 +735,7 @@ onBeforeUnmount(() => {
 
 /* Editor Footer */
 .editor-footer {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   background: var(--bg-secondary);
   display: flex;
@@ -769,7 +769,7 @@ onBeforeUnmount(() => {
 }
 
 .variable-tag {
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-info-bg);
   color: var(--color-info);
   border-radius: var(--radius-default);
@@ -803,7 +803,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;

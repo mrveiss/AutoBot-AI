@@ -146,7 +146,7 @@ const isDevToolsActive = computed(() => {
 
 /* Header Section */
 .analytics-header {
-  padding: 24px 32px 20px;
+  padding: var(--spacing-6) var(--spacing-8) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-primary);
 }
@@ -166,7 +166,7 @@ const isDevToolsActive = computed(() => {
 }
 
 .page-subtitle {
-  margin: 6px 0 0 0;
+  margin: var(--spacing-1-5) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
@@ -184,7 +184,7 @@ const isDevToolsActive = computed(() => {
 .nav-tabs {
   display: flex;
   gap: var(--spacing-0-5);
-  padding: 0 32px;
+  padding: var(--spacing-0) var(--spacing-8);
   max-width: 1400px;
   margin: 0 auto;
   overflow-x: auto;
@@ -194,7 +194,7 @@ const isDevToolsActive = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -232,13 +232,13 @@ const isDevToolsActive = computed(() => {
 .analytics-router-view {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: var(--spacing-6) var(--spacing-8);
 }
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   .analytics-header {
-    padding: 20px 16px 16px;
+    padding: var(--spacing-5) var(--spacing-4) var(--spacing-4);
   }
 
   .page-title {
@@ -250,12 +250,12 @@ const isDevToolsActive = computed(() => {
   }
 
   .nav-tabs {
-    padding: 0 16px;
+    padding: var(--spacing-0) var(--spacing-4);
     gap: var(--spacing-0);
   }
 
   .nav-tab {
-    padding: 10px 12px;
+    padding: var(--spacing-2-5) var(--spacing-3);
     font-size: var(--text-sm);
     gap: var(--spacing-1-5);
   }

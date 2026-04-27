@@ -1030,7 +1030,7 @@ onMounted(() => {
   color: var(--text-on-primary);
   font-size: var(--text-xs);
   font-weight: var(--font-bold);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-full);
   min-width: 1.25rem;
   text-align: center;

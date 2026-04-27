@@ -293,7 +293,7 @@ const showEmptyStateHint = computed(
 }
 
 .kb-status-panel__text:last-child {
-  margin-bottom: 0;
+  margin-bottom: var(--spacing-0);
 }
 
 .kb-status-panel--info {

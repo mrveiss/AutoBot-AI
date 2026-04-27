@@ -378,7 +378,7 @@ function onApiKeysSaved(): void {
     overflow-x: auto;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
-    gap: 0;
+    gap: var(--spacing-0);
   }
 
   .settings-tab {

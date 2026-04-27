@@ -455,7 +455,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .key-badge {
   font-size: 0.7rem;
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   text-transform: uppercase;
 }

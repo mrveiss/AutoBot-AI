@@ -426,7 +426,7 @@ function statusClass(status: string): string {
   border: 1px solid var(--border, #334155);
   border-radius: var(--radius-default);
   color: inherit;
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   width: 200px;
 }
 .error-banner {
@@ -434,7 +434,7 @@ function statusClass(status: string): string {
   border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: var(--radius-md);
   color: #fca5a5;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
 }
 .card {
   background: var(--bg-card, #1e293b);
@@ -529,7 +529,7 @@ function statusClass(status: string): string {
   padding: var(--spacing-0);
 }
 .events-container {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
@@ -558,7 +558,7 @@ function statusClass(status: string): string {
 .empty-state {
   color: var(--text-secondary, #94a3b8);
   font-style: italic;
-  padding: 0.5rem 0;
+  padding: var(--spacing-2) var(--spacing-0);
 }
 .count-badge {
   background: var(--bg-input, #0f172a);

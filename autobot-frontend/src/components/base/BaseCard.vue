@@ -156,7 +156,7 @@ const footerClasses = computed(() => ({
 }
 
 .card-subtitle {
-  margin: 4px 0 0 0;
+  margin: var(--spacing-1) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
@@ -181,7 +181,7 @@ const footerClasses = computed(() => ({
 
 /* Card Footer */
 .card-footer {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
   display: flex;
@@ -238,7 +238,7 @@ const footerClasses = computed(() => ({
   }
 
   .card-footer {
-    padding: 10px 12px;
+    padding: var(--spacing-2-5) var(--spacing-3);
     flex-wrap: wrap;
   }
 }

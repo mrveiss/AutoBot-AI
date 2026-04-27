@@ -418,14 +418,14 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   gap: var(--spacing-0);
   border-bottom: 1px solid var(--border-default);
-  padding: 0 24px;
+  padding: var(--spacing-0) var(--spacing-6);
 }
 
 .tab-btn {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -494,7 +494,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .role-badge {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -525,7 +525,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .option-btn {
-  padding: 6px 16px;
+  padding: var(--spacing-1-5) var(--spacing-4);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
@@ -569,7 +569,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .save-btn {
   margin-top: var(--spacing-4);
-  padding: 8px 20px;
+  padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-primary, #6366f1);
   color: white;
   border: none;
@@ -596,7 +596,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .pw-input {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
@@ -620,7 +620,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   font-weight: 500;

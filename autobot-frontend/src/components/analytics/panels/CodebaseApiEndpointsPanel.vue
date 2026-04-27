@@ -321,7 +321,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   cursor: pointer;
   background: var(--bg-secondary);
   transition: background var(--duration-200) var(--ease-out);
@@ -362,7 +362,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Unified Severity Badges */
 .severity-badge {
   font-size: 0.7em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   font-weight: 500;
 }
@@ -406,7 +406,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .list-item {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border-left: 4px solid var(--text-tertiary);
   transition: all var(--duration-200) var(--ease-out);
 }
@@ -453,7 +453,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 .item-severity {
   font-size: 0.75em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-weight: 600;
   text-transform: uppercase;
@@ -491,7 +491,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Duplicate-specific Styles */
 .item-similarity {
   font-size: 0.75em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-weight: 600;
 }
@@ -588,7 +588,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
-  margin: 0 0 20px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5) var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
@@ -621,7 +621,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 
 /* Coverage Bar */
 .coverage-bar-container {
-  margin: 20px 0;
+  margin: var(--spacing-5) var(--spacing-0);
   padding: var(--spacing-4);
   background: rgba(30, 41, 59, 0.8);
   border-radius: var(--radius-lg);
@@ -667,7 +667,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* HTTP Method Badges */
 .method-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -692,7 +692,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Call Count Badge */
 .call-count-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   margin-left: auto;
   background: rgba(59, 130, 246, 0.2);
   color: var(--color-info-light);
@@ -704,7 +704,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Item Details */
 .item-details {
   margin-top: var(--spacing-1);
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-default);
   color: var(--text-muted);
@@ -772,7 +772,7 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 /* Scan Timestamp */
 .scan-timestamp {
   margin-top: var(--spacing-4);
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: rgba(30, 41, 59, 0.8);
   border-radius: var(--radius-md);
   color: var(--text-tertiary);

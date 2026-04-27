@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.1));
   background: var(--bg-elevated, rgba(15, 23, 42, 0.8));
 }
@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
 
 .voice-overlay__mode-select {
   appearance: none;
-  padding: 0.25rem 1.75rem 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-7) var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
   background: var(--bg-tertiary, #1e293b)
@@ -545,7 +545,7 @@ onBeforeUnmount(() => {
 
 .voice-overlay__bubble-content {
   max-width: 80%;
-  padding: 0.625rem 0.875rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   border-radius: 0.875rem;
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -577,7 +577,7 @@ onBeforeUnmount(() => {
 /* Live transcript */
 .voice-overlay__live-transcript {
   margin-top: var(--spacing-3);
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-lg);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
@@ -588,8 +588,8 @@ onBeforeUnmount(() => {
 
 /* Error banner */
 .voice-overlay__error {
-  margin: 0 1.25rem;
-  padding: 0.5rem 0.75rem;
+  margin: var(--spacing-0) var(--spacing-5);
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-lg);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -599,8 +599,8 @@ onBeforeUnmount(() => {
 
 /* Insecure-context cert warning (#1059) */
 .voice-overlay__cert-warning {
-  margin: 0 1.25rem;
-  padding: 0.75rem 1rem;
+  margin: var(--spacing-0) var(--spacing-5);
+  padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
@@ -648,7 +648,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 1.5rem 1.25rem 2rem;
+  padding: var(--spacing-6) var(--spacing-5) var(--spacing-8);
   border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.08));
   background: linear-gradient(
     to top,
@@ -771,7 +771,7 @@ onBeforeUnmount(() => {
    ============================================ */
 
 .voice-overlay__hf-controls {
-  padding: 0.75rem 1.25rem 0;
+  padding: var(--spacing-3) var(--spacing-5) var(--spacing-0);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2-5);

@@ -504,7 +504,7 @@ watch([selectedGranularity, selectedDays], () => {
 }
 
 .control-select {
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

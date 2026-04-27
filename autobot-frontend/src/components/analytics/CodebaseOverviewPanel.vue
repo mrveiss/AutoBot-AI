@@ -280,7 +280,7 @@ const getQualityClass = (score: number): string => {
   background: var(--bg-tertiary);
   border: 1px solid var(--bg-hover);
   color: var(--text-secondary);
-  padding: 6px 8px;
+  padding: var(--spacing-1-5) var(--spacing-2);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-200);
@@ -302,7 +302,7 @@ const getQualityClass = (score: number): string => {
   background: var(--bg-secondary);
   border: 1px solid var(--bg-tertiary);
   color: var(--text-muted);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   cursor: pointer;
@@ -363,7 +363,7 @@ const getQualityClass = (score: number): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: var(--spacing-2) var(--spacing-0);
   border-bottom: 1px solid var(--bg-tertiary);
 }
 
@@ -501,7 +501,7 @@ const getQualityClass = (score: number): string => {
   background: var(--chart-indigo);
   color: var(--text-on-primary);
   border: none;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-200);

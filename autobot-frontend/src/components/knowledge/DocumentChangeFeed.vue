@@ -357,7 +357,7 @@ onUnmounted(() => {
 }
 
 .badge {
-  padding: 0.25rem 0.75rem;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-full);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -411,7 +411,7 @@ onUnmounted(() => {
 }
 
 .section-select {
-  padding: 0.375rem 0.5rem;
+  padding: var(--spacing-1-5) var(--spacing-2);
   font-size: var(--text-sm);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-default);
@@ -466,7 +466,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   margin-bottom: var(--spacing-4);
 }
 

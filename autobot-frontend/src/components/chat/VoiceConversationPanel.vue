@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
 /* Live transcript */
 .voice-panel__transcript {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
@@ -384,8 +384,8 @@ onBeforeUnmount(() => {
 
 /* Error */
 .voice-panel__error {
-  margin: 0 0.75rem;
-  padding: 0.375rem 0.5rem;
+  margin: var(--spacing-0) var(--spacing-3);
+  padding: var(--spacing-1-5) var(--spacing-2);
   border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -395,8 +395,8 @@ onBeforeUnmount(() => {
 
 /* Cert warning */
 .voice-panel__cert-warning {
-  margin: 0 0.75rem;
-  padding: 0.5rem 0.625rem;
+  margin: var(--spacing-0) var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-2-5);
   border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
@@ -409,7 +409,7 @@ onBeforeUnmount(() => {
 
 /* Hands-free controls */
 .voice-panel__hf-controls {
-  padding: 0.5rem 0.75rem 0;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-0);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
@@ -468,7 +468,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem 0.75rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-3) var(--spacing-5);
   border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.08));
 }
 

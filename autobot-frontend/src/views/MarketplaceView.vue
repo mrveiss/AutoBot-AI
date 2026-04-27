@@ -437,7 +437,7 @@ onMounted(async () => {
 
 .search-input {
   width: 100%;
-  padding: 6px 12px 6px 32px;
+  padding: var(--spacing-1-5) var(--spacing-3) var(--spacing-1-5) var(--spacing-8);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -456,7 +456,7 @@ onMounted(async () => {
 }
 
 .filter-select {
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -478,7 +478,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -501,7 +501,7 @@ onMounted(async () => {
 
 .count-badge {
   font-size: var(--text-xs);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-xl);
   min-width: 20px;
   text-align: center;
@@ -613,7 +613,7 @@ onMounted(async () => {
 .status-badge {
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -687,7 +687,7 @@ onMounted(async () => {
 .category-tag {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   color: var(--text-secondary);
@@ -704,7 +704,7 @@ onMounted(async () => {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
@@ -724,7 +724,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;

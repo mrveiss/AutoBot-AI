@@ -242,11 +242,11 @@
 .category-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: var(--spacing-3) var(--spacing-0);
 }
 
 .category-divider {
-  padding: 12px 20px 8px;
+  padding: var(--spacing-3) var(--spacing-5) var(--spacing-2);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -259,7 +259,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   cursor: pointer;
   transition: all var(--duration-150) var(--ease-in-out);
   color: var(--text-secondary);
@@ -335,7 +335,7 @@
   }
 
   .category-item {
-    padding: 12px 16px;
+    padding: var(--spacing-3) var(--spacing-4);
     min-height: 44px;
   }
 
@@ -344,7 +344,7 @@
   }
 
   .category-divider {
-    padding: 10px 16px 6px;
+    padding: var(--spacing-2-5) var(--spacing-4) var(--spacing-1-5);
   }
 }
 </style>

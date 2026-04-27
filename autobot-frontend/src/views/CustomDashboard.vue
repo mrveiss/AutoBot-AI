@@ -634,7 +634,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -668,7 +668,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.625rem 1rem;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
@@ -706,7 +706,7 @@ onMounted(() => {
 }
 
 .dashboard-selector select {
-  padding: 0.625rem 1rem;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -736,7 +736,7 @@ onMounted(() => {
 
 /* Widget Palette */
 .widget-palette {
-  padding: 1rem 2rem;
+  padding: var(--spacing-4) var(--spacing-8);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -758,7 +758,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -783,7 +783,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-6);
-  padding: 1.5rem 2rem;
+  padding: var(--spacing-6) var(--spacing-8);
   overflow-y: auto;
 }
 
@@ -837,7 +837,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -956,7 +956,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -1007,7 +1007,7 @@ onMounted(() => {
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 0.625rem 0.75rem;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -1030,7 +1030,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-3);
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   background: var(--bg-primary);
   border-top: 1px solid var(--border-default);
 }

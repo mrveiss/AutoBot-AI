@@ -332,7 +332,7 @@ const handleRemove = () => {
 <style scoped>
 .showcase-container { padding: var(--spacing-6); max-width: 1400px; margin: 0 auto; background-color: var(--bg-primary); min-height: 100%; overflow-y: auto; }
 .showcase-header { margin-bottom: var(--spacing-8); }
-.showcase-title { font-size: 32px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px 0; font-family: var(--font-sans); }
+.showcase-title { font-size: 32px; font-weight: 600; color: var(--text-primary); margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0); font-family: var(--font-sans); }
 .showcase-subtitle { font-size: var(--text-base); color: var(--text-secondary); margin: var(--spacing-0); }
 .showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--spacing-6); }
 .showcase-full-width { grid-column: 1 / -1; }

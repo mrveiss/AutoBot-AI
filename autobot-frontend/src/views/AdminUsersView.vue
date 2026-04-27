@@ -376,7 +376,7 @@ onMounted(loadUsers)
 .page-title {
   font-size: var(--text-2xl);
   font-weight: 600;
-  margin: 0 0 0.25rem;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
 }
 
 .page-subtitle {
@@ -394,7 +394,7 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-error-bg, #fef2f2);
   border: 1px solid var(--color-error-border, #fca5a5);
   border-radius: var(--radius-lg);
@@ -425,7 +425,7 @@ onMounted(loadUsers)
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -452,7 +452,7 @@ onMounted(loadUsers)
 
 .data-table th {
   text-align: left;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -463,7 +463,7 @@ onMounted(loadUsers)
 }
 
 .data-table td {
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #f3f4f6);
   font-size: var(--text-sm);
 }
@@ -484,7 +484,7 @@ onMounted(loadUsers)
 
 .badge {
   display: inline-block;
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 600;
@@ -506,7 +506,7 @@ onMounted(loadUsers)
 }
 
 .role-select {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
@@ -561,7 +561,7 @@ onMounted(loadUsers)
 }
 
 .btn-page {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   background: transparent;
@@ -584,7 +584,7 @@ onMounted(loadUsers)
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -640,7 +640,7 @@ onMounted(loadUsers)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--color-border, #e5e7eb);
 }
 
@@ -675,7 +675,7 @@ onMounted(loadUsers)
 
 .form-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);

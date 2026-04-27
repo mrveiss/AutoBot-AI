@@ -425,7 +425,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   cursor: pointer;
   background: var(--bg-secondary);
   transition: background var(--duration-200) var(--ease-out);
@@ -466,7 +466,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Unified Severity Badges */
 .severity-badge {
   font-size: 0.7em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   font-weight: 500;
 }
@@ -510,7 +510,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 .list-item {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border-left: 4px solid var(--text-tertiary);
   transition: all var(--duration-200) var(--ease-out);
 }
@@ -557,7 +557,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 .item-severity {
   font-size: 0.75em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-weight: 600;
   text-transform: uppercase;
@@ -595,7 +595,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Duplicate-specific Styles */
 .item-similarity {
   font-size: 0.75em;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-weight: 600;
 }
@@ -692,7 +692,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
-  margin: 0 0 20px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5) var(--spacing-0);
   color: var(--text-secondary);
   font-size: 1.1rem;
   font-weight: 600;
@@ -728,7 +728,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-3);
-  margin: 16px 0;
+  margin: var(--spacing-4) var(--spacing-0);
   padding: var(--spacing-3);
   background: rgba(30, 41, 59, 0.8);
   border-radius: var(--radius-lg);
@@ -738,7 +738,7 @@ function formatTimestamp(timestamp: string | undefined): string {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 500;
@@ -765,7 +765,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Cross-language Type Badges */
 .type-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -791,7 +791,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Validation Type Badge */
 .validation-type-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -804,7 +804,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Similarity Score */
 .similarity-score {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -822,7 +822,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Match Type */
 .match-type {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   margin-left: var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
@@ -868,7 +868,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 }
 
 .item-field code {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   background: rgba(0, 0, 0, 0.3);
   border-radius: var(--radius-default);
   color: var(--text-secondary);
@@ -884,7 +884,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 /* Item Recommendation */
 .item-recommendation {
   margin-top: var(--spacing-1-5);
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-md);
   color: var(--color-info-light);
@@ -901,7 +901,7 @@ function formatTimestamp(timestamp: string | undefined): string {
 
 /* Scan Button */
 .btn-scan {
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   background: var(--chart-purple);
   color: white;
   border: none;

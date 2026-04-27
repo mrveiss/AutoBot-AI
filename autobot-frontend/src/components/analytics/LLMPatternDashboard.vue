@@ -513,7 +513,7 @@ onMounted(() => {
 .subtitle {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin: 0.25rem 0 0 0;
+  margin: var(--spacing-1) var(--spacing-0) var(--spacing-0) var(--spacing-0);
 }
 
 /* Stats Grid */
@@ -671,7 +671,7 @@ onMounted(() => {
 }
 
 .analyze-btn {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background: var(--color-info);
   border: none;
   border-radius: var(--radius-md);
@@ -709,7 +709,7 @@ onMounted(() => {
 .category-badge,
 .tokens-badge,
 .cost-badge {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: var(--text-xs);
 }
@@ -811,13 +811,13 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
 }
 
 .recommendation-card p {
   font-size: 0.8125rem;
   color: var(--text-secondary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
 }
 
 .rec-meta {
@@ -832,7 +832,7 @@ onMounted(() => {
   border-radius: var(--radius-default);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   cursor: pointer;
 }
 
@@ -918,7 +918,7 @@ onMounted(() => {
 }
 
 .category-item {
-  padding: 0.5rem 0;
+  padding: var(--spacing-2) var(--spacing-0);
 }
 
 .category-header {

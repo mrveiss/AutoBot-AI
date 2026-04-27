@@ -1554,7 +1554,7 @@ watch(layoutMode, () => {
   cursor: pointer;
   text-decoration: underline;
   font-size: var(--text-sm);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 /* Zoom Controls */
@@ -1995,7 +1995,7 @@ watch(layoutMode, () => {
 .control-separator {
   color: var(--border-default);
   font-size: var(--text-sm);
-  margin: 0 4px;
+  margin: var(--spacing-0) var(--spacing-1);
 }
 
 /* 3D Graph Loading Skeleton */

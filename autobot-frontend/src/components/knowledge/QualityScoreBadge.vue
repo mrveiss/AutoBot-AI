@@ -27,7 +27,7 @@ const qualityClass = computed(() => {
 <style scoped>
 .quality-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xs);
   font-size: var(--text-xs);
   font-weight: 600;

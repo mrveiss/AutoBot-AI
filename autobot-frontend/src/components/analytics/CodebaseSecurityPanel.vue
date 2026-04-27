@@ -178,7 +178,7 @@ const getTabCount = (tabId: string): number => {
 }
 
 .code-intelligence-section .action-btn {
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   background: var(--bg-tertiary);
@@ -224,7 +224,7 @@ const getTabCount = (tabId: string): number => {
 }
 
 .code-intel-tabs .tab-btn {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -248,7 +248,7 @@ const getTabCount = (tabId: string): number => {
 
 .code-intel-tabs .tab-count {
   background: var(--bg-tertiary);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-full);
   font-size: 0.8em;
 }

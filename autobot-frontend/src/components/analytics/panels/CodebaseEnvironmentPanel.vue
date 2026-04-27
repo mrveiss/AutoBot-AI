@@ -346,7 +346,7 @@ function formatFactorName(factor: string): string {
 }
 
 .environment-analysis-section .category-badge {
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   font-size: 0.85em;
@@ -394,13 +394,13 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .env-var-name {
   background: rgba(34, 197, 94, 0.2);
   color: var(--color-success-light);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.9em;
 }
 
 .environment-analysis-section .priority-badge {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: 0.7em;
   text-transform: uppercase;
@@ -503,7 +503,7 @@ function formatFactorName(factor: string): string {
 .environment-analysis-section .hv-value code {
   background: rgba(245, 158, 11, 0.1);
   color: var(--color-warning-light);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: 0.85em;
 }
@@ -518,7 +518,7 @@ function formatFactorName(factor: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-default);
   font-size: 0.85em;

@@ -323,7 +323,7 @@ async function copyId() {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
 }
 
 .progress-section,
@@ -448,7 +448,7 @@ async function copyId() {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
   border-radius: var(--radius-md);
@@ -506,7 +506,7 @@ async function copyId() {
 }
 
 .copy-id-btn {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   font-size: var(--text-xs);
   background: none;
   border: 1px solid var(--border-default);

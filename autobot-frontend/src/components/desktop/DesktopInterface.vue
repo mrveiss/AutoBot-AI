@@ -470,7 +470,7 @@ onUnmounted(() => {
 }
 
 .desktop-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
 }
@@ -496,7 +496,7 @@ onUnmounted(() => {
 /* Loading and error styles moved to UnifiedLoadingView */
 
 .desktop-controls {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background-color: var(--bg-card);
   border-top: 1px solid var(--border-default);
   display: flex;
@@ -505,7 +505,7 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-sm);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
@@ -526,7 +526,7 @@ onUnmounted(() => {
 
 /* Desktop Actions Toolbar (Issue #74) */
 .desktop-actions {
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background-color: var(--bg-card);
   border-top: 1px solid var(--border-default);
   display: flex;
@@ -546,7 +546,7 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-sm);
   background-color: var(--color-primary-bg);
   color: var(--color-primary);
@@ -587,7 +587,7 @@ onUnmounted(() => {
 }
 
 .screenshot-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -608,7 +608,7 @@ onUnmounted(() => {
 }
 
 .screenshot-footer {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -617,7 +617,7 @@ onUnmounted(() => {
 }
 
 .download-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
   color: white;
   border: none;
@@ -631,7 +631,7 @@ onUnmounted(() => {
 }
 
 .cancel-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -677,7 +677,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-header {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -690,7 +690,7 @@ onUnmounted(() => {
 
 .type-textarea {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   background-color: var(--bg-secondary);
@@ -710,7 +710,7 @@ onUnmounted(() => {
 }
 
 .type-dialog-footer {
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
@@ -719,7 +719,7 @@ onUnmounted(() => {
 }
 
 .type-btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
   color: white;
   border: none;

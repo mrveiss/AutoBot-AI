@@ -440,7 +440,7 @@ function selectIcon(icon: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.875rem 1rem;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-6);
   font-size: var(--text-sm);
@@ -461,7 +461,7 @@ function selectIcon(icon: string): void {
 /* Category Path */
 .category-path {
   background: var(--bg-secondary);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-6);
 }
@@ -497,7 +497,7 @@ function selectIcon(icon: string): void {
 .form-input,
 .form-textarea {
   width: 100%;
-  padding: 0.625rem 0.875rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);

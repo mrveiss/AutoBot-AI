@@ -822,7 +822,7 @@ function formatTimestamp(timestamp: string): string {
 
 .score-card .score-header .card-refresh-btn {
   margin-left: auto;
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: var(--radius-default);
@@ -889,7 +889,7 @@ function formatTimestamp(timestamp: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-default);
   font-size: 0.8em;
 }
@@ -964,7 +964,7 @@ function formatTimestamp(timestamp: string): string {
 
 .quality-trend {
   margin-top: var(--spacing-2);
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-default);
   font-size: 0.8em;
   font-weight: 500;
@@ -1010,7 +1010,7 @@ function formatTimestamp(timestamp: string): string {
 .suggestions-section h4 i { color: var(--color-warning); }
 
 .suggestions-count {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: rgba(245, 158, 11, 0.2);
   border-radius: var(--radius-xl);
   font-size: 0.75em;
@@ -1024,7 +1024,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .suggestion-item {
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-lg);
   border-left: 4px solid var(--text-tertiary);
@@ -1042,7 +1042,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .suggestion-type-badge {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: rgba(99, 102, 241, 0.2);
   border-radius: var(--radius-default);
   font-size: 0.75em;
@@ -1051,7 +1051,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .suggestion-priority {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.7em;
   font-weight: 600;
@@ -1130,7 +1130,7 @@ function formatTimestamp(timestamp: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 14px;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-md);
   transition: background var(--duration-200) var(--ease-out);
@@ -1181,7 +1181,7 @@ function formatTimestamp(timestamp: string): string {
 .view-details-btn {
   width: 100%;
   margin-top: var(--spacing-3);
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   background: rgba(99, 102, 241, 0.2);
   border: 1px solid rgba(99, 102, 241, 0.4);
   border-radius: var(--radius-md);
@@ -1234,7 +1234,7 @@ function formatTimestamp(timestamp: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   background: rgba(30, 41, 59, 0.8);
   border-bottom: 1px solid rgba(71, 85, 105, 0.5);
 }
@@ -1254,7 +1254,7 @@ function formatTimestamp(timestamp: string): string {
 .redis-findings-panel .findings-header h4 i { color: var(--color-info); }
 
 .findings-count {
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   background: rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-2xl);
   color: var(--text-muted);
@@ -1268,7 +1268,7 @@ function formatTimestamp(timestamp: string): string {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-2-5);
-  padding: 40px 20px;
+  padding: var(--spacing-10) var(--spacing-5);
   color: var(--text-muted);
   font-size: 0.95em;
 }
@@ -1287,7 +1287,7 @@ function formatTimestamp(timestamp: string): string {
 .finding-item {
   background: rgba(15, 23, 42, 0.6);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   margin-bottom: var(--spacing-2-5);
   border-left: 4px solid var(--text-tertiary);
   transition: all var(--duration-200) var(--ease-out);
@@ -1330,7 +1330,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .finding-severity {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 600;
@@ -1370,7 +1370,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 .finding-category {
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-default);
   font-size: 0.75em;
@@ -1402,7 +1402,7 @@ function formatTimestamp(timestamp: string): string {
 
 .finding-recommendation {
   margin-top: var(--spacing-2-5);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: rgba(34, 197, 94, 0.1);
   border-radius: var(--radius-md);
   border-left: 3px solid var(--chart-green);

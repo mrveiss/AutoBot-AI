@@ -1330,13 +1330,13 @@ function _extractCompleteSentences(text: string): string[] {
   border-bottom: 1px solid var(--color-warning-border);
 }
 .tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
-.tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: 0; }
+.tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }
 .tool-approval-label { @apply text-xs font-medium; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
 .tool-approval-value { @apply text-sm; color: var(--text-primary); }
 .tool-approval-value code { @apply font-mono text-xs px-2 py-0.5 rounded; background: var(--bg-tertiary); }
-.tool-approval-args { @apply text-xs font-mono p-2 rounded overflow-auto max-h-32; background: var(--bg-tertiary); color: var(--text-primary); margin: 0; }
+.tool-approval-args { @apply text-xs font-mono p-2 rounded overflow-auto max-h-32; background: var(--bg-tertiary); color: var(--text-primary); margin: var(--spacing-0); }
 .risk-low    { color: var(--color-success); font-weight: 600; }
 .risk-medium { color: var(--color-warning); font-weight: 600; }
 .risk-high   { color: var(--color-error); font-weight: 600; }
