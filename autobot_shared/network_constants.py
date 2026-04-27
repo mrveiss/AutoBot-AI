@@ -218,7 +218,15 @@ class NetworkConstants:
 
     @classmethod
     def get_websocket_url(cls) -> str:
-        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy)."""
+        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy).
+
+        Issue #6303: Returns wss:// when backend TLS is enabled; omits port
+        because nginx terminates TLS on 443 and proxies to the backend.
+        """
+        from autobot_shared.ssot_config import config  # lazy to avoid circular import
+
+        if config.tls.backend_tls_enabled:
+            return f"wss://{cls.MAIN_MACHINE_IP}/api/ws"
         return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/api/ws"
 
 
