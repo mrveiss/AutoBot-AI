@@ -93,9 +93,9 @@ async def _process_ai_stack_response(
             None,
             False,
             AIStackError(
-                f"AI Stack request failed: {response.status}",
+                f"AI Stack error: upstream HTTP {response.status}",
                 status_code=response.status,
-                details={"response": response_text, "url": url},
+                details={"response": response_text[:500], "url": url},
             ),
         )
 
@@ -251,20 +251,37 @@ class AIStackClient:
                         raise error
                     return result
 
+            except asyncio.TimeoutError as e:
+                _log_connection_error(attempt + 1, e)
+                if attempt < self.retry_attempts - 1:
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                raise AIStackError(
+                    f"AI Stack unreachable: connection timed out ({self.timeout.total}s) to {url}",
+                    details={"error": type(e).__name__, "url": url},
+                )
+            except aiohttp.ClientConnectorError as e:
+                _log_connection_error(attempt + 1, e)
+                if attempt < self.retry_attempts - 1:
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                raise AIStackError(
+                    f"AI Stack unreachable: connection refused at {url}",
+                    details={"error": type(e).__name__, "url": url, "os_error": str(e.os_error) if e.os_error else None},
+                )
             except aiohttp.ClientError as e:
                 _log_connection_error(attempt + 1, e)
                 if attempt < self.retry_attempts - 1:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
-
                 raise AIStackError(
-                    f"AI Stack unreachable: {type(e).__name__} connecting to {url}",
+                    f"AI Stack connection error: {type(e).__name__}: {e}",
                     details={"error": type(e).__name__, "url": url},
                 )
             except Exception as e:
-                logger.warning("Unexpected error in AI Stack request: %s", e)
+                logger.warning("Unexpected error in AI Stack request: %s: %s", type(e).__name__, e)
                 raise AIStackError(
-                    f"AI Stack error: {type(e).__name__}: {e}",
+                    f"Unexpected error during AI Stack request: {type(e).__name__}: {e}",
                     details={"error": type(e).__name__, "url": url},
                 )
 
