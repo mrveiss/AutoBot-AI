@@ -5815,7 +5815,8 @@
       "subtitle": "Browse, install, and manage AutoBot plugins",
       "reload": "Reload",
       "version": "Version",
-      "configuration": "Configuration"
+      "configuration": "Configuration",
+      "marketplace": "مارکیٹ پلیس"
     },
     "vision": {
       "serviceOffline": "Service Offline",

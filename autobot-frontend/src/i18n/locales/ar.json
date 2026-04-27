@@ -5511,7 +5511,8 @@
       "cancel": "إلغاء",
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
-      "saveFailed": "Failed to save configuration."
+      "saveFailed": "Failed to save configuration.",
+      "marketplace": "السوق"
     },
     "marketplace": {
       "title": "Plugin Marketplace",
