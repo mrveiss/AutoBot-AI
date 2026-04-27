@@ -1325,7 +1325,7 @@ async def coordinate_multi_agent_task(
         return create_success_response(
             {
                 "task": payload.task,
-                "agents": payload.agents,
+                "agents_used": payload.agents,
                 "coordination_strategy": payload.coordination_strategy,
                 "coordination_time": coordination_time,
                 "subtasks_count": len(payload.subtasks) if payload.subtasks else 0,

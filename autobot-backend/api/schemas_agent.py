@@ -983,16 +983,14 @@ class EnhancedGoalData(AgentTaskData):
     timestamp: str
 
 
-class MultiAgentCoordinationData(BaseModel):
+class MultiAgentCoordinationData(AgentTaskData):
     """data payload for POST /agent/multi-agent/coordinate."""
 
     task: str
-    agents: List[str]
     coordination_strategy: str
     coordination_time: float
     subtasks_count: int
     dependencies_count: int
-    result: Optional[Dict[str, Any]] = None
     timestamp: str
 
 
