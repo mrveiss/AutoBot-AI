@@ -156,7 +156,6 @@ class OwnershipAnalyzer:
         else:
             self.redis_client = None
             logger.info("Redis not available - caching disabled for OwnershipAnalyzer")
-        self.config = config
 
         # Caching keys
         self.OWNERSHIP_KEY = "ownership_analysis:files"
