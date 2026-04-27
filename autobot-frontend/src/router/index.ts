@@ -484,6 +484,16 @@ const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #4465: Usage & Costs moved under analytics
+      {
+        path: 'usage',
+        name: 'analytics-usage',
+        component: () => import('@/views/UsageView.vue'),
+        meta: {
+          title: 'Usage & Costs',
+          parent: 'analytics'
+        }
+      },
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
@@ -710,17 +720,10 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
-  // Issue #1803: Plugin and agent marketplace
+  // Issue #1803: Marketplace merged into /plugins — redirect for backwards compatibility
   {
     path: '/marketplace',
-    name: 'marketplace',
-    component: () => import('@/views/MarketplaceView.vue'),
-    meta: {
-      title: 'Marketplace',
-      icon: 'fas fa-store',
-      description: 'Discover and install community plugins and agents',
-      requiresAuth: true
-    }
+    redirect: '/plugins'
   },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
@@ -745,17 +748,8 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
-  {
-    path: '/usage',
-    name: 'usage',
-    component: () => import('@/views/UsageView.vue'),
-    meta: {
-      title: 'Usage & Cost Tracking',
-      icon: 'fas fa-chart-bar',
-      description: 'Token usage, LLM costs, and billing-ready metrics',
-      requiresAuth: true
-    }
-  },
+  // Issue #4465: Usage moved under /analytics/usage
+  { path: '/usage', redirect: '/analytics/usage' },
   {
     path: '/permission-denied',
     name: 'permission-denied',

@@ -761,7 +761,9 @@
         "evolution": "Evolution",
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
-        "auditAria": "Audit logs"
+        "auditAria": "Audit logs",
+        "usage": "استعمال",
+        "usageAria": "استعمال اور اخراجات"
       }
     },
     "header": {

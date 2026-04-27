@@ -82,6 +82,18 @@
             <i class="fas fa-bolt tab-icon-fa" aria-hidden="true"></i>
             <span>Dev Tools</span>
           </router-link>
+          <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
+          <router-link
+            to="/analytics/usage"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isUsageActive }"
+            role="tab"
+            :aria-selected="isUsageActive"
+            :aria-label="$t('analytics.views.tabs.usageAria')"
+          >
+            <i class="fas fa-chart-bar tab-icon-fa" aria-hidden="true"></i>
+            <span>{{ $t('analytics.views.tabs.usage') }}</span>
+          </router-link>
         </nav>
       </div>
 
@@ -120,6 +132,10 @@ const isAuditActive = computed(() => {
 
 const isDevToolsActive = computed(() => {
   return route.path === '/analytics/dev-tools' || route.path.startsWith('/analytics/dev-tools/')
+})
+
+const isUsageActive = computed(() => {
+  return route.path === '/analytics/usage' || route.path.startsWith('/analytics/usage/')
 })
 </script>
 

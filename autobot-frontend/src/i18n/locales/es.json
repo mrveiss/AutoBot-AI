@@ -1241,7 +1241,9 @@
         "evolution": "Evolution",
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
-        "auditAria": "Audit logs"
+        "auditAria": "Audit logs",
+        "usage": "Uso",
+        "usageAria": "Uso & Costos"
       }
     },
     "header": {
