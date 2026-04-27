@@ -6,14 +6,27 @@ Rate Limiting Middleware
 
 Prevents brute force password change attempts.
 Issue #635.
+
+Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
+core sliding-window logic (Issue #4460).
 """
 
 import logging
 import uuid
 
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
+
+# Shared delegate scoped to user rate-limit operations (Issue #4460).
+# PasswordChangeRateLimiter uses Redis directly for its fixed-attempt counter
+# semantics; the shared limiter is available for sliding-window checks
+# elsewhere in the user_management middleware layer.
+user_rate_limiter = _SharedRateLimiter(
+    scope_prefix="user",
+    default_tier="authenticated",
+)
 
 
 class RateLimitExceeded(Exception):
