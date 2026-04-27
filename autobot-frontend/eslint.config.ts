@@ -51,6 +51,9 @@ export default defineConfigWithVueTs(
       'vue/no-deprecated-filter': 'warn',
       'vue/no-parsing-error': 'warn',
       'prefer-const': 'warn',
+      'vue/no-undef-components': ['error', {
+        ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense'],
+      }],
     },
   },
   ...pluginOxlint.configs['flat/recommended'],
