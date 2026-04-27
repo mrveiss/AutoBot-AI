@@ -58,7 +58,7 @@ jobs:
             sleep 10
           done
 
-          echo "Services failed to become healthy within 7 minutes"
+          echo "Services failed to become healthy within 7.5 minutes (450s)"
           echo ""
           echo "=== Docker Compose Logs ==="
           docker compose --env-file docker/.env.docker logs
