@@ -280,10 +280,9 @@ class PKIManager:
 
         if "ca" in certificates:
             raise ValueError(
-                "CA certificate renewal requires manual steps: the CA key and "
-                "certificate must be rotated offline, and all service certificates "
-                "must then be re-signed against the new CA.  Remove 'ca' from the "
-                "renewal list and follow the PKI CA-rotation runbook."
+                "CA certificate renewal is a manual process. "
+                "Follow the runbook at docs/developer/PKI_CA_ROTATION.md to rotate "
+                "the CA key and re-sign all service certificates."
             )
 
         logger.info(
