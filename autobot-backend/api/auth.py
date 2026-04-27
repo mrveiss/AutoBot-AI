@@ -18,6 +18,7 @@ from pydantic import BaseModel, validator
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.event_log import EventType, emit as _emit_event  # Issue #4461
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
@@ -293,6 +294,7 @@ async def login(request: Request, login_data: LoginRequest):
             session_id = get_auth_middleware().create_session(
                 {"username": "admin", "role": "admin"}, request
             )
+            _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
             return LoginResponse(
                 success=True,
                 message="Login successful",
@@ -317,6 +319,11 @@ async def login(request: Request, login_data: LoginRequest):
             "last_login": user_data.get("last_login"),
         }
 
+        _emit_event(
+            EventType.USER_LOGIN,
+            user_id=safe_user_data["user_id"],
+            ip_address=ip_address,
+        )
         return LoginResponse(
             success=True,
             message="Login successful",
