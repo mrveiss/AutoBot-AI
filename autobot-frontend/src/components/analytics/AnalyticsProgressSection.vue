@@ -300,7 +300,7 @@ function getPhaseIcon(status: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
   font-size: 0.85em;

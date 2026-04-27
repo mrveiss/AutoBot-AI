@@ -1628,7 +1628,7 @@ watch(selectedScope, () => {
 }
 
 .sidebar-search {
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -1647,7 +1647,7 @@ watch(selectedScope, () => {
 
 .search-wrapper .search-input {
   width: 100%;
-  padding: 10px 36px 10px 36px;
+  padding: var(--spacing-2-5) var(--spacing-9) var(--spacing-2-5) var(--spacing-9);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -1679,11 +1679,11 @@ watch(selectedScope, () => {
 .category-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: var(--spacing-3) var(--spacing-0);
 }
 
 .category-divider {
-  padding: 12px 20px 8px;
+  padding: var(--spacing-3) var(--spacing-5) var(--spacing-2);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -1695,7 +1695,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   cursor: pointer;
   transition: all var(--duration-150);
   color: var(--text-secondary);
@@ -1724,7 +1724,7 @@ watch(selectedScope, () => {
 .category-item .count {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   color: var(--text-tertiary);
 }
@@ -1744,7 +1744,7 @@ watch(selectedScope, () => {
 }
 
 .sidebar-actions {
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
@@ -1782,7 +1782,7 @@ watch(selectedScope, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: var(--spacing-5) var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -1831,7 +1831,7 @@ watch(selectedScope, () => {
 .stats-bar {
   display: flex;
   gap: var(--spacing-6);
-  padding: 16px 24px;
+  padding: var(--spacing-4) var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
@@ -1966,7 +1966,7 @@ watch(selectedScope, () => {
 
 .badge {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
   font-weight: 500;
   text-transform: capitalize;
@@ -2023,7 +2023,7 @@ watch(selectedScope, () => {
 }
 
 .card-description {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
@@ -2055,7 +2055,7 @@ watch(selectedScope, () => {
 
 .tag {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   color: var(--text-secondary);
@@ -2083,7 +2083,7 @@ watch(selectedScope, () => {
 
 .usage-tag {
   font-size: var(--text-xs);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-xl);
@@ -2131,7 +2131,7 @@ watch(selectedScope, () => {
 }
 
 .templates-section h3 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
@@ -2145,7 +2145,7 @@ watch(selectedScope, () => {
 }
 
 .templates-subtitle {
-  margin: 0 0 20px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
@@ -2192,7 +2192,7 @@ watch(selectedScope, () => {
 }
 
 .template-info p {
-  margin: 2px 0 0;
+  margin: var(--spacing-0-5) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -2205,7 +2205,7 @@ watch(selectedScope, () => {
 }
 
 .template-selection h4 {
-  margin: 0 0 16px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   font-size: 15px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -2325,7 +2325,7 @@ watch(selectedScope, () => {
 }
 
 .form-input {
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -2555,7 +2555,7 @@ watch(selectedScope, () => {
 .transfer-content,
 .delete-content {
   text-align: center;
-  padding: 20px 0;
+  padding: var(--spacing-5) var(--spacing-0);
 }
 
 .transfer-icon,
@@ -2582,7 +2582,7 @@ watch(selectedScope, () => {
 
 .transfer-content h4,
 .delete-content h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
@@ -2590,7 +2590,7 @@ watch(selectedScope, () => {
 
 .transfer-content p,
 .delete-content p {
-  margin: 0 0 16px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   color: var(--text-secondary);
 }
 
@@ -2599,7 +2599,7 @@ watch(selectedScope, () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
 }
@@ -2616,7 +2616,7 @@ watch(selectedScope, () => {
 
 /* Buttons */
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -2641,7 +2641,7 @@ watch(selectedScope, () => {
 }
 
 .btn-secondary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
@@ -2657,7 +2657,7 @@ watch(selectedScope, () => {
 }
 
 .btn-danger {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;
@@ -2692,7 +2692,7 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);

@@ -388,7 +388,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -404,7 +404,7 @@ onUnmounted(() => {
 }
 
 .btn-capture {
-  padding: 12px 24px;
+  padding: var(--spacing-3) var(--spacing-6);
   background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
@@ -477,7 +477,7 @@ onUnmounted(() => {
 }
 
 .interval-select {
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -497,7 +497,7 @@ onUnmounted(() => {
 }
 
 .filter-group select {
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -536,7 +536,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
   gap: var(--spacing-3);
@@ -566,14 +566,14 @@ onUnmounted(() => {
 .elements-section,
 .text-section,
 .layout-section {
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
 .elements-section h5,
 .text-section h5,
 .layout-section h5 {
-  margin: 0 0 12px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
@@ -591,7 +591,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -643,7 +643,7 @@ onUnmounted(() => {
 .element-confidence {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   border-radius: var(--radius-default);
 }
@@ -670,7 +670,7 @@ onUnmounted(() => {
 }
 
 .text-region {
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
 }
@@ -758,7 +758,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -815,7 +815,7 @@ onUnmounted(() => {
 
 .interaction-tag {
   font-size: var(--text-xs);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-xl);

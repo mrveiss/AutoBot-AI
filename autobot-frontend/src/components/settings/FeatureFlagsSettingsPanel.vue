@@ -316,7 +316,7 @@ onMounted(() => {
 }
 
 .error-state p {
-  margin: 0 0 16px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   font-size: var(--text-sm);
 }
 
@@ -324,7 +324,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   background: var(--color-error);
   color: var(--text-on-error);
   border: none;

@@ -1501,7 +1501,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   background-color: #2d2d2d;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-bottom: 1px solid #333;
   user-select: none;
 }
@@ -1527,7 +1527,7 @@ export default {
   background-color: #444;
   border: 1px solid #666;
   color: #fff;
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: var(--text-xs);
@@ -1553,7 +1553,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   background-color: #1e1e1e;
-  padding: 4px 16px;
+  padding: var(--spacing-1) var(--spacing-4);
   border-bottom: 1px solid #333;
   font-size: var(--text-xs);
   color: #888;
@@ -1643,7 +1643,7 @@ export default {
 .terminal-input-line {
   display: flex;
   align-items: center;
-  padding: 0 16px 16px 16px;
+  padding: var(--spacing-0) var(--spacing-4) var(--spacing-4) var(--spacing-4);
   background-color: #000;
 }
 
@@ -1684,7 +1684,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   background-color: #2d2d2d;
-  padding: 6px 16px;
+  padding: var(--spacing-1-5) var(--spacing-4);
   border-top: 1px solid #333;
   font-size: var(--text-xs);
 }
@@ -1761,7 +1761,7 @@ export default {
 }
 
 .btn {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
   border-radius: var(--radius-default);
   cursor: pointer;
@@ -1876,7 +1876,7 @@ export default {
 }
 
 .modal-header {
-  padding: 20px 24px 16px 24px;
+  padding: var(--spacing-5) var(--spacing-6) var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid #444;
   background: var(--bg-secondary);
   border-radius: var(--radius-xl) 12px 0 0;
@@ -1933,7 +1933,7 @@ export default {
 }
 
 .risk-level {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -1983,7 +1983,7 @@ export default {
 }
 
 .confirmation-message ul {
-  margin: 12px 0;
+  margin: var(--spacing-3) var(--spacing-0);
   padding-left: var(--spacing-5);
 }
 
@@ -2003,7 +2003,7 @@ export default {
 
 .process-item {
   background-color: #1e1e1e;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-default);
   margin-bottom: var(--spacing-1);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -2015,7 +2015,7 @@ export default {
   display: flex;
   gap: var(--spacing-3);
   justify-content: flex-end;
-  padding: 20px 24px;
+  padding: var(--spacing-5) var(--spacing-6);
   border-top: 1px solid #444;
   background-color: #252525;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
@@ -2065,7 +2065,7 @@ export default {
 .step-counter {
   background-color: #17a2b8;
   color: white;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-2xl);
   display: inline-block;
   font-size: var(--text-xs);
@@ -2076,14 +2076,14 @@ export default {
 }
 
 .step-description h4 {
-  margin: 0 0 8px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
   color: #17a2b8;
   font-size: var(--text-base);
   font-weight: 600;
 }
 
 .step-description p {
-  margin: 0 0 16px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   color: #ccc;
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -2098,7 +2098,7 @@ export default {
 }
 
 .option-info p {
-  margin: 0 0 12px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
   color: #17a2b8;
   font-weight: 600;
 }
@@ -2121,7 +2121,7 @@ export default {
 
 .workflow-actions {
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: var(--spacing-5) var(--spacing-6);
 }
 
 .btn-success {
@@ -2218,7 +2218,7 @@ export default {
 /* Responsive */
 @media (max-width: 768px) {
   .window-header {
-    padding: 6px 12px;
+    padding: var(--spacing-1-5) var(--spacing-3);
   }
 
   .terminal-status-bar {
@@ -2231,7 +2231,7 @@ export default {
   }
 
   .terminal-input-line {
-    padding: 0 12px 12px 12px;
+    padding: var(--spacing-0) var(--spacing-3) var(--spacing-3) var(--spacing-3);
   }
 
   .footer-info {

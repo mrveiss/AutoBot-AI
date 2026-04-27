@@ -142,7 +142,7 @@ const {
 }
 
 .captcha-type {
-  margin: 0.125rem 0 0;
+  margin: var(--spacing-0-5) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-xs);
   opacity: 0.9;
 }

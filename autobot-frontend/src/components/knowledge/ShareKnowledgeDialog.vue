@@ -452,7 +452,7 @@ const closeDialog = () => {
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-10);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -523,7 +523,7 @@ const closeDialog = () => {
 }
 
 .current-access h4 {
-  margin: 0 0 1rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -582,7 +582,7 @@ const closeDialog = () => {
 }
 
 .permission-select {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   font-size: var(--text-sm);
@@ -614,7 +614,7 @@ const closeDialog = () => {
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;

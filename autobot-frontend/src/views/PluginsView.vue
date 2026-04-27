@@ -642,7 +642,7 @@ onMounted(async () => {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-xl);
   min-width: 20px;
   text-align: center;
@@ -757,7 +757,7 @@ onMounted(async () => {
 .status-badge {
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-xl);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -837,7 +837,7 @@ onMounted(async () => {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  padding: 1px 6px;
+  padding: var(--spacing-px) var(--spacing-1-5);
   border-radius: var(--radius-default);
   border: 1px solid var(--border-default);
 }
@@ -857,7 +857,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -900,7 +900,7 @@ onMounted(async () => {
   background: var(--color-info-bg);
   color: var(--color-info);
   border-color: var(--color-info-border, rgba(59, 130, 246, 0.3));
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-reload:hover:not(:disabled) {
@@ -911,7 +911,7 @@ onMounted(async () => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border-color: var(--color-error-border);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-unload:hover:not(:disabled) {
@@ -1050,7 +1050,7 @@ onMounted(async () => {
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  padding: 2px 10px;
+  padding: var(--spacing-0-5) var(--spacing-2-5);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;

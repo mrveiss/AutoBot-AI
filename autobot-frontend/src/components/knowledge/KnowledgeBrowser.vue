@@ -1172,7 +1172,7 @@ watch(() => props.mode, () => {
   justify-content: center;
   min-width: 1.5rem;
   height: 1.25rem;
-  padding: 0 0.375rem;
+  padding: var(--spacing-0) var(--spacing-1-5);
   background: rgba(0, 0, 0, 0.1);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
@@ -1190,7 +1190,7 @@ watch(() => props.mode, () => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
   border-radius: var(--radius-2xl);
@@ -1277,7 +1277,7 @@ watch(() => props.mode, () => {
   z-index: 100;
   background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -1347,7 +1347,7 @@ watch(() => props.mode, () => {
 
 .search-input {
   width: 100%;
-  padding: 0.625rem 2.5rem 0.625rem 2.5rem;
+  padding: var(--spacing-2-5) var(--spacing-10) var(--spacing-2-5) var(--spacing-10);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
@@ -1374,7 +1374,7 @@ watch(() => props.mode, () => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
   font-size: var(--text-sm);
@@ -1446,7 +1446,7 @@ watch(() => props.mode, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1.5rem;
+  padding: var(--spacing-12) var(--spacing-6);
   text-align: center;
   color: var(--text-tertiary);
 }

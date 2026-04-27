@@ -259,7 +259,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 /* Table Controls */
 .table-controls {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
 }
@@ -295,7 +295,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .table-header-cell {
-  padding: 12px 8px;
+  padding: var(--spacing-3) var(--spacing-2);
   font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -375,7 +375,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .table-cell {
-  padding: 12px 8px;
+  padding: var(--spacing-3) var(--spacing-2);
   color: var(--text-primary);
   vertical-align: middle;
 }
@@ -423,7 +423,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 }
 
 .empty-cell {
-  padding: 48px 16px;
+  padding: var(--spacing-12) var(--spacing-4);
   text-align: center;
 }
 
@@ -442,7 +442,7 @@ const formatCellValue = (value: any, column: TableColumn) => {
 
 /* Table Footer */
 .table-footer {
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
 }
@@ -450,17 +450,17 @@ const formatCellValue = (value: any, column: TableColumn) => {
 /* Size Variants */
 .table-compact .table-header-cell,
 .table-compact .table-cell {
-  padding: 8px 8px;
+  padding: var(--spacing-2) var(--spacing-2);
 }
 
 .table-comfortable .table-header-cell,
 .table-comfortable .table-cell {
-  padding: 12px 8px;
+  padding: var(--spacing-3) var(--spacing-2);
 }
 
 .table-spacious .table-header-cell,
 .table-spacious .table-cell {
-  padding: 16px 12px;
+  padding: var(--spacing-4) var(--spacing-3);
 }
 
 /* Variant Styles */

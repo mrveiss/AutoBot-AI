@@ -818,7 +818,7 @@ onMounted(() => {
 
 .subtitle {
   color: var(--text-secondary);
-  margin: 0.25rem 0 0 0;
+  margin: var(--spacing-1) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -832,7 +832,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -863,7 +863,7 @@ onMounted(() => {
 .action-btn.text {
   background: transparent;
   color: var(--accent-color);
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-btn:disabled {
@@ -910,7 +910,7 @@ onMounted(() => {
 }
 
 .input-group input {
-  padding: 0.625rem 0.875rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -934,7 +934,7 @@ onMounted(() => {
 }
 
 .chip {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-2xl);
@@ -1040,7 +1040,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   background: transparent;
   border: none;
   border-radius: var(--radius-default);
@@ -1056,7 +1056,7 @@ onMounted(() => {
 
 .filter-tab .count {
   background: rgba(0,0,0,0.2);
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-lg);
   font-size: 0.625rem;
 }
@@ -1115,7 +1115,7 @@ onMounted(() => {
 
 .severity-badge.small {
   font-size: 0.625rem;
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   background: var(--bg-quaternary);
 }
@@ -1125,7 +1125,7 @@ onMounted(() => {
   font-weight: 600;
   color: var(--accent-color);
   background: var(--bg-quaternary);
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
 }
 
@@ -1249,7 +1249,7 @@ onMounted(() => {
 .donut-chart-container {
   display: flex;
   justify-content: center;
-  padding: 1rem 0;
+  padding: var(--spacing-4) var(--spacing-0);
 }
 
 .donut-chart {
@@ -1281,7 +1281,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
-  padding: 0 1rem;
+  padding: var(--spacing-0) var(--spacing-4);
 }
 
 .legend-item {
@@ -1322,7 +1322,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -1356,7 +1356,7 @@ onMounted(() => {
 }
 
 .stat {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.6875rem;
   font-weight: 600;
@@ -1383,12 +1383,12 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1rem;
+  padding: var(--spacing-12) var(--spacing-4);
   color: var(--text-secondary);
 }
 
 .empty-state.small {
-  padding: 1.5rem 1rem;
+  padding: var(--spacing-6) var(--spacing-4);
 }
 
 .empty-icon {
@@ -1427,7 +1427,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -1446,7 +1446,7 @@ onMounted(() => {
 }
 
 .pattern-category h4 {
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-primary);
 }
@@ -1461,7 +1461,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.625rem 0.875rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   opacity: 0.6;

@@ -286,7 +286,7 @@ async function handleSave(): Promise<void> {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -302,7 +302,7 @@ async function handleSave(): Promise<void> {
 .notif-header h3 i { color: var(--color-primary); }
 
 .btn-close {
-  padding: 6px 8px;
+  padding: var(--spacing-1-5) var(--spacing-2);
   background: transparent;
   border: none;
   color: var(--text-tertiary);
@@ -331,7 +331,7 @@ async function handleSave(): Promise<void> {
 }
 
 .notif-error {
-  padding: 10px 14px;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: var(--color-error-bg);
   color: var(--color-error);
   border-radius: var(--radius-md);
@@ -352,12 +352,12 @@ async function handleSave(): Promise<void> {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
-  padding: 0 6px;
+  padding: var(--spacing-0) var(--spacing-1-5);
 }
 
 .notif-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -384,7 +384,7 @@ async function handleSave(): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-2xl);
@@ -405,7 +405,7 @@ async function handleSave(): Promise<void> {
 
 .tag-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -417,13 +417,13 @@ async function handleSave(): Promise<void> {
 .tag-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .field-error {
-  margin: 6px 0 0;
+  margin: var(--spacing-1-5) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-xs);
   color: var(--color-error);
 }
 
 .field-hint {
-  margin: 0 0 10px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2-5);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -447,13 +447,13 @@ async function handleSave(): Promise<void> {
 .event-label {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  padding: 6px 4px;
+  padding: var(--spacing-1-5) var(--spacing-1);
 }
 
 .channel-cell {
   display: flex;
   justify-content: center;
-  padding: 6px 4px;
+  padding: var(--spacing-1-5) var(--spacing-1);
 }
 
 .channel-cell input[type="checkbox"] {
@@ -467,12 +467,12 @@ async function handleSave(): Promise<void> {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-2-5);
-  padding: 14px 20px;
+  padding: var(--spacing-3-5) var(--spacing-5);
   border-top: 1px solid var(--border-default);
 }
 
 .btn-primary {
-  padding: 8px 20px;
+  padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-primary);
   color: white;
   border: none;
@@ -488,7 +488,7 @@ async function handleSave(): Promise<void> {
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-secondary {
-  padding: 8px 20px;
+  padding: var(--spacing-2) var(--spacing-5);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-default);

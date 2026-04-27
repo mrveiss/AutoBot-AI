@@ -642,7 +642,7 @@ onMounted(() => {
 
 .subtitle {
   color: var(--text-secondary);
-  margin: 0.25rem 0 0 0;
+  margin: var(--spacing-1) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   font-size: var(--text-sm);
 }
 
@@ -656,7 +656,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 1rem;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -696,7 +696,7 @@ onMounted(() => {
 .action-btn.text {
   background: transparent;
   color: var(--accent-color);
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
 }
 
 .action-btn:disabled {
@@ -722,7 +722,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-  padding: 1rem 1.25rem;
+  padding: var(--spacing-4) var(--spacing-5);
   border-radius: var(--radius-lg);
   border: 1px solid;
 }
@@ -847,7 +847,7 @@ onMounted(() => {
 }
 
 .filter-btn {
-  padding: 0.25rem 0.5rem;
+  padding: var(--spacing-1) var(--spacing-2);
   background: transparent;
   border: none;
   border-radius: var(--radius-default);
@@ -903,7 +903,7 @@ onMounted(() => {
   font-weight: 600;
   color: var(--accent-color);
   background: var(--bg-quaternary);
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
 }
 
@@ -920,7 +920,7 @@ onMounted(() => {
 }
 
 .result-message {
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
   font-size: 0.8125rem;
   color: var(--text-secondary);
 }
@@ -988,14 +988,14 @@ onMounted(() => {
 }
 
 .category-checks {
-  padding: 0.5rem 0 0 1.5rem;
+  padding: var(--spacing-2) var(--spacing-0) var(--spacing-0) var(--spacing-6);
 }
 
 .check-item {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.5rem 0;
+  padding: var(--spacing-2) var(--spacing-0);
   opacity: 0.6;
 }
 
@@ -1063,7 +1063,7 @@ onMounted(() => {
 
 .severity-indicator {
   font-size: 0.625rem;
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   text-transform: uppercase;
 }
@@ -1098,7 +1098,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.625rem 0.875rem;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -1143,7 +1143,7 @@ onMounted(() => {
 }
 
 .stat {
-  padding: 0.125rem 0.375rem;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: 0.625rem;
   font-weight: 600;
@@ -1188,7 +1188,7 @@ onMounted(() => {
 }
 
 .common-issues h4 {
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-primary);
 }
@@ -1241,12 +1241,12 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1rem;
+  padding: var(--spacing-12) var(--spacing-4);
   color: var(--text-secondary);
 }
 
 .empty-state.small {
-  padding: 1.5rem 1rem;
+  padding: var(--spacing-6) var(--spacing-4);
 }
 
 .empty-icon {

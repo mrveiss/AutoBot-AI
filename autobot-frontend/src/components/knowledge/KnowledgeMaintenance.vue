@@ -303,7 +303,7 @@ onMounted(() => {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
@@ -346,7 +346,7 @@ onMounted(() => {
 }
 
 .health-status-badge {
-  padding: 0.375rem 0.75rem;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -472,7 +472,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin: 0 0 1rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
 }
 
 .dimension-bars {
@@ -539,7 +539,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .issues-counts {
@@ -576,7 +576,7 @@ onMounted(() => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-info-dark);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .recommendation-list {
@@ -654,7 +654,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   border-left: 3px solid var(--border-light);

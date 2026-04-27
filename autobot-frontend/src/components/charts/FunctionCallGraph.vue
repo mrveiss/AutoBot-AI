@@ -1399,7 +1399,7 @@ watch(viewMode, async (newMode) => {
   cursor: pointer;
   text-decoration: underline;
   font-size: var(--text-sm);
-  padding: 0;
+  padding: var(--spacing-0);
 }
 
 .loading-spinner {
@@ -2063,7 +2063,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .orphaned-item-header .async-badge {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: var(--text-xs);
   background: var(--color-info-bg);
   color: var(--color-info);
@@ -2071,7 +2071,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .orphaned-item-header .class-badge {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: var(--text-xs);
   background: var(--color-secondary-bg, rgba(139, 92, 246, 0.1));
   color: var(--color-secondary, #8b5cf6);

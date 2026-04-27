@@ -516,7 +516,7 @@ onMounted(() => {
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.875rem 0.5rem 2.5rem;
+  padding: var(--spacing-2) var(--spacing-3-5) var(--spacing-2) var(--spacing-10);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -561,7 +561,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   width: 100%;
-  padding: 0.625rem 1rem;
+  padding: var(--spacing-2-5) var(--spacing-4);
   border: none;
   background: none;
   color: var(--text-primary);
@@ -579,7 +579,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-3) var(--spacing-4);
   background: var(--color-error-bg);
   color: var(--color-error-dark);
   border-bottom: 1px solid var(--color-error-border);
@@ -606,11 +606,11 @@ onMounted(() => {
 .docs-sidebar {
   border-right: 1px solid var(--border-default);
   overflow-y: auto;
-  padding: 1rem 0;
+  padding: var(--spacing-4) var(--spacing-0);
 }
 
 .category-tree {
-  padding: 0 0.5rem;
+  padding: var(--spacing-0) var(--spacing-2);
 }
 
 .category-item {
@@ -621,7 +621,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-150);
@@ -669,7 +669,7 @@ onMounted(() => {
   font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--bg-secondary);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-2xl);
 }
 
@@ -777,7 +777,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }
@@ -800,7 +800,7 @@ onMounted(() => {
 .preview-meta {
   display: flex;
   gap: var(--spacing-6);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-card);
 }

@@ -217,7 +217,7 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .config-value-badge {
   background: rgba(245, 158, 11, 0.2);
   color: var(--color-warning-light);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-default);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 0.85em;
@@ -236,7 +236,7 @@ function truncateValue(value: string, maxLength = 50): string {
 .config-duplicates-section .location-item {
   color: var(--text-muted);
   font-size: 0.85em;
-  padding: 2px 0;
+  padding: var(--spacing-0-5) var(--spacing-0);
 }
 
 .config-duplicates-section .more-locations {
@@ -248,7 +248,7 @@ function truncateValue(value: string, maxLength = 50): string {
 
 .config-duplicates-section .recommendation-box {
   margin-top: var(--spacing-5);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: var(--radius-lg);
@@ -264,7 +264,7 @@ function truncateValue(value: string, maxLength = 50): string {
 
 .config-duplicates-section .recommendation-box code {
   background: rgba(30, 41, 59, 0.8);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-size: 0.9em;
 }

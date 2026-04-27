@@ -309,7 +309,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-xs);
   border-bottom: 1px solid #333;
 }
@@ -355,7 +355,7 @@ defineExpose({
 }
 
 .reconnect-btn {
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-default);

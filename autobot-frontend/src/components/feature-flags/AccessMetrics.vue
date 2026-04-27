@@ -324,7 +324,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .header-info h3 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -350,7 +350,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .days-selector {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-input);
@@ -407,7 +407,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .no-data-state h4 {
-  margin: 0 0 8px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
@@ -529,7 +529,7 @@ const formatTime = (timestamp: number) => {
 }
 
 .breakdown-section h4 {
-  margin: 0 0 16px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
@@ -667,7 +667,7 @@ code.item-label {
   display: grid;
   grid-template-columns: 120px 100px 1fr 100px;
   gap: var(--spacing-4);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   font-weight: 600;
@@ -679,7 +679,7 @@ code.item-label {
   display: grid;
   grid-template-columns: 120px 100px 1fr 100px;
   gap: var(--spacing-4);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -691,7 +691,7 @@ code.item-label {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
 }
 

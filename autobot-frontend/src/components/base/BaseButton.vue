@@ -166,35 +166,35 @@ const createRipple = (event: TouchEvent) => {
 /* Size variants - Issue #901: Technical Precision sizing */
 .btn-xs {
   height: 28px;
-  padding: 0 8px;
+  padding: var(--spacing-0) var(--spacing-2);
   font-size: var(--text-xs);
   border-radius: var(--radius-xs);
 }
 
 .btn-sm {
   height: 32px;
-  padding: 0 12px;
+  padding: var(--spacing-0) var(--spacing-3);
   font-size: var(--text-sm);
   border-radius: var(--radius-xs);
 }
 
 .btn-md {
   height: 40px;
-  padding: 0 16px;
+  padding: var(--spacing-0) var(--spacing-4);
   font-size: var(--text-sm);
   border-radius: var(--radius-xs);
 }
 
 .btn-lg {
   height: 48px;
-  padding: 0 24px;
+  padding: var(--spacing-0) var(--spacing-6);
   font-size: var(--text-base);
   border-radius: var(--radius-default);
 }
 
 .btn-xl {
   height: 56px;
-  padding: 0 32px;
+  padding: var(--spacing-0) var(--spacing-8);
   font-size: var(--text-lg);
   border-radius: var(--radius-default);
 }
@@ -371,12 +371,12 @@ const createRipple = (event: TouchEvent) => {
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .btn-lg {
-    padding: 0.5rem 1rem;
+    padding: var(--spacing-2) var(--spacing-4);
     font-size: var(--text-base);
   }
 
   .btn-xl {
-    padding: 0.75rem 1.5rem;
+    padding: var(--spacing-3) var(--spacing-6);
     font-size: var(--text-base);
   }
 }

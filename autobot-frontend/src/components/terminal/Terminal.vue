@@ -773,7 +773,7 @@ onUnmounted(() => {
   }
 
   .terminal-header {
-    padding: 8px 12px;
+    padding: var(--spacing-2) var(--spacing-3);
   }
 
   .terminal-header h3 {
@@ -781,7 +781,7 @@ onUnmounted(() => {
   }
 
   .terminal-controls button {
-    padding: 4px 8px;
+    padding: var(--spacing-1) var(--spacing-2);
     font-size: var(--text-xs);
   }
 

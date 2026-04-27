@@ -552,7 +552,7 @@ onMounted(() => {
 }
 
 .modal-header {
-  padding: 16px 24px;
+  padding: var(--spacing-4) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
@@ -676,7 +676,7 @@ onMounted(() => {
 }
 
 .file-info p {
-  margin: 8px 0;
+  margin: var(--spacing-2) var(--spacing-0);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -687,7 +687,7 @@ onMounted(() => {
 
 .download-btn {
   margin-top: var(--spacing-5);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   background-color: var(--color-electric-600, #2563eb);
   color: white;
   border: none;
@@ -709,7 +709,7 @@ onMounted(() => {
   }
 
   .modal-header {
-    padding: 12px 16px;
+    padding: var(--spacing-3) var(--spacing-4);
   }
 
   .modal-header h3 {

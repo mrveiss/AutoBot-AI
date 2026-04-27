@@ -498,7 +498,7 @@ function formatFactorName(factor: string): string {
 }
 
 .ownership-tabs .tab-btn {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   background: rgba(71, 85, 105, 0.3);
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-md);
@@ -525,7 +525,7 @@ function formatFactorName(factor: string): string {
 .ownership-tabs .gap-badge {
   background: rgba(239, 68, 68, 0.3);
   color: var(--color-error-light);
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-xl);
   font-size: 0.75em;
 }
@@ -616,7 +616,7 @@ function formatFactorName(factor: string): string {
   display: grid;
   grid-template-columns: 40px 1fr 120px 80px;
   align-items: center;
-  padding: 10px 14px;
+  padding: var(--spacing-2-5) var(--spacing-3-5);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-lg);
   border: 1px solid rgba(71, 85, 105, 0.3);
@@ -665,7 +665,7 @@ function formatFactorName(factor: string): string {
 }
 
 .risk-badge {
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   border-radius: var(--radius-md);
   font-size: 0.85em;
   font-weight: 500;
@@ -731,7 +731,7 @@ function formatFactorName(factor: string): string {
 .expert-score {
   background: var(--chart-purple);
   color: var(--text-on-primary);
-  padding: 4px 10px;
+  padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-xl);
   font-weight: 700;
   font-size: 0.9em;
@@ -843,7 +843,7 @@ function formatFactorName(factor: string): string {
 
 .directory-item,
 .file-item {
-  padding: 12px 14px;
+  padding: var(--spacing-3) var(--spacing-3-5);
   background: rgba(17, 24, 39, 0.5);
   border-radius: var(--radius-lg);
   border-left: 3px solid var(--color-success-light);

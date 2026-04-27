@@ -165,7 +165,7 @@ function clearFilters() {
 }
 
 .filter-select {
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-8) var(--spacing-2) var(--spacing-3);
   font-size: var(--text-sm);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -197,7 +197,7 @@ function clearFilters() {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-2) var(--spacing-3);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);

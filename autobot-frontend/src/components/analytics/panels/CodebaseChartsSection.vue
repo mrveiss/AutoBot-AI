@@ -331,7 +331,7 @@ function getCategoryIcon(categoryId: string): string {
   contain: layout style;}
 
 .stats-section h3 {
-  margin: 0 0 20px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5) var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-xl);
   font-weight: 600;
@@ -362,7 +362,7 @@ function getCategoryIcon(categoryId: string): string {
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-md);
   color: var(--text-muted);
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
@@ -449,7 +449,7 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   background: rgba(51, 65, 85, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: var(--radius-md);
@@ -482,7 +482,7 @@ function getCategoryIcon(categoryId: string): string {
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  padding: 0 6px;
+  padding: var(--spacing-0) var(--spacing-1-5);
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
@@ -687,7 +687,7 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: rgba(30, 41, 59, 0.5);
   border-radius: var(--radius-default);
   font-family: 'JetBrains Mono', monospace;
@@ -708,7 +708,7 @@ function getCategoryIcon(categoryId: string): string {
 }
 
 .external-deps-table h4 {
-  margin: 0 0 16px 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   color: var(--text-secondary);
   font-size: var(--text-base);
   font-weight: 600;
@@ -731,7 +731,7 @@ function getCategoryIcon(categoryId: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: rgba(51, 65, 85, 0.4);
   border-radius: var(--radius-default);
   transition: background var(--duration-200) var(--ease-out);
@@ -751,7 +751,7 @@ function getCategoryIcon(categoryId: string): string {
   font-size: 0.8rem;
   color: var(--text-muted);
   background: rgba(59, 130, 246, 0.2);
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-default);
 }
 

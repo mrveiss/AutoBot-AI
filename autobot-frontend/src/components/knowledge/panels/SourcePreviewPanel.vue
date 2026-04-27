@@ -319,7 +319,7 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
+  padding: var(--spacing-5) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -417,7 +417,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-4);
-  padding: 0.75rem 1.5rem;
+  padding: var(--spacing-3) var(--spacing-6);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
@@ -464,7 +464,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-3);
-  padding: 1rem 1.5rem;
+  padding: var(--spacing-4) var(--spacing-6);
   border-top: 1px solid var(--border-default);
   background: var(--bg-card);
 }

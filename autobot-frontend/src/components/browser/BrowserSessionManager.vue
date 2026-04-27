@@ -567,7 +567,7 @@ export default {
 }
 
 .persistent-badge {
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-radius: var(--radius-sm);

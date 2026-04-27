@@ -920,7 +920,7 @@ export default {
   left: 0;
   background: #000;
   color: #fff;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   text-decoration: none;
   border-radius: 0 0 var(--radius-default) 0;
   font-size: var(--text-sm);

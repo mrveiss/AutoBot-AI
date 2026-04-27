@@ -282,7 +282,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -372,7 +372,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -403,13 +403,13 @@ defineExpose({
 .capability-filter {
   display: flex;
   gap: var(--spacing-1);
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
 }
 
 .filter-btn {
   flex: 1;
-  padding: 6px 12px;
+  padding: var(--spacing-1-5) var(--spacing-3);
   background: var(--bg-tertiary);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -439,7 +439,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-150);
@@ -501,7 +501,7 @@ defineExpose({
 }
 
 .capability-badge {
-  padding: 2px 6px;
+  padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: var(--text-xs);
   font-weight: 600;
   border-radius: var(--radius-default);
@@ -524,7 +524,7 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: var(--spacing-8) var(--spacing-4);
   text-align: center;
   color: var(--text-muted);
 }
@@ -544,14 +544,14 @@ defineExpose({
 .selector-actions {
   display: flex;
   gap: var(--spacing-2);
-  padding: 12px 16px;
+  padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
 }
 
 .btn-secondary,
 .btn-primary {
   flex: 1;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);

@@ -243,7 +243,7 @@ function submitType() {
 .toolbar {
   display: flex;
   gap: var(--spacing-1);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
 }
@@ -276,14 +276,14 @@ function submitType() {
 .type-overlay {
   display: flex;
   gap: var(--spacing-1);
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-surface, #1e1e2e);
   border-top: 1px solid var(--color-border, #333);
 }
 
 .type-input {
   flex: 1;
-  padding: 4px 8px;
+  padding: var(--spacing-1) var(--spacing-2);
   border: 1px solid var(--color-border, #333);
   border-radius: var(--radius-default);
   background: var(--color-bg, #121212);

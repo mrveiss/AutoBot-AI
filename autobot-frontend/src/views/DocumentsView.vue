@@ -295,7 +295,7 @@ function showError(msg: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: var(--spacing-3-5) var(--spacing-4);
   border-bottom: 1px solid var(--color-border, #333);
   flex-shrink: 0;
 }
@@ -353,7 +353,7 @@ function showError(msg: string) {
 .document-item {
   display: flex;
   flex-direction: column;
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   cursor: pointer;
   border-bottom: 1px solid var(--color-border, #2a2a2a);
   gap: var(--spacing-0-5);
@@ -403,7 +403,7 @@ function showError(msg: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   border-top: 1px solid var(--color-border, #333);
   font-size: 0.8rem;
   flex-shrink: 0;
@@ -463,13 +463,13 @@ function showError(msg: string) {
 }
 
 .modal-title {
-  margin: 0 0 12px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
   font-size: var(--text-base);
   font-weight: 600;
 }
 
 .modal-body {
-  margin: 0 0 20px;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: 0.9rem;
   color: var(--color-text-muted, #bbb);
   line-height: 1.5;
@@ -491,7 +491,7 @@ function showError(msg: string) {
   color: var(--color-error, #f87171);
   border: 1px solid var(--color-error, #f87171);
   border-radius: var(--radius-md);
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   font-size: var(--text-sm);
   z-index: var(--z-popover);
   max-width: 90vw;

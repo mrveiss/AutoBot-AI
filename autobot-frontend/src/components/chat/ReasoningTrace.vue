@@ -176,7 +176,7 @@ function formatDuration(ms: number): string {
   border-top: 1px solid var(--color-border, #334155);
   max-height: 18rem;
   overflow-y: auto;
-  padding: 0.25rem 0;
+  padding: var(--spacing-1) var(--spacing-0);
 }
 
 /* Entries */

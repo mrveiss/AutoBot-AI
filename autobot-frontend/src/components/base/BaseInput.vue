@@ -238,7 +238,7 @@ defineExpose({
 /* Size Variants */
 .input-size-sm .input-container {
   height: 32px;
-  padding: 0 8px;
+  padding: var(--spacing-0) var(--spacing-2);
 }
 
 .input-size-sm .base-input {
@@ -247,7 +247,7 @@ defineExpose({
 
 .input-size-md .input-container {
   height: 40px;
-  padding: 0 12px;
+  padding: var(--spacing-0) var(--spacing-3);
 }
 
 .input-size-md .base-input {
@@ -256,7 +256,7 @@ defineExpose({
 
 .input-size-lg .input-container {
   height: 48px;
-  padding: 0 16px;
+  padding: var(--spacing-0) var(--spacing-4);
 }
 
 .input-size-lg .base-input {

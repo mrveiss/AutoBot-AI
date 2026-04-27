@@ -2,8 +2,14 @@
 """
 Migrate hardcoded padding/margin/gap values in Vue <style> blocks to spacing design tokens.
 
-Covers only single-value declarations (e.g. `padding: 16px`) — multi-value shorthands
-(e.g. `padding: 8px 16px`) are skipped per issue #4651 scope.
+Pass 1 (single-value, issue #4651) handled `padding: 16px` etc.
+This pass (issue #4947) adds multi-value shorthand support:
+  - Two-value:   padding: 8px 16px
+  - Three-value: padding: 12px 20px 8px
+  - Four-value:  padding: 4px 8px 4px 8px
+  - Mixed zero:  padding: 0 12px
+
+Values with no token equivalent are left unchanged (e.g. padding: 15px 30px).
 
 Usage:
     python scripts/migrate_spacing_tokens.py <src_dir>
@@ -64,48 +70,64 @@ SPACING_MAP = {
     "0": "var(--spacing-0)",
 }
 
-# Properties to migrate
-SPACING_PROPS = [
-    "padding",
-    "padding-top",
-    "padding-right",
-    "padding-bottom",
-    "padding-left",
-    "margin",
-    "margin-top",
-    "margin-right",
-    "margin-bottom",
-    "margin-left",
-    "gap",
-    "row-gap",
-    "column-gap",
+# Shorthand-only properties (can take 2–4 values)
+_SHORTHAND_PROPS = ["padding", "margin", "gap", "row-gap", "column-gap"]
+# All properties including directional variants (always single-value)
+_ALL_PROPS = [
+    "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "gap", "row-gap", "column-gap",
 ]
 
-_PROPS_RE = "|".join(re.escape(p) for p in SPACING_PROPS)
+_SHORTHAND_PROPS_RE = "|".join(re.escape(p) for p in _SHORTHAND_PROPS)
+_ALL_PROPS_RE = "|".join(re.escape(p) for p in _ALL_PROPS)
 
-# Matches single-value spacing declarations only (no multi-value shorthands).
-# Value must be a single token (digits + optional unit), nothing after before `;`.
-DECL_RE = re.compile(
-    r"(?P<indent>[ \t]*)(?P<prop>" + _PROPS_RE + r")(?P<colon>\s*:\s*)"
-    r"(?P<value>-?[\d.]+(?:px|rem)|0)(?P<tail>\s*;)",
+# Single raw CSS value: digit-based with optional unit, or bare zero
+_VAL = r"(?:-?[\d.]+(?:px|rem)|0(?:px|rem)?)"
+
+# Multi-value declarations: 2–4 space-separated raw values immediately before `;`
+# Only matches shorthand properties (padding, margin, gap) — not directional variants
+MULTI_DECL_RE = re.compile(
+    r"(?P<indent>[ \t]*)(?P<prop>" + _SHORTHAND_PROPS_RE + r")(?P<colon>\s*:\s*)"
+    r"(?P<values>" + _VAL + r"(?:\s+" + _VAL + r"){1,3})(?P<tail>\s*;)",
+    re.MULTILINE,
+)
+
+# Single-value declarations (all properties)
+SINGLE_DECL_RE = re.compile(
+    r"(?P<indent>[ \t]*)(?P<prop>" + _ALL_PROPS_RE + r")(?P<colon>\s*:\s*)"
+    r"(?P<value>" + _VAL + r")(?P<tail>\s*;)",
     re.MULTILINE,
 )
 
 
 def migrate_style_block(style_block: str) -> tuple[str, int]:
-    """Replace single-value spacing declarations inside a <style> block."""
+    """Replace multi-value then single-value spacing declarations inside a <style> block."""
     replacements = 0
 
-    def replacer(m: re.Match) -> str:
+    def multi_replacer(m: re.Match) -> str:
         nonlocal replacements
-        raw_val = m.group("value")
-        token = SPACING_MAP.get(raw_val)
+        parts = m.group("values").split()
+        mapped = [SPACING_MAP.get(p) for p in parts]
+        if any(t is None for t in mapped):
+            return m.group(0)  # at least one value has no token — leave unchanged
+        replacements += 1
+        return (
+            m.group("indent") + m.group("prop") + m.group("colon")
+            + " ".join(mapped) + m.group("tail")  # type: ignore[arg-type]
+        )
+
+    def single_replacer(m: re.Match) -> str:
+        nonlocal replacements
+        token = SPACING_MAP.get(m.group("value"))
         if token is None:
-            return m.group(0)  # no mapping — leave unchanged
+            return m.group(0)
         replacements += 1
         return m.group("indent") + m.group("prop") + m.group("colon") + token + m.group("tail")
 
-    new_block = DECL_RE.sub(replacer, style_block)
+    # Multi-value first — prevents single-value regex from partially matching
+    new_block = MULTI_DECL_RE.sub(multi_replacer, style_block)
+    new_block = SINGLE_DECL_RE.sub(single_replacer, new_block)
     return new_block, replacements
 
 

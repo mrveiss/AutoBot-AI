@@ -141,7 +141,7 @@ onUnmounted(() => {
   border-color: var(--border-default);
   border-radius: 18px 18px 18px 4px;
   max-width: 85%;
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
 }
 
 .message-header {

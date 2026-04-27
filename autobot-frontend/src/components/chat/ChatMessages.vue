@@ -1139,7 +1139,7 @@ onMounted(async () => {
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200 relative;
   max-width: 85%;
-  padding: 6px 10px;
+  padding: var(--spacing-1-5) var(--spacing-2-5);
 }
 
 .message-wrapper:hover {

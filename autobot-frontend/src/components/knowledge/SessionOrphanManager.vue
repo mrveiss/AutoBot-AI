@@ -223,7 +223,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1) var(--spacing-0);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -292,7 +292,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-warning-darker);
-  margin: 0 0 0.75rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
 }
 
 .orphan-list {
@@ -318,7 +318,7 @@ const cleanupSessionOrphans = async () => {
 
 .orphan-category {
   font-size: var(--text-xs);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
   border-radius: var(--radius-full);
@@ -326,7 +326,7 @@ const cleanupSessionOrphans = async () => {
 
 .orphan-important {
   font-size: var(--text-xs);
-  padding: 0.125rem 0.5rem;
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning-dark);
   border-radius: var(--radius-full);
@@ -335,7 +335,7 @@ const cleanupSessionOrphans = async () => {
 .orphan-content-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin: 0 0 0.25rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1) var(--spacing-0);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -351,7 +351,7 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   font-style: italic;
-  margin: 0.75rem 0 0 0;
+  margin: var(--spacing-3) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   text-align: center;
 }
 
@@ -415,12 +415,12 @@ const cleanupSessionOrphans = async () => {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
 }
 
 .action-card p {
   color: var(--text-tertiary);
-  margin: 0 0 1rem 0;
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   line-height: 1.5;
 }
 

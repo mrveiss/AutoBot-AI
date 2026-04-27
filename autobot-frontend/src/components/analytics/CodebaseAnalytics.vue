@@ -996,7 +996,7 @@ onUnmounted(() => {
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
 
 .btn-primary {
-  padding: 10px 20px;
+  padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
   border-radius: var(--radius-lg);
   font-weight: var(--font-semibold);
@@ -1095,7 +1095,7 @@ onUnmounted(() => {
   background: var(--chart-indigo);
   color: var(--text-on-primary);
   border: none;
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-200);
@@ -1149,7 +1149,7 @@ onUnmounted(() => {
 }
 
 .kb-optin-btn {
-  padding: 8px 14px;
+  padding: var(--spacing-2) var(--spacing-3-5);
   background: var(--color-success);
   border: none;
   border-radius: var(--radius-lg);
@@ -1201,7 +1201,7 @@ onUnmounted(() => {
 .project-sub-tabs {
   display: flex;
   gap: var(--spacing-0-5);
-  padding: 0 0 0 0;
+  padding: var(--spacing-0) var(--spacing-0) var(--spacing-0) var(--spacing-0);
   overflow-x: auto;
   border-bottom: 1px solid var(--border-default);
   background-color: var(--bg-secondary);
@@ -1211,7 +1211,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  padding: 10px 16px;
+  padding: var(--spacing-2-5) var(--spacing-4);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
