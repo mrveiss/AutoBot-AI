@@ -28,11 +28,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,10 @@ try:
     from training.completion_trainer import CompletionTrainer
 
     HAS_ML = True
-except ImportError:
-    logger.warning("ML dependencies not available, using pattern-only completions")
+except (ImportError, RuntimeError) as e:
+    logger.warning(
+        "ML dependencies not available, using pattern-only completions: %s", e
+    )
     CompletionTrainer = None  # type: ignore
     HAS_ML = False
 
@@ -1206,7 +1208,9 @@ async def get_engine() -> IDEIntegrationEngine:
     operation="analyze_code",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.post("/analyze", summary="Analyze code for patterns", response_model=AnalysisResponse)
+@router.post(
+    "/analyze", summary="Analyze code for patterns", response_model=AnalysisResponse
+)
 async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     """
     Analyze code and return LSP-compatible diagnostics.
@@ -1222,7 +1226,9 @@ async def analyze_code(request: AnalysisRequest) -> AnalysisResponse:
     operation="get_quick_fixes",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.post("/quickfix", summary="Get quick fix suggestions", response_model=QuickFixResponse)
+@router.post(
+    "/quickfix", summary="Get quick fix suggestions", response_model=QuickFixResponse
+)
 async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     """Get available quick fixes for a diagnostic."""
     engine = await get_engine()
@@ -1263,7 +1269,9 @@ async def get_rules() -> Dict[str, Any]:
     operation="update_config",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.put("/config", summary="Update configuration", response_model=IDEConfigUpdateResponse)
+@router.put(
+    "/config", summary="Update configuration", response_model=IDEConfigUpdateResponse
+)
 async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     """Update IDE integration configuration."""
     engine = await get_engine()
@@ -1276,7 +1284,11 @@ async def update_config(config: ConfigurationUpdate) -> Dict[str, Any]:
     operation="get_categories",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.get("/categories", summary="Get pattern categories", response_model=IDECategoriesResponse)
+@router.get(
+    "/categories",
+    summary="Get pattern categories",
+    response_model=IDECategoriesResponse,
+)
 async def get_categories() -> Dict[str, Any]:
     """Get available pattern categories."""
     return {
@@ -1292,7 +1304,9 @@ async def get_categories() -> Dict[str, Any]:
     operation="get_severities",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.get("/severities", summary="Get severity levels", response_model=IDESeveritiesResponse)
+@router.get(
+    "/severities", summary="Get severity levels", response_model=IDESeveritiesResponse
+)
 async def get_severities() -> Dict[str, Any]:
     """Get available severity levels."""
     return {
@@ -1308,7 +1322,11 @@ async def get_severities() -> Dict[str, Any]:
     operation="batch_analyze",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.post("/batch-analyze", summary="Analyze multiple files", response_model=IDEBatchAnalyzeResponse)
+@router.post(
+    "/batch-analyze",
+    summary="Analyze multiple files",
+    response_model=IDEBatchAnalyzeResponse,
+)
 async def batch_analyze(
     requests: List[AnalysisRequest],
 ) -> Dict[str, Any]:
@@ -1337,7 +1355,9 @@ async def batch_analyze(
     operation="get_completions",
     error_code_prefix="IDE_INTEGRATION",
 )
-@router.post("/completion", summary="Get code completions", response_model=CompletionResponse)
+@router.post(
+    "/completion", summary="Get code completions", response_model=CompletionResponse
+)
 async def get_completions(request: CompletionRequest) -> CompletionResponse:
     """
     Get intelligent code completions.
