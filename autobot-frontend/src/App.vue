@@ -400,8 +400,8 @@
       </UnifiedLoadingView>
     </main>
 
-    <!-- Footer: About link -->
-    <footer class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
+    <!-- Footer: About link (hidden on login page — /about requires auth) -->
+    <footer v-if="!isLoginPage" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
       <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
         {{ $t('nav.about') }}
       </router-link>
