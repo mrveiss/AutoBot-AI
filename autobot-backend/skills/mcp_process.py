@@ -19,6 +19,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.ssot_config import config
 from skills.mcp_trace import MCPSpan, new_span, write_span
 
@@ -177,7 +178,7 @@ class MCPProcessManager:
             span.ended_at = time.time()
             span.output = result if isinstance(result, dict) else ({"value": result} if result is not None else None)
             span.error = error_str
-            asyncio.create_task(write_span(span))
+            run_redis_write(write_span(span), label="mcp_trace")
 
     async def stop(self, name: str) -> None:
         """Terminate the skill subprocess and remove its temp file."""
