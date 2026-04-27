@@ -15,7 +15,7 @@
 import { ref, computed, reactive } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import apiClient from '@/utils/ApiClient';
+import httpClient from '@/utils/ApiClient';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
@@ -260,9 +260,9 @@ class WorkflowBuilderApiClient {
       let data: T;
       if (method === 'POST') {
         const body = options.body ? JSON.parse(options.body as string) as unknown : undefined;
-        data = await apiClient.post<T>(url, body, { timeout: this.timeout });
+        data = await httpClient.post<T>(url, body, { timeout: this.timeout });
       } else {
-        data = await apiClient.get<T>(url, { timeout: this.timeout });
+        data = await httpClient.get<T>(url, { timeout: this.timeout });
       }
       return { success: true, data };
     } catch (error) {
