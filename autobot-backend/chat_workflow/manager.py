@@ -2660,6 +2660,20 @@ before summarizing.
                     continue
 
                 sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+                # Issue #4448: Extract KB-only citations into top-level sources list.
+                # metadata.citations includes the always-appended llm_training entry —
+                # filter it out so sources contains only knowledge-base references.
+                raw_citations = (wf_msg.metadata or {}).get("citations", [])
+                sources = [
+                    {
+                        "title": c.get("title") or c.get("source", ""),
+                        "path": c.get("source", ""),
+                        "score": c.get("score", 0.0),
+                        "chunk_id": c.get("id", ""),
+                    }
+                    for c in raw_citations
+                    if c.get("type") == "knowledge_base"
+                ]
                 batch.append(
                     chat_mgr._build_message_dict(
                         sender,
@@ -2667,6 +2681,7 @@ before summarizing.
                         wf_msg.type,
                         wf_msg.metadata,
                         None,
+                        sources=sources,
                     )
                 )
 

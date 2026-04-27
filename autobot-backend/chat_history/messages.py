@@ -44,6 +44,7 @@ class MessagesMixin:
         raw_data: Any,
         tool_markers: Optional[List[Dict[str, Any]]],
         author_id: Optional[str] = None,
+        sources: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Build a message dictionary with standard fields.
@@ -55,6 +56,8 @@ class MessagesMixin:
             raw_data: Additional raw data (metadata).
             tool_markers: Optional list of tool usage markers.
             author_id: Optional user ID for multi-user attribution (Issue #3282).
+            sources: Optional RAG retrieval sources for citation display (Issue #4448).
+                Each entry is {title, path, score, chunk_id}.
 
         Returns:
             Constructed message dictionary.
@@ -68,6 +71,7 @@ class MessagesMixin:
             "messageType": message_type,
             "metadata": raw_data,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "sources": sources if sources is not None else [],
         }
         if tool_markers:
             message["toolMarkers"] = tool_markers

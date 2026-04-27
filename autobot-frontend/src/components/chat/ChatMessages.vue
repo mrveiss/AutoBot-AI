@@ -172,10 +172,15 @@
             </div>
           </div>
 
-          <!-- Issue #249, #1186: Source Attribution Display -->
+          <!-- Issue #249, #1186, #4448: Source Attribution Display
+               Prefer top-level message.sources (persisted via Issue #4448) when
+               present; fall back to metadata.citations for live-streaming chunks
+               where sources have not been persisted yet.  Only knowledge_base
+               entries are included in message.sources so no llm_training
+               sentinel is appended here. -->
           <CitationsDisplay
-            v-if="message.sender === 'assistant' && ((message.metadata as any)?.citations?.length || 0) > 0"
-            :citations="(message.metadata as any)?.citations || []"
+            v-if="message.sender === 'assistant' && getMessageCitations(message).length > 0"
+            :citations="getMessageCitations(message)"
           />
 
           <!-- Attachments -->
@@ -896,6 +901,40 @@ const shouldShowMetadata = (message: ChatMessage): boolean => {
          message.sender === 'assistant' &&
          !!message.metadata &&
          Object.keys(message.metadata).length > 0
+}
+
+/**
+ * Issue #4448: Return the canonical citation list for a message.
+ *
+ * Priority order:
+ * 1. message.sources — top-level persisted sources (knowledge_base entries only,
+ *    shape: {title, path, score, chunk_id}).  Present after the message is saved
+ *    and reloaded from the backend.
+ * 2. metadata.citations — present during live streaming before persistence.
+ *    May include the always-appended llm_training sentinel; filter it out so
+ *    the user only sees real knowledge-base references.
+ *
+ * Returns a Citation-compatible array accepted by CitationsDisplay.
+ */
+const getMessageCitations = (message: ChatMessage): Record<string, unknown>[] => {
+  if (Array.isArray(message.sources) && message.sources.length > 0) {
+    return message.sources.map((s) => ({
+      id: s.chunk_id,
+      title: s.title,
+      source: s.path,
+      score: s.score,
+      type: 'knowledge_base' as const,
+      reliability: 'high' as const,
+    }))
+  }
+  const metaCitations = (message.metadata as Record<string, unknown> | undefined)
+    ?.citations
+  if (Array.isArray(metaCitations)) {
+    return (metaCitations as Record<string, unknown>[]).filter(
+      (c) => c.type !== 'llm_training'
+    )
+  }
+  return []
 }
 
 const hasCodeBlocks = (content: string): boolean => {
