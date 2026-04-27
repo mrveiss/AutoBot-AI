@@ -31,6 +31,9 @@ COPY requirements.txt /app/requirements-root.txt
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot.shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
+    && python3 -m pip install --no-cache-dir \
+        "torch>=2.11.0" "torchvision>=0.26.0" \
+        --index-url https://download.pytorch.org/whl/cpu \
     && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
 
