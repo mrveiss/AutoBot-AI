@@ -233,7 +233,8 @@ const vncUrl = ref('') // Will be loaded on mount
 /** Build VNC URL from a SelectorHost record (Issue #4977). */
 const buildHostVncUrl = (h: SelectorHost): string => {
   const port = h.vnc_port || 6080
-  return `http://${h.host}:${port}/vnc.html?autoconnect=true`
+  const scheme = window.location.protocol === 'https:' ? 'https' : 'http'
+  return `${scheme}://${h.host}:${port}/vnc.html?autoconnect=true`
 }
 
 // Load dynamic VNC URL on component mount
