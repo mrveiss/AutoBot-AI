@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
@@ -55,11 +56,11 @@ _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 _CONTROL_FLOW_TYPES = (ast.If, ast.For, ast.While, ast.With)
 _NESTING_TYPES = (ast.If, ast.For, ast.While, ast.With, ast.Try)
 
-# Issue #906: Module-level instances for code completion
-redis_client = get_redis_client(async_client=False, database="main")
-context_analyzer = ContextAnalyzer()
-pattern_extractor = PatternExtractor()
-trainer = CompletionTrainer() if HAS_ML else None
+# Issue #6225: Lazy singletons — nothing instantiated at module import time
+_get_redis_client = lazy_singleton(lambda: get_redis_client(async_client=False, database="main"))
+_get_context_analyzer = lazy_singleton(ContextAnalyzer)
+_get_pattern_extractor = lazy_singleton(PatternExtractor)
+_get_trainer = lazy_optional_singleton(lambda: CompletionTrainer() if HAS_ML and CompletionTrainer is not None else None)
 
 
 # =============================================================================
@@ -934,7 +935,7 @@ class IDEIntegrationEngine:
         """Helper for complete. Return cached CompletionResponse or None. Ref: #1088."""
         import time as _time
 
-        cached_result = redis_client.get(cache_key)
+        cached_result = _get_redis_client().get(cache_key)
         if not cached_result:
             return None
         completions_data = json.loads(cached_result.decode())
@@ -990,7 +991,7 @@ class IDEIntegrationEngine:
         if cached:
             return cached
 
-        context = context_analyzer.analyze(
+        context = _get_context_analyzer().analyze(
             file_content=request.content,
             cursor_line=request.cursor_line,
             cursor_position=request.cursor_position,
@@ -1001,7 +1002,7 @@ class IDEIntegrationEngine:
         completions = self._rank_completions(completions, context)
         completions = completions[: request.max_completions]
 
-        redis_client.setex(
+        _get_redis_client().setex(
             cache_key, 10, json.dumps([c.model_dump() for c in completions])
         )
         elapsed_ms = (_time.time() - start_time) * 1000
@@ -1017,7 +1018,8 @@ class IDEIntegrationEngine:
     ) -> List[CompletionItem]:
         """Get ML-based completions. (Issue #906 - helper)"""
         # Check if ML is available
-        if not HAS_ML or trainer is None:
+        trainer = _get_trainer()
+        if trainer is None:
             return []
 
         # Load trained model (cached)
