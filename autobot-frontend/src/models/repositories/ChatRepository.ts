@@ -108,6 +108,14 @@ interface BackendSessionEntry {
   lastModified?: string
 }
 
+/** RAG source entry persisted at the top level of a backend message (Issue #4448). */
+interface BackendRagSource {
+  title?: string
+  path?: string
+  score?: number
+  chunk_id?: string
+}
+
 /** Minimal message shape returned by the backend get-session endpoint */
 interface BackendMessageEntry {
   id?: string
@@ -119,6 +127,8 @@ interface BackendMessageEntry {
   type?: string
   metadata?: Record<string, unknown>
   rawData?: Record<string, unknown>
+  /** Issue #4448: RAG retrieval sources persisted alongside the message. */
+  sources?: BackendRagSource[]
 }
 
 /**
@@ -395,7 +405,17 @@ export class ChatRepository {
           type: normalizedType,
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
           // Check both rawData (old format) and metadata (new format) for backward compatibility
-          metadata: msg.metadata || msg.rawData || {}
+          metadata: msg.metadata || msg.rawData || {},
+          // Issue #4448: Map top-level sources for RAG citation display.
+          // Normalise to RagSource shape; treat missing array as empty.
+          sources: Array.isArray(msg.sources)
+            ? msg.sources.map((s) => ({
+                title: s.title ?? s.path ?? '',
+                path: s.path ?? '',
+                score: typeof s.score === 'number' ? s.score : 0,
+                chunk_id: s.chunk_id ?? '',
+              }))
+            : []
         }
         logger.debug(`Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`)
         return transformed
