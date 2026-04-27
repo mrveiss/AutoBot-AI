@@ -169,8 +169,8 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
@@ -181,6 +181,15 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import { useVncControls } from '@/composables/useVncControls'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { createLogger } from '@/utils/debugUtils'
+import type { SelectorHost } from '@/composables/useHostSelector'
+
+/** Optional host prop — when provided, drives the VNC URL directly from the
+ *  host record rather than fetching from AppConfig (Issue #4977). */
+interface Props {
+  host?: SelectorHost | null
+}
+
+const props = withDefaults(defineProps<Props>(), { host: null })
 
 const { t } = useI18n()
 const logger = createLogger('DesktopInterface')
@@ -199,9 +208,9 @@ const screenshotData = ref<string | null>(null)
 const textToType = ref('')
 const showTypeDialog = ref(false)
 
-const vncFrame = ref(null)
+const vncFrame = ref<HTMLIFrameElement | null>(null)
 const loading = ref(true)
-const error = ref(null)
+const error = ref<string | null>(null)
 const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
@@ -218,13 +227,24 @@ const connectionStatusDisplay = computed(() => {
   return statusMap[connectionStatus.value] || connectionStatus.value
 })
 
-// VNC connection URL - will be loaded asynchronously from AppConfig
+// VNC connection URL - will be loaded asynchronously from AppConfig or derived from host prop
 const vncUrl = ref('') // Will be loaded on mount
+
+/** Build VNC URL from a SelectorHost record (Issue #4977). */
+const buildHostVncUrl = (h: SelectorHost): string => {
+  const port = h.vnc_port || 6080
+  return `http://${h.host}:${port}/vnc.html?autoconnect=true`
+}
 
 // Load dynamic VNC URL on component mount
 const loadVncUrlFn = async () => {
-  const dynamicVncUrl = await appConfig.getVncUrl('desktop');
-  vncUrl.value = dynamicVncUrl;
+  // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
+  if (props.host) {
+    vncUrl.value = buildHostVncUrl(props.host)
+  } else {
+    const dynamicVncUrl = await appConfig.getVncUrl('desktop');
+    vncUrl.value = dynamicVncUrl;
+  }
   // Clear any previous errors and update status
   error.value = null;
   loading.value = false;
@@ -259,6 +279,16 @@ const loadVncUrl = async () => {
     logger.error('Desktop unavailable - no configuration loaded');
   });
 }
+
+// Issue #4977: when the host prop changes, reload the VNC URL
+watch(() => props.host, async (newHost: SelectorHost | null | undefined) => {
+  if (newHost !== undefined) {
+    loading.value = true
+    error.value = null
+    connectionStatus.value = 'Connecting...'
+    await loadVncUrl()
+  }
+})
 
 const connectionStatusClass = computed(() => {
   switch (connectionStatus.value) {
