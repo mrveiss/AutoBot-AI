@@ -47,6 +47,12 @@ export interface CommandResult {
   error?: string
 }
 
+export interface ApprovalResponse {
+  status: 'approved' | 'denied' | 'error' | string
+  comment?: string
+  error?: string
+}
+
 export function useCommandApproval() {
   const { showToast } = useToast()
   const chatStore = useChatStore()
@@ -220,7 +226,7 @@ export function useCommandApproval() {
     }
 
     try {
-      const result = await apiClient.post(
+      const result = await apiClient.post<ApprovalResponse>(
         `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`,
         {
           approved,
@@ -389,11 +395,11 @@ export function useCommandApproval() {
     terminalSessionId: string,
     approved: boolean,
     userId = 'web_user'
-  ): Promise<{ status: string; error?: string; [key: string]: unknown }> => {
-    const result = await apiClient.post(
+  ): Promise<ApprovalResponse> => {
+    const result = await apiClient.post<ApprovalResponse>(
       `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
       { approved, user_id: userId }
-    ) as { status: string; error?: string; [key: string]: unknown }
+    )
     return result
   }
 
