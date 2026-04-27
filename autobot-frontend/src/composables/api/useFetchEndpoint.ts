@@ -216,7 +216,7 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
   //
   // fallbackData is handled by catching inside the fetcher and returning the
   // fallback value rather than re-throwing, so useApiResource sees a success.
-  const resource = useApiResource<TOut | null>(async (signal?: AbortSignal) => {
+  const resource = useApiResource<TOut | null>(async (signal: AbortSignal) => {
     const ctx = pendingCtx
     const queryExtras = pendingExtras
 
@@ -264,7 +264,7 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
       if (
         (err instanceof DOMException && err.name === 'AbortError') ||
         (err as Error)?.name === 'AbortError'
-      ) return
+      ) return null
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to load ${label}:`, err)
       opts.onError?.(message, err, ctx)
