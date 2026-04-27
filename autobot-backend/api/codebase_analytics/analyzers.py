@@ -939,6 +939,8 @@ def _detect_technical_debt_in_line(line_num: int, line: str, file_path: str) -> 
 
 def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
     """Run anti-pattern detection (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _anti_pattern_detector
 
     problems = []
@@ -966,6 +968,8 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
 
 def _run_performance_analysis(file_path: str) -> List[Dict]:
     """Run performance analysis (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _performance_analyzer
 
     problems = []
@@ -993,6 +997,8 @@ def _run_performance_analysis(file_path: str) -> List[Dict]:
 
 def _run_bug_prediction(file_path: str) -> List[Dict]:
     """Run bug prediction analysis (Issue #398: extracted, Issue #662: thread-safe)."""
+    if not _analyzers_available:
+        return []
     global _bug_predictor
 
     problems = []

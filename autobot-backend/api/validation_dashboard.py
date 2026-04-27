@@ -101,7 +101,7 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
-    if ValidationDashboardGenerator is None:
+    if not ValidationDashboardGenerator:
         logger.error("ValidationDashboardGenerator not available: %s", import_error)
         return None
 
