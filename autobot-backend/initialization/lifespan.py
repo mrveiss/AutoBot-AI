@@ -1532,6 +1532,15 @@ async def cleanup_services(app: FastAPI):
         except Exception as pm_err:
             logger.warning("Plugin manager shutdown failed: %s", pm_err)
 
+        # Issue #4107: Stop isolated MCP bridge worker processes
+        try:
+            from services.mcp_isolated_runtime import get_isolated_registry
+
+            await get_isolated_registry().shutdown_all()
+            logger.info("✅ Isolated MCP bridge workers shutdown")
+        except Exception as mcp_err:
+            logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
+
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
