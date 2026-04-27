@@ -20,6 +20,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+
 logger = logging.getLogger(__name__)
 
 # Check speech recognition availability
@@ -27,8 +29,8 @@ try:
     import speech_recognition as sr
 
     SPEECH_RECOGNITION_AVAILABLE = True
-except ImportError:
-    sr = None
+except ImportError as _e:
+    sr = _MissingDep("speech_recognition", _e)  # type: ignore[assignment]
     SPEECH_RECOGNITION_AVAILABLE = False
 
 # Check pyttsx3 availability
@@ -36,8 +38,8 @@ try:
     import pyttsx3
 
     PYTTSX3_AVAILABLE = True
-except ImportError:
-    pyttsx3 = None
+except ImportError as _e:
+    pyttsx3 = _MissingDep("pyttsx3", _e)  # type: ignore[assignment]
     PYTTSX3_AVAILABLE = False
 
 # Check Vosk availability
@@ -45,9 +47,9 @@ try:
     from vosk import KaldiRecognizer, Model
 
     VOSK_AVAILABLE = True
-except ImportError:
-    KaldiRecognizer = None
-    Model = None
+except ImportError as _e:
+    KaldiRecognizer = _MissingDep("KaldiRecognizer", _e)  # type: ignore[assignment]
+    Model = _MissingDep("Model", _e)  # type: ignore[assignment]
     VOSK_AVAILABLE = False
 
 # Check Coqui TTS availability
@@ -55,8 +57,8 @@ try:
     from TTS.api import TTS as CoquiTTS
 
     COQUI_TTS_AVAILABLE = True
-except ImportError:
-    CoquiTTS = None
+except ImportError as _e:
+    CoquiTTS = _MissingDep("CoquiTTS", _e)  # type: ignore[assignment]
     COQUI_TTS_AVAILABLE = False
 
 # Check gTTS availability (Google Text-to-Speech - online fallback)
@@ -64,8 +66,8 @@ try:
     from gtts import gTTS
 
     GTTS_AVAILABLE = True
-except ImportError:
-    gTTS = None
+except ImportError as _e:
+    gTTS = _MissingDep("gTTS", _e)  # type: ignore[assignment]
     GTTS_AVAILABLE = False
 
 # Check sounddevice for audio playback
@@ -74,9 +76,9 @@ try:
     import soundfile as sf
 
     SOUNDDEVICE_AVAILABLE = True
-except ImportError:
-    sd = None
-    sf = None
+except ImportError as _e:
+    sd = _MissingDep("sounddevice", _e)  # type: ignore[assignment]
+    sf = _MissingDep("soundfile", _e)  # type: ignore[assignment]
     SOUNDDEVICE_AVAILABLE = False
 
 

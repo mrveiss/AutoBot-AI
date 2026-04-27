@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
@@ -28,9 +29,9 @@ try:
     )
 
     EMBEDDING_ANALYTICS_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     EMBEDDING_ANALYTICS_AVAILABLE = False
-    EmbeddingUsageRequest = None
+    EmbeddingUsageRequest = _MissingDep("EmbeddingUsageRequest", _e)  # type: ignore[assignment]
     logger = logging.getLogger(__name__)
     logger.debug("Embedding analytics not available - usage tracking disabled")
 
