@@ -62,7 +62,7 @@ const effectiveVoiceId = computed<string>(() => {
 
 // GET voices — useFetchEndpoint provides AbortController + race protection
 const voicesEndpoint = useFetchEndpoint<VoicesRaw, VoiceProfile[]>({
-  path: '/voice/voices',
+  path: '/api/voice/voices',
   label: 'fetchVoices',
   pickData: (raw) => {
     const list = Array.isArray(raw) ? (raw as unknown as VoiceProfile[]) : (raw.voices ?? null)
@@ -79,7 +79,7 @@ const voicesEndpoint = useFetchEndpoint<VoicesRaw, VoiceProfile[]>({
 
 // GET active personality — useFetchEndpoint provides AbortController + race protection
 const personalityEndpoint = useFetchEndpoint<PersonalityRaw, PersonalityRaw>({
-  path: '/personality/active',
+  path: '/api/personality/active',
   label: 'fetchPersonalityVoice',
   pickData: (raw) => raw ?? null,
   onSuccess: (data) => {
