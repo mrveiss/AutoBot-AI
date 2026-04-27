@@ -247,16 +247,29 @@ class PKIManager:
         """Get list of certificates needing renewal."""
         return self.generator.needs_renewal()
 
-    async def renew(self, certificates: Optional[List[str]] = None) -> bool:
+    async def renew(
+        self,
+        certificates: Optional[List[str]] = None,
+        preserve_keys: bool = True,
+    ) -> bool:
         """
         Renew certificates.
 
         Args:
             certificates: List of certificate names to renew.
                          If None, renews all that need renewal.
+            preserve_keys: When True (default), reuses the existing private key
+                          and only regenerates the certificate.  When False,
+                          regenerates both the private key and the certificate
+                          (full key rotation).
 
         Returns:
-            True if renewal successful
+            True if all renewals succeeded.
+
+        Raises:
+            ValueError: If "ca" is included in the certificates list.  CA
+                       renewal requires manual steps (re-signing all service
+                       certificates) and cannot be performed automatically.
         """
         if certificates is None:
             certificates = self.generator.needs_renewal()
@@ -265,26 +278,40 @@ class PKIManager:
             logger.info("No certificates need renewal")
             return True
 
-        logger.info(f"Renewing certificates: {certificates}")
+        if "ca" in certificates:
+            raise ValueError(
+                "CA certificate renewal requires manual steps: the CA key and "
+                "certificate must be rotated offline, and all service certificates "
+                "must then be re-signed against the new CA.  Remove 'ca' from the "
+                "renewal list and follow the PKI CA-rotation runbook."
+            )
 
-        # For now, regenerate and redistribute
-        # TODO: Implement proper renewal that preserves keys if desired
+        logger.info(
+            "Renewing certificates: %s (preserve_keys=%s)", certificates, preserve_keys
+        )
 
+        success = True
         for cert_name in certificates:
-            if cert_name == "ca":
-                # CA renewal is more complex - would need to re-sign all certs
-                logger.warning("CA renewal not yet implemented")
+            vm_ip = VM_DEFINITIONS.get(cert_name)
+            if not vm_ip:
+                logger.warning("Unknown certificate name '%s', skipping", cert_name)
                 continue
 
-            vm_ip = VM_DEFINITIONS.get(cert_name)
-            if vm_ip:
-                vm_info = self.config.get_vm_cert_info(cert_name, vm_ip)
-                # Regenerate
-                self.generator._generate_service_cert(vm_info, force=True)
-                # Redistribute
-                await self.distributor._distribute_to_vm(vm_info)
+            vm_info = self.config.get_vm_cert_info(cert_name, vm_ip)
 
-        return True
+            if preserve_keys:
+                renewed = self.generator._renew_service_cert(vm_info)
+            else:
+                renewed = self.generator._generate_service_cert(vm_info, force=True)
+
+            if not renewed:
+                logger.error("Failed to renew certificate for %s", cert_name)
+                success = False
+                continue
+
+            await self.distributor._distribute_to_vm(vm_info)
+
+        return success
 
     def get_certificate_details(self) -> Dict[str, dict]:
         """Get detailed certificate information."""
