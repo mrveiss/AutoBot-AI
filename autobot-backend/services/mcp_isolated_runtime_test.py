@@ -151,6 +151,157 @@ class TestIsolatedBridgeClient:
         proc.kill.assert_called_once()
 
 
+class TestConcurrentRequestIds:
+    """Concurrency tests ensuring unique JSON-RPC request IDs (#4105).
+
+    The existing tests mock subprocess communication but run calls serially,
+    so they cannot catch race conditions in `_next_id()`.  These tests run
+    N >= 100 concurrent coroutines via ``asyncio.gather`` and assert that
+    every assigned request ID is unique.
+    """
+
+    _N = 100  # stress level — must be at least 100 per issue spec
+
+    # ------------------------------------------------------------------
+    # Helper: build a fake proc whose readline captures the request line
+    # written by _raw_request so we can inspect the JSON-RPC id field.
+    # ------------------------------------------------------------------
+
+    def _make_capturing_proc(self, captured_ids: list) -> MagicMock:
+        """Return a fake proc that records the JSON-RPC id from each write.
+
+        ``stdin.write`` receives the encoded JSON line; we decode it and
+        store the ``id`` field in *captured_ids* so the test can assert
+        uniqueness after all coroutines complete.
+
+        ``stdout.readline`` returns a generic success response each call.
+        """
+        proc = MagicMock()
+        proc.returncode = None
+        proc.stdin = MagicMock()
+        proc.stdin.drain = AsyncMock()
+
+        def _capture_write(data: bytes) -> None:
+            msg = json.loads(data.decode("utf-8").strip())
+            captured_ids.append(msg["id"])
+
+        proc.stdin.write = MagicMock(side_effect=_capture_write)
+
+        # readline returns a unique success payload on every call so
+        # _raw_request can parse it without crashing.
+        async def _readline():
+            return (
+                json.dumps({"jsonrpc": "2.0", "id": 0, "result": {"pong": True}})
+                + "\n"
+            ).encode("utf-8")
+
+        proc.stdout = MagicMock()
+        proc.stdout.readline = AsyncMock(side_effect=_readline)
+        proc.wait = AsyncMock(return_value=0)
+        proc.terminate = MagicMock()
+        proc.kill = MagicMock()
+        return proc
+
+    # ------------------------------------------------------------------
+    # Test 1 — _next_id() called concurrently without the outer lock
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_next_id_uniqueness_direct(self):
+        """N concurrent _next_id() calls each return a distinct integer.
+
+        ``_next_id`` does a simple ``self._req_id += 1`` with no explicit
+        mutex.  Under CPython the GIL makes the increment atomic for pure
+        integer add, but this test documents and enforces the guarantee so
+        future refactors (e.g. moving to a non-GIL build) cannot regress.
+        """
+        client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
+        ids = await asyncio.gather(*[client._next_id() for _ in range(self._N)])
+        assert len(ids) == self._N
+        assert len(set(ids)) == self._N, (
+            f"Collision detected: {self._N} calls produced only "
+            f"{len(set(ids))} unique IDs"
+        )
+
+    # ------------------------------------------------------------------
+    # Test 2 — concurrent call_tool() calls embed unique ids in requests
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_call_tool_unique_request_ids(self):
+        """N concurrent call_tool() invocations send N unique JSON-RPC ids.
+
+        The asyncio.Lock inside IsolatedBridgeClient serialises access to
+        the subprocess, so calls queue up naturally.  This test verifies
+        that each queued request receives a distinct ``id`` in the JSON-RPC
+        message actually written to stdin — i.e. no two requests share an id
+        that would cause response routing to fail.
+        """
+        captured_ids: list = []
+        fake_proc = self._make_capturing_proc(captured_ids)
+
+        client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=fake_proc),
+        ):
+            await asyncio.gather(
+                *[
+                    client.call_tool("read_file", {"path": f"/tmp/f{i}"})
+                    for i in range(self._N)
+                ]
+            )
+
+        # Filter out the "shutdown" or "ping" requests emitted by _ensure_alive
+        # (those also get ids but belong to internal housekeeping, not tool calls).
+        # We only need to verify the tool call ids — captured_ids contains ALL
+        # requests; uniqueness must still hold across the entire set.
+        assert len(captured_ids) >= self._N, (
+            f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
+        )
+        assert len(captured_ids) == len(set(captured_ids)), (
+            f"Request ID collision detected in {len(captured_ids)} requests: "
+            f"duplicates = {[x for x in captured_ids if captured_ids.count(x) > 1]}"
+        )
+
+    # ------------------------------------------------------------------
+    # Test 3 — mixed concurrent call_tool + health_check unique ids
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_mixed_concurrent_call_tool_and_health_check(self):
+        """Concurrent call_tool() and health_check() share the same id counter.
+
+        Both methods acquire the same asyncio.Lock and call _raw_request,
+        which invokes _next_id().  This test ensures the counter advances
+        monotonically across both call paths so ids never collide even when
+        the two call types are interleaved under concurrent load.
+        """
+        captured_ids: list = []
+        fake_proc = self._make_capturing_proc(captured_ids)
+
+        half = self._N // 2
+        client = IsolatedBridgeClient("filesystem_mcp", _make_policy())
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=fake_proc),
+        ):
+            tool_coros = [
+                client.call_tool("list_dir", {"path": f"/tmp/{i}"})
+                for i in range(half)
+            ]
+            health_coros = [client.health_check() for _ in range(half)]
+            await asyncio.gather(*tool_coros, *health_coros)
+
+        assert len(captured_ids) >= self._N, (
+            f"Expected at least {self._N} captured ids, got {len(captured_ids)}"
+        )
+        assert len(captured_ids) == len(set(captured_ids)), (
+            f"Request ID collision between call_tool and health_check: "
+            f"duplicates = {[x for x in captured_ids if captured_ids.count(x) > 1]}"
+        )
+
+
 class TestIsolatedBridgeRegistry:
     """Registry mode routing."""
 
