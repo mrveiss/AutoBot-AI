@@ -53,21 +53,23 @@ from .streaming import StreamingManager
 from .tiered_routing import TierConfig, TieredModelRouter
 from .types import ProviderType
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+
 # Issue #756: Import provider health checking to prevent stalls
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
 
     HEALTH_CHECK_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     HEALTH_CHECK_AVAILABLE = False
-    ProviderHealthManager = None
-    ProviderStatus = None
+    ProviderHealthManager = _MissingDep("ProviderHealthManager", _e)  # type: ignore[assignment]
+    ProviderStatus = _MissingDep("ProviderStatus", _e)  # type: ignore[assignment]
 
 # Optional imports
 try:
     from prompt_manager import prompt_manager
-except ImportError:
-    prompt_manager = None
+except ImportError as _e:
+    prompt_manager = _MissingDep("prompt_manager", _e)  # type: ignore[assignment]
 
 try:
     from autobot_shared.logging_manager import get_llm_logger
@@ -81,9 +83,9 @@ try:
     from api.analytics_llm_patterns import UsageRecordRequest, get_pattern_analyzer
 
     PATTERN_ANALYZER_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     PATTERN_ANALYZER_AVAILABLE = False
-    UsageRecordRequest = None
+    UsageRecordRequest = _MissingDep("UsageRecordRequest", _e)  # type: ignore[assignment]
     logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
 config = get_config_manager()

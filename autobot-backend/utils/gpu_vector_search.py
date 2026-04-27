@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
 from utils.async_initializable import AsyncInitializable
 
@@ -40,19 +41,19 @@ try:
     else:
         FAISS_GPU_AVAILABLE = False
         FAISS_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     FAISS_AVAILABLE = False
     FAISS_GPU_AVAILABLE = False
-    faiss = None
+    faiss = _MissingDep("faiss", _e)  # type: ignore[assignment]
 
 # ChromaDB import
 try:
     import chromadb
 
     CHROMADB_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     CHROMADB_AVAILABLE = False
-    chromadb = None
+    chromadb = _MissingDep("chromadb", _e)  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

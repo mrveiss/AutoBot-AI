@@ -44,14 +44,16 @@ from api.schemas_analytics import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+
 # LLM Interface for real code generation
 try:
     from llm_interface import LLMInterface
 
     LLM_INTERFACE_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     LLM_INTERFACE_AVAILABLE = False
-    LLMInterface = None
+    LLMInterface = _MissingDep("LLMInterface", _e)  # type: ignore[assignment]
     logging.warning("LLMInterface not available - code generation will fail")
 
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*

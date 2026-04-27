@@ -16,13 +16,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from autobot_shared.missing_dep import MissingDep as _MissingDep
+
 try:
     import httpx
 
     HTTPX_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     HTTPX_AVAILABLE = False
-    httpx = None
+    httpx = _MissingDep("httpx", _e)  # type: ignore[assignment]
 
 from autobot_shared.ssot_config import config as _ssot_config
 
