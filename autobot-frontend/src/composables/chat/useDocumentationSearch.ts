@@ -75,10 +75,10 @@ interface CategoriesResponse {
   categories?: DocCategory[]
 }
 
-// ---- GET /knowledge_base/docs/categories via useFetchEndpoint ----
+// ---- GET /api/knowledge_base/docs/categories via useFetchEndpoint ----
 
 const categoriesEndpoint = useFetchEndpoint<CategoriesResponse, DocCategory[]>({
-  path: '/knowledge_base/docs/categories',
+  path: '/api/knowledge_base/docs/categories',
   label: 'fetchDocCategories',
   pickData: (raw) => raw.categories ?? null,
   onError: (message) => {
