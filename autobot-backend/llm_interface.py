@@ -15,6 +15,7 @@ For new code, import directly from llm_interface_pkg:
 """
 
 # Import additional dependencies that may be expected by consumers
+from autobot_shared.missing_dep import MissingDep as _MissingDep
 from config.manager import get_config_manager
 
 # Re-export everything from the refactored package
@@ -47,8 +48,8 @@ config = get_config_manager()
 # Optional imports for backward compatibility
 try:
     from prompt_manager import prompt_manager
-except ImportError:
-    prompt_manager = None
+except ImportError as _e:
+    prompt_manager = _MissingDep("prompt_manager", _e)  # type: ignore[assignment]
 
 try:
     from autobot_shared.logging_manager import get_llm_logger
@@ -64,10 +65,10 @@ try:
     from api.analytics_llm_patterns import UsageRecordRequest, get_pattern_analyzer
 
     PATTERN_ANALYZER_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
     PATTERN_ANALYZER_AVAILABLE = False
-    UsageRecordRequest = None
-    get_pattern_analyzer = None
+    UsageRecordRequest = _MissingDep("UsageRecordRequest", _e)  # type: ignore[assignment]
+    get_pattern_analyzer = _MissingDep("get_pattern_analyzer", _e)  # type: ignore[assignment]
 
 # OpenAI availability flag
 try:
