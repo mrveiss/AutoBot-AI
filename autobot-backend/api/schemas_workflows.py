@@ -679,6 +679,28 @@ class SkillSuggestionsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class MCPSpanResponse(BaseModel):
+    """Single MCP tool-call span returned by the traces API (Issue #4413)."""
+
+    trace_id: str
+    skill_name: str
+    tool_name: str
+    started_at: float
+    ended_at: Optional[float]
+    input_params: Dict[str, Any]
+    output: Optional[Dict[str, Any]]
+    error: Optional[str]
+    pid: int
+
+
+class SkillTracesResponse(BaseModel):
+    """Response for GET /skills/traces (Issue #4413)."""
+
+    skill: Optional[str]
+    traces: List[MCPSpanResponse]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # structured_thinking_mcp.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
