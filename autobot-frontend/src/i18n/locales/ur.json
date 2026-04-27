@@ -121,6 +121,7 @@
     "skipToNavigation": "Skip to navigation",
     "openMainMenu": "Open main menu",
     "operations": "آپریشنز",
+    "remoteDesktop": "Remote Desktop",
     "applicationError": "Application Error",
     "unexpectedError": "An unexpected error occurred",
     "loadingTimeout": "Loading Timed Out",
@@ -7104,5 +7105,11 @@
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
     "newAnalysisDesc": "Start an analysis session"
+  },
+  "slm": {
+    "novnc": {
+      "selectHost": "Select a host to connect",
+      "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
   }
 }
