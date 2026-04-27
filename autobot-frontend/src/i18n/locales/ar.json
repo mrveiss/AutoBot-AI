@@ -6853,7 +6853,8 @@
       "errorInitFailed": "Failed to initialize desktop connection.",
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
-      "screenshotAlt": "Desktop Screenshot"
+      "screenshotAlt": "Desktop Screenshot",
+      "openInNewWindow": "Open in new window"
     },
     "popoutBrowser": {
       "title": "Research Browser",
