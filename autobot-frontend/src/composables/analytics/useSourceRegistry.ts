@@ -15,7 +15,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
@@ -54,12 +54,8 @@ async function _getBackendUrl(): Promise<string> {
  */
 export async function fetchSourceSecrets(): Promise<RegistrySecret[]> {
   const backendUrl = await _getBackendUrl()
-  const response = await fetchWithAuth(`${backendUrl}/api/secrets`)
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
-  }
-  const data = await response.json()
-  return (data.secrets ?? []) as RegistrySecret[]
+  const data = await apiClient.get<{ secrets?: RegistrySecret[] }>(`${backendUrl}/api/secrets`)
+  return data.secrets ?? []
 }
 
 /** Payload shape for POST /api/analytics/codebase/sources/:id/share */
@@ -77,19 +73,10 @@ export async function shareCodeSource(
   payload: SourceSharePayload,
 ): Promise<CodeSource> {
   const backendUrl = await _getBackendUrl()
-  const response = await fetchWithAuth(
+  return await apiClient.post<CodeSource>(
     `${backendUrl}/api/analytics/codebase/sources/${sourceId}/share`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    },
+    payload,
   )
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`HTTP ${response.status}: ${text}`)
-  }
-  return (await response.json()) as CodeSource
 }
 
 /**
@@ -105,17 +92,9 @@ export async function saveCodeSource(
   const url = id
     ? `${backendUrl}/api/analytics/codebase/sources/${id}`
     : `${backendUrl}/api/analytics/codebase/sources`
-  const method = id ? 'PUT' : 'POST'
-  const response = await fetchWithAuth(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`HTTP ${response.status}: ${text}`)
-  }
-  return (await response.json()) as CodeSource
+  return id
+    ? await apiClient.put<CodeSource>(url, payload)
+    : await apiClient.post<CodeSource>(url, payload)
 }
 
 export interface UseSourceRegistryDeps {

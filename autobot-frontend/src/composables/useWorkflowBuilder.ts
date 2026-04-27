@@ -15,7 +15,7 @@
 import { ref, computed, reactive } from 'vue';
 import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
+import apiClient from '@/utils/ApiClient';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
@@ -255,33 +255,17 @@ class WorkflowBuilderApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
     try {
-      const response = await fetchWithAuth(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch((err) => { logger.warn('Failed to parse error response: %s', err); return {} });
-        return {
-          success: false,
-          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
-        };
+      const method = ((options.method as string) || 'GET').toUpperCase();
+      let data: T;
+      if (method === 'POST') {
+        const body = options.body ? JSON.parse(options.body as string) as unknown : undefined;
+        data = await apiClient.post<T>(url, body, { timeout: this.timeout });
+      } else {
+        data = await apiClient.get<T>(url, { timeout: this.timeout });
       }
-
-      const data = await response.json();
       return { success: true, data };
     } catch (error) {
-      clearTimeout(timeoutId);
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('API request failed:', { endpoint, error: message });
       return { success: false, error: message };

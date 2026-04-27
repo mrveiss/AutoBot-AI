@@ -112,7 +112,7 @@ export function useMultiModelCompare(): UseMultiModelCompareReturn {
 
     let fetchResponse: Response
     try {
-      fetchResponse = await fetchWithAuth(url, {
+      fetchResponse = await fetchWithAuth(url, { // fetchWithAuth retained: ReadableStream SSE streaming + AbortController signal — exempt from Wave 5 (#6224)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, models: targetModels }),

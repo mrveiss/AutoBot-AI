@@ -6,7 +6,7 @@
  */
 
 import { getBackendUrl } from '@/config/ssot-config';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
+import apiClient from '@/utils/ApiClient';
 
 export interface InfraHost {
   id: string;
@@ -37,30 +37,21 @@ export function useSecretsAuditApi() {
   /** Fetch legacy infrastructure hosts from the old API. */
   async function fetchInfraHosts(): Promise<InfraHostsResponse> {
     const backendUrl = getBackendUrl();
-    return fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`)
-      .then(r => (r.ok ? r.json() : { hosts: [] }))
+    return apiClient.get<InfraHostsResponse>(`${backendUrl}/api/infrastructure/hosts`)
       .catch(() => ({ hosts: [] }));
   }
 
   /** Fetch workflow-usage mapping for secrets (#1415). */
   async function fetchSecretsUsage(): Promise<SecretsUsageResponse> {
     const backendUrl = getBackendUrl();
-    const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/secrets-usage`);
-    if (!response.ok) {
-      return { secrets_usage: {} };
-    }
-    return response.json();
+    return apiClient.get<SecretsUsageResponse>(`${backendUrl}/api/templates/templates/secrets-usage`)
+      .catch(() => ({ secrets_usage: {} }));
   }
 
   /** Delete a legacy infrastructure host by id. */
   async function deleteInfraHost(id: string): Promise<void> {
     const backendUrl = getBackendUrl();
-    const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts/${id}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      throw new Error('Failed to delete infrastructure host');
-    }
+    await apiClient.delete(`${backendUrl}/api/infrastructure/hosts/${id}`);
   }
 
   return { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost };
