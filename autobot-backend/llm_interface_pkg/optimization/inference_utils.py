@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Conditional torch import — module degrades gracefully without it
 try:
     import torch
-except ImportError:
+except (ImportError, RuntimeError):
     torch = None  # type: ignore[assignment]
 
 

@@ -42,7 +42,7 @@ def _import_torch() -> Any:
         import torch  # noqa: PLC0415
 
         return torch
-    except ImportError as exc:
+    except (ImportError, RuntimeError) as exc:
         raise ImportError(
             "torch is required for attention backend selection. "
             "Install with: pip install torch>=2.0.0"
@@ -55,7 +55,7 @@ def _import_better_transformer() -> Any:
         from optimum.bettertransformer import BetterTransformer  # noqa: PLC0415
 
         return BetterTransformer
-    except ImportError:
+    except (ImportError, RuntimeError):
         return None
 
 
@@ -252,7 +252,7 @@ class AttentionBackendSelector:
         try:
             torch = _import_torch()
             return hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        except ImportError:
+        except (ImportError, RuntimeError):
             return False
 
     def _try_apply_better_transformer(self, model: Any) -> Optional[Any]:
@@ -304,7 +304,7 @@ def _free_memory() -> None:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             logger.debug("CUDA cache cleared after backend fallback")
-    except ImportError:
+    except (ImportError, RuntimeError):
         pass
 
 

@@ -102,7 +102,7 @@ class _VRAMTracker:
                 import torch
 
                 self._cuda_available = torch.cuda.is_available()
-            except ImportError:
+            except (ImportError, RuntimeError):
                 self._cuda_available = False
         return self._cuda_available
 

@@ -44,7 +44,7 @@ def _get_torch() -> Any:
             import torch as _t
 
             _torch = _t
-        except ImportError:
+        except (ImportError, RuntimeError):
             _torch = None
     return _torch
 
@@ -419,7 +419,7 @@ class LayerInferenceEngine:
 
         try:
             from transformers import AutoTokenizer  # noqa: PLC0415
-        except ImportError as exc:
+        except (ImportError, RuntimeError) as exc:
             raise ImportError(
                 "transformers is required for generate. "
                 "Install with: pip install transformers>=4.40.0"

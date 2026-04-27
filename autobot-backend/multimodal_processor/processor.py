@@ -52,7 +52,7 @@ def _get_torch_nn():
 
             _torch_nn = nn
             _TORCH_NN_AVAILABLE = True
-        except ImportError:
+        except (ImportError, RuntimeError):
             _TORCH_NN_AVAILABLE = False
     return _torch_nn, _TORCH_NN_AVAILABLE
 

@@ -40,7 +40,7 @@ def _import_torch() -> Any:
         import torch  # noqa: PLC0415
 
         return torch
-    except ImportError as exc:
+    except (ImportError, RuntimeError) as exc:
         raise RuntimeError(
             "PyTorch is required for meta-device eviction. "
             "Install with: pip install torch"
@@ -53,7 +53,7 @@ def _import_accelerate() -> Any:
         import accelerate  # noqa: PLC0415
 
         return accelerate
-    except ImportError as exc:
+    except (ImportError, RuntimeError) as exc:
         raise ImportError(
             "accelerate is required for per-parameter meta-device eviction. "
             "Install with: pip install accelerate"
