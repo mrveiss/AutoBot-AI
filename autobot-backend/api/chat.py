@@ -2062,14 +2062,10 @@ async def enhanced_chat(
             preferences,
         )
 
-        return JSONResponse(
-            status_code=200,
-            media_type="application/json; charset=utf-8",
-            content=create_success_response(
-                response_data,
-                "Enhanced chat message processed successfully",
-                request_id,
-            ),
+        return create_success_response(
+            response_data,
+            "Enhanced chat message processed successfully",
+            request_id,
         )
 
     except HTTPException:
