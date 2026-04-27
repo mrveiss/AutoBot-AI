@@ -208,15 +208,15 @@ async def get_skill_traces(
     unique_ids = unique_ids[:limit]
 
     traces: list = []
-    for tid in unique_ids:
-        raw = await redis.get(f"mcp_trace:{tid}")
+    keys = [f"mcp_trace:{tid}" for tid in unique_ids]
+    raws = await redis.mget(*keys)
+    for raw in raws:
         if raw is None:
             continue
         try:
-            data = _json.loads(raw)
-            traces.append(MCPSpanResponse(**data))
+            traces.append(MCPSpanResponse(**_json.loads(raw)))
         except Exception as exc:
-            logger.debug("mcp_trace: failed to deserialise span %s: %s", tid, exc)
+            logger.debug("mcp_trace: failed to deserialise span: %s", exc)
 
     return {"skill": skill, "traces": traces, "total": len(traces)}
 
