@@ -43,7 +43,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 try:
     from scripts.validation_dashboard_generator import ValidationDashboardGenerator
 except ImportError as e:
-    ValidationDashboardGenerator = None
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    ValidationDashboardGenerator = _MissingDep("ValidationDashboardGenerator", e)  # type: ignore[assignment]
     import_error = str(e)
 
 # Import LLM judges for validation enhancement
