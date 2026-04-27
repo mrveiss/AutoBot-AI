@@ -24,13 +24,13 @@ try:
     # get_performance_report, get_agent_recommendations, etc.).
     orchestrator = get_orchestrator_sync()
     _ORCHESTRATOR_AVAILABLE = True
-except ImportError:
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
     _ORCHESTRATOR_AVAILABLE = False
-    create_and_execute_workflow = None
-    orchestrator = None
-    logging.getLogger(__name__).warning(
-        "orchestrator module not available"
-    )
+    create_and_execute_workflow = _MissingDep("create_and_execute_workflow", _e)  # type: ignore[assignment]
+    orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
+    logging.getLogger(__name__).warning("orchestrator module not available")
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_common import DataResponse, SuccessResponse

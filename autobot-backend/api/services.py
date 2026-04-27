@@ -25,8 +25,10 @@ from api.schemas_system import (
 # Import existing monitoring functionality
 try:
     from api.monitoring import get_services_health as monitoring_services_health
-except ImportError:
-    monitoring_services_health = None
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    monitoring_services_health = _MissingDep("monitoring_services_health", _e)  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Services"])

@@ -58,20 +58,24 @@ try:
         OperationMigrator,
         operation_integration_manager,
     )
-except ImportError as e:
-    logging.warning(f"Long-running operations framework not available: {e}")
-    # Provide fallback implementations
-    operation_integration_manager = None
+except ImportError as _e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    logging.warning(f"Long-running operations framework not available: {_e}")
+    OperationStatus = _MissingDep("OperationStatus", _e)  # type: ignore[assignment]
+    OperationType = _MissingDep("OperationType", _e)  # type: ignore[assignment]
+    CreateOperationRequest = _MissingDep("CreateOperationRequest", _e)  # type: ignore[assignment]
+    OperationMigrator = _MissingDep("OperationMigrator", _e)  # type: ignore[assignment]
+    operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
-FAILED_OPERATION_STATUSES = (
-    {OperationStatus.FAILED, OperationStatus.TIMEOUT}
-    if operation_integration_manager
-    else set()
-)
+try:
+    FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
+except ImportError:
+    FAILED_OPERATION_STATUSES = set()
 
 
 # Additional models specific to AutoBot integration

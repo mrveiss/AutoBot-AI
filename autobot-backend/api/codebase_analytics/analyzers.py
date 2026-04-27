@@ -36,11 +36,13 @@ try:
     _bug_predictor: Optional[BugPredictor] = None
     _analyzers_available = True
 except ImportError as e:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
     logger.warning("Code intelligence analyzers not available: %s", e)
     _analyzers_available = False
-    _anti_pattern_detector = None
-    _performance_analyzer = None
-    _bug_predictor = None
+    _anti_pattern_detector = _MissingDep("AntiPatternDetector", e)  # type: ignore[assignment]
+    _performance_analyzer = _MissingDep("PerformanceAnalyzer", e)  # type: ignore[assignment]
+    _bug_predictor = _MissingDep("BugPredictor", e)  # type: ignore[assignment]
 
 
 # =============================================================================
