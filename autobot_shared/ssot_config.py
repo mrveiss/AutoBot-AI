@@ -1415,10 +1415,12 @@ class AutoBotConfig(BaseSettings):
         """Get the WebSocket URL for real-time communication.
 
         Issue #6232: Path corrected to /api/ws to match backend route /api/ws/live.
-        Uses wss:// when backend TLS is enabled.
+        Issue #6302: When TLS is enabled the port is omitted so the connection
+        routes through nginx on 443 (TLS termination) rather than hitting the
+        uvicorn TLS listener on backend_tls_port directly.
         """
         if self.tls.backend_tls_enabled:
-            return f"wss://{self.vm.main}:{self.tls.backend_tls_port}/api/ws"
+            return f"wss://{self.vm.main}/api/ws"
         return f"ws://{self.vm.main}:{self.port.backend}/api/ws"
 
     @property
