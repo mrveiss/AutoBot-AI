@@ -144,7 +144,7 @@ def _build_fallback_config() -> Dict[str, Any]:
             "timeouts": _build_timeouts_config(api_config.get("timeouts", {})),
         },
         "websocket": {
-            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws",
+            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/api/ws",
             "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
             "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
         },
