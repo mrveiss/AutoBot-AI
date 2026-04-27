@@ -19,6 +19,7 @@ export interface RequestOptions {
   maxRetries?: number;
   onUploadProgress?: (progressEvent: UploadProgressEvent) => void;
   responseType?: string;
+  signal?: AbortSignal;
 }
 
 export interface ChatMessageOptions {
@@ -254,15 +255,36 @@ export class ApiClient {
       headers = {},
       body,
       timeout = options.timeout || this.defaultTimeout,
+      signal: externalSignal,
     } = options;
 
     const baseUrl = await this.ensureBaseUrl();
     const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(
-      () => controller.abort(), timeout
-    );
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeout);
+
+    // Forward external cancellation into the internal controller (#6257)
+    let externalAbortHandler: (() => void) | null = null;
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort();
+      } else {
+        externalAbortHandler = () => controller.abort();
+        externalSignal.addEventListener('abort', externalAbortHandler);
+      }
+    }
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener('abort', externalAbortHandler);
+      }
+    };
 
     try {
       const fetchOptions: RequestInit = {
@@ -288,7 +310,7 @@ export class ApiClient {
       }
 
       const response = await fetch(url, fetchOptions);
-      clearTimeout(timeoutId);
+      cleanup();
 
       // Handle 401 — redirect to login (skip for auth endpoints)
       if (
@@ -300,9 +322,10 @@ export class ApiClient {
 
       return response;
     } catch (error) {
-      clearTimeout(timeoutId);
+      cleanup();
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeout}ms`);
+        if (timedOut) throw new Error(`Request timeout after ${timeout}ms`);
+        throw error;
       }
       throw error;
     }
