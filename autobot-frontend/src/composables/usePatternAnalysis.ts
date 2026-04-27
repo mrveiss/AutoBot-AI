@@ -213,8 +213,6 @@ export function usePatternAnalysis() {
 
   // API Methods
 
-  // fetchWithAuth retained: 409 conflict detection requires raw response.status,
-  // and partial-results streaming during polling cannot be replicated with ApiClient/useBackgroundTask.
   /**
    * Run full pattern analysis on a directory
    */
@@ -246,7 +244,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,7 +263,7 @@ export function usePatternAnalysis() {
         logger.info('Another analysis is running, attempting to clear stuck tasks...')
 
         // Try to clear stuck tasks with force=true
-        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
+        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, { // fetchWithAuth retained: AbortController signal — exempt (#6256)
           method: 'POST',
           signal: _analyzeSignal,
         })
@@ -275,7 +273,7 @@ export function usePatternAnalysis() {
           logger.info('Cleared stuck tasks:', clearResult)
 
           // Retry the analysis
-          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -315,11 +313,11 @@ export function usePatternAnalysis() {
           wasInterrupted.value = false
           error.value = null
 
-          await fetchWithAuth(
+          await fetchWithAuth( // fetchWithAuth retained: AbortController signal — exempt (#6256)
             `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
             { method: 'POST', signal: _analyzeSignal },
           )
-          const retryResp = await fetchWithAuth(
+          const retryResp = await fetchWithAuth( // fetchWithAuth retained: AbortController signal + response.status check — exempt (#6256)
             `${backendUrl}/api/analytics/codebase/patterns/analyze`,
             {
               method: 'POST',
@@ -365,8 +363,6 @@ export function usePatternAnalysis() {
     }
   }
 
-  // fetchWithAuth retained: partial-results streaming updates reactive state (regexOpportunities,
-  // complexityHotspots, etc.) on every poll tick — this pattern cannot be replicated with ApiClient.
   /**
    * Poll for background task status using usePollingJob for resilience.
    * Returns a Promise that resolves when the task completes or fails.
@@ -397,7 +393,7 @@ export function usePatternAnalysis() {
             const backendUrl = await getBackendUrl()
             _pollController?.abort()
             _pollController = new AbortController()
-            const response = await fetchWithAuth(
+            const response = await fetchWithAuth( // fetchWithAuth retained: AbortController signal + partial-results streaming — exempt (#6256)
               `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`,
               { signal: _pollController.signal },
             )

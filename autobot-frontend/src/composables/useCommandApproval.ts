@@ -128,8 +128,7 @@ export function useCommandApproval() {
         const backendUrl = await appConfig.getApiUrl(
           `${getApiBase()}/agent-terminal/commands/${command_id}`
         )
-        // fetchWithAuth retained: AbortController signal required for polling abort. Exempt.
-        const response = await fetchWithAuth(backendUrl, { signal })
+        const response = await fetchWithAuth(backendUrl, { signal }) // fetchWithAuth retained: AbortController signal for polling abort — exempt (#6256)
 
         if (!response.ok) {
           logger.error('Failed to get command state:', response.status)

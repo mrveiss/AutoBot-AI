@@ -325,7 +325,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     const maxRetries = 2
     let response: Response | null = null
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      response = await fetchWithAuth(endpoint, {
+      response = await fetchWithAuth(endpoint, { // fetchWithAuth retained: raw Response needed for 502/503 retry status inspection — exempt (#6256)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
