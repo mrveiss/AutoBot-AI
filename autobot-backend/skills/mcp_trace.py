@@ -30,6 +30,18 @@ from autobot_shared.redis_client import get_async_redis_client
 logger = logging.getLogger(__name__)
 
 _SPAN_TTL: int = 3600  # seconds
+_MAX_PARAM_BYTES: int = 4096  # 4 KB cap for input_params before Redis storage
+
+
+def _truncate_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Truncate input_params if serialized size exceeds _MAX_PARAM_BYTES."""
+    serialized = json.dumps(params, default=str)
+    if len(serialized.encode("utf-8")) <= _MAX_PARAM_BYTES:
+        return params
+    return {
+        "_truncated": True,
+        "preview": serialized.encode("utf-8")[:_MAX_PARAM_BYTES].decode("utf-8", errors="replace"),
+    }
 
 
 @dataclass
@@ -60,7 +72,7 @@ def new_span(
         tool_name=tool_name,
         started_at=time.time(),
         ended_at=None,
-        input_params=input_params,
+        input_params=_truncate_params(input_params),
         output=None,
         error=None,
         pid=pid,
