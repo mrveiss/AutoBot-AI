@@ -455,7 +455,7 @@ function buildConfig(): AutoBotConfig {
 
     get websocketUrl(): string {
       const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
-      return `${wsProtocol}://${vm.main}:${port.backend}/ws`;
+      return `${wsProtocol}://${vm.main}:${port.backend}/api/ws`;
     },
 
     get aistackUrl(): string {
