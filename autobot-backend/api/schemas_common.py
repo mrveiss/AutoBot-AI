@@ -15,9 +15,11 @@ Domain-specific schemas live in:
   schemas_code.py        - CodeReview*, Git*, Skills*, Database*, Template*, etc.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel
+
+T = TypeVar("T")
 
 
 # ---------------------------------------------------------------------------
@@ -54,15 +56,18 @@ class SuccessResponse(BaseModel):
 
 
 
-class DataResponse(BaseModel):
+class DataResponse(BaseModel, Generic[T]):
     """Generic envelope returned by create_success_response() helpers.
 
     Covers all endpoints that delegate to utils.response_helpers.create_success_response,
     which always produces {"success": True, "data": ..., "message": ..., "timestamp": ...}.
+
+    Use DataResponse[ConcreteType] on endpoints where the data payload shape is known;
+    bare DataResponse (equivalent to DataResponse[Any]) remains valid for opaque payloads.
     """
 
     success: bool
-    data: Optional[Any] = None
+    data: Optional[T] = None
     message: Optional[str] = None
     timestamp: Optional[str] = None
 
