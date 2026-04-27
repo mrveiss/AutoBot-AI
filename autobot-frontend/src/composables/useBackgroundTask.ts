@@ -70,7 +70,7 @@ async function postAnalyze(
   fetchOpts: RequestInit,
 ): Promise<Response> {
   const backendUrl = await getBackendUrl()
-  return fetchWithAuth(`${backendUrl}${baseUrl}/analyze${qs}`, fetchOpts)
+  return fetchWithAuth(`${backendUrl}${baseUrl}/analyze${qs}`, fetchOpts) // fetchWithAuth retained: callers inspect response.status === 409 — exempt (#6256)
 }
 
 /**
@@ -230,9 +230,8 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
       const poller = usePollingJob<PollResult>(
         async () => {
           try {
-            // fetchWithAuth retained: AbortController signal required for polling abort. Exempt.
             const backendUrl = await getBackendUrl()
-            const resp = await fetchWithAuth(
+            const resp = await fetchWithAuth( // fetchWithAuth retained: AbortController signal for polling abort — exempt (#6256)
               `${backendUrl}${baseUrl}/status/${id}`,
               { signal: pollSignal },
             )
