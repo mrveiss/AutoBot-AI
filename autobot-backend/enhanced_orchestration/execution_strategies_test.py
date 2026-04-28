@@ -61,9 +61,10 @@ async def _default_execute(task, ctx):
     return _completed(task.task_id)
 
 
-def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5):
+def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5, group_stages_fn=None):
     execute_fn = execute_fn or _default_execute
     deps_met_fn = deps_met_fn or _deps_met
+    group_stages_fn = group_stages_fn or (lambda tasks, graph: [tasks])
 
     async def _noop_coord(channel):
         pass
@@ -72,7 +73,7 @@ def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5):
         execute_single_task=execute_fn,
         topological_sort_tasks=lambda tasks, graph: tasks,
         dependencies_met=deps_met_fn,
-        group_pipeline_stages=lambda tasks, graph: [tasks],
+        group_pipeline_stages=group_stages_fn,
         enhance_task_for_collaboration=lambda task, channel: task,
         coordinate_collaboration=_noop_coord,
     )
@@ -208,20 +209,9 @@ async def test_pipeline_stops_after_required_stage_failure():
             return _failed(task.task_id)
         return _completed(task.task_id)
 
-    deps = __import__("enhanced_orchestration.types", fromlist=["WorkflowDependencies"]).WorkflowDependencies(
-        execute_single_task=execute,
-        topological_sort_tasks=lambda tasks, graph: tasks,
-        dependencies_met=lambda task, results: True,
-        group_pipeline_stages=lambda tasks, graph: [stage1, stage2],
-        enhance_task_for_collaboration=lambda task, channel: task,
-        coordinate_collaboration=lambda channel: __import__("asyncio").sleep(0),
-    )
-    from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-    import asyncio
-    handler = ExecutionStrategyHandler(
-        max_parallel_tasks=5,
-        resource_semaphore=asyncio.Semaphore(5),
-        deps=deps,
+    handler = _make_handler(
+        execute_fn=execute,
+        group_stages_fn=lambda tasks, graph: [stage1, stage2],
     )
     results = await handler.execute_pipeline(_plan([t1, t2]))
     assert results["t1"]["status"] == "failed"
@@ -243,24 +233,68 @@ async def test_pipeline_continues_when_failed_stage_task_is_optional():
             return _failed(task.task_id)
         return _completed(task.task_id)
 
-    deps = __import__("enhanced_orchestration.types", fromlist=["WorkflowDependencies"]).WorkflowDependencies(
-        execute_single_task=execute,
-        topological_sort_tasks=lambda tasks, graph: tasks,
-        dependencies_met=lambda task, results: True,
-        group_pipeline_stages=lambda tasks, graph: [stage1, stage2],
-        enhance_task_for_collaboration=lambda task, channel: task,
-        coordinate_collaboration=lambda channel: __import__("asyncio").sleep(0),
-    )
-    from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-    import asyncio
-    handler = ExecutionStrategyHandler(
-        max_parallel_tasks=5,
-        resource_semaphore=asyncio.Semaphore(5),
-        deps=deps,
+    handler = _make_handler(
+        execute_fn=execute,
+        group_stages_fn=lambda tasks, graph: [stage1, stage2],
     )
     results = await handler.execute_pipeline(_plan([t1, t2]))
     assert "t2" in executed
     assert results["t2"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_records_failed_result_when_task_raises():
+    """execute_pipeline must record a failed result when _execute_single_task raises (#6449)."""
+    t1 = _task("t1")
+    t2 = _task("t2")
+    stage1, stage2 = [t1], [t2]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t1":
+            raise ValueError("task exploded")
+        return _completed(task.task_id)
+
+    handler = _make_handler(
+        execute_fn=execute,
+        group_stages_fn=lambda tasks, graph: [stage1, stage2],
+    )
+    results = await handler.execute_pipeline(_plan([t1, t2]))
+    assert results["t1"]["status"] == "failed"
+    assert "t2" not in executed
+
+
+@pytest.mark.asyncio
+async def test_parallel_batch_records_failed_result_when_task_raises():
+    """_execute_parallel_batch must record a failed result when _execute_single_task raises (#6449)."""
+    t_ok = _task("t_ok")
+    t_bad = _task("t_bad")
+
+    async def execute(task, ctx):
+        if task.task_id == "t_bad":
+            raise RuntimeError("boom")
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    pending = [t_ok, t_bad]
+    results = {}
+    c, f = await handler._execute_parallel_batch(pending, results)
+    assert results["t_ok"]["status"] == "completed"
+    assert results["t_bad"]["status"] == "failed"
+    assert c == 1 and f == 1
+    assert not pending
+
+
+@pytest.mark.asyncio
+async def test_wait_for_dependencies_raises_on_non_failed_terminal_status():
+    """_wait_for_dependencies must raise on any non-completed terminal status, not only 'failed' (#6454)."""
+    t1 = _task("t1", deps=["dep"])
+    results = {"dep": {"status": "cancelled"}}
+
+    handler = _make_handler()
+    with pytest.raises(RuntimeError, match="terminal"):
+        await handler._wait_for_dependencies(t1, results)
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +442,6 @@ async def test_collaborative_coordinator_awaited_on_cancel():
         resource_semaphore=asyncio.Semaphore(5),
         deps=deps,
     )
-    from enhanced_orchestration.types import ExecutionStrategy
     plan = _plan([_task("t1")], ExecutionStrategy.COLLABORATIVE)
     await handler.execute_collaborative(plan)
     assert cleanup_ran, "coordinator finally block must run before execute_collaborative returns"
