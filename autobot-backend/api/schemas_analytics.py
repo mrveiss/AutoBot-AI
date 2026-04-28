@@ -5,6 +5,7 @@
 Analytics, cost, budget, usage, and metrics schemas.
 """
 
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -1469,3 +1470,374 @@ class QualityDrillDownResponse(BaseModel):
     """Response for GET /quality/drill-down/{category} — dual shape (success vs no_data)."""
 
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# analytics_precommit schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class CheckSeverity(str, Enum):
+    """Severity levels for pre-commit checks."""
+
+    BLOCK = "block"
+    WARN = "warn"
+    INFO = "info"
+
+
+class CheckCategory(str, Enum):
+    """Categories of pre-commit checks."""
+
+    SECURITY = "security"
+    QUALITY = "quality"
+    STYLE = "style"
+    DEBUG = "debug"
+    DOCS = "docs"
+
+
+class CheckResult(BaseModel):
+    """Result of a single check."""
+
+    check_id: str
+    name: str
+    category: CheckCategory
+    severity: CheckSeverity
+    passed: bool
+    message: str
+    file: Optional[str] = None
+    line: Optional[int] = None
+    snippet: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+class CommitCheckResult(BaseModel):
+    """Result of checking staged files."""
+
+    passed: bool
+    total_checks: int
+    passed_checks: int
+    failed_checks: int
+    warnings: int
+    blocked: bool
+    duration_ms: float
+    results: List[CheckResult]
+    files_checked: List[str]
+    timestamp: str
+
+
+class HookConfig(BaseModel):
+    """Configuration for pre-commit hooks."""
+
+    enabled: bool = True
+    fast_mode: bool = True
+    timeout_seconds: int = Field(default=5, ge=1, le=30)
+    bypass_keyword: str = "[skip-hooks]"
+    enabled_checks: List[str] = Field(default_factory=list)
+    disabled_checks: List[str] = Field(default_factory=list)
+
+
+class CheckDefinition(BaseModel):
+    """Definition of a check rule."""
+
+    id: str
+    name: str
+    category: CheckCategory
+    severity: CheckSeverity
+    pattern: str
+    description: str
+    suggestion: str
+    file_patterns: List[str] = Field(default_factory=lambda: ["*"])
+    enabled: bool = True
+
+
+class HookStatus(BaseModel):
+    """Status of installed hooks."""
+
+    installed: bool
+    path: Optional[str] = None
+    version: Optional[str] = None
+    last_run: Optional[str] = None
+    config: HookConfig
+
+
+class CheckToggleResponse(BaseModel):
+    """Response for POST /checks/{check_id}/toggle."""
+
+    check_id: str
+    enabled: bool
+    message: str
+
+
+class HookConfigUpdateResponse(BaseModel):
+    """Response for POST /config — echoes back the new config."""
+
+    message: str
+    config: HookConfig
+
+
+class HookInstallResponse(BaseModel):
+    """Response for POST /install and POST /uninstall."""
+
+    success: bool
+    message: str
+    path: Optional[str] = None
+
+
+class CommonIssueItem(BaseModel):
+    """Single issue entry in the summary common_issues list."""
+
+    check_id: str
+    count: int
+    name: str
+
+
+class PrecommitSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    total_runs: int
+    pass_rate: float
+    average_duration_ms: float
+    common_issues: List[CommonIssueItem]
+    checks_enabled: Optional[int] = None
+    total_checks: Optional[int] = None
+
+
+class PrecommitCategoryItem(BaseModel):
+    """Single category entry for GET /categories."""
+
+    category: str
+    enabled: int
+    disabled: int
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# error_monitoring schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class ErrorMonitoringDataResponse(BaseModel):
+    """Generic envelope for endpoints returning {"status": str, "data": Any}."""
+
+    status: str
+    data: Optional[Any] = None
+
+
+class ErrorMonitoringClearResponse(BaseModel):
+    """Response for POST /clear."""
+
+    status: str
+    message: str
+
+
+class ErrorMonitoringTestErrorResponse(BaseModel):
+    """Response for POST /test-error."""
+
+    status: str
+    message: str
+    error_caught: Optional[str] = None
+    error_type: Optional[str] = None
+
+
+class ErrorMonitoringResolveResponse(BaseModel):
+    """Response for POST /metrics/resolve/{trace_id}."""
+
+    status: str
+    message: str
+
+
+class ErrorMonitoringAlertThresholdResponse(BaseModel):
+    """Response for POST /metrics/alert-threshold."""
+
+    status: str
+    message: str
+    threshold_key: str
+    threshold: int
+
+
+class ErrorMonitoringCleanupResponse(BaseModel):
+    """Response for POST /metrics/cleanup."""
+
+    status: str
+    message: str
+    removed_count: int
+
+
+class TestErrorRequest(BaseModel):
+    error_type: str = "ValueError"
+    message: str = "Test error for error boundary system"
+
+
+class AlertThresholdRequest(BaseModel):
+    component: str
+    error_code: Optional[str] = None
+    threshold: int
+
+
+# ---------------------------------------------------------------------------
+# rum.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class RumEvent(BaseModel):
+    type: str
+    timestamp: str
+    sessionId: str
+    url: str
+    userAgent: str
+    data: Metadata = {}
+
+
+class RumConfig(BaseModel):
+    enabled: bool = False
+    error_tracking: bool = True
+    performance_monitoring: bool = True
+    interaction_tracking: bool = False
+    session_recording: bool = False
+    sample_rate: int = 100
+    max_events_per_session: int = 1000
+    debug_mode: bool = False
+    log_to_backend: bool = True
+    log_level: str = "info"
+
+
+class RumPageMetrics(BaseModel):
+    """Page performance metrics from frontend."""
+
+    page: str
+    load_time_seconds: Optional[float] = None
+    fcp_seconds: Optional[float] = None
+    lcp_seconds: Optional[float] = None
+    tti_seconds: Optional[float] = None
+    dom_loaded_seconds: Optional[float] = None
+
+
+class RumApiCallMetric(BaseModel):
+    """Frontend API call metric."""
+
+    endpoint: str
+    method: str
+    status: str
+    latency_seconds: float
+    is_slow: bool = False
+    is_timeout: bool = False
+    error_type: Optional[str] = None
+
+
+class RumJsErrorMetric(BaseModel):
+    """JavaScript error metric."""
+
+    error_type: str
+    page: str
+    is_rejection: bool = False
+    component: Optional[str] = None
+
+
+class RumUserActionMetric(BaseModel):
+    """User action/interaction metric."""
+
+    action_type: str
+    page: str
+    form_name: Optional[str] = None
+    form_status: Optional[str] = None
+
+
+class RumSessionMetric(BaseModel):
+    """Session metric."""
+
+    event: str
+    duration_seconds: Optional[float] = None
+
+
+class RumWebSocketMetric(BaseModel):
+    """WebSocket event metric from frontend."""
+
+    event: str
+    direction: Optional[str] = None
+    event_type: Optional[str] = None
+
+
+class RumResourceMetric(BaseModel):
+    """Resource load metric."""
+
+    resource_type: str
+    load_time_seconds: float
+    is_slow: bool = False
+
+
+class RumCriticalIssueMetric(BaseModel):
+    """Critical issue from frontend."""
+
+    issue_type: str
+
+
+class RumMetrics(BaseModel):
+    """Batch of RUM metrics from frontend. Issue #476: Used for Prometheus metrics export."""
+
+    session_id: str
+    timestamp: str
+    page_metrics: Optional[RumPageMetrics] = None
+    api_calls: Optional[List[RumApiCallMetric]] = None
+    js_errors: Optional[List[RumJsErrorMetric]] = None
+    user_actions: Optional[List[RumUserActionMetric]] = None
+    session: Optional[RumSessionMetric] = None
+    websocket_events: Optional[List[RumWebSocketMetric]] = None
+    resources: Optional[List[RumResourceMetric]] = None
+    critical_issues: Optional[List[RumCriticalIssueMetric]] = None
+
+
+# analytics_cost.py schemas (#6042)
+
+
+class CostSummaryResponse(BaseModel):
+    period: dict
+    total_cost_usd: float
+    daily_costs: dict
+    by_model: dict
+    avg_daily_cost: float
+
+
+class CostTrendResponse(BaseModel):
+    period_days: int
+    total_cost_usd: float
+    daily_costs: dict
+    trend: str
+    growth_rate_percent: float
+    avg_daily_cost: float
+
+
+class SessionCostResponse(BaseModel):
+    session_id: str
+    found: bool
+    cost_usd: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    error: Optional[str] = None
+
+
+class BudgetAlertRequest(BaseModel):
+    name: str = Field(..., description="Alert name")
+    threshold_usd: float = Field(..., gt=0, description="Budget threshold in USD")
+    period: str = Field(..., pattern="^(daily|weekly|monthly)$", description="Alert period")
+    notify_at_percent: List[int] = Field(default=[50, 75, 90, 100])
+    enabled: bool = Field(default=True)
+
+
+class ModelPricingInfo(BaseModel):
+    model: str
+    input_price_per_1m: float
+    output_price_per_1m: float
+    provider: str
+
+
+class AgentBudgetRequest(BaseModel):
+    budget_monthly_usd: float = Field(..., gt=0, description="Monthly budget in USD")
+
+
+class AgentCostResponse(BaseModel):
+    agent_id: str
+    found: bool = False
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    call_count: int = 0

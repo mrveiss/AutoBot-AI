@@ -5,9 +5,16 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+import re
+from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from type_defs.common import Metadata
+from utils.path_validation import contains_path_traversal
 
 
 # ---------------------------------------------------------------------------
@@ -1055,17 +1062,6 @@ class MemoryRelationInvalidateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # knowledge_models.py classes (merged from knowledge_models.py — Issue #5996)
 # ---------------------------------------------------------------------------
-
-import re
-from datetime import datetime
-from enum import Enum
-from typing import List, Optional
-
-from pydantic import Field, field_validator
-
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from type_defs.common import Metadata
-from utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
 _VALID_TAG_OPERATIONS = frozenset({"add", "remove"})
@@ -3524,3 +3520,459 @@ class NLSearchHealthResponse(BaseModel):
     use_instead: str
     features: List[str]
     llm_available: bool
+
+
+# ---------------------------------------------------------------------------
+# knowledge_tags schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeTagFactTagsResponse(BaseModel):
+    """Response for POST/DELETE/GET /fact/{fact_id}/tags."""
+
+    status: str
+    fact_id: str
+    tags: List[Any]
+    message: Optional[str] = None
+    added_count: Optional[int] = None
+    removed_count: Optional[int] = None
+
+
+class KnowledgeTagGetFactTagsResponse(BaseModel):
+    """Response for GET /fact/{fact_id}/tags."""
+
+    status: str
+    fact_id: str
+    tags: List[Any]
+
+
+class KnowledgeTagSearchResponse(BaseModel):
+    """Response for POST /tags/search."""
+
+    status: str
+    facts: List[Any]
+    total_count: int
+    tags_searched: List[str]
+    match_all: bool
+    limit: int
+    offset: int
+
+
+class KnowledgeTagListResponse(BaseModel):
+    """Response for GET /tags."""
+
+    status: str
+    tags: List[Any]
+    total_count: int
+
+
+class KnowledgeTagBulkResponse(BaseModel):
+    """Response for POST /tags/bulk."""
+
+    status: str
+    operation: str
+    processed_count: int
+    failed_count: int
+    results: List[Any]
+
+
+class KnowledgeTagRenameResponse(BaseModel):
+    """Response for PUT /tags/{tag_name}."""
+
+    status: str
+    old_tag: str
+    new_tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagDeleteResponse(BaseModel):
+    """Response for DELETE /tags/{tag_name}."""
+
+    status: str
+    tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagMergeResponse(BaseModel):
+    """Response for POST /tags/merge."""
+
+    status: str
+    source_tags: List[str]
+    target_tag: str
+    affected_count: int
+    message: str
+
+
+class KnowledgeTagFactsByTagResponse(BaseModel):
+    """Response for GET /tags/{tag_name}/facts."""
+
+    status: str
+    tag: str
+    facts: List[Any]
+    total_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class KnowledgeTagInfoResponse(BaseModel):
+    """Response for GET /tags/{tag_name}/info."""
+
+    status: str
+    tag: str
+    fact_count: int
+
+
+class KnowledgeTagStyleInfo(BaseModel):
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool
+
+
+class KnowledgeTagStyleResponse(BaseModel):
+    """Response for PATCH/GET /tags/{tag_name}/style."""
+
+    status: str
+    tag: str
+    style: Dict[str, Any]
+    message: Optional[str] = None
+
+
+class KnowledgeTagDeleteStyleResponse(BaseModel):
+    """Response for DELETE /tags/{tag_name}/style."""
+
+    status: str
+    tag: str
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# conversation_files.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class FileDestination(str, Enum):
+    """File transfer destination options."""
+
+    KNOWLEDGE_BASE = "kb"
+    SHARED = "shared"
+
+
+class ConversationFileInfo(BaseModel):
+    """Conversation file information model."""
+
+    file_id: str
+    filename: str
+    original_filename: str
+    size: int
+    mime_type: Optional[str] = None
+    session_id: str
+    uploaded_at: datetime
+    uploaded_by: str
+    file_path: str
+    extension: Optional[str] = None
+
+
+class ConversationFileListResponse(BaseModel):
+    """Response model for listing conversation files."""
+
+    session_id: str
+    files: List[ConversationFileInfo]
+    total_files: int
+    total_size: int
+    page: int = 1
+    page_size: int = 50
+
+
+class FileUploadResponse(BaseModel):
+    """Response model for file upload."""
+
+    success: bool
+    message: str
+    file_info: Optional[ConversationFileInfo] = None
+    upload_id: str
+
+
+class FileTransferRequest(BaseModel):
+    """Request model for file transfer operation."""
+
+    file_ids: List[str] = Field(
+        ..., min_length=1, description="List of file IDs to transfer"
+    )
+    destination: FileDestination = Field(
+        ..., description="Transfer destination (kb or shared)"
+    )
+    target_path: Optional[str] = Field(None, description="Target path in destination")
+    copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
+    tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
+
+    @field_validator("file_ids")
+    @classmethod
+    def validate_file_ids(cls, v):
+        """Validate that at least one file ID is provided."""
+        if not v:
+            raise ValueError("At least one file ID must be provided")
+        return v
+
+
+class FileTransferResponse(BaseModel):
+    """Response model for file transfer operation."""
+
+    success: bool
+    message: str
+    transferred_files: List[Dict[str, str]]
+    failed_files: List[Dict[str, str]]
+    total_transferred: int
+    total_failed: int
+
+
+class FilePreviewResponse(BaseModel):
+    """Response model for file preview."""
+
+    file_info: ConversationFileInfo
+    preview_available: bool
+    preview_content: Optional[str] = None
+    preview_type: Optional[str] = None
+
+
+class ConvFileCreateRequest(BaseModel):
+    """Request model for creating a new file."""
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(default="")
+    mime_type: str = Field(default="text/plain")
+
+
+class ConvFileRenameRequest(BaseModel):
+    """Request model for renaming a file."""
+
+    new_filename: str = Field(..., min_length=1, max_length=255)
+
+
+class ConvFileUpdateContentRequest(BaseModel):
+    """Request model for updating file content."""
+
+    content: str
+
+
+class ConvFileCopyRequest(BaseModel):
+    """Request model for copying a file."""
+
+    new_filename: Optional[str] = Field(
+        None, max_length=255, description="Optional new name for the copy"
+    )
+
+
+class AgentGenerateFileRequest(BaseModel):
+    """Request model for agent file generation."""
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str
+    file_type: str = Field(default="generated", description="File type tag")
+    mime_type: str = Field(default="text/plain")
+    agent_name: Optional[str] = Field(None, description="Name of generating agent")
+    metadata: Optional[Dict[str, str]] = Field(None, description="Extra metadata")
+
+
+class MCPToolCallRequest(BaseModel):
+    """Request model for MCP tool call dispatch."""
+
+    tool_name: str = Field(..., description="Name of the MCP tool to call")
+    arguments: Dict = Field(default_factory=dict, description="Tool arguments")
+
+
+# memory.py schemas (#6042)
+
+_VALID_ENTITY_TYPES = frozenset({
+    "conversation", "bug_fix", "feature", "decision", "task",
+    "user_preference", "context", "learning", "research", "implementation",
+})
+_VALID_RELATION_TYPES = frozenset({
+    "relates_to", "depends_on", "implements", "fixes", "informs",
+    "guides", "follows", "contains", "blocks",
+})
+
+
+class EntityCreateRequest(BaseModel):
+    entity_type: str = Field(..., description="Type of entity")
+    name: str = Field(..., min_length=1, max_length=200)
+    observations: List[str] = Field(..., min_length=1)
+    metadata: Optional[Metadata] = Field(default_factory=dict)
+    tags: Optional[List[str]] = Field(default_factory=list)
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v):
+        if v not in _VALID_ENTITY_TYPES:
+            raise ValueError(f"entity_type must be one of: {_VALID_ENTITY_TYPES}")
+        return v
+
+
+class ObservationAddRequest(BaseModel):
+    observations: List[str] = Field(..., min_length=1)
+
+
+class RelationCreateRequest(BaseModel):
+    from_entity: str = Field(..., description="Source entity name")
+    to_entity: str = Field(..., description="Target entity name")
+    relation_type: str = Field(..., description="Type of relationship")
+    bidirectional: bool = Field(default=False)
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    metadata: Optional[Metadata] = Field(default_factory=dict)
+
+    @field_validator("relation_type")
+    @classmethod
+    def validate_relation_type(cls, v):
+        if v not in _VALID_RELATION_TYPES:
+            raise ValueError(f"relation_type must be one of: {_VALID_RELATION_TYPES}")
+        return v
+
+
+class InvalidateEntityRequest(BaseModel):
+    ended_at: Optional[str] = Field(default=None, description="ISO-8601 timestamp for valid_to")
+
+
+class InvalidateRelationRequest(BaseModel):
+    from_id: str = Field(..., description="Source entity UUID")
+    relation_type: str = Field(..., description="Type of the relation")
+    to_id: str = Field(..., description="Target entity UUID")
+    ended_at: Optional[str] = Field(default=None)
+
+
+class EntityResponse(BaseModel):
+    id: str
+    type: str
+    name: str
+    created_at: int
+    updated_at: int
+    observations: List[str]
+    metadata: Metadata
+
+
+class RelationResponse(BaseModel):
+    to: str
+    type: str
+    created_at: int
+    metadata: Metadata
+
+
+class GraphNodeResponse(BaseModel):
+    entity: EntityResponse
+    relations: Dict[str, List[RelationResponse]]
+
+
+class SearchResponse(BaseModel):
+    entities: List[EntityResponse]
+    total_count: int
+    query: str
+    filters: Metadata
+
+
+# ai_stack_integration.py schemas (#6042)
+
+
+class RAGQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=10000)
+    documents: Optional[List[Metadata]] = None
+    context: Optional[str] = None
+    max_results: int = Field(10, ge=1, le=50)
+
+
+class EnhancedChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=50000)
+    context: Optional[str] = None
+    chat_history: Optional[List[Metadata]] = None
+    use_knowledge_base: bool = Field(True)
+    response_style: str = Field("conversational")
+
+
+class KnowledgeExtractionRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    content_type: str = Field("text")
+    extraction_mode: str = Field("comprehensive")
+
+
+class ResearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=5000)
+    research_depth: str = Field("comprehensive")
+    sources: Optional[List[str]] = None
+    include_web: bool = Field(True)
+
+
+class CodeSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    search_scope: str = Field("codebase")
+    include_npu: bool = Field(True)
+
+
+class DevelopmentAnalysisRequest(BaseModel):
+    code_path: Optional[str] = None
+    analysis_type: str = Field("comprehensive")
+
+
+class ContentClassificationRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    classification_types: Optional[List[str]] = None
+
+
+# chat_knowledge.py schemas (#6042)
+
+
+class KnowledgeDecision(str, Enum):
+    ADD_TO_KB = "add_to_kb"
+    KEEP_TEMPORARY = "keep_temporary"
+    DELETE = "delete"
+
+
+class FileAssociationType(str, Enum):
+    REFERENCE = "reference"
+    UPLOAD = "upload"
+    GENERATED = "generated"
+    MODIFIED = "modified"
+
+
+class CreateContextRequest(BaseModel):
+    chat_id: str
+    topic: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    user_id: Optional[str] = None
+
+
+class AssociateFileRequest(BaseModel):
+    chat_id: str
+    file_path: str
+    association_type: FileAssociationType
+    metadata: Optional[Metadata] = None
+
+
+class AddKnowledgeRequest(BaseModel):
+    chat_id: str
+    content: str
+    metadata: Optional[Metadata] = None
+
+
+class KnowledgeDecisionRequest(BaseModel):
+    chat_id: str
+    knowledge_id: str
+    decision: KnowledgeDecision
+
+
+class CompileChatRequest(BaseModel):
+    chat_id: str
+    title: Optional[str] = None
+    include_system_messages: bool = False
+
+
+class ChatKnowledgeSearchRequest(BaseModel):
+    query: str
+    chat_id: Optional[str] = None
+    include_temporary: bool = True
+
+
+class MarkFactsPreservedRequest(BaseModel):
+    fact_ids: List[str]
+    preserve: bool = True

@@ -9,10 +9,19 @@ REST API for user management operations.
 
 import logging
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from api.schemas_agent import (
+    PasswordChangedResponse,
+    RoleAssignmentResponse,
+    RoleUpdateRequest,
+    RoleUpdateResponse,
+    UserCreatedResponse,
+    UserDeletedResponse,
+    UserSearchResponse,
+    UserSearchResult,
+)
 
 from api.user_management.dependencies import (
     get_current_user,
@@ -41,81 +50,6 @@ from user_management.services.user_service import (
 
 router = APIRouter(prefix="/users", tags=["Users"])
 logger = logging.getLogger(__name__)
-
-
-# -------------------------------------------------------------------------
-# Response Models
-# -------------------------------------------------------------------------
-
-
-class UserCreatedResponse(BaseModel):
-    """Response for user creation."""
-
-    success: bool = True
-    message: str
-    user: UserResponse
-
-
-class UserDeletedResponse(BaseModel):
-    """Response for user deletion."""
-
-    success: bool = True
-    message: str
-
-
-class PasswordChangedResponse(BaseModel):
-    """Response for password change."""
-
-    success: bool = True
-    message: str
-
-
-class RoleAssignmentResponse(BaseModel):
-    """Response for role assignment."""
-
-    success: bool = True
-    message: str
-    role_id: uuid.UUID
-
-
-class RoleUpdateRequest(BaseModel):
-    """Request to set a user's role by name (#1801)."""
-
-    role: str = Field(
-        ...,
-        description="Role name: admin, user, or readonly",
-        pattern="^(admin|user|readonly)$",
-    )
-
-
-class RoleUpdateResponse(BaseModel):
-    """Response for role-by-name update (#1801)."""
-
-    success: bool = True
-    message: str
-    username: str
-    role: str
-
-
-class UserSearchResult(BaseModel):
-    """A single user result for the sharing dialog search."""
-
-    id: str
-    name: str
-    type: str = "user"
-
-
-class UserSearchResponse(BaseModel):
-    """Response for user search used by sharing features.
-
-    Issue #2072: Provides a search endpoint safe to call in all deployment
-    modes; returns an empty list with a message when user management is
-    unavailable rather than raising an error.
-    """
-
-    users: List[UserSearchResult]
-    available: bool
-    message: str
 
 
 # -------------------------------------------------------------------------

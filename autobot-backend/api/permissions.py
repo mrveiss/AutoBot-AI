@@ -25,124 +25,35 @@ Usage:
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
 from api.schemas_system import (
-    PermissionRuleMutateResponse,
+    ApprovalRecordResponse,
+    CheckCommandRequest,
+    CheckCommandResponse,
+    PermissionAddRuleRequest,
     PermissionClearApprovalsResponse,
-    PermissionStoreApprovalResponse,
     PermissionMemoryStatsResponse,
+    PermissionModeRequest,
+    PermissionModeResponse,
+    PermissionRemoveRuleRequest,
+    PermissionRuleMutateResponse,
+    PermissionRuleResponse,
+    PermissionRulesResponse,
+    PermissionStatusResponse,
+    ProjectApprovalsResponse,
+    PermissionStoreApprovalResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
-
-
-# =============================================================================
-# Request/Response Models
-# =============================================================================
-
-
-class PermissionModeResponse(BaseModel):
-    """Response model for permission mode."""
-
-    mode: str
-    enabled: bool
-    is_admin_only: bool
-    allowed_modes: List[str]
-
-
-class PermissionModeRequest(BaseModel):
-    """Request model for setting permission mode."""
-
-    mode: str = Field(..., description="Permission mode to set")
-
-
-class PermissionRuleResponse(BaseModel):
-    """Response model for a single rule."""
-
-    tool: str
-    pattern: str
-    action: str
-    description: str
-
-
-class PermissionRulesResponse(BaseModel):
-    """Response model for all rules."""
-
-    allow: List[PermissionRuleResponse]
-    ask: List[PermissionRuleResponse]
-    deny: List[PermissionRuleResponse]
-
-
-class AddRuleRequest(BaseModel):
-    """Request model for adding a rule."""
-
-    tool: str = Field(default="Bash", description="Tool name")
-    pattern: str = Field(..., description="Glob pattern")
-    action: str = Field(..., description="allow, ask, or deny")
-    description: str = Field(default="", description="Rule description")
-
-
-class RemoveRuleRequest(BaseModel):
-    """Request model for removing a rule."""
-
-    tool: str = Field(default="Bash", description="Tool name")
-    pattern: str = Field(..., description="Pattern to remove")
-
-
-class ApprovalRecordResponse(BaseModel):
-    """Response model for an approval record."""
-
-    pattern: str
-    tool: str
-    risk_level: str
-    user_id: str
-    created_at: float
-    original_command: str
-    comment: Optional[str] = None
-
-
-class ProjectApprovalsResponse(BaseModel):
-    """Response model for project approvals."""
-
-    project_path: str
-    approvals: List[ApprovalRecordResponse]
-
-
-class PermissionStatusResponse(BaseModel):
-    """Response model for permission system status."""
-
-    enabled: bool
-    mode: str
-    approval_memory_enabled: bool
-    approval_memory_ttl_days: int
-    rules_file: str
-    rules_count: dict
-
-
-class CheckCommandRequest(BaseModel):
-    """Request model for checking a command."""
-
-    command: str = Field(..., description="Command to check")
-    tool: str = Field(default="Bash", description="Tool name")
-
-
-class CheckCommandResponse(BaseModel):
-    """Response model for command check."""
-
-    result: str  # allow, ask, deny, default
-    pattern: Optional[str] = None
-    description: Optional[str] = None
 
 
 # =============================================================================
@@ -336,7 +247,7 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
 )
 @router.post("/rules", response_model=PermissionRuleMutateResponse)
 async def add_permission_rule(
-    request: AddRuleRequest,
+    request: PermissionAddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
     is_admin: bool = Query(default=False),
 ):
@@ -389,7 +300,7 @@ async def add_permission_rule(
 )
 @router.delete("/rules", response_model=PermissionRuleMutateResponse)
 async def remove_permission_rule(
-    request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
+    request: PermissionRemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Remove a permission rule.

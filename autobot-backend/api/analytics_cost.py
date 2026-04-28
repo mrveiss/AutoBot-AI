@@ -17,93 +17,35 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
+    AgentBudgetRequest,
     AgentBudgetSetResponse,
     AgentBudgetStatusResponse,
     AllAgentCostsResponse,
     BudgetAlertCreateResponse,
+    BudgetAlertRequest,
     BudgetAlertsListResponse,
     BudgetStatusResponse,
     CostByModelResponse,
     CostEstimateResponse,
     CostForecastResponse,
+    CostSummaryResponse,
+    CostTrendResponse,
     ModelPricingResponse,
+    SessionCostResponse,
     SingleAgentCostResponse,
     UsageRecentResponse,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
-
-
-# ============================================================================
-# PYDANTIC MODELS
-# ============================================================================
-
-
-class CostSummaryResponse(BaseModel):
-    """Cost summary response model"""
-
-    period: dict
-    total_cost_usd: float
-    daily_costs: dict
-    by_model: dict
-    avg_daily_cost: float
-
-
-class CostTrendResponse(BaseModel):
-    """Cost trend response model"""
-
-    period_days: int
-    total_cost_usd: float
-    daily_costs: dict
-    trend: str
-    growth_rate_percent: float
-    avg_daily_cost: float
-
-
-class SessionCostResponse(BaseModel):
-    """Session cost response model"""
-
-    session_id: str
-    found: bool
-    cost_usd: Optional[float] = None
-    input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None
-    error: Optional[str] = None
-
-
-class BudgetAlertRequest(BaseModel):
-    """Budget alert configuration request"""
-
-    name: str = Field(..., description="Alert name")
-    threshold_usd: float = Field(..., gt=0, description="Budget threshold in USD")
-    period: str = Field(
-        ..., pattern="^(daily|weekly|monthly)$", description="Alert period"
-    )
-    notify_at_percent: List[int] = Field(
-        default=[50, 75, 90, 100], description="Percentages to notify at"
-    )
-    enabled: bool = Field(default=True, description="Whether alert is enabled")
-
-
-class ModelPricingInfo(BaseModel):
-    """Model pricing information"""
-
-    model: str
-    input_price_per_1m: float
-    output_price_per_1m: float
-    provider: str
 
 
 # ============================================================================
@@ -668,23 +610,6 @@ async def get_budget_status(
 # ============================================================================
 # PER-AGENT COST ENDPOINTS (#1401)
 # ============================================================================
-
-
-class AgentBudgetRequest(BaseModel):
-    """Per-agent budget configuration request (#1401)"""
-
-    budget_monthly_usd: float = Field(..., gt=0, description="Monthly budget in USD")
-
-
-class AgentCostResponse(BaseModel):
-    """Per-agent cost response (#1401)"""
-
-    agent_id: str
-    found: bool = False
-    cost_usd: float = 0.0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    call_count: int = 0
 
 
 @with_error_handling(

@@ -32,17 +32,18 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
 
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.time_utils import now_utc
-from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    EntityCreateRequest,
+    InvalidateEntityRequest,
+    InvalidateRelationRequest,
     MemoryDeleteEntityResponse,
     MemoryDeleteRelationResponse,
     MemoryEntityInvalidateResponse,
@@ -51,6 +52,8 @@ from api.schemas_knowledge import (
     MemoryOrphanScanResponse,
     MemoryRelatedEntitiesResponse,
     MemoryRelationInvalidateResponse,
+    ObservationAddRequest,
+    RelationCreateRequest,
 )
 
 # ====================================================================
@@ -59,151 +62,6 @@ from api.schemas_knowledge import (
 
 router = APIRouter(tags=["memory"])
 logger = logging.getLogger(__name__)
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class EntityCreateRequest(BaseModel):
-    """Request model for creating a new entity"""
-
-    entity_type: str = Field(
-        ..., description="Type of entity (conversation, bug_fix, feature, etc.)"
-    )
-    name: str = Field(
-        ..., min_length=1, max_length=200, description="Human-readable entity name"
-    )
-    observations: List[str] = Field(
-        ..., min_items=1, description="List of observation strings"
-    )
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-    tags: Optional[List[str]] = Field(
-        default_factory=list, description="Classification tags"
-    )
-
-    @validator("entity_type")
-    def validate_entity_type(cls, v):
-        """Validate entity type against allowed values."""
-        valid_types = {
-            "conversation",
-            "bug_fix",
-            "feature",
-            "decision",
-            "task",
-            "user_preference",
-            "context",
-            "learning",
-            "research",
-            "implementation",
-        }
-        if v not in valid_types:
-            raise ValueError(f"entity_type must be one of: {valid_types}")
-        return v
-
-
-class ObservationAddRequest(BaseModel):
-    """Request model for adding observations to an entity"""
-
-    observations: List[str] = Field(
-        ..., min_items=1, description="New observations to add"
-    )
-
-
-class RelationCreateRequest(BaseModel):
-    """Request model for creating a relationship between entities"""
-
-    from_entity: str = Field(..., description="Source entity name")
-    to_entity: str = Field(..., description="Target entity name")
-    relation_type: str = Field(..., description="Type of relationship")
-    bidirectional: bool = Field(
-        default=False, description="Create reverse relation as well"
-    )
-    strength: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Relationship strength (0.0-1.0)"
-    )
-    metadata: Optional[Metadata] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-
-    @validator("relation_type")
-    def validate_relation_type(cls, v):
-        """Validate relation type against allowed values."""
-        valid_types = {
-            "relates_to",
-            "depends_on",
-            "implements",
-            "fixes",
-            "informs",
-            "guides",
-            "follows",
-            "contains",
-            "blocks",
-        }
-        if v not in valid_types:
-            raise ValueError(f"relation_type must be one of: {valid_types}")
-        return v
-
-
-class InvalidateEntityRequest(BaseModel):
-    """Request model for invalidating an entity (setting valid_to). Issue #3810."""
-
-    ended_at: Optional[str] = Field(
-        default=None,
-        description="ISO-8601 timestamp for valid_to. Defaults to now.",
-    )
-
-
-class InvalidateRelationRequest(BaseModel):
-    """Request model for invalidating a relation (setting valid_to). Issue #3810."""
-
-    from_id: str = Field(..., description="Source entity UUID")
-    relation_type: str = Field(..., description="Type of the relation")
-    to_id: str = Field(..., description="Target entity UUID")
-    ended_at: Optional[str] = Field(
-        default=None,
-        description="ISO-8601 timestamp for valid_to. Defaults to now.",
-    )
-
-
-class EntityResponse(BaseModel):
-    """Response model for entity data"""
-
-    id: str
-    type: str
-    name: str
-    created_at: int
-    updated_at: int
-    observations: List[str]
-    metadata: Metadata
-
-
-class RelationResponse(BaseModel):
-    """Response model for relation data"""
-
-    to: str
-    type: str
-    created_at: int
-    metadata: Metadata
-
-
-class GraphNodeResponse(BaseModel):
-    """Response model for graph node with relations"""
-
-    entity: EntityResponse
-    relations: Dict[str, List[RelationResponse]]
-
-
-class SearchResponse(BaseModel):
-    """Response model for search results"""
-
-    entities: List[EntityResponse]
-    total_count: int
-    query: str
-    filters: Metadata
-
 
 # ====================================================================
 # Dependency Injection

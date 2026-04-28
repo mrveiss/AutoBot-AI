@@ -13,83 +13,26 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_agent import (
+    CollabInviteRequest,
+    CollabInviteResponse,
+    CollabParticipantResponse,
+    CollabRemoveRequest,
+    CollabRemoveResponse,
+    CollabShareSecretRequest,
+    SessionParticipantsResponse,
+)
+from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretResponse
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
-from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["collaboration"])
-
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class InviteRequest(BaseModel):
-    """Request to invite user to session."""
-
-    user_id: str = Field(..., description="User ID to invite")
-    permission: PermissionLevel = Field(
-        ..., description="Permission level (owner/editor/viewer)"
-    )
-
-
-class RemoveRequest(BaseModel):
-    """Request to remove collaborator."""
-
-    user_id: str = Field(..., description="User ID to remove")
-
-
-class ShareSecretRequest(BaseModel):
-    """Request to share secret with session participants."""
-
-    secret_id: str = Field(..., description="Secret ID to share")
-    participant_ids: Optional[List[str]] = Field(
-        None,
-        description="Specific participants (None = all with editor+)",
-    )
-
-
-class ParticipantResponse(BaseModel):
-    """Participant information."""
-
-    user_id: str
-    permission: str
-    is_owner: bool
-    online: bool = False
-
-
-class SessionParticipantsResponse(BaseModel):
-    """Session participants list."""
-
-    session_id: str
-    owner_id: str
-    participants: List[ParticipantResponse]
-    total_count: int
-
-
-class InviteResponse(BaseModel):
-    """Invitation response."""
-
-    success: bool
-    session_id: str
-    invited_user_id: str
-    permission: str
-
-
-class RemoveResponse(BaseModel):
-    """Remove collaborator response."""
-
-    success: bool
-    session_id: str
-    removed_user_id: str
 
 
 # ====================================================================
@@ -182,7 +125,7 @@ async def _fetch_and_validate_secret(
 
 
 def _resolve_share_recipients(
-    share: ShareSecretRequest, user_id: uuid.UUID, collab: SessionCollaboration
+    share: CollabShareSecretRequest, user_id: uuid.UUID, collab: SessionCollaboration
 ) -> list:
     """Helper for share_secret_with_session. Ref: #1088."""
     if share.participant_ids:
@@ -208,10 +151,10 @@ def _resolve_share_recipients(
     operation="invite_user",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/invite", response_model=InviteResponse)
+@router.post("/{session_id}/invite", response_model=CollabInviteResponse)
 async def invite_user(
     session_id: str,
-    invite: InviteRequest,
+    invite: CollabInviteRequest,
     db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -239,7 +182,7 @@ async def invite_user(
             f"to session {session_id} as {invite.permission.value}"
         )
 
-        return InviteResponse(
+        return CollabInviteResponse(
             success=True,
             session_id=session_id,
             invited_user_id=invite.user_id,
@@ -266,10 +209,10 @@ async def invite_user(
     operation="remove_collaborator",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/remove", response_model=RemoveResponse)
+@router.post("/{session_id}/remove", response_model=CollabRemoveResponse)
 async def remove_collaborator(
     session_id: str,
-    remove: RemoveRequest,
+    remove: CollabRemoveRequest,
     db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -309,7 +252,7 @@ async def remove_collaborator(
             f"User {user_id} removed {remove_user_id} " f"from session {session_id}"
         )
 
-        return RemoveResponse(
+        return CollabRemoveResponse(
             success=True,
             session_id=session_id,
             removed_user_id=remove.user_id,
@@ -359,7 +302,7 @@ async def get_participants(
 
         # Add owner
         participants.append(
-            ParticipantResponse(
+            CollabParticipantResponse(
                 user_id=str(collab.owner_id),
                 permission=PermissionLevel.OWNER.value,
                 is_owner=True,
@@ -369,7 +312,7 @@ async def get_participants(
         # Add collaborators
         for user_id_str, perm in collab.list_collaborators().items():
             participants.append(
-                ParticipantResponse(
+                CollabParticipantResponse(
                     user_id=user_id_str,
                     permission=perm,
                     is_owner=False,
@@ -406,7 +349,7 @@ async def get_participants(
 @router.post("/{session_id}/secrets/share", response_model=SessionShareSecretResponse)
 async def share_secret_with_session(
     session_id: str,
-    share: ShareSecretRequest,
+    share: CollabShareSecretRequest,
     db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):

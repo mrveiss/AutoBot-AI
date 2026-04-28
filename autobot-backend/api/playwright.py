@@ -10,8 +10,6 @@ import logging
 
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -26,23 +24,22 @@ from services.playwright_service import (
 )
 from api.schemas_common import DataResponse
 from api.schemas_code import (
-    PlaywrightStatusResponse,
-    PlaywrightHealthResponse,
-    PlaywrightQuickTestResponse,
     PlaywrightBrowserActionResponse,
-    PlaywrightWorkerStatusResponse,
     PlaywrightCapabilitiesResponse,
+    PlaywrightHealthResponse,
+    PlaywrightInteractRequest,
+    PlaywrightNavigateRequest,
+    PlaywrightQuickTestResponse,
+    PlaywrightReloadRequest,
+    PlaywrightScreenshotRequest,
+    PlaywrightSearchRequest,
+    PlaywrightStatusResponse,
+    PlaywrightWorkerStatusResponse,
 )
 from api.schemas_system import PlaywrightEmbeddedResultResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
-
-
-class SearchRequest(BaseModel):
-    query: str
-    search_engine: str = "duckduckgo"
-    max_results: int = 5
 
 
 class TestMessageRequest(BaseModel):
@@ -52,31 +49,6 @@ class TestMessageRequest(BaseModel):
 
 class FrontendTestRequest(BaseModel):
     frontend_url: str = _ssot_config.frontend_url
-
-
-class ScreenshotRequest(BaseModel):
-    url: str
-    full_page: bool = True
-    wait_timeout: int = 5000
-
-
-class NavigateRequest(BaseModel):
-    url: str
-    wait_until: str = "networkidle"
-    timeout: int = 30000
-
-
-class ReloadRequest(BaseModel):
-    wait_until: str = "networkidle"
-
-
-class InteractRequest(BaseModel):
-    action: str  # click, scroll, type, hover
-    x: float | None = None
-    y: float | None = None
-    deltaX: float = 0
-    deltaY: float = 0
-    text: str | None = None
 
 
 # Browser VM connection
@@ -156,7 +128,7 @@ async def health_check():
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/search", response_model=PlaywrightEmbeddedResultResponse)
-async def web_search(request: SearchRequest):
+async def web_search(request: PlaywrightSearchRequest):
     """
     Perform web search using embedded Playwright
 
@@ -284,7 +256,7 @@ async def send_test_message(request: TestMessageRequest):
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/screenshot", response_model=PlaywrightEmbeddedResultResponse)
-async def capture_screenshot(request: ScreenshotRequest):
+async def capture_screenshot(request: PlaywrightScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright
 
@@ -396,7 +368,7 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/navigate", response_model=PlaywrightBrowserActionResponse)
-async def navigate_to_url(request: NavigateRequest):
+async def navigate_to_url(request: PlaywrightNavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
 
@@ -446,7 +418,7 @@ async def navigate_to_url(request: NavigateRequest):
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/reload", response_model=PlaywrightBrowserActionResponse)
-async def reload_page(request: ReloadRequest):
+async def reload_page(request: PlaywrightReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
 
@@ -669,7 +641,7 @@ async def take_worker_screenshot():
     error_code_prefix="PLAYWRIGHT",
 )
 @router.post("/interact", response_model=PlaywrightBrowserActionResponse)
-async def interact_with_page(request: InteractRequest):
+async def interact_with_page(request: PlaywrightInteractRequest):
     """Proxy interactive browser actions to Browser VM (#1416)"""
     allowed = {"click", "scroll", "type", "hover"}
     if request.action not in allowed:

@@ -35,7 +35,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from api.schemas_code import GitMCPInfoResponse, GitMCPOperationResponse, GitMCPServiceStatusResponse
+from api.schemas_code import GitMCPInfoResponse, GitMCPOperationResponse, GitMCPServiceStatusResponse, MCPTool
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -44,7 +44,7 @@ from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import QueryDefaults
 from services.tool_output_filter import get_tool_output_filter
-from type_defs.common import JSONObject, Metadata
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -343,14 +343,6 @@ async def execute_git_command(
 
 
 # Pydantic Models
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: JSONObject
 
 
 class GitStatusRequest(BaseModel):

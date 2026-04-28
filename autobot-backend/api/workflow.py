@@ -14,8 +14,17 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel
-
+from api.schemas_workflows import (
+    WorkflowApprovalResponse,
+    WorkflowApproveResponse,
+    WorkflowCancelResponse,
+    WorkflowDetailResponse,
+    WorkflowExecutionRequest,
+    WorkflowExecutionResponse,
+    WorkflowListResponse,
+    WorkflowPendingApprovalsResponse,
+    WorkflowStatusResponse,
+)
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -354,130 +363,6 @@ def _convert_preview_to_steps(workflow_preview: list) -> list:
         }
         steps.append(step)
     return steps
-
-
-# Workflow models
-class WorkflowApprovalRequest(BaseModel):
-    workflow_id: str
-    step_id: str
-    step_description: str
-    required_action: str
-    context: Metadata
-    timeout_seconds: int = 300
-
-
-class WorkflowApprovalResponse(BaseModel):
-    workflow_id: str
-    step_id: str
-    approved: bool
-    user_input: Optional[Metadata] = None
-    timestamp: float
-
-
-class WorkflowStatusUpdate(BaseModel):
-    workflow_id: str
-    step_id: str
-    status: str  # "pending", "in_progress", "completed", "failed", "waiting_approval"
-    progress: float  # 0.0 to 1.0
-    message: str
-    timestamp: float
-
-
-class WorkflowExecutionRequest(BaseModel):
-    user_message: str
-    workflow_id: Optional[str] = None
-    auto_approve: bool = False
-
-
-# ---------------------------------------------------------------------------
-# Response models for response_model= annotations (#5317 — first batch)
-# ---------------------------------------------------------------------------
-
-
-class WorkflowSummary(BaseModel):
-    """Summary of a single workflow as returned by list/detail endpoints."""
-
-    workflow_id: str
-    user_message: str
-    classification: str
-    status: str
-    total_steps: int
-    current_step: int
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-
-
-class WorkflowListResponse(BaseModel):
-    """Response shape for GET /workflows."""
-
-    success: bool
-    active_workflows: int
-    workflows: list[WorkflowSummary]
-
-
-class WorkflowDetailResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}."""
-
-    success: bool
-    workflow: Metadata
-
-
-class WorkflowStatusResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}/status."""
-
-    success: bool
-    workflow_id: str
-    status: str
-    current_step: int
-    total_steps: int
-    progress: float
-    current_step_info: Optional[Metadata] = None
-    estimated_remaining: Optional[str] = None
-
-
-class WorkflowApproveResponse(BaseModel):
-    """Response shape for POST /workflow/{workflow_id}/approve."""
-
-    success: bool
-    message: str
-    next_action: str
-
-
-class WorkflowCancelResponse(BaseModel):
-    """Response shape for DELETE /workflow/{workflow_id}."""
-
-    success: bool
-    message: str
-
-
-class PendingApprovalStep(BaseModel):
-    """A single step awaiting user approval."""
-
-    step_id: str
-    description: str
-    agent_type: str
-    action: str
-    context: Metadata
-
-
-class WorkflowPendingApprovalsResponse(BaseModel):
-    """Response shape for GET /workflow/{workflow_id}/pending_approvals."""
-
-    success: bool
-    workflow_id: str
-    pending_approvals: list[PendingApprovalStep]
-
-
-class WorkflowExecutionResponse(BaseModel):
-    """Response shape for POST /execute (covers both simple and complex paths)."""
-
-    success: bool
-    type: str
-    result: Optional[str] = None
-    routing_method: Optional[str] = None
-    workflow_id: Optional[str] = None
-    execution_started: Optional[bool] = None
-    status_endpoint: Optional[str] = None
 
 
 # In-memory workflow storage (in production, use Redis or database)

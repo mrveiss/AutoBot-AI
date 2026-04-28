@@ -9,125 +9,41 @@ CRUD and lifecycle endpoints for human-in-the-loop approval gates.
 
 import logging
 import uuid
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_workflows import (
+    ApprovalAddCommentRequest,
+    ApprovalCommentResponse,
+    ApprovalGateResponse,
+    ApprovalLinkTaskRequest,
+    ApprovalResubmitRequest,
+    ApprovalTransitionRequest,
+    CreateApprovalRequest,
+    TaskApprovalLinkResponse,
+)
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# -- Request / Response schemas ----------------------------------------
-
-
-class AuthorTypeEnum(str, Enum):
-    """Valid author types for comments."""
-
-    HUMAN = "human"
-    AGENT = "agent"
-    SYSTEM = "system"
-
-
-class CreateApprovalRequest(BaseModel):
-    """Request body for creating an approval gate."""
-
-    title: str
-    approval_type: ApprovalType
-    description: Optional[str] = None
-    requested_by_agent: Optional[str] = None
-    workflow_id: Optional[str] = None
-    workflow_step: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    task_ids: Optional[List[str]] = None
-
-
-class TransitionRequest(BaseModel):
-    """Request body for approve / reject / request-revision."""
-
-    comment: Optional[str] = None
-
-
-class ResubmitRequest(BaseModel):
-    """Request body for resubmitting after revision."""
-
-    description: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-
-
-class AddCommentRequest(BaseModel):
-    """Request body for adding a comment."""
-
-    body: str
-    author_type: AuthorTypeEnum = AuthorTypeEnum.HUMAN
-
-
-class LinkTaskRequest(BaseModel):
-    """Request body for linking a task."""
-
-    task_id: str
-    task_type: str = "github_issue"
-
-
-class TaskApprovalLinkResponse(BaseModel):
-    """Response for a task-approval link."""
-
-    id: str
-    approval_id: str
-    task_id: str
-    task_type: str
-
-
-class CommentResponse(BaseModel):
-    """Response for a comment."""
-
-    id: str
-    approval_id: str
-    author: str
-    author_type: str
-    body: str
-    created_at: Optional[str] = None
-
-
-class ApprovalResponse(BaseModel):
-    """Response for an approval."""
-
-    id: str
-    title: str
-    description: Optional[str] = None
-    approval_type: str
-    status: str
-    requested_by_agent: Optional[str] = None
-    decided_by_user: Optional[str] = None
-    workflow_id: Optional[str] = None
-    workflow_step: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    decided_at: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    comments: List[CommentResponse] = Field(default_factory=list)
-    task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)
-
-
 # -- Helpers -----------------------------------------------------------
 
 
-def _build_comments(approval) -> List[CommentResponse]:
+def _build_comments(approval) -> List[ApprovalCommentResponse]:
     """Build comment responses from approval ORM object (#1402)."""
     comments = []
     for c in getattr(approval, "comments", []) or []:
         comments.append(
-            CommentResponse(
+            ApprovalCommentResponse(
                 id=str(c.id),
                 approval_id=str(c.approval_id),
                 author=c.author,
@@ -154,9 +70,9 @@ def _build_task_links(approval) -> List[TaskApprovalLinkResponse]:
     return task_links
 
 
-def _to_response(approval) -> ApprovalResponse:
+def _to_response(approval) -> ApprovalGateResponse:
     """Convert an Approval ORM object to a response dict."""
-    return ApprovalResponse(
+    return ApprovalGateResponse(
         id=str(approval.id),
         title=approval.title,
         description=approval.description,
@@ -185,7 +101,7 @@ def _to_response(approval) -> ApprovalResponse:
 )
 @router.post(
     "/approval-gates",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_approval(
@@ -215,7 +131,7 @@ async def create_approval(
 )
 @router.get(
     "/approval-gates",
-    response_model=List[ApprovalResponse],
+    response_model=List[ApprovalGateResponse],
 )
 async def list_approvals(
     status_filter: Optional[ApprovalStatus] = None,
@@ -246,7 +162,7 @@ async def list_approvals(
 )
 @router.get(
     "/approval-gates/{approval_id}",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
 )
 async def get_approval(
     approval_id: uuid.UUID,
@@ -271,11 +187,11 @@ async def get_approval(
 )
 @router.post(
     "/approval-gates/{approval_id}/approve",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
 )
 async def approve(
     approval_id: uuid.UUID,
-    body: TransitionRequest,
+    body: ApprovalTransitionRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -303,11 +219,11 @@ async def approve(
 )
 @router.post(
     "/approval-gates/{approval_id}/reject",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
 )
 async def reject(
     approval_id: uuid.UUID,
-    body: TransitionRequest,
+    body: ApprovalTransitionRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -335,11 +251,11 @@ async def reject(
 )
 @router.post(
     "/approval-gates/{approval_id}/request-revision",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
 )
 async def request_revision(
     approval_id: uuid.UUID,
-    body: TransitionRequest,
+    body: ApprovalTransitionRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -367,11 +283,11 @@ async def request_revision(
 )
 @router.post(
     "/approval-gates/{approval_id}/resubmit",
-    response_model=ApprovalResponse,
+    response_model=ApprovalGateResponse,
 )
 async def resubmit(
     approval_id: uuid.UUID,
-    body: ResubmitRequest,
+    body: ApprovalResubmitRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -398,12 +314,12 @@ async def resubmit(
 )
 @router.post(
     "/approval-gates/{approval_id}/comments",
-    response_model=CommentResponse,
+    response_model=ApprovalCommentResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_comment(
     approval_id: uuid.UUID,
-    body: AddCommentRequest,
+    body: ApprovalAddCommentRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -422,7 +338,7 @@ async def add_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Internal server error",
         )
-    return CommentResponse(
+    return ApprovalCommentResponse(
         id=str(comment.id),
         approval_id=str(comment.approval_id),
         author=comment.author,
@@ -444,7 +360,7 @@ async def add_comment(
 )
 async def link_task(
     approval_id: uuid.UUID,
-    body: LinkTaskRequest,
+    body: ApprovalLinkTaskRequest,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):

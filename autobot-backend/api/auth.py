@@ -10,11 +10,19 @@ import datetime
 import logging
 from collections import defaultdict
 from time import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, validator
+from api.schemas_agent import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
+    LoginRequest,
+    LoginResponse,
+    LogoutRequest,
+    SignupRequest,
+    SignupResponse,
+)
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -94,131 +102,6 @@ class PasswordChangeRateLimiter:
 
 # Global rate limiter for password changes
 password_change_limiter = PasswordChangeRateLimiter()
-
-
-class LoginRequest(BaseModel):
-    """Login request model"""
-
-    username: str
-    password: str
-
-    @validator("username")
-    def validate_username(cls, v):
-        """Validate and sanitize username format."""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("Username cannot be empty")
-        if len(v) > 50:
-            raise ValueError("Username too long")
-        # Basic sanitization
-        v = v.strip().lower()
-        if not v.replace("_", "").replace("-", "").replace(".", "").isalnum():
-            raise ValueError("Username contains invalid characters")
-        return v
-
-    @validator("password")
-    def validate_password(cls, v):
-        """Validate password length constraints."""
-        if not v or len(v) < 1:
-            raise ValueError("Password cannot be empty")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        return v
-
-
-class LoginResponse(BaseModel):
-    """Login response model"""
-
-    success: bool
-    message: str
-    user: Optional[dict] = None
-    token: Optional[str] = None
-    session_id: Optional[str] = None
-
-
-class LogoutRequest(BaseModel):
-    """Logout request model"""
-
-    session_id: Optional[str] = None
-
-
-class ChangePasswordRequest(BaseModel):
-    """Change password request model"""
-
-    current_password: str
-    new_password: str
-
-    @validator("new_password")
-    def validate_new_password(cls, v):
-        """Validate password strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class ChangePasswordResponse(BaseModel):
-    """Change password response model"""
-
-    success: bool
-    message: str
-
-
-class SignupRequest(BaseModel):
-    """Self-registration request model (#1801)."""
-
-    username: str
-    email: str
-    password: str
-    display_name: str | None = None
-
-    @validator("username")
-    def validate_username(cls, v):
-        """Validate username format."""
-        v = v.strip().lower()
-        if not v or len(v) < 3:
-            raise ValueError("Username must be at least 3 characters")
-        if len(v) > 50:
-            raise ValueError("Username too long")
-        if not v.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Username contains invalid characters")
-        return v
-
-    @validator("email")
-    def validate_email(cls, v):
-        """Minimal email sanity check."""
-        if "@" not in v or len(v) > 255:
-            raise ValueError("Invalid email address")
-        return v.strip().lower()
-
-    @validator("password")
-    def validate_password(cls, v):
-        """Password strength requirements."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if len(v) > 128:
-            raise ValueError("Password too long")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class SignupResponse(BaseModel):
-    """Self-registration response model (#1801)."""
-
-    success: bool
-    message: str
-    username: str | None = None
 
 
 async def _authenticate_and_build_user_data(

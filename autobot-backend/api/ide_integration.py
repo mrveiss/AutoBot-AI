@@ -28,6 +28,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from api.schemas_code import (
+    IDEBatchAnalyzeResponse,
+    IDECategoriesResponse,
+    IDEConfigUpdateResponse,
+    IDEHealthResponse,
+    IDERulesResponse,
+    IDESeveritiesResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
@@ -455,65 +463,6 @@ class CompletionResponse(BaseModel):
     completion_time_ms: float
     source: str  # "ml", "patterns", "hybrid"
     cached: bool = False
-
-
-class IDERulesResponse(BaseModel):
-    """Response for GET /rules."""
-
-    rules: List[Dict[str, Any]]
-    total: int
-    enabled: int
-
-
-class IDEConfigUpdateResponse(BaseModel):
-    """Response for PUT /config."""
-
-    updated: bool
-
-
-class IDECategoryItem(BaseModel):
-    """A single category entry."""
-
-    id: str
-    name: str
-
-
-class IDECategoriesResponse(BaseModel):
-    """Response for GET /categories."""
-
-    categories: List[IDECategoryItem]
-
-
-class IDESeverityItem(BaseModel):
-    """A single severity entry."""
-
-    id: str
-    name: str
-    lsp_code: int
-
-
-class IDESeveritiesResponse(BaseModel):
-    """Response for GET /severities."""
-
-    severities: List[IDESeverityItem]
-
-
-class IDEBatchAnalyzeResponse(BaseModel):
-    """Response for POST /batch-analyze."""
-
-    results: List[Any]
-    files_analyzed: int
-    total_issues: int
-    errors: int
-
-
-class IDEHealthResponse(BaseModel):
-    """Response for GET /health."""
-
-    status: str
-    rules_loaded: int
-    disabled_rules: int
-    cache_size: int
 
 
 # =============================================================================

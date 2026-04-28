@@ -23,8 +23,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
@@ -40,7 +38,20 @@ from scripts.logging.log_forwarder import (
     LogForwarder,
     SyslogProtocol,
 )
-from api.schemas_system import LogForwardingDestinationItem
+from api.schemas_system import (
+    LogForwardingDestinationItem,
+    LogFwdAutoStartResponse,
+    LogFwdCreateUpdateResponse,
+    LogFwdDestinationCreate,
+    LogFwdDestinationResponse,
+    LogFwdDestinationTypesResponse,
+    LogFwdDestinationUpdate,
+    LogFwdKnownHostsResponse,
+    LogFwdMessageResponse,
+    LogFwdStatusResponse,
+    LogFwdTestAllResponse,
+    LogFwdTestResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,184 +72,6 @@ async def _get_forwarder() -> LogForwarder:
 
 
 # Pydantic models for API
-class DestinationCreate(BaseModel):
-    """Model for creating a new destination."""
-
-    name: str = Field(..., description="Unique name for the destination")
-    type: str = Field(
-        ...,
-        description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
-    )
-    enabled: bool = Field(True, description="Whether the destination is enabled")
-    url: Optional[str] = Field(None, description="URL/host for the destination")
-    api_key: Optional[str] = Field(None, description="API key for authentication")
-    username: Optional[str] = Field(None, description="Username for authentication")
-    password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field(
-        "autobot-logs", description="Index name (Elasticsearch)"
-    )
-    file_path: Optional[str] = Field(None, description="File path (file destination)")
-    min_level: str = Field("Information", description="Minimum log level to forward")
-    batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(
-        5.0, ge=0.1, le=60.0, description="Batch timeout in seconds"
-    )
-    retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(
-        1.0, ge=0.1, le=30.0, description="Delay between retries"
-    )
-    # Scope configuration
-    scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(
-        default_factory=list, description="Target hosts for per_host scope"
-    )
-    # Syslog-specific options
-    syslog_protocol: str = Field(
-        "udp", description="Syslog protocol: udp, tcp, tcp_tls"
-    )
-    ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
-    ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(
-        None, description="Path to client certificate"
-    )
-    ssl_client_key: Optional[str] = Field(None, description="Path to client key")
-
-
-class DestinationUpdate(BaseModel):
-    """Model for updating an existing destination."""
-
-    enabled: Optional[bool] = None
-    url: Optional[str] = None
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    index: Optional[str] = None
-    file_path: Optional[str] = None
-    min_level: Optional[str] = None
-    batch_size: Optional[int] = None
-    batch_timeout: Optional[float] = None
-    retry_count: Optional[int] = None
-    retry_delay: Optional[float] = None
-    scope: Optional[str] = None
-    target_hosts: Optional[List[str]] = None
-    syslog_protocol: Optional[str] = None
-    ssl_verify: Optional[bool] = None
-    ssl_ca_cert: Optional[str] = None
-    ssl_client_cert: Optional[str] = None
-    ssl_client_key: Optional[str] = None
-
-
-class DestinationResponse(BaseModel):
-    """Response model for a destination."""
-
-    name: str
-    type: str
-    enabled: bool
-    url: Optional[str]
-    index: Optional[str]
-    file_path: Optional[str]
-    min_level: str
-    batch_size: int
-    batch_timeout: float
-    scope: str
-    target_hosts: List[str]
-    syslog_protocol: str
-    ssl_verify: bool
-    # Status fields
-    healthy: bool
-    last_error: Optional[str]
-    sent_count: int
-    failed_count: int
-
-
-class LogFwdMessageResponse(BaseModel):
-    """Simple message-only response (start, stop, delete)."""
-
-    message: str
-
-
-class LogFwdCreateUpdateResponse(BaseModel):
-    """Response for create/update destination endpoints."""
-
-    message: str
-    destination: Dict[str, Any]
-
-
-class LogFwdTestResponse(BaseModel):
-    """Response for POST /destinations/{name}/test."""
-
-    name: str
-    healthy: bool
-    last_error: Optional[str] = None
-    message: str
-
-
-class LogFwdTestAllResponse(BaseModel):
-    """Response for POST /test-all."""
-
-    results: Dict[str, Any]
-    total: int
-    healthy: int
-    unhealthy: int
-
-
-class LogFwdDestinationStatusItem(BaseModel):
-    """Single entry in the destinations list within LogFwdStatusResponse."""
-
-    name: str
-    type: str
-    enabled: bool
-    healthy: bool
-    last_error: Optional[str] = None
-    sent_count: int
-    failed_count: int
-    scope: str
-
-
-class LogFwdStatusResponse(BaseModel):
-    """Response for GET /status."""
-
-    running: bool
-    hostname: str
-    queue_size: int
-    destinations: List[LogFwdDestinationStatusItem]
-    total_destinations: int
-    enabled_destinations: int
-    healthy_destinations: int
-    total_sent: int
-    total_failed: int
-
-
-class LogFwdDestinationTypesResponse(BaseModel):
-    """Response for GET /destination-types."""
-
-    types: List[Any]
-    scopes: List[Any]
-    log_levels: List[str]
-    syslog_protocols: List[Any]
-
-
-class LogFwdKnownHostItem(BaseModel):
-    """A single host entry in the known-hosts response."""
-
-    hostname: str
-    ip: Optional[str] = None
-    description: str
-
-
-class LogFwdKnownHostsResponse(BaseModel):
-    """Response for GET /known-hosts."""
-
-    hosts: List[LogFwdKnownHostItem]
-    current_hostname: str
-
-
-class LogFwdAutoStartResponse(BaseModel):
-    """Response for GET/PUT /auto-start."""
-
-    auto_start: bool
-    message: str
-
 
 def _build_updated_destination_config(
     name: str,
@@ -277,7 +110,7 @@ def _build_updated_destination_config(
     )
 
 
-def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
+def _config_to_destination_config(data: LogFwdDestinationCreate) -> DestinationConfig:
     """Convert API model to DestinationConfig."""
     try:
         dest_type = DestinationType(data.type)
@@ -321,9 +154,9 @@ def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
     )
 
 
-def _destination_to_response(dest) -> DestinationResponse:
+def _destination_to_response(dest) -> LogFwdDestinationResponse:
     """Convert LogDestination to API response."""
-    return DestinationResponse(
+    return LogFwdDestinationResponse(
         name=dest.config.name,
         type=dest.config.type.value,
         enabled=dest.config.enabled,
@@ -434,7 +267,7 @@ async def get_destination(
 )
 @router.post("/destinations", response_model=LogFwdCreateUpdateResponse)
 async def create_destination_endpoint(
-    data: DestinationCreate,
+    data: LogFwdDestinationCreate,
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Create a new log forwarding destination.
@@ -487,7 +320,7 @@ async def create_destination_endpoint(
 @router.put("/destinations/{name}", response_model=LogFwdCreateUpdateResponse)
 async def update_destination(
     name: str,
-    data: DestinationUpdate,
+    data: LogFwdDestinationUpdate,
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Update an existing destination.

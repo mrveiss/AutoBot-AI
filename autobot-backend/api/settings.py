@@ -9,13 +9,26 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 import aiofiles
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.schemas_system import (
+    ClearCacheResponse,
+    ConfigSyncRequest,
+    ConfigSyncResponse,
+    HardwarePriorityRequest,
+    HardwarePriorityResponse,
+    RBACInitRequest,
+    RBACStatusResponse,
+    SettingsTaskQueuedResponse,
+    SettingsTaskStatusResponse,
+    SystemUpdateRequest,
+    UpdateStatusResponse,
+    WorkerStatusResponse,
+)
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
@@ -35,92 +48,9 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Issue #687: RBAC initialization request model
-import re
-
 # Issue #687: RBAC marker path constant
 RBAC_MARKER_PATH = Path("/etc/autobot/rbac-initialized")
 
-
-class SaveSettingsResponse(BaseModel):
-    """Response for save settings endpoints — passes through ConfigService result dict."""
-
-    status: Optional[str] = None
-    message: Optional[str] = None
-    success: Optional[bool] = None
-
-
-class ClearCacheResponse(BaseModel):
-    """Response for POST /clear-cache."""
-
-    status: str
-    message: str
-    available_endpoints: Optional[dict] = None
-
-
-class TaskQueuedResponse(BaseModel):
-    """Response when a Celery task is queued."""
-
-    task_id: str
-    status: str
-    message: str
-    dry_run: Optional[bool] = None
-
-
-class TaskStatusResponse(BaseModel):
-    """Response for Celery task status polling."""
-
-    task_id: str
-    status: str
-    message: Optional[str] = None
-    progress: Optional[Any] = None
-    result: Optional[Any] = None
-    error: Optional[str] = None
-
-
-class RBACStatusResponse(BaseModel):
-    """Response for GET /rbac/status."""
-
-    initialized: bool
-    message: str
-
-
-class WorkerStatusResponse(BaseModel):
-    """Response for GET /updates/worker-status."""
-
-    available: bool
-    message: str
-
-
-class UpdateStatusResponse(BaseModel):
-    """Response for GET /updates/status."""
-
-    last_update: Optional[str] = None
-    marker_exists: bool
-    message: str
-
-
-class RBACInitRequest(BaseModel):
-    """Request model for RBAC initialization."""
-
-    create_admin: bool = False
-    admin_username: str = "admin"
-
-    @classmethod
-    def validate_admin_username(cls, v: str) -> str:
-        """Validate admin username format."""
-        if len(v) < 3 or len(v) > 32:
-            raise ValueError("Username must be 3-32 characters")
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
-            raise ValueError(
-                "Username must start with a letter and contain only letters, numbers, and underscores"
-            )
-        return v
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if self.create_admin:
-            self.admin_username = self.validate_admin_username(self.admin_username)
 
 
 @with_error_handling(
@@ -414,7 +344,7 @@ async def clear_cache():
     operation="initialize_rbac_endpoint",
     error_code_prefix="SETTINGS",
 )
-@router.post("/rbac/initialize", response_model=TaskQueuedResponse)
+@router.post("/rbac/initialize", response_model=SettingsTaskQueuedResponse)
 async def initialize_rbac_endpoint(
     request: RBACInitRequest,
     _: None = Depends(check_admin_permission),
@@ -468,7 +398,7 @@ async def initialize_rbac_endpoint(
     operation="get_rbac_task_status",
     error_code_prefix="SETTINGS",
 )
-@router.get("/rbac/status/{task_id}", response_model=TaskStatusResponse)
+@router.get("/rbac/status/{task_id}", response_model=SettingsTaskStatusResponse)
 async def get_rbac_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -557,19 +487,6 @@ async def get_rbac_status(
 UPDATES_MARKER_PATH = Path("/etc/autobot/last-update")
 
 
-class SystemUpdateRequest(BaseModel):
-    """Request model for system updates (Issue #544)."""
-
-    update_type: str = "dependencies"  # 'dependencies' or 'system'
-    target_groups: Optional[list] = None  # Host groups to update (None = all)
-    dry_run: bool = False  # Preview mode
-    force_update: bool = False  # Skip version checks
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if self.update_type not in ("dependencies", "system"):
-            raise ValueError("update_type must be 'dependencies' or 'system'")
-
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -581,7 +498,7 @@ class SystemUpdateRequest(BaseModel):
     operation="run_system_update_endpoint",
     error_code_prefix="SETTINGS",
 )
-@router.post("/updates/run", response_model=TaskQueuedResponse)
+@router.post("/updates/run", response_model=SettingsTaskQueuedResponse)
 async def run_system_update_endpoint(
     request: SystemUpdateRequest,
     _: None = Depends(check_admin_permission),
@@ -654,7 +571,7 @@ async def run_system_update_endpoint(
     operation="get_update_task_status",
     error_code_prefix="SETTINGS",
 )
-@router.get("/updates/status/{task_id}", response_model=TaskStatusResponse)
+@router.get("/updates/status/{task_id}", response_model=SettingsTaskStatusResponse)
 async def get_update_task_status(
     task_id: str,
     _: None = Depends(check_admin_permission),
@@ -776,7 +693,7 @@ async def check_celery_worker_status(
     operation="check_updates_endpoint",
     error_code_prefix="SETTINGS",
 )
-@router.post("/updates/check", response_model=TaskQueuedResponse)
+@router.post("/updates/check", response_model=SettingsTaskQueuedResponse)
 async def check_updates_endpoint(
     _: None = Depends(check_admin_permission),
 ):
@@ -914,23 +831,6 @@ def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
         return any(_exceeds_depth(v, current_depth + 1) for v in obj.values())
     return False
 
-
-class ConfigSyncRequest(BaseModel):
-    """Request body for POST /api/settings/sync.
-
-    The *settings* dict is merged into the active settings.json so callers
-    can send partial payloads — only the provided keys are changed.
-    """
-
-    settings: dict
-
-
-class ConfigSyncResponse(BaseModel):
-    """Response body for POST /api/settings/sync."""
-
-    status: str
-    changed: dict  # keys that changed: {key: {"before": old, "after": new}}
-    unchanged_keys: int
 
 
 def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
@@ -1084,34 +984,6 @@ async def sync_config(
 
 
 # ==================== Hardware Priority Endpoint (Issue #3288) ====================
-
-_VALID_HARDWARE_TYPES = frozenset({"npu", "gpu", "cpu"})
-
-
-class HardwarePriorityRequest(BaseModel):
-    """Request body for PATCH /api/settings/hardware-priority.
-
-    priority_order must be a permutation of ["npu", "gpu", "cpu"] — all three
-    values required, no duplicates.
-    """
-
-    priority_order: List[str]
-
-    def model_post_init(self, __context) -> None:  # noqa: ANN001
-        given = set(self.priority_order)
-        if given != _VALID_HARDWARE_TYPES or len(self.priority_order) != 3:
-            raise ValueError(
-                f"priority_order must be a permutation of {sorted(_VALID_HARDWARE_TYPES)}, "
-                f"got {self.priority_order}"
-            )
-
-
-class HardwarePriorityResponse(BaseModel):
-    """Response body for PATCH /api/settings/hardware-priority."""
-
-    status: str
-    priority_order: List[str]
-    changed: dict
 
 
 @with_error_handling(

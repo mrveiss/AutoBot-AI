@@ -19,75 +19,25 @@ Issue #2153 — Secret management for workflow credentials.
 """
 
 import logging
-import re
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
 
+from api.schemas_workflows import (
+    WorkflowSecretCreateRequest,
+    WorkflowSecretMetadata,
+    WorkflowSecretUpdateRequest,
+)
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
 )
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Allowed characters in a secret name — same rule as the general secrets API.
-_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
-
-
-# ---------------------------------------------------------------------------
-# Request / response schemas
-# ---------------------------------------------------------------------------
-
-
-def _validate_secret_name(name: str) -> str:
-    """Reject names containing characters outside the safe set. Issue #2153."""
-    if not _NAME_RE.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
-    return name
-
-
-class WorkflowSecretCreateRequest(BaseModel):
-    """Request body for creating a workflow secret. Issue #2303: owner_id derived from auth."""
-
-    name: str = Field(..., min_length=1, max_length=256)
-    value: str = Field(..., min_length=1, max_length=65536)
-    secret_type: str = Field(default="api_key", max_length=50)
-    workflow_id: Optional[str] = Field(default=None, max_length=128)
-    description: Optional[str] = Field(default=None, max_length=1024)
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Reject unsafe characters in the secret name."""
-        return _validate_secret_name(v)
-
-
-class WorkflowSecretUpdateRequest(BaseModel):
-    """Request body for updating a workflow secret's value. Issue #2303: owner_id from auth."""
-
-    value: str = Field(..., min_length=1, max_length=65536)
-
-
-class WorkflowSecretMetadata(BaseModel):
-    """Safe metadata response — no value field. Issue #2153."""
-
-    id: str
-    name: str
-    secret_type: str
-    scope: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    description: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

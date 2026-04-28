@@ -14,13 +14,25 @@ import re
 import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
+from api.schemas_analytics import (
+    CheckCategory,
+    CheckDefinition,
+    CheckResult,
+    CheckSeverity,
+    CheckToggleResponse,
+    CommitCheckResult,
+    HookConfig,
+    HookConfigUpdateResponse,
+    HookInstallResponse,
+    HookStatus,
+    PrecommitCategoryItem,
+    PrecommitSummaryResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
@@ -31,145 +43,6 @@ router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_regi
 
 # Issue #380: Module-level frozenset for expensive checks to skip in fast mode
 _EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})
-
-
-# ============================================================================
-# Models
-# ============================================================================
-
-
-class CheckSeverity(str, Enum):
-    """Severity levels for pre-commit checks."""
-
-    BLOCK = "block"  # Prevents commit
-    WARN = "warn"  # Shows warning but allows commit
-    INFO = "info"  # Informational only
-
-
-class CheckCategory(str, Enum):
-    """Categories of pre-commit checks."""
-
-    SECURITY = "security"
-    QUALITY = "quality"
-    STYLE = "style"
-    DEBUG = "debug"
-    DOCS = "docs"
-
-
-class CheckResult(BaseModel):
-    """Result of a single check."""
-
-    check_id: str
-    name: str
-    category: CheckCategory
-    severity: CheckSeverity
-    passed: bool
-    message: str
-    file: Optional[str] = None
-    line: Optional[int] = None
-    snippet: Optional[str] = None
-    suggestion: Optional[str] = None
-
-
-class CommitCheckResult(BaseModel):
-    """Result of checking staged files."""
-
-    passed: bool
-    total_checks: int
-    passed_checks: int
-    failed_checks: int
-    warnings: int
-    blocked: bool
-    duration_ms: float
-    results: list[CheckResult]
-    files_checked: list[str]
-    timestamp: str
-
-
-class HookConfig(BaseModel):
-    """Configuration for pre-commit hooks."""
-
-    enabled: bool = True
-    fast_mode: bool = True  # Skip expensive checks
-    timeout_seconds: int = Field(default=5, ge=1, le=30)
-    bypass_keyword: str = "[skip-hooks]"
-    enabled_checks: list[str] = Field(default_factory=list)
-    disabled_checks: list[str] = Field(default_factory=list)
-
-
-class CheckDefinition(BaseModel):
-    """Definition of a check rule."""
-
-    id: str
-    name: str
-    category: CheckCategory
-    severity: CheckSeverity
-    pattern: str
-    description: str
-    suggestion: str
-    file_patterns: list[str] = Field(default_factory=lambda: ["*"])
-    enabled: bool = True
-
-
-class HookStatus(BaseModel):
-    """Status of installed hooks."""
-
-    installed: bool
-    path: Optional[str] = None
-    version: Optional[str] = None
-    last_run: Optional[str] = None
-    config: HookConfig
-
-
-class CheckToggleResponse(BaseModel):
-    """Response for POST /checks/{check_id}/toggle."""
-
-    check_id: str
-    enabled: bool
-    message: str
-
-
-class HookConfigUpdateResponse(BaseModel):
-    """Response for POST /config — echoes back the new config."""
-
-    message: str
-    config: HookConfig
-
-
-class HookInstallResponse(BaseModel):
-    """Response for POST /install and POST /uninstall."""
-
-    success: bool
-    message: str
-    path: Optional[str] = None
-
-
-class CommonIssueItem(BaseModel):
-    """Single issue entry in the summary common_issues list."""
-
-    check_id: str
-    count: int
-    name: str
-
-
-class PrecommitSummaryResponse(BaseModel):
-    """Response for GET /summary."""
-
-    total_runs: int
-    pass_rate: float
-    average_duration_ms: float
-    common_issues: list[CommonIssueItem]
-    checks_enabled: Optional[int] = None
-    total_checks: Optional[int] = None
-
-
-class CategoryItem(BaseModel):
-    """Single category entry for GET /categories."""
-
-    category: str
-    enabled: int
-    disabled: int
-    total: int
 
 
 # ============================================================================
@@ -993,7 +866,7 @@ async def get_summary(
     operation="get_categories",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/categories", response_model=list[CategoryItem])
+@router.get("/categories", response_model=list[PrecommitCategoryItem])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:

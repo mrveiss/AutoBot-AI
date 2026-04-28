@@ -11,12 +11,12 @@ Registered in feature_routers.py as:
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
 from api.schemas_workflows import (
+    CloneWorkflowRequest,
+    ImportWorkflowRequest,
+    ShareWorkflowRequest,
     WorkflowExportResponse,
     WorkflowImportResponse,
     WorkflowListSharesResponse,
@@ -33,44 +33,6 @@ from services.workflow_sharing_service import WorkflowSharingService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["workflow-export"])
-
-
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
-
-
-class ShareWorkflowRequest(BaseModel):
-    """Request body for creating a workflow share (#2165)."""
-
-    workflow_id: str = Field(..., description="ID of the workflow to share.")
-    target_user_id: Optional[str] = Field(
-        default=None,
-        description="Share with a specific user.  Mutually optional with public.",
-    )
-    public: bool = Field(
-        default=False, description="Make the share publicly accessible."
-    )
-
-
-class ImportWorkflowRequest(BaseModel):
-    """Request body for importing a workflow from an export document (#2165)."""
-
-    export_document: dict = Field(
-        ...,
-        description="WorkflowExportFormat.to_dict() payload produced by the export endpoint.",
-    )
-    session_id: Optional[str] = Field(
-        default=None, description="Session to associate with the imported workflow."
-    )
-
-
-class CloneWorkflowRequest(BaseModel):
-    """Request body for cloning a shared workflow (#2165)."""
-
-    session_id: Optional[str] = Field(
-        default=None, description="Session to associate with the cloned workflow."
-    )
 
 
 # ---------------------------------------------------------------------------

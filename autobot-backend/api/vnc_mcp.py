@@ -11,17 +11,32 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from typing import Any, Dict, List, Optional
+from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
-from type_defs.common import Metadata
+from api.schemas_system import (
+    BrowserVncContextResponse,
+    DesktopClickMcpResponse,
+    DesktopKeyboardTypeMcpResponse,
+    DesktopKeyboardTypeRequest,
+    DesktopMouseClickRequest,
+    DesktopObserveStateMcpResponse,
+    DesktopObserveStateRequest,
+    DesktopScreenshotMcpResponse,
+    DesktopSpecialKeyMcpResponse,
+    DesktopSpecialKeyRequest,
+    VNCObservationRequest,
+    VNCStatusRequest,
+    VncMCPTool,
+    VncObservationMcpResponse,
+    VncRecordObservationResponse,
+    VncStatusMcpResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -199,112 +214,6 @@ VNC_MCP_TOOL_DEFINITIONS = (
 )
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class VNCStatusRequest(BaseModel):
-    """Request model for VNC status check"""
-
-    vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-
-
-class VNCObservationRequest(BaseModel):
-    """Request model for VNC observations"""
-
-    vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-    duration_seconds: int = Field(
-        5, description="How many seconds of recent activity to return"
-    )
-
-
-# Response models for VNC MCP endpoints
-class VncStatusMcpResponse(BaseModel):
-    """Response for check_vnc_status MCP tool"""
-    success: bool
-    vnc_type: str
-    accessible: bool
-    endpoint: Optional[str] = None
-    status_code: Optional[int] = None
-    message: str
-    error: Optional[str] = None
-
-
-class VncObservationMcpResponse(BaseModel):
-    """Response for observe_vnc_activity MCP tool"""
-    success: bool
-    vnc_type: str
-    duration_seconds: int
-    observation_count: int
-    observations: List[Dict[str, Any]]
-    last_check: Optional[str] = None
-    message: str
-
-
-class BrowserVncContextResponse(BaseModel):
-    """Response for get_browser_vnc_context MCP tool"""
-    success: bool
-    timestamp: str
-    playwright_state: Dict[str, Any]
-    vnc_state: Dict[str, Any]
-
-
-class VncRecordObservationResponse(BaseModel):
-    """Response for record_vnc_observation"""
-    success: bool
-    recorded: bool
-
-
-class DesktopClickMcpResponse(BaseModel):
-    """Response for desktop_mouse_click MCP tool"""
-    success: bool
-    message: str
-    action: str
-    coordinates: Dict[str, int]
-    button: str
-
-
-class DesktopKeyboardTypeMcpResponse(BaseModel):
-    """Response for desktop_keyboard_type MCP tool"""
-    success: bool
-    message: str
-    action: str
-    text_length: int
-
-
-class DesktopSpecialKeyMcpResponse(BaseModel):
-    """Response for desktop_special_key MCP tool"""
-    success: bool
-    message: str
-    action: str
-    key: str
-
-
-class DesktopScreenshotMcpResponse(BaseModel):
-    """Response for desktop_screenshot MCP tool"""
-    success: bool
-    message: str
-    action: str
-    image_data: Optional[str] = None
-    format: Optional[str] = None
-
-
-class DesktopObserveStateMcpResponse(BaseModel):
-    """Response for desktop_observe_state MCP tool"""
-    success: bool
-    action: str
-    timestamp: str
-    resolution: Optional[str] = None
-    active_window: Optional[str] = None
-    screenshot: Optional[str] = None
-    screenshot_format: Optional[str] = None
-
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vnc_mcp_tools",
@@ -315,8 +224,8 @@ class DesktopObserveStateMcpResponse(BaseModel):
     operation="get_vnc_mcp_tools",
     error_code_prefix="VNC_MCP",
 )
-@router.get("/mcp/tools", response_model=List[MCPTool])
-async def get_vnc_mcp_tools() -> List[MCPTool]:
+@router.get("/mcp/tools", response_model=List[VncMCPTool])
+async def get_vnc_mcp_tools() -> List[VncMCPTool]:
     """
     Get available MCP tools for VNC observation.
 
@@ -329,7 +238,7 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     - Get real-time status of what humans are viewing
     """
     return [
-        MCPTool(name=name, description=desc, input_schema=schema)
+        VncMCPTool(name=name, description=desc, input_schema=schema)
         for name, desc, schema in VNC_MCP_TOOL_DEFINITIONS
     ]
 
@@ -563,32 +472,6 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
 
 # Issue #74: Agent Desktop Interaction MCP Endpoints
 # These endpoints allow AI agents to interact with the desktop via MCP tools
-
-
-class DesktopMouseClickRequest(BaseModel):
-    """Agent mouse click request"""
-
-    x: int = Field(..., ge=0)
-    y: int = Field(..., ge=0)
-    button: str = Field(default="left")
-
-
-class DesktopKeyboardTypeRequest(BaseModel):
-    """Agent keyboard type request"""
-
-    text: str
-
-
-class DesktopSpecialKeyRequest(BaseModel):
-    """Agent special key request"""
-
-    key: str
-
-
-class DesktopObserveStateRequest(BaseModel):
-    """Agent desktop observation request"""
-
-    include_screenshot: bool = Field(default=True)
 
 
 @with_error_handling(

@@ -5,11 +5,17 @@
 Workflow, registry, RUM, elevation, advanced-control, state-tracking, and validation schemas.
 """
 
+import re
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessMessageResponse
+from autobot_shared.models.service_message import ServiceMessage
+from autobot_shared.time_utils import now_utc
+from models.approval import ApprovalType
+from type_defs.common import Metadata
 
 
 # ---------------------------------------------------------------------------
@@ -841,15 +847,6 @@ class AdvancedControlHealthResponse(BaseModel):
     paused_tasks: int
 
 
-class AdvancedControlInfoResponse(BaseModel):
-    """Response for GET / — advanced control capabilities info."""
-
-    name: str
-    version: str
-    features: List[str]
-    endpoints: Any
-
-
 # ---------------------------------------------------------------------------
 # long_running_operations.py schemas  (Issue #5989)
 # ---------------------------------------------------------------------------
@@ -1245,3 +1242,362 @@ class MarketplacePluginActionResponse(BaseModel):
 
     status: str
     plugin: str
+
+
+# ---------------------------------------------------------------------------
+# workflow.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowApprovalRequest(BaseModel):
+    workflow_id: str
+    step_id: str
+    step_description: str
+    required_action: str
+    context: Metadata
+    timeout_seconds: int = 300
+
+
+class WorkflowApprovalResponse(BaseModel):
+    workflow_id: str
+    step_id: str
+    approved: bool
+    user_input: Optional[Metadata] = None
+    timestamp: float
+
+
+class WorkflowStatusUpdate(BaseModel):
+    workflow_id: str
+    step_id: str
+    status: str
+    progress: float
+    message: str
+    timestamp: float
+
+
+class WorkflowExecutionRequest(BaseModel):
+    user_message: str
+    workflow_id: Optional[str] = None
+    auto_approve: bool = False
+
+
+class WorkflowSummary(BaseModel):
+    """Summary of a single workflow as returned by list/detail endpoints."""
+
+    workflow_id: str
+    user_message: str
+    classification: str
+    status: str
+    total_steps: int
+    current_step: int
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class WorkflowListResponse(BaseModel):
+    """Response shape for GET /workflows."""
+
+    success: bool
+    active_workflows: int
+    workflows: list[WorkflowSummary]
+
+
+class WorkflowDetailResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}."""
+
+    success: bool
+    workflow: Metadata
+
+
+class WorkflowStatusResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}/status."""
+
+    success: bool
+    workflow_id: str
+    status: str
+    current_step: int
+    total_steps: int
+    progress: float
+    current_step_info: Optional[Metadata] = None
+    estimated_remaining: Optional[str] = None
+
+
+class WorkflowApproveResponse(BaseModel):
+    """Response shape for POST /workflow/{workflow_id}/approve."""
+
+    success: bool
+    message: str
+    next_action: str
+
+
+class WorkflowCancelResponse(BaseModel):
+    """Response shape for DELETE /workflow/{workflow_id}."""
+
+    success: bool
+    message: str
+
+
+class PendingApprovalStep(BaseModel):
+    """A single step awaiting user approval."""
+
+    step_id: str
+    description: str
+    agent_type: str
+    action: str
+    context: Metadata
+
+
+class WorkflowPendingApprovalsResponse(BaseModel):
+    """Response shape for GET /workflow/{workflow_id}/pending_approvals."""
+
+    success: bool
+    workflow_id: str
+    pending_approvals: list[PendingApprovalStep]
+
+
+class WorkflowExecutionResponse(BaseModel):
+    """Response shape for POST /execute (covers both simple and complex paths)."""
+
+    success: bool
+    type: str
+    result: Optional[str] = None
+    routing_method: Optional[str] = None
+    workflow_id: Optional[str] = None
+    execution_started: Optional[bool] = None
+    status_endpoint: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# workflow_export.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class ShareWorkflowRequest(BaseModel):
+    """Request body for creating a workflow share (#2165)."""
+
+    workflow_id: str = Field(..., description="ID of the workflow to share.")
+    target_user_id: Optional[str] = Field(
+        default=None,
+        description="Share with a specific user.  Mutually optional with public.",
+    )
+    public: bool = Field(default=False, description="Make the share publicly accessible.")
+
+
+class ImportWorkflowRequest(BaseModel):
+    """Request body for importing a workflow from an export document (#2165)."""
+
+    export_document: dict = Field(
+        ...,
+        description="WorkflowExportFormat.to_dict() payload produced by the export endpoint.",
+    )
+    session_id: Optional[str] = Field(
+        default=None, description="Session to associate with the imported workflow."
+    )
+
+
+class CloneWorkflowRequest(BaseModel):
+    """Request body for cloning a shared workflow (#2165)."""
+
+    session_id: Optional[str] = Field(
+        default=None, description="Session to associate with the cloned workflow."
+    )
+
+
+# ---------------------------------------------------------------------------
+# workflow_permissions.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class GrantPermissionRequest(BaseModel):
+    """Request body for granting or updating a workflow role."""
+
+    user_id: str = Field(..., description="User receiving the role")
+    role: str = Field(..., description="owner | editor | runner | viewer")
+
+
+class WorkflowPermissionResponse(BaseModel):
+    """Serialised workflow permission entry."""
+
+    workflow_id: str
+    user_id: str
+    role: str
+    granted_by: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class WorkflowAuditLogEntry(BaseModel):
+    """Serialised workflow audit log entry."""
+
+    id: str
+    timestamp: str
+    user_id: str
+    workflow_id: str
+    action: str
+    details: Optional[dict]
+
+
+# ---------------------------------------------------------------------------
+# workflow_secrets.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+_WORKFLOW_SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def _validate_workflow_secret_name(name: str) -> str:
+    """Reject names containing characters outside the safe set. Issue #2153."""
+    if not _WORKFLOW_SECRET_NAME_RE.match(name):
+        raise ValueError(
+            "Secret name must contain only alphanumeric characters, "
+            "underscores, hyphens, and dots"
+        )
+    return name
+
+
+class WorkflowSecretCreateRequest(BaseModel):
+    """Request body for creating a workflow secret. Issue #2303: owner_id derived from auth."""
+
+    name: str = Field(..., min_length=1, max_length=256)
+    value: str = Field(..., min_length=1, max_length=65536)
+    secret_type: str = Field(default="api_key", max_length=50)
+    workflow_id: Optional[str] = Field(default=None, max_length=128)
+    description: Optional[str] = Field(default=None, max_length=1024)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Reject unsafe characters in the secret name."""
+        return _validate_workflow_secret_name(v)
+
+
+class WorkflowSecretUpdateRequest(BaseModel):
+    """Request body for updating a workflow secret's value. Issue #2303: owner_id from auth."""
+
+    value: str = Field(..., min_length=1, max_length=65536)
+
+
+class WorkflowSecretMetadata(BaseModel):
+    """Safe metadata response — no value field. Issue #2153."""
+
+    id: str
+    name: str
+    secret_type: str
+    scope: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    description: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# workflow_state.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowState(BaseModel):
+    """Persistent workflow state with explicit routing."""
+
+    workflow_id: str
+    goal: str
+    current_step: str = "planning"
+    active_service: str = "main-backend"
+    steps_completed: List[str] = Field(default_factory=list)
+    steps_remaining: List[Dict] = Field(default_factory=list)
+    mailbox: List[ServiceMessage] = Field(default_factory=list)
+    done: bool = False
+    errors: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: now_utc().isoformat())
+    updated_at: str = Field(default_factory=lambda: now_utc().isoformat())
+    metadata: Dict = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# approval_gates.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class AuthorTypeEnum(str, Enum):
+    """Valid author types for approval comments."""
+
+    HUMAN = "human"
+    AGENT = "agent"
+    SYSTEM = "system"
+
+
+class CreateApprovalRequest(BaseModel):
+    """Request body for creating an approval gate."""
+
+    title: str
+    approval_type: ApprovalType
+    description: Optional[str] = None
+    requested_by_agent: Optional[str] = None
+    workflow_id: Optional[str] = None
+    workflow_step: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    task_ids: Optional[List[str]] = None
+
+
+class ApprovalTransitionRequest(BaseModel):
+    """Request body for approve / reject / request-revision."""
+
+    comment: Optional[str] = None
+
+
+class ApprovalResubmitRequest(BaseModel):
+    """Request body for resubmitting after revision."""
+
+    description: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
+
+class ApprovalAddCommentRequest(BaseModel):
+    """Request body for adding a comment to an approval gate."""
+
+    body: str
+    author_type: AuthorTypeEnum = AuthorTypeEnum.HUMAN
+
+
+class ApprovalLinkTaskRequest(BaseModel):
+    """Request body for linking a task to an approval gate."""
+
+    task_id: str
+    task_type: str = "github_issue"
+
+
+class TaskApprovalLinkResponse(BaseModel):
+    """Response for a task-approval link."""
+
+    id: str
+    approval_id: str
+    task_id: str
+    task_type: str
+
+
+class ApprovalCommentResponse(BaseModel):
+    """Response for an approval gate comment."""
+
+    id: str
+    approval_id: str
+    author: str
+    author_type: str
+    body: str
+    created_at: Optional[str] = None
+
+
+class ApprovalGateResponse(BaseModel):
+    """Response for an approval gate."""
+
+    id: str
+    title: str
+    description: Optional[str] = None
+    approval_type: str
+    status: str
+    requested_by_agent: Optional[str] = None
+    decided_by_user: Optional[str] = None
+    workflow_id: Optional[str] = None
+    workflow_step: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    decided_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    comments: List[ApprovalCommentResponse] = Field(default_factory=list)
+    task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)

@@ -12,15 +12,26 @@ import asyncio
 import logging
 import secrets
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field, field_validator
-
+from api.schemas_knowledge import (
+    AgentGenerateFileRequest,
+    ConvFileCopyRequest,
+    ConvFileCreateRequest,
+    ConvFileRenameRequest,
+    ConvFileUpdateContentRequest,
+    ConversationFileInfo,
+    ConversationFileListResponse,
+    FilePreviewResponse,
+    FileTransferRequest,
+    FileTransferResponse,
+    FileUploadResponse,
+    MCPToolCallRequest,
+)
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security_layer import SecurityLayer
@@ -70,133 +81,6 @@ ALLOWED_EXTENSIONS = {
     ".xls",
     ".xlsx",
 }
-
-
-class FileDestination(str, Enum):
-    """File transfer destination options"""
-
-    KNOWLEDGE_BASE = "kb"
-    SHARED = "shared"
-
-
-class ConversationFileInfo(BaseModel):
-    """Conversation file information model"""
-
-    file_id: str
-    filename: str
-    original_filename: str
-    size: int
-    mime_type: Optional[str] = None
-    session_id: str
-    uploaded_at: datetime
-    uploaded_by: str
-    file_path: str
-    extension: Optional[str] = None
-
-
-class ConversationFileListResponse(BaseModel):
-    """Response model for listing conversation files"""
-
-    session_id: str
-    files: List[ConversationFileInfo]
-    total_files: int
-    total_size: int
-    page: int = 1
-    page_size: int = 50
-
-
-class FileUploadResponse(BaseModel):
-    """Response model for file upload"""
-
-    success: bool
-    message: str
-    file_info: Optional[ConversationFileInfo] = None
-    upload_id: str
-
-
-class FileTransferRequest(BaseModel):
-    """Request model for file transfer operation"""
-
-    file_ids: List[str] = Field(
-        ..., min_length=1, description="List of file IDs to transfer"
-    )
-    destination: FileDestination = Field(
-        ..., description="Transfer destination (kb or shared)"
-    )
-    target_path: Optional[str] = Field(None, description="Target path in destination")
-    # Renamed from 'copy' to avoid shadowing BaseModel.copy() method
-    copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
-    tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
-
-    @field_validator("file_ids")
-    @classmethod
-    def validate_file_ids(cls, v):
-        """Validate that at least one file ID is provided."""
-        if not v:
-            raise ValueError("At least one file ID must be provided")
-        return v
-
-
-class FileTransferResponse(BaseModel):
-    """Response model for file transfer operation"""
-
-    success: bool
-    message: str
-    transferred_files: List[Dict[str, str]]
-    failed_files: List[Dict[str, str]]
-    total_transferred: int
-    total_failed: int
-
-
-class FilePreviewResponse(BaseModel):
-    """Response model for file preview"""
-
-    file_info: ConversationFileInfo
-    preview_available: bool
-    preview_content: Optional[str] = None
-    preview_type: Optional[str] = None  # "text", "image", "metadata_only"
-
-
-# Issue #70: New request/response models for file manager operations
-
-
-class CreateFileRequest(BaseModel):
-    """Request model for creating a new file"""
-
-    filename: str = Field(..., min_length=1, max_length=255)
-    content: str = Field(default="")
-    mime_type: str = Field(default="text/plain")
-
-
-class RenameFileRequest(BaseModel):
-    """Request model for renaming a file"""
-
-    new_filename: str = Field(..., min_length=1, max_length=255)
-
-
-class UpdateFileContentRequest(BaseModel):
-    """Request model for updating file content"""
-
-    content: str
-
-
-class CopyFileRequest(BaseModel):
-    """Request model for copying a file"""
-
-    new_filename: Optional[str] = Field(
-        None, max_length=255, description="Optional new name for the copy"
-    )
-
-
-class AgentGenerateFileRequest(BaseModel):
-    """Request model for agent file generation"""
-
-    filename: str = Field(..., min_length=1, max_length=255)
-    content: str
-    file_type: str = Field(default="generated", description="File type tag")
-    mime_type: str = Field(default="text/plain")
-    agent_name: Optional[str] = Field(None, description="Name of generating agent")
-    metadata: Optional[Dict[str, str]] = Field(None, description="Extra metadata")
 
 
 def get_security_layer(request: Request) -> SecurityLayer:
@@ -977,7 +861,7 @@ async def transfer_conversation_files(
 )
 @router.post("/conversation/{session_id}/files/create", response_model=DataResponse)
 async def create_conversation_file(
-    request: Request, session_id: str, body: CreateFileRequest
+    request: Request, session_id: str, body: ConvFileCreateRequest
 ):
     """Create a new file with content in a conversation session (Issue #70)."""
     try:
@@ -1025,7 +909,7 @@ async def create_conversation_file(
 )
 @router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse)
 async def rename_conversation_file(
-    request: Request, session_id: str, file_id: str, body: RenameFileRequest
+    request: Request, session_id: str, file_id: str, body: ConvFileRenameRequest
 ):
     """Rename a file in a conversation session (Issue #70)."""
     try:
@@ -1104,7 +988,7 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
 )
 @router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 async def update_file_content(
-    request: Request, session_id: str, file_id: str, body: UpdateFileContentRequest
+    request: Request, session_id: str, file_id: str, body: ConvFileUpdateContentRequest
 ):
     """Update the text content of a file (Issue #70)."""
     try:
@@ -1148,7 +1032,7 @@ async def update_file_content(
 )
 @router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse)
 async def copy_conversation_file(
-    request: Request, session_id: str, file_id: str, body: CopyFileRequest
+    request: Request, session_id: str, file_id: str, body: ConvFileCopyRequest
 ):
     """Copy a file within a conversation session (Issue #70)."""
     try:
@@ -1332,13 +1216,6 @@ SESSION_MCP_TOOLS = [
         },
     },
 ]
-
-
-class MCPToolCallRequest(BaseModel):
-    """Request model for MCP tool call dispatch"""
-
-    tool_name: str = Field(..., description="Name of the MCP tool to call")
-    arguments: Dict = Field(default_factory=dict, description="Tool arguments")
 
 
 @with_error_handling(

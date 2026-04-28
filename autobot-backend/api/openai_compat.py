@@ -26,8 +26,20 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-
+from api.schemas_code import (
+    ChatCompletionChunk,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    OAIChoice,
+    OAIChoiceMessage,
+    OAIDeltaMessage,
+    OAIMessage,
+    OAIModelCard,
+    OAIModelListResponse,
+    OAIStreamChoice,
+    OAIStreamOptions,
+    OAIUsage,
+)
 from auth_middleware import get_current_user
 from llm_interface_pkg.models import LLMRequest
 from llm_providers.provider_registry import get_provider_registry
@@ -80,94 +92,6 @@ def _remote_addr(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
-
-
-# ---------------------------------------------------------------------------
-# Request / response models (OpenAI wire format)
-# ---------------------------------------------------------------------------
-
-
-class OAIMessage(BaseModel):
-    role: str
-    content: str
-    name: Optional[str] = None
-
-
-class OAIStreamOptions(BaseModel):
-    include_usage: bool = False
-
-
-class ChatCompletionRequest(BaseModel):
-    model: str = "autobot-default"
-    messages: List[OAIMessage]
-    temperature: float = 0.7
-    max_tokens: Optional[int] = None
-    top_p: float = 1.0
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    stop: Optional[List[str]] = None
-    stream: bool = False
-    stream_options: Optional[OAIStreamOptions] = None
-    n: int = Field(default=1, ge=1)
-    user: Optional[str] = None
-
-
-class OAIChoiceMessage(BaseModel):
-    role: str
-    content: str
-
-
-class OAIChoice(BaseModel):
-    index: int
-    message: OAIChoiceMessage
-    finish_reason: str = "stop"
-
-
-class OAIUsage(BaseModel):
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-
-
-class ChatCompletionResponse(BaseModel):
-    id: str
-    object: str = "chat.completion"
-    created: int
-    model: str
-    choices: List[OAIChoice]
-    usage: OAIUsage
-
-
-class OAIDeltaMessage(BaseModel):
-    role: Optional[str] = None
-    content: Optional[str] = None
-
-
-class OAIStreamChoice(BaseModel):
-    index: int
-    delta: OAIDeltaMessage
-    finish_reason: Optional[str] = None
-
-
-class ChatCompletionChunk(BaseModel):
-    id: str
-    object: str = "chat.completion.chunk"
-    created: int
-    model: str
-    choices: List[OAIStreamChoice]
-    usage: Optional[OAIUsage] = None
-
-
-class OAIModelCard(BaseModel):
-    id: str
-    object: str = "model"
-    created: int = 0
-    owned_by: str = "autobot"
-
-
-class ModelListResponse(BaseModel):
-    object: str = "list"
-    data: List[OAIModelCard]
 
 
 # ---------------------------------------------------------------------------
@@ -403,8 +327,8 @@ async def chat_completions(
     operation="list_models",
     error_code_prefix="OPENAI_COMPAT",
 )
-@router.get("/models", response_model=ModelListResponse)
-async def list_models(request: Request) -> ModelListResponse:
+@router.get("/models", response_model=OAIModelListResponse)
+async def list_models(request: Request) -> OAIModelListResponse:
     """OpenAI-compatible models list endpoint (#4447).
 
     Returns all models available across registered providers.
@@ -436,4 +360,4 @@ async def list_models(request: Request) -> ModelListResponse:
     if not model_cards:
         model_cards.append(OAIModelCard(id="autobot-default", created=created))
 
-    return ModelListResponse(data=model_cards)
+    return OAIModelListResponse(data=model_cards)

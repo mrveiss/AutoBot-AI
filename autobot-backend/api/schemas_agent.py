@@ -5,9 +5,13 @@
 Agent config, memory, and LLM schemas.
 """
 
+import uuid
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+from models.session_collaboration import PermissionLevel
+from user_management.schemas import UserResponse as _UserResponse
 
 
 # ---------------------------------------------------------------------------
@@ -1033,3 +1037,458 @@ class ComprehensiveResearchData(BaseModel):
 
     research: Dict[str, Any]
     web_research: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# agent_org.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class OrgNodeResponse(BaseModel):
+    """Single node in the org tree response (#1405)."""
+
+    agent_id: str
+    name: str
+    org_role: str
+    title: Optional[str] = None
+    capabilities: Optional[str] = None
+    direct_reports_count: int = 0
+    children: List["OrgNodeResponse"] = Field(default_factory=list)
+
+
+OrgNodeResponse.model_rebuild()
+
+
+class AgentSummary(BaseModel):
+    """Compact agent summary used in chain of command (#1405)."""
+
+    agent_id: str
+    name: str
+    org_role: str
+    title: Optional[str] = None
+
+
+class ChainOfCommandResponse(BaseModel):
+    """Ordered list from agent to org root (#1405)."""
+
+    chain: List[AgentSummary]
+
+
+class UpdateOrgRequest(BaseModel):
+    """Request body for PATCH /agents/{agent_id}/org (#1405)."""
+
+    reports_to: Optional[str] = Field(
+        default=None,
+        description="agent_id of the new manager, or null to clear",
+    )
+    org_role: Optional[str] = Field(
+        default=None,
+        description="One of: manager, coordinator, specialist, worker",
+    )
+    title: Optional[str] = Field(default=None, description="Human-readable job title")
+    capabilities: Optional[str] = Field(
+        default=None, description="Free-text capability description"
+    )
+
+
+class UpsertOrgRequest(BaseModel):
+    """Request body for PUT /agents/{agent_id}/org (#1405)."""
+
+    name: str
+    org_role: str = "worker"
+    reports_to: Optional[str] = None
+    title: Optional[str] = None
+    capabilities: Optional[str] = None
+
+
+class AgentDelegateRequest(BaseModel):
+    """Request body for POST /{manager_id}/delegate (#1753)."""
+
+    assignee_id: str = Field(..., description="Direct report to assign to")
+    task_description: str = Field(..., description="What the assignee should do")
+    context: Optional[Dict[str, Any]] = Field(
+        default=None, description="Extra context for the task"
+    )
+
+
+class DelegationResponse(BaseModel):
+    """Response for a task delegation (#1753)."""
+
+    id: str
+    delegator_id: str
+    assignee_id: str
+    task_description: str
+    status: str
+    escalated_to: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class DelegationStatusUpdate(BaseModel):
+    """Request body for PATCH /delegations/{id}/status (#1753)."""
+
+    status: str = Field(..., description="New status value")
+    result: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# collaboration.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class CollabInviteRequest(BaseModel):
+    """Request to invite user to session."""
+
+    user_id: str = Field(..., description="User ID to invite")
+    permission: PermissionLevel = Field(
+        ..., description="Permission level (owner/editor/viewer)"
+    )
+
+
+class CollabRemoveRequest(BaseModel):
+    """Request to remove collaborator."""
+
+    user_id: str = Field(..., description="User ID to remove")
+
+
+class CollabShareSecretRequest(BaseModel):
+    """Request to share secret with session participants."""
+
+    secret_id: str = Field(..., description="Secret ID to share")
+    participant_ids: Optional[List[str]] = Field(
+        None,
+        description="Specific participants (None = all with editor+)",
+    )
+
+
+class CollabParticipantResponse(BaseModel):
+    """Participant information."""
+
+    user_id: str
+    permission: str
+    is_owner: bool
+    online: bool = False
+
+
+class SessionParticipantsResponse(BaseModel):
+    """Session participants list."""
+
+    session_id: str
+    owner_id: str
+    participants: List[CollabParticipantResponse]
+    total_count: int
+
+
+class CollabInviteResponse(BaseModel):
+    """Invitation response."""
+
+    success: bool
+    session_id: str
+    invited_user_id: str
+    permission: str
+
+
+class CollabRemoveResponse(BaseModel):
+    """Remove collaborator response."""
+
+    success: bool
+    session_id: str
+    removed_user_id: str
+
+
+# user_management/teams.py schemas (#6042)
+
+
+class TeamCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(default_factory=dict)
+    is_default: bool = Field(False)
+
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(None)
+
+
+class MembershipUpdate(BaseModel):
+    role: str = Field(..., description="New role (owner, admin, member)")
+
+
+class MemberResponse(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    email: str
+    display_name: Optional[str]
+    role: str
+    joined_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class TeamResponse(BaseModel):
+    id: uuid.UUID
+    org_id: uuid.UUID
+    name: str
+    description: Optional[str]
+    settings: dict
+    is_default: bool
+    member_count: int = 0
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class TeamListResponse(BaseModel):
+    teams: List[TeamResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class TeamCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    team: TeamResponse
+
+
+class TeamDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class MemberAddedResponse(BaseModel):
+    success: bool = True
+    message: str
+    member: MemberResponse
+
+
+class MemberRemovedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+# user_management/users.py schemas (#6042)
+
+
+class UserCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    user: _UserResponse
+
+
+class UserDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class PasswordChangedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class RoleAssignmentResponse(BaseModel):
+    success: bool = True
+    message: str
+    role_id: uuid.UUID
+
+
+class RoleUpdateRequest(BaseModel):
+    role: str = Field(..., description="Role name: admin, user, or readonly",
+                     pattern="^(admin|user|readonly)$")
+
+
+class RoleUpdateResponse(BaseModel):
+    success: bool = True
+    message: str
+    username: str
+    role: str
+
+
+class UserSearchResult(BaseModel):
+    id: str
+    name: str
+    type: str = "user"
+
+
+class UserSearchResponse(BaseModel):
+    users: List[UserSearchResult]
+    available: bool
+
+
+# auth.py schemas (#6042)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError("Username cannot be empty")
+        if len(v) > 50:
+            raise ValueError("Username too long")
+        v = v.strip().lower()
+        if not v.replace("_", "").replace("-", "").replace(".", "").isalnum():
+            raise ValueError("Username contains invalid characters")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if not v or len(v) < 1:
+            raise ValueError("Password cannot be empty")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        return v
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    user: Optional[dict] = None
+    token: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class LogoutRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class ChangePasswordResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    display_name: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        v = v.strip().lower()
+        if not v or len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if len(v) > 50:
+            raise ValueError("Username too long")
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username contains invalid characters")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        if "@" not in v or len(v) > 255:
+            raise ValueError("Invalid email address")
+        return v.strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class SignupResponse(BaseModel):
+    success: bool
+    message: str
+    username: str | None = None
+
+
+# user_management/organizations.py schemas (#6042)
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(default_factory=dict)
+    subscription_tier: str = Field("free")
+    max_users: int = Field(-1)
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = None
+    subscription_tier: Optional[str] = None
+    max_users: Optional[int] = None
+
+
+class OrganizationResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: Optional[str]
+    settings: dict
+    subscription_tier: str
+    max_users: int
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class OrganizationListResponse(BaseModel):
+    organizations: List[OrganizationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class OrganizationCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    organization: OrganizationResponse
+
+
+class OrganizationDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class OrganizationStatsResponse(BaseModel):
+    organization_id: str
+    name: str
+    slug: str
+    subscription_tier: str
+    users: dict
+    teams: dict
+    is_active: bool
+    created_at: Optional[str]
