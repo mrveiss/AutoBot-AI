@@ -63,6 +63,8 @@ def load_mcp_routers():
     # Optional MCP routers
     optional_mcp_configs = [
         ("api.manual_mcp", "", ["manual_mcp", "mcp"], "manual_mcp"),
+        # Issue #5072: AutoBot MCP server HTTP transport (POST /api/mcp/tool)
+        ("api.autobot_mcp_router", "", ["mcp", "autobot-mcp"], "autobot_mcp_server"),
     ]
 
     for module_path, prefix, tags, name in optional_mcp_configs:
