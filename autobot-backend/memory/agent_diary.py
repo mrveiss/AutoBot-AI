@@ -9,6 +9,7 @@ session_id, and topic so entries can be retrieved or searched per agent
 without touching any other KB content.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -162,4 +163,32 @@ class AgentDiaryService:
             return []
 
 
-__all__ = ["AgentDiaryService"]
+async def list_with_diaries(
+    agent_names: List[str], last_n: int = 3
+) -> List[Dict[str, Any]]:
+    """Return recent diary entries for multiple agents in parallel.
+
+    Args:
+        agent_names: Agents to include in the summary.
+        last_n:      How many recent entries to fetch per agent.
+
+    Returns:
+        List of dicts ``{agent_name, recent_entries, entry_count}``,
+        one per agent.  Agents with no entries are still included with
+        ``recent_entries=[]`` and ``entry_count=0``.
+    """
+    diary = AgentDiaryService()
+
+    async def _fetch(name: str) -> Dict[str, Any]:
+        entries = await diary.read(name, last_n=last_n)
+        return {
+            "agent_name": name,
+            "recent_entries": entries,
+            "entry_count": len(entries),
+        }
+
+    results = await asyncio.gather(*[_fetch(name) for name in agent_names])
+    return list(results)
+
+
+__all__ = ["AgentDiaryService", "list_with_diaries"]

@@ -614,6 +614,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #5071: per-agent diary with background append and runtime discovery
+  {
+    path: '/agents/activity',
+    name: 'agent-activity',
+    component: () => import('@/views/AgentActivity.vue'),
+    meta: {
+      title: 'Agent Activity',
+      icon: 'fas fa-journal-whills',
+      description: 'Per-agent diary — recent entries and cross-session journal',
+      requiresAuth: true
+    }
+  },
   // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
     path: '/code-intelligence',
