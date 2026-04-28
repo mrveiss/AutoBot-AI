@@ -3,8 +3,9 @@
 # Author: mrveiss
 """Redis pub/sub collaboration coordinator extracted from WorkflowRunner (#6393)."""
 
+import asyncio
 import json
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -17,19 +18,22 @@ class CollaborationCoordinator:
 
     Extracted from WorkflowRunner (#6393) — owns all Redis lifecycle and
     pub/sub logic so WorkflowRunner remains focused on workflow execution.
+
+    Accept a redis_factory for testability (#6401); defaults to the production
+    async client so production callers need no changes.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, redis_factory: Callable = get_async_redis_client) -> None:
         self._redis_async = None
+        self._redis_factory = redis_factory
 
     async def _ensure_redis(self) -> None:
         if self._redis_async is None:
-            self._redis_async = await get_async_redis_client()
+            self._redis_async = await self._redis_factory()
         if self._redis_async is None:
             raise RuntimeError("Redis unavailable — collaboration channel requires Redis")
 
-    async def coordinate_collaboration(self, plan: Any, collab_channel: str) -> None:
-        import asyncio
+    async def coordinate_collaboration(self, collab_channel: str) -> None:
         await self._ensure_redis()
         pubsub = self._redis_async.pubsub()
         await pubsub.subscribe(collab_channel)

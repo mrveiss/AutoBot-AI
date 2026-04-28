@@ -41,6 +41,7 @@ class WorkflowRunner:
         collaboration: CollaborationCoordinator,
         agent_router: AgentRouter,
         max_parallel_tasks: int = 5,
+        criteria_evaluator: Optional[SuccessCriteriaEvaluator] = None,
     ) -> None:
         self._strategy_planner = strategy_planner
         self._perf = performance_tracker
@@ -49,6 +50,7 @@ class WorkflowRunner:
         self._agent_router = agent_router
         self.max_parallel_tasks = max_parallel_tasks
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
+        self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
         self._strategy_handler: Optional[ExecutionStrategyHandler] = None
 
     # ------------------------------------------------------------------ helpers
@@ -101,8 +103,7 @@ class WorkflowRunner:
         self, plan: WorkflowPlan, results: Dict[str, Any]
     ) -> Dict[str, Any]:
         if plan.structured_criteria:
-            evaluator = SuccessCriteriaEvaluator()
-            eval_result = await evaluator.evaluate(plan.structured_criteria, results)
+            eval_result = await self._criteria_evaluator.evaluate(plan.structured_criteria, results)
             return eval_result.to_dict()
         binary_pass = self._strategy_planner.check_success_criteria(plan, results)
         return {
