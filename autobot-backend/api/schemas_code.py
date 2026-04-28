@@ -5,10 +5,13 @@
 Code review, git, skills, database, template, log, voice, access-control, MCP, and file-sandbox schemas.
 """
 
+import re
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from autobot_shared.ssot_config import PROJECT_ROOT
+from constants.threshold_constants import QueryDefaults
 from type_defs.common import JSONObject
 
 from api.schemas_common import SuccessMessageResponse
@@ -1787,3 +1790,194 @@ class OAIModelCard(BaseModel):
 class OAIModelListResponse(BaseModel):
     object: str = "list"
     data: List[OAIModelCard]
+
+
+# ---------------------------------------------------------------------------
+# git_mcp.py request schemas (#6042)
+# ---------------------------------------------------------------------------
+
+_GIT_DEFAULT_REPO_PATH = str(PROJECT_ROOT)
+_GIT_MAX_LOG_ENTRIES = 100
+_GIT_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")
+_GIT_SHELL_METACHAR_RE = re.compile(r"[;&|`$]")
+_GIT_COMMIT_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~]+$")
+_GIT_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")
+
+
+class GitStatusRequest(BaseModel):
+    """Git status request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path (must be whitelisted)")
+    short: Optional[bool] = Field(default=False, description="Use short format output")
+
+
+class GitLogRequest(BaseModel):
+    """Git log request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    max_count: Optional[int] = Field(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        le=_GIT_MAX_LOG_ENTRIES,
+        description=f"Maximum number of commits (1-{_GIT_MAX_LOG_ENTRIES})",
+    )
+    oneline: Optional[bool] = Field(default=False, description="Use one-line format")
+    file_path: Optional[str] = Field(default=None, description="Filter log to specific file")
+
+    @field_validator("file_path")
+    @classmethod
+    def validate_file_path(cls, v):
+        if v:
+            if not _GIT_SAFE_PATH_RE.match(v):
+                raise ValueError("Invalid file path format")
+            if ".." in v:
+                raise ValueError("Path traversal not allowed")
+            if v.startswith("/"):
+                raise ValueError("Absolute paths not allowed")
+        return v
+
+    @field_validator("repo_path")
+    @classmethod
+    def validate_repo_path(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Repository path cannot be empty")
+        if _GIT_SHELL_METACHAR_RE.search(v):
+            raise ValueError("Invalid characters in repository path")
+        return v.strip()
+
+
+class GitDiffRequest(BaseModel):
+    """Git diff request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    staged: Optional[bool] = Field(default=False, description="Show staged changes only")
+    file_path: Optional[str] = Field(default=None, description="Diff specific file")
+    commit: Optional[str] = Field(default=None, description="Compare with specific commit")
+
+    @field_validator("file_path")
+    @classmethod
+    def validate_file_path(cls, v):
+        if v:
+            if not _GIT_SAFE_PATH_RE.match(v):
+                raise ValueError("Invalid file path format")
+            if ".." in v:
+                raise ValueError("Path traversal not allowed")
+            if v.startswith("/"):
+                raise ValueError("Absolute paths not allowed")
+        return v
+
+    @field_validator("commit")
+    @classmethod
+    def validate_commit_ref(cls, v):
+        if v and not _GIT_COMMIT_REF_RE.match(v):
+            raise ValueError("Invalid commit reference format")
+        return v
+
+    @field_validator("repo_path")
+    @classmethod
+    def validate_repo_path(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Repository path cannot be empty")
+        if _GIT_SHELL_METACHAR_RE.search(v):
+            raise ValueError("Invalid characters in repository path")
+        return v.strip()
+
+
+class GitBranchRequest(BaseModel):
+    """Git branch request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    all_branches: Optional[bool] = Field(default=False, description="Show remote branches too")
+
+
+class GitBlameRequest(BaseModel):
+    """Git blame request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    file_path: str = Field(..., description="File to blame")
+    line_start: Optional[int] = Field(default=None, ge=1, description="Starting line number")
+    line_end: Optional[int] = Field(default=None, ge=1, description="Ending line number")
+
+    @field_validator("file_path")
+    @classmethod
+    def validate_file_path(cls, v):
+        if not _GIT_SAFE_PATH_RE.match(v):
+            raise ValueError("Invalid file path format")
+        if ".." in v:
+            raise ValueError("Path traversal not allowed")
+        if v.startswith("/"):
+            raise ValueError("Absolute paths not allowed")
+        return v
+
+    @field_validator("repo_path")
+    @classmethod
+    def validate_repo_path(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Repository path cannot be empty")
+        if _GIT_SHELL_METACHAR_RE.search(v):
+            raise ValueError("Invalid characters in repository path")
+        return v.strip()
+
+
+class GitShowRequest(BaseModel):
+    """Git show request model"""
+
+    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    ref: str = Field(default="HEAD", description="Commit or ref to show (default: HEAD)")
+
+    @field_validator("ref")
+    @classmethod
+    def validate_ref(cls, v):
+        if not _GIT_FULL_REF_RE.match(v):
+            raise ValueError("Invalid ref format")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# code_search.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class CodeSearchIndexRequest(BaseModel):
+    root_path: str
+    force_reindex: bool = False
+
+
+class CodeSearchRequest(BaseModel):
+    query: str
+    search_type: str = "semantic"
+    language: Optional[str] = None
+    max_results: int = 20
+
+
+class CodeSearchResponse(BaseModel):
+    results: List[dict]
+    stats: dict
+    query: str
+    search_type: str
+
+
+class CodeAnalyticsRequest(BaseModel):
+    root_path: str
+    include_patterns: Optional[List[str]] = None
+    exclude_patterns: Optional[List[str]] = ["*.pyc", "*.git*", "*__pycache__*"]
+    languages: Optional[List[str]] = None
+
+
+class CodeDeclaration(BaseModel):
+    name: str
+    type: str
+    file_path: str
+    line_number: int
+    usage_count: int
+    definition: str
+    context: str
+    complexity_score: Optional[float] = None
+
+
+class ReusabilityReport(BaseModel):
+    declaration: CodeDeclaration
+    reusability_score: float
+    usage_patterns: List[str]
+    refactor_suggestions: List[str]
+    similar_declarations: List[str]

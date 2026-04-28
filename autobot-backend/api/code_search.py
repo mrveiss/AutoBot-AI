@@ -16,8 +16,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-
 from agents.npu_code_search_agent import (
     get_npu_code_search,
     index_project,
@@ -26,8 +24,13 @@ from agents.npu_code_search_agent import (
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
-from api.schemas_code import CodeSearchGetResponse
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_code import (
+    CodeAnalyticsRequest,
+    CodeSearchGetResponse,
+    CodeSearchIndexRequest,
+    CodeSearchRequest,
+)
+from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -138,25 +141,6 @@ SEARCH_EXAMPLES_DATA = {
 _get_code_search_agent = lazy_singleton(get_npu_code_search)
 
 
-class IndexRequest(BaseModel):
-    root_path: str
-    force_reindex: bool = False
-
-
-class SearchRequest(BaseModel):
-    query: str
-    search_type: str = "semantic"  # semantic, exact, regex, element
-    language: Optional[str] = None
-    max_results: int = 20
-
-
-class SearchResponse(BaseModel):
-    results: List[dict]
-    stats: dict
-    query: str
-    search_type: str
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -168,7 +152,7 @@ class SearchResponse(BaseModel):
     error_code_prefix="CODE_SEARCH",
 )
 @router.post("/index", response_model=DataResponse)
-async def index_codebase(request: IndexRequest):
+async def index_codebase(request: CodeSearchIndexRequest):
     """
     Index a codebase for fast searching.
 
@@ -225,7 +209,7 @@ async def index_codebase(request: IndexRequest):
     error_code_prefix="CODE_SEARCH",
 )
 @router.post("/search", response_model=DataResponse)
-async def search_code(request: SearchRequest):
+async def search_code(request: CodeSearchRequest):
     """
     Search through indexed code.
 
@@ -317,7 +301,7 @@ async def search_code_get(
     - lang: Language filter (python, javascript, etc.)
     - max: Maximum number of results (1-100)
     """
-    request = SearchRequest(query=q, search_type=type, language=lang, max_results=max)
+    request = CodeSearchRequest(query=q, search_type=type, language=lang, max_results=max)
     return await search_code(request)
 
 
@@ -446,33 +430,6 @@ async def get_search_examples():
     """
     # Issue #281: Use module-level constant for search examples
     return JSONResponse(status_code=200, content=SEARCH_EXAMPLES_DATA)
-
-
-# New Analytics Models
-class AnalyticsRequest(BaseModel):
-    root_path: str
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: Optional[List[str]] = ["*.pyc", "*.git*", "*__pycache__*"]
-    languages: Optional[List[str]] = None
-
-
-class CodeDeclaration(BaseModel):
-    name: str
-    type: str  # function, class, variable, import, etc.
-    file_path: str
-    line_number: int
-    usage_count: int
-    definition: str
-    context: str
-    complexity_score: Optional[float] = None
-
-
-class ReusabilityReport(BaseModel):
-    declaration: CodeDeclaration
-    reusability_score: float
-    usage_patterns: List[str]
-    refactor_suggestions: List[str]
-    similar_declarations: List[str]
 
 
 # Advanced Codebase Analytics Endpoints
@@ -825,7 +782,7 @@ async def _analyze_all_pattern_types() -> dict:
     error_code_prefix="CODE_SEARCH",
 )
 @router.post("/analytics/declarations", response_model=DataResponse)
-async def analyze_declarations(request: AnalyticsRequest):
+async def analyze_declarations(request: CodeAnalyticsRequest):
     """
     Analyze codebase declarations for usage statistics and reusability potential.
 
@@ -863,7 +820,7 @@ async def analyze_declarations(request: AnalyticsRequest):
     error_code_prefix="CODE_SEARCH",
 )
 @router.post("/analytics/duplicates", response_model=DataResponse)
-async def find_code_duplicates(request: AnalyticsRequest):
+async def find_code_duplicates(request: CodeAnalyticsRequest):
     """
     Find potential code duplicates and similar patterns for refactoring opportunities.
 
@@ -1012,7 +969,7 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     error_code_prefix="CODE_SEARCH",
 )
 @router.post("/analytics/refactor-suggestions", response_model=DataResponse)
-async def get_refactor_suggestions(request: AnalyticsRequest):
+async def get_refactor_suggestions(request: CodeAnalyticsRequest):
     """
     Generate intelligent refactoring suggestions based on codebase analysis.
 

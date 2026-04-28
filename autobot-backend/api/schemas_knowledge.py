@@ -3976,3 +3976,80 @@ class ChatKnowledgeSearchRequest(BaseModel):
 class MarkFactsPreservedRequest(BaseModel):
     fact_ids: List[str]
     preserve: bool = True
+
+
+# ---------------------------------------------------------------------------
+# entity_extraction.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+_EXTRACTION_VALID_ROLES = frozenset({"user", "assistant", "system"})
+
+
+class ExtractionMessage(BaseModel):
+    """Message in conversation."""
+
+    role: str = Field(..., description="Message role (user/assistant/system)")
+    content: str = Field(..., min_length=1, description="Message content")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        if v not in _EXTRACTION_VALID_ROLES:
+            raise ValueError(f"Role must be one of {_EXTRACTION_VALID_ROLES}")
+        return v
+
+
+class EntityExtractionRequest(BaseModel):
+    """Request model for entity extraction."""
+
+    conversation_id: str = Field(..., min_length=1, max_length=200, description="Conversation identifier")
+    messages: List[ExtractionMessage] = Field(..., min_length=1, description="Conversation messages")
+    session_metadata: Optional[Metadata] = Field(None, description="Optional session metadata")
+
+    @field_validator("conversation_id")
+    @classmethod
+    def validate_conversation_id(cls, v):
+        if not v.strip():
+            raise ValueError("Conversation ID cannot be empty or whitespace")
+        return v.strip()
+
+
+class BatchExtractionRequest(BaseModel):
+    """Request model for batch entity extraction."""
+
+    conversations: List[EntityExtractionRequest] = Field(
+        ..., min_length=1, max_length=50, description="Conversations to process (max 50)"
+    )
+
+
+class EntityExtractionResponse(BaseModel):
+    """Response model for entity extraction."""
+
+    success: bool = Field(..., description="Whether extraction succeeded")
+    conversation_id: str = Field(..., description="Conversation identifier")
+    facts_analyzed: int = Field(..., description="Number of facts analyzed")
+    entities_created: int = Field(..., description="Number of entities created")
+    relations_created: int = Field(..., description="Number of relations created")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    errors: List[str] = Field(default_factory=list, description="Errors encountered")
+    request_id: str = Field(..., description="Unique request identifier")
+
+
+class BatchExtractionResponse(BaseModel):
+    """Response model for batch extraction."""
+
+    success: bool = Field(..., description="Whether batch succeeded")
+    total_conversations: int = Field(..., description="Total conversations processed")
+    successful_extractions: int = Field(..., description="Number of successful extractions")
+    failed_extractions: int = Field(..., description="Number of failed extractions")
+    results: List[EntityExtractionResponse] = Field(..., description="Individual extraction results")
+    total_processing_time: float = Field(..., description="Total processing time in seconds")
+    request_id: str = Field(..., description="Unique request identifier")
+
+
+class EntityExtractionHealthResponse(BaseModel):
+    """Response model for health check."""
+
+    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
+    components: Dict[str, str] = Field(..., description="Component health status")
+    timestamp: str = Field(..., description="Timestamp of health check")

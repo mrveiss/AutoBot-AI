@@ -28,21 +28,31 @@ import asyncio
 import logging
 import re
 import subprocess
-from datetime import datetime, timezone
+
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
 
-from api.schemas_code import GitMCPInfoResponse, GitMCPOperationResponse, GitMCPServiceStatusResponse, MCPTool
+from api.schemas_code import (
+    GitBlameRequest,
+    GitBranchRequest,
+    GitDiffRequest,
+    GitLogRequest,
+    GitMCPInfoResponse,
+    GitMCPOperationResponse,
+    GitMCPServiceStatusResponse,
+    GitShowRequest,
+    GitStatusRequest,
+    MCPTool,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
-from constants.threshold_constants import QueryDefaults
+
 from services.tool_output_filter import get_tool_output_filter
 from type_defs.common import Metadata
 
@@ -340,178 +350,6 @@ async def execute_git_command(
     except Exception as e:
         logger.error("Git command execution error: %s", e)
         raise HTTPException(status_code=500, detail="Git command failed")
-
-
-# Pydantic Models
-
-
-class GitStatusRequest(BaseModel):
-    """Git status request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path (must be whitelisted)",
-    )
-    short: Optional[bool] = Field(default=False, description="Use short format output")
-
-
-class GitLogRequest(BaseModel):
-    """Git log request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    max_count: Optional[int] = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        ge=1,
-        le=MAX_LOG_ENTRIES,
-        description=f"Maximum number of commits (1-{MAX_LOG_ENTRIES})",
-    )
-    oneline: Optional[bool] = Field(default=False, description="Use one-line format")
-    file_path: Optional[str] = Field(
-        default=None, description="Filter log to specific file"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if v:
-            if not _SAFE_PATH_RE.match(v):
-                raise ValueError("Invalid file path format")
-            if ".." in v:
-                raise ValueError("Path traversal not allowed")
-            if v.startswith("/"):
-                raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitDiffRequest(BaseModel):
-    """Git diff request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    staged: Optional[bool] = Field(
-        default=False, description="Show staged changes only"
-    )
-    file_path: Optional[str] = Field(default=None, description="Diff specific file")
-    commit: Optional[str] = Field(
-        default=None, description="Compare with specific commit"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if v:
-            if not _SAFE_PATH_RE.match(v):
-                raise ValueError("Invalid file path format")
-            if ".." in v:
-                raise ValueError("Path traversal not allowed")
-            if v.startswith("/"):
-                raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("commit")
-    @classmethod
-    def validate_commit_ref(cls, v):
-        """Ensure commit reference is safe"""
-        if v and not _COMMIT_REF_RE.match(v):
-            raise ValueError("Invalid commit reference format")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitBranchRequest(BaseModel):
-    """Git branch request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    all_branches: Optional[bool] = Field(
-        default=False, description="Show remote branches too"
-    )
-
-
-class GitBlameRequest(BaseModel):
-    """Git blame request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    file_path: str = Field(..., description="File to blame")
-    line_start: Optional[int] = Field(
-        default=None, ge=1, description="Starting line number"
-    )
-    line_end: Optional[int] = Field(
-        default=None, ge=1, description="Ending line number"
-    )
-
-    @field_validator("file_path")
-    @classmethod
-    def validate_file_path(cls, v):
-        """Ensure file path is safe"""
-        if not _SAFE_PATH_RE.match(v):
-            raise ValueError("Invalid file path format")
-        if ".." in v:
-            raise ValueError("Path traversal not allowed")
-        if v.startswith("/"):
-            raise ValueError("Absolute paths not allowed")
-        return v
-
-    @field_validator("repo_path")
-    @classmethod
-    def validate_repo_path(cls, v):
-        """Basic validation for repository path"""
-        if not v or not v.strip():
-            raise ValueError("Repository path cannot be empty")
-        if _SHELL_METACHAR_RE.search(v):
-            raise ValueError("Invalid characters in repository path")
-        return v.strip()
-
-
-class GitShowRequest(BaseModel):
-    """Git show request model"""
-
-    repo_path: str = Field(
-        default=DEFAULT_REPO_PATH,
-        description="Repository path",
-    )
-    ref: str = Field(
-        default="HEAD", description="Commit or ref to show (default: HEAD)"
-    )
-
-    @field_validator("ref")
-    @classmethod
-    def validate_ref(cls, v):
-        """Ensure ref is safe"""
-        if not _FULL_REF_RE.match(v):
-            raise ValueError("Invalid ref format")
-        return v
 
 
 # MCP Tool Definitions
