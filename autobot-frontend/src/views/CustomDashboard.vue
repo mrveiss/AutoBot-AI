@@ -7,20 +7,20 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h1><i class="fas fa-th-large"></i> {{ dashboardTitle }}</h1>
+        <h1><Icon name="th-large" class="header-icon-svg" /> {{ dashboardTitle }}</h1>
         <p class="header-description">{{ $t('views.customDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button @click="toggleEditMode" class="action-btn" :class="{ active: isEditMode }">
-          <i :class="isEditMode ? 'fas fa-check' : 'fas fa-edit'"></i>
+          <Icon :name="isEditMode ? 'check' : 'edit'" />
           {{ isEditMode ? $t('views.customDashboard.done') : $t('views.customDashboard.editLayout') }}
         </button>
         <button @click="addWidget" class="action-btn" v-if="isEditMode">
-          <i class="fas fa-plus"></i>
+          <Icon name="plus" />
           {{ $t('views.customDashboard.addWidget') }}
         </button>
         <button @click="saveDashboard" class="action-btn primary">
-          <i class="fas fa-save"></i>
+          <Icon name="save" />
           {{ $t('views.customDashboard.save') }}
         </button>
         <div class="dashboard-selector">
@@ -30,7 +30,7 @@
             </option>
           </select>
           <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')">
-            <i class="fas fa-plus"></i>
+            <Icon name="plus" />
           </button>
         </div>
       </div>
@@ -48,7 +48,7 @@
             draggable="true"
             @dragstart="handleDragStart($event, widget)"
           >
-            <i :class="widget.icon"></i>
+            <Icon :name="widget.icon" />
             <span>{{ widget.name }}</span>
           </div>
         </div>
@@ -75,21 +75,21 @@
         <!-- Widget Header -->
         <div class="widget-header">
           <h3>
-            <i :class="getWidgetIcon(widget.type)"></i>
+            <Icon :name="getWidgetIcon(widget.type)" />
             {{ widget.title }}
           </h3>
           <div class="widget-actions" v-if="isEditMode">
             <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')">
-              <i class="fas fa-cog"></i>
+              <Icon name="cog" />
             </button>
             <button @click="resizeWidget(widget, 'expand')" :title="$t('views.customDashboard.expand')">
-              <i class="fas fa-expand-alt"></i>
+              <Icon name="expand-alt" />
             </button>
             <button @click="resizeWidget(widget, 'shrink')" :title="$t('views.customDashboard.shrink')">
-              <i class="fas fa-compress-alt"></i>
+              <Icon name="compress-alt" />
             </button>
             <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
         </div>
@@ -108,12 +108,12 @@
       <!-- Empty State -->
       <div v-if="widgets.length === 0" class="empty-dashboard">
         <div class="empty-icon">
-          <i class="fas fa-th-large"></i>
+          <Icon name="th-large" />
         </div>
         <h3>{{ $t('views.customDashboard.noWidgets') }}</h3>
         <p>{{ $t('views.customDashboard.noWidgetsHint') }}</p>
         <button @click="toggleEditMode" class="action-btn primary">
-          <i class="fas fa-plus"></i>
+          <Icon name="plus" />
           {{ $t('views.customDashboard.addFirstWidget') }}
         </button>
       </div>
@@ -123,9 +123,9 @@
     <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-cog"></i> {{ $t('views.customDashboard.configureWidget') }}</h4>
+          <h4><Icon name="cog" class="modal-icon" /> {{ $t('views.customDashboard.configureWidget') }}</h4>
           <button @click="showConfigModal = false" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body" v-if="configWidget">
@@ -171,9 +171,9 @@
     <div v-if="showNewDashboardModal" class="modal-overlay" @click.self="showNewDashboardModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> {{ $t('views.customDashboard.createDashboard') }}</h4>
+          <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.createDashboard') }}</h4>
           <button @click="showNewDashboardModal = false" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body">
@@ -202,9 +202,9 @@
     <div v-if="showAddWidgetModal" class="modal-overlay" @click.self="showAddWidgetModal = false">
       <div class="modal-content wide">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> {{ $t('views.customDashboard.addWidgetTitle') }}</h4>
+          <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.addWidgetTitle') }}</h4>
           <button @click="showAddWidgetModal = false" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body">
@@ -216,7 +216,7 @@
               @click="confirmAddWidget(widget)"
             >
               <div class="widget-preview">
-                <i :class="widget.icon"></i>
+                <Icon :name="widget.icon" />
               </div>
               <h5>{{ widget.name }}</h5>
               <p>{{ widget.description }}</p>
@@ -238,6 +238,8 @@ import { ref, computed, onMounted, shallowRef, markRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import type { IconName } from '@/components/ui/Icon.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 // Import visualization components
 import ResourceHeatmap from '@/components/visualizations/ResourceHeatmap.vue'
@@ -268,7 +270,7 @@ interface Widget {
 interface WidgetDefinition {
   type: string
   name: string
-  icon: string
+  icon: IconName
   description: string
   defaultWidth: number
   defaultHeight: number
@@ -312,7 +314,7 @@ const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
   {
     type: 'heatmap',
     name: t('views.customDashboard.widgetHeatmap'),
-    icon: 'fas fa-th',
+    icon: 'th-large',
     description: t('views.customDashboard.widgetHeatmapDesc'),
     defaultWidth: 2,
     defaultHeight: 300,
@@ -321,7 +323,7 @@ const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
   {
     type: 'workflow',
     name: t('views.customDashboard.widgetWorkflow'),
-    icon: 'fas fa-project-diagram',
+    icon: 'project-diagram',
     description: t('views.customDashboard.widgetWorkflowDesc'),
     defaultWidth: 2,
     defaultHeight: 400,
@@ -330,7 +332,7 @@ const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
   {
     type: 'agents',
     name: t('views.customDashboard.widgetAgents'),
-    icon: 'fas fa-robot',
+    icon: 'robot',
     description: t('views.customDashboard.widgetAgentsDesc'),
     defaultWidth: 2,
     defaultHeight: 400,
@@ -339,7 +341,7 @@ const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
   {
     type: 'architecture',
     name: t('views.customDashboard.widgetArchitecture'),
-    icon: 'fas fa-sitemap',
+    icon: 'sitemap',
     description: t('views.customDashboard.widgetArchitectureDesc'),
     defaultWidth: 3,
     defaultHeight: 500,
@@ -545,9 +547,9 @@ function getWidgetComponent(type: string) {
   return componentRegistry.value[type] || null
 }
 
-function getWidgetIcon(type: string): string {
+function getWidgetIcon(type: string): IconName {
   const def = availableWidgetDefs.value.find(w => w.type === type)
-  return def?.icon || 'fas fa-puzzle-piece'
+  return def?.icon || 'puzzle-piece'
 }
 
 function getWidgetStyle(widget: Widget) {
@@ -665,7 +667,7 @@ defineExpose({ stopDashboardPolling })
   color: var(--text-primary);
 }
 
-.header-content h1 i {
+.header-icon-svg {
   color: var(--color-primary);
 }
 
@@ -790,7 +792,7 @@ defineExpose({ stopDashboardPolling })
   background: var(--bg-tertiary);
 }
 
-.palette-widget i {
+.palette-widget svg {
   color: var(--color-primary);
 }
 
@@ -868,7 +870,7 @@ defineExpose({ stopDashboardPolling })
   color: var(--text-primary);
 }
 
-.widget-header h3 i {
+.widget-header h3 svg {
   color: var(--color-primary);
 }
 
@@ -987,7 +989,7 @@ defineExpose({ stopDashboardPolling })
   color: var(--text-primary);
 }
 
-.modal-header h4 i {
+.modal-icon {
   color: var(--color-primary);
 }
 

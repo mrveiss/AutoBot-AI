@@ -13,17 +13,17 @@
           title="Refresh document list"
           @click="composable.fetchDocuments()"
         >
-          <i class="fas fa-sync-alt" aria-hidden="true"></i>
+          <Icon name="sync-alt" aria-hidden="true" />
         </BaseButton>
       </div>
 
       <div v-if="composable.isLoading.value && !composable.hasDocuments.value" class="loading-state">
-        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+        <Icon name="sync-alt" :spin="true" aria-hidden="true" />
         <span>Loading documents…</span>
       </div>
 
       <div v-else-if="!composable.hasDocuments.value" class="empty-state">
-        <i class="fas fa-file-alt empty-icon" aria-hidden="true"></i>
+        <Icon name="file-alt" class="empty-icon" aria-hidden="true" />
         <p>No AI documents yet.</p>
         <p class="empty-hint">
           Save an AI response from the
@@ -54,7 +54,7 @@
             :aria-label="`Delete ${doc.title}`"
             @click.stop="confirmDelete(doc.id, doc.title)"
           >
-            <i class="fas fa-trash" aria-hidden="true"></i>
+            <Icon name="trash" aria-hidden="true" />
           </BaseButton>
         </li>
       </ul>
@@ -85,7 +85,7 @@
 
     <div class="documents-main">
       <div v-if="!selectedDocId" class="no-selection">
-        <i class="fas fa-file-alt no-selection-icon" aria-hidden="true"></i>
+        <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
         <p>Select a document from the list to view and edit it.</p>
       </div>
 
@@ -144,6 +144,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
 import { createLogger } from '@/utils/debugUtils'
 import { useFocusTrap } from '@/composables/useFocusTrap'

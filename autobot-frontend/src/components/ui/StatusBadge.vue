@@ -1,12 +1,14 @@
 <template>
   <span class="status-badge" :class="[`status-${variant}`, sizeClass, { 'with-icon': icon }]">
-    <i v-if="icon" :class="icon"></i>
+    <Icon v-if="icon" :name="icon" />
     <slot></slot>
   </span>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
 
 /**
  * Reusable Status Badge Component
@@ -16,7 +18,7 @@ import { computed } from 'vue'
  *
  * Usage:
  * ```vue
- * <StatusBadge variant="success" icon="fas fa-check-circle">Active</StatusBadge>
+ * <StatusBadge variant="success" icon="check-circle">Active</StatusBadge>
  * <StatusBadge variant="danger" size="large">Failed</StatusBadge>
  * <StatusBadge variant="warning">Pending</StatusBadge>
  * ```
@@ -27,8 +29,8 @@ interface Props {
   variant?: 'success' | 'danger' | 'warning' | 'info' | 'secondary' | 'primary'
   /** Badge size: small, medium, large */
   size?: 'small' | 'medium' | 'large'
-  /** Optional icon class (Font Awesome) */
-  icon?: string
+  /** Optional icon name (IconName) */
+  icon?: IconName
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -103,7 +105,8 @@ const sizeClass = computed(() => `status-${props.size}`)
 }
 
 /* Icon */
-.with-icon i {
-  font-size: 0.875em;
+.with-icon svg {
+  width: 0.875em;
+  height: 0.875em;
 }
 </style>

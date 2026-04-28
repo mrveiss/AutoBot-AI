@@ -22,7 +22,7 @@
         class="btn-action-primary"
         :disabled="evolution.loading.value"
       >
-        <i class="fas fa-play-circle"></i>
+        <Icon name="play-circle" />
         {{ $t('analytics.evolution.analyzeRepository') }}
       </button>
     </div>
@@ -31,7 +31,7 @@
     <div v-if="evolution.hasAnalysisResult.value" class="analysis-summary">
       <div class="summary-card">
         <div class="summary-icon success">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
         </div>
         <div class="summary-content">
           <div class="summary-value">{{ evolution.analysisResult.value?.commits_analyzed || 0 }}</div>
@@ -41,7 +41,7 @@
 
       <div class="summary-card">
         <div class="summary-icon emerging">
-          <i class="fas fa-arrow-trend-up"></i>
+          <Icon name="arrow-trend-up" />
         </div>
         <div class="summary-content">
           <div class="summary-value">
@@ -53,7 +53,7 @@
 
       <div class="summary-card">
         <div class="summary-icon declining">
-          <i class="fas fa-arrow-trend-down"></i>
+          <Icon name="arrow-trend-down" />
         </div>
         <div class="summary-content">
           <div class="summary-value">
@@ -65,7 +65,7 @@
 
       <div class="summary-card">
         <div class="summary-icon refactor">
-          <i class="fas fa-code-branch"></i>
+          <Icon name="code-branch" />
         </div>
         <div class="summary-content">
           <div class="summary-value">
@@ -112,7 +112,7 @@
             class="btn-action-primary"
             :disabled="evolution.loading.value"
           >
-            <i class="fas fa-filter"></i>
+            <Icon name="filter" />
             {{ $t('analytics.evolution.applyFilters') }}
           </button>
           <div class="export-group">
@@ -121,7 +121,7 @@
               class="btn-action-secondary"
               :title="$t('analytics.evolution.exportJson')"
             >
-              <i class="fas fa-file-code"></i>
+              <Icon name="file-code" />
               JSON
             </button>
             <button
@@ -129,7 +129,7 @@
               class="btn-action-secondary"
               :title="$t('analytics.evolution.exportCsv')"
             >
-              <i class="fas fa-file-csv"></i>
+              <Icon name="file-alt" />
               CSV
             </button>
           </div>
@@ -159,15 +159,9 @@
             {{ trend.last_value.toFixed(1) }}
           </div>
           <div class="trend-change" :class="trend.direction">
-            <i
-              :class="
-                trend.direction === 'improving'
-                  ? 'fas fa-arrow-up'
-                  : trend.direction === 'declining'
-                    ? 'fas fa-arrow-down'
-                    : 'fas fa-minus'
-              "
-            ></i>
+            <Icon
+              :name="trend.direction === 'improving' ? 'arrow-up' : trend.direction === 'declining' ? 'arrow-down' : 'minus'"
+            />
             {{ trend.percent_change > 0 ? '+' : '' }}{{ trend.percent_change.toFixed(1) }}%
           </div>
           <div class="trend-label">{{ trend.direction }}</div>
@@ -209,7 +203,7 @@
       <!-- Emerging Patterns -->
       <div v-if="evolution.analysisResult.value?.emerging_patterns.length" class="pattern-table">
         <h3 class="table-title">
-          <i class="fas fa-arrow-trend-up icon-success"></i>
+          <Icon name="arrow-trend-up" class="icon-success" />
           {{ $t('analytics.evolution.emergingPatterns') }}
         </h3>
         <table class="data-table">
@@ -239,7 +233,7 @@
       <!-- Declining Patterns -->
       <div v-if="evolution.analysisResult.value?.declining_patterns.length" class="pattern-table">
         <h3 class="table-title">
-          <i class="fas fa-arrow-trend-down icon-info"></i>
+          <Icon name="arrow-trend-down" class="icon-info" />
           {{ $t('analytics.evolution.decliningPatterns') }}
         </h3>
         <table class="data-table">
@@ -269,7 +263,7 @@
 
     <!-- Empty State -->
     <div v-if="!evolution.loading.value && !evolution.hasAnalysisResult.value" class="empty-state">
-      <i class="fas fa-chart-line"></i>
+      <Icon name="chart-line" />
       <p>{{ $t('analytics.evolution.noData') }}</p>
       <p class="empty-detail">
         {{ $t('analytics.evolution.noDataHint') }}
@@ -282,7 +276,7 @@
         <div class="modal-header">
           <h3 class="modal-title">{{ $t('analytics.evolution.analyzeRepository') }}</h3>
           <button @click="showAnalysisModal = false" class="modal-close">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -330,7 +324,7 @@
           </div>
 
           <div v-if="evolution.error.value" class="error-message">
-            <i class="fas fa-exclamation-triangle"></i>
+            <Icon name="exclamation-triangle" />
             {{ evolution.error.value }}
           </div>
         </div>
@@ -344,8 +338,8 @@
             class="btn-action-primary"
             :disabled="!analysisForm.repo_path || evolution.loading.value"
           >
-            <i class="fas fa-spinner fa-spin" v-if="evolution.loading.value"></i>
-            <i class="fas fa-play-circle" v-else></i>
+            <Icon name="sync-alt" :spin="true" v-if="evolution.loading.value" />
+            <Icon name="play-circle" v-else />
             {{ evolution.loading.value ? $t('analytics.evolution.modal.analyzing') : $t('analytics.evolution.modal.startAnalysis') }}
           </button>
         </div>
@@ -362,6 +356,7 @@ import { useEvolution } from '@/composables/useEvolution'
 import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.vue'
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()

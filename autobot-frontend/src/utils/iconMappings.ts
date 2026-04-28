@@ -5,35 +5,41 @@
  * reducing duplication and ensuring UI consistency.
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
+
 // ============================================================================
 // STATUS ICONS
 // ============================================================================
 
-export const statusIcons = {
+export const statusIcons: Record<string, IconName> = {
   // Health/Status States
-  healthy: 'fas fa-check-circle',
-  success: 'fas fa-check-circle',
-  online: 'fas fa-check-circle',
-  active: 'fas fa-circle',
+  healthy: 'check-circle',
+  success: 'check-circle',
+  online: 'check-circle',
+  active: 'circle',
 
-  warning: 'fas fa-exclamation-triangle',
-  degraded: 'fas fa-exclamation-triangle',
-  pending: 'fas fa-clock',
+  warning: 'exclamation-triangle',
+  degraded: 'exclamation-triangle',
+  pending: 'clock',
 
-  error: 'fas fa-times-circle',
-  unhealthy: 'fas fa-times-circle',
-  failed: 'fas fa-times-circle',
-  offline: 'fas fa-times-circle',
-  disconnected: 'fas fa-plug',
+  error: 'times-circle',
+  unhealthy: 'times-circle',
+  failed: 'times-circle',
+  offline: 'times-circle',
+  disconnected: 'plug',
 
-  unknown: 'fas fa-question-circle',
-  loading: 'fas fa-spinner fa-spin'
-} as const
+  unknown: 'question-circle',
+  // Note: loading spin is handled at the call site via :spin="true" on <Icon>
+  loading: 'sync-alt',
+}
 
 // ============================================================================
 // FILE TYPE ICONS
 // ============================================================================
 
+// Note: file-type icons use Font Awesome class strings because many icons
+// (file-pdf, file-word, fab fa-*, etc.) have no SVG equivalent in Icon.vue.
+// Callers use <i :class="getFileIcon(...)"> and are outside the SVG migration scope.
 export const fileTypeIcons = {
   // Documents
   pdf: 'fas fa-file-pdf',
@@ -101,6 +107,7 @@ export const fileTypeIcons = {
 // DOCUMENT TYPE ICONS (for knowledge base entries)
 // ============================================================================
 
+// Note: these use Font Awesome class strings — callers use <i :class="...">
 export const documentTypeIcons = {
   document: 'fas fa-file-alt',
   webpage: 'fas fa-globe',
@@ -113,6 +120,7 @@ export const documentTypeIcons = {
 // PLATFORM ICONS
 // ============================================================================
 
+// Note: brand icons (fab fa-*) have no SVG equivalent in Icon.vue
 export const platformIcons = {
   linux: 'fab fa-linux',
   windows: 'fab fa-windows',
@@ -138,11 +146,11 @@ export function getFileIcon(filename: string, isFolder: boolean = false): string
 }
 
 /**
- * Get icon for status
+ * Get icon for status — returns an IconName for use with <Icon :name="...">
  */
-export function getStatusIcon(status: string): string {
+export function getStatusIcon(status: string): IconName {
   const normalizedStatus = status.toLowerCase()
-  return statusIcons[normalizedStatus as keyof typeof statusIcons] || statusIcons.unknown
+  return statusIcons[normalizedStatus] || statusIcons['unknown']
 }
 
 /**
@@ -218,7 +226,8 @@ export function getStatusColorClass(status: string): string {
 }
 
 /**
- * Get status icon with color class (combined for backward compatibility)
+ * Get status icon name with color class (combined for backward compatibility)
+ * Returns "<iconName> <colorClass>" — note: icon is now an IconName, not an FA class string.
  * @deprecated Use getStatusIcon() + getStatusColorClass() separately for better flexibility
  */
 export function getStatusIconWithColor(status: string): string {

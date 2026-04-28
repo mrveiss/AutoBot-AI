@@ -4,7 +4,7 @@
       <!-- Security notice -->
       <div class="security-notice">
         <div class="notice-inner">
-          <i class="fas fa-shield-alt notice-icon"></i>
+          <Icon name="shield-alt" class="notice-icon" />
           <div class="notice-content">
             <h3 class="notice-title">{{ $t('views.secrets.noticeTitle') }}</h3>
             <p class="notice-text">
@@ -24,6 +24,7 @@
 // View-level component for secrets management layout
 // Issue #753: Design token usage instead of Tailwind utilities
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 </script>
@@ -78,24 +79,5 @@ const { t } = useI18n()
   font-size: var(--text-sm);
   color: var(--color-warning);
   margin: var(--spacing-0);
-  line-height: var(--leading-relaxed);
-}
-
-/* ============================================
- * RESPONSIVE
- * ============================================ */
-
-@media (max-width: 768px) {
-  .secrets-content {
-    padding: var(--spacing-sm);
-  }
-
-  .security-notice {
-    padding: var(--spacing-sm);
-  }
-
-  .notice-inner {
-    gap: var(--spacing-sm);
-  }
 }
 </style>

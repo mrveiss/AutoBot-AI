@@ -17,7 +17,7 @@
       class="slm-novnc-desktop"
     />
     <div v-else class="slm-novnc-empty">
-      <i class="fas fa-desktop slm-novnc-empty-icon"></i>
+      <Icon name="desktop" class="slm-novnc-empty-icon" />
       <p class="slm-novnc-empty-title">{{ $t('slm.novnc.selectHost') }}</p>
       <p class="slm-novnc-empty-desc">{{ $t('slm.novnc.selectHostDesc') }}</p>
     </div>
@@ -31,6 +31,7 @@ import { useI18n } from 'vue-i18n'
 import type { SelectorHost } from '@/composables/useHostSelector'
 import HostSelector from '@/components/ui/HostSelector.vue'
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('SlmNoVncView')
 const { t } = useI18n()
