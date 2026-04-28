@@ -8,9 +8,10 @@ Agent config, memory, and LLM schemas.
 import uuid
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
+from user_management.schemas import UserResponse as _UserResponse
 
 
 # ---------------------------------------------------------------------------
@@ -1266,3 +1267,164 @@ class MemberAddedResponse(BaseModel):
 class MemberRemovedResponse(BaseModel):
     success: bool = True
     message: str
+
+
+# user_management/users.py schemas (#6042)
+
+
+class UserCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    user: _UserResponse
+
+
+class UserDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class PasswordChangedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class RoleAssignmentResponse(BaseModel):
+    success: bool = True
+    message: str
+    role_id: uuid.UUID
+
+
+class RoleUpdateRequest(BaseModel):
+    role: str = Field(..., description="Role name: admin, user, or readonly",
+                     pattern="^(admin|user|readonly)$")
+
+
+class RoleUpdateResponse(BaseModel):
+    success: bool = True
+    message: str
+    username: str
+    role: str
+
+
+class UserSearchResult(BaseModel):
+    id: str
+    name: str
+    type: str = "user"
+
+
+class UserSearchResponse(BaseModel):
+    users: List[UserSearchResult]
+    available: bool
+
+
+# auth.py schemas (#6042)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError("Username cannot be empty")
+        if len(v) > 50:
+            raise ValueError("Username too long")
+        v = v.strip().lower()
+        if not v.replace("_", "").replace("-", "").replace(".", "").isalnum():
+            raise ValueError("Username contains invalid characters")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if not v or len(v) < 1:
+            raise ValueError("Password cannot be empty")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        return v
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    user: Optional[dict] = None
+    token: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class LogoutRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class ChangePasswordResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    display_name: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        v = v.strip().lower()
+        if not v or len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if len(v) > 50:
+            raise ValueError("Username too long")
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username contains invalid characters")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        if "@" not in v or len(v) > 255:
+            raise ValueError("Invalid email address")
+        return v.strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(v) > 128:
+            raise ValueError("Password too long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class SignupResponse(BaseModel):
+    success: bool
+    message: str
+    username: str | None = None

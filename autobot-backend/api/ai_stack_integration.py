@@ -13,7 +13,15 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from api.schemas_knowledge import (
+    CodeSearchRequest,
+    ContentClassificationRequest,
+    DevelopmentAnalysisRequest,
+    EnhancedChatRequest,
+    KnowledgeExtractionRequest,
+    RAGQueryRequest,
+    ResearchRequest,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -43,79 +51,6 @@ AgentQueryHandler = Callable[[Any, str], Awaitable[Dict[str, Any]]]
 # ====================================================================
 
 router = APIRouter(tags=["ai-stack"])
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class RAGQueryRequest(BaseModel):
-    """RAG query request model."""
-
-    query: str = Field(..., min_length=1, max_length=10000, description="Search query")
-    documents: Optional[List[Metadata]] = Field(
-        None, description="Pre-retrieved documents"
-    )
-    context: Optional[str] = Field(None, description="Additional context")
-    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
-
-
-class EnhancedChatRequest(BaseModel):
-    """Enhanced chat request model."""
-
-    message: str = Field(
-        ..., min_length=1, max_length=50000, description="Chat message"
-    )
-    context: Optional[str] = Field(None, description="Conversation context")
-    chat_history: Optional[List[Metadata]] = Field(
-        None, description="Previous messages"
-    )
-    use_knowledge_base: bool = Field(True, description="Whether to use knowledge base")
-    response_style: str = Field("conversational", description="Response style")
-
-
-class KnowledgeExtractionRequest(BaseModel):
-    """Knowledge extraction request model."""
-
-    content: str = Field(
-        ..., min_length=1, description="Content to extract knowledge from"
-    )
-    content_type: str = Field("text", description="Content type (text, document, url)")
-    extraction_mode: str = Field("comprehensive", description="Extraction detail level")
-
-
-class ResearchRequest(BaseModel):
-    """Research request model."""
-
-    query: str = Field(..., min_length=1, max_length=5000, description="Research query")
-    research_depth: str = Field("comprehensive", description="Research depth")
-    sources: Optional[List[str]] = Field(None, description="Specific sources")
-    include_web: bool = Field(True, description="Include web research")
-
-
-class CodeSearchRequest(BaseModel):
-    """Code search request model."""
-
-    query: str = Field(..., min_length=1, description="Code search query")
-    search_scope: str = Field("codebase", description="Search scope")
-    include_npu: bool = Field(True, description="Use NPU acceleration")
-
-
-class DevelopmentAnalysisRequest(BaseModel):
-    """Development analysis request model."""
-
-    code_path: Optional[str] = Field(None, description="Specific path to analyze")
-    analysis_type: str = Field("comprehensive", description="Analysis type")
-
-
-class ContentClassificationRequest(BaseModel):
-    """Content classification request model."""
-
-    content: str = Field(..., min_length=1, description="Content to classify")
-    classification_types: Optional[List[str]] = Field(
-        None, description="Classification types"
-    )
-
 
 # ====================================================================
 # Utility Functions (imported from backend.utils.response_helpers)

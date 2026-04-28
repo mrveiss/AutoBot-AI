@@ -3878,3 +3878,50 @@ class SearchResponse(BaseModel):
     total_count: int
     query: str
     filters: Metadata
+
+
+# ai_stack_integration.py schemas (#6042)
+
+
+class RAGQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=10000)
+    documents: Optional[List[Metadata]] = None
+    context: Optional[str] = None
+    max_results: int = Field(10, ge=1, le=50)
+
+
+class EnhancedChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=50000)
+    context: Optional[str] = None
+    chat_history: Optional[List[Metadata]] = None
+    use_knowledge_base: bool = Field(True)
+    response_style: str = Field("conversational")
+
+
+class KnowledgeExtractionRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    content_type: str = Field("text")
+    extraction_mode: str = Field("comprehensive")
+
+
+class ResearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=5000)
+    research_depth: str = Field("comprehensive")
+    sources: Optional[List[str]] = None
+    include_web: bool = Field(True)
+
+
+class CodeSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    search_scope: str = Field("codebase")
+    include_npu: bool = Field(True)
+
+
+class DevelopmentAnalysisRequest(BaseModel):
+    code_path: Optional[str] = None
+    analysis_type: str = Field("comprehensive")
+
+
+class ContentClassificationRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    classification_types: Optional[List[str]] = None

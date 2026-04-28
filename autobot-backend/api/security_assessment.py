@@ -10,11 +10,20 @@ Issue: #260
 """
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    AddFindingRequest,
+    AddHostRequest,
+    AddPortRequest,
+    AddVulnerabilityRequest,
+    AdvancePhaseRequest,
+    CreateAssessmentRequest,
+    ParseToolOutputRequest,
+    RecoverErrorRequest,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -30,88 +39,11 @@ from services.security_workflow_manager import (
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from utils.request_utils import generate_request_id
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/security", tags=["security"])
-
-
-# Pydantic models for request/response validation
-class CreateAssessmentRequest(BaseModel):
-    """Request to create a new security assessment."""
-
-    name: str = Field(..., min_length=1, max_length=200)
-    target: str = Field(..., min_length=1, description="Target IP, CIDR, or hostname")
-    scope: Optional[list[str]] = Field(None, description="In-scope targets")
-    training_mode: bool = Field(False, description="Enable exploitation phase")
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AdvancePhaseRequest(BaseModel):
-    """Request to advance to the next phase."""
-
-    reason: str = Field("", description="Reason for phase transition")
-    target_phase: Optional[str] = Field(
-        None, description="Specific phase to transition to"
-    )
-
-
-class AddHostRequest(BaseModel):
-    """Request to add a host to the assessment."""
-
-    ip: str = Field(..., description="Host IP address")
-    hostname: Optional[str] = None
-    status: str = Field("up", description="Host status (up/down/unknown)")
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AddPortRequest(BaseModel):
-    """Request to add a port to a host."""
-
-    host_ip: str = Field(..., description="Host IP address")
-    port: int = Field(..., ge=1, le=65535)
-    protocol: str = Field("tcp", description="Protocol (tcp/udp)")
-    state: str = Field("open", description="Port state")
-    service: Optional[str] = None
-    version: Optional[str] = None
-
-
-class AddVulnerabilityRequest(BaseModel):
-    """Request to add a vulnerability."""
-
-    host_ip: str = Field(..., description="Affected host IP")
-    cve_id: Optional[str] = None
-    title: str = Field("", description="Vulnerability title")
-    severity: str = Field("unknown", description="Severity level")
-    description: str = ""
-    affected_service: Optional[str] = None
-    affected_port: Optional[int] = None
-    metadata: Optional[dict[str, Any]] = None
-
-
-class AddFindingRequest(BaseModel):
-    """Request to add a general finding."""
-
-    finding_type: str = Field(..., description="Type of finding")
-    description: str = ""
-    data: Optional[dict[str, Any]] = None
-
-
-class ParseToolOutputRequest(BaseModel):
-    """Request to parse tool output."""
-
-    output: str = Field(..., min_length=1, description="Raw tool output")
-    tool: Optional[str] = Field(
-        None, description="Tool name (auto-detect if not provided)"
-    )
-
-
-class RecoverErrorRequest(BaseModel):
-    """Request to recover from error state."""
-
-    target_phase: str = Field(..., description="Phase to recover to")
-    reason: str = Field("Manual recovery", description="Recovery reason")
 
 
 # Dependency injection

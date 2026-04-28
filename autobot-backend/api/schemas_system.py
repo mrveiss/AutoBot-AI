@@ -2244,3 +2244,62 @@ class LogFwdKnownHostsResponse(BaseModel):
 class LogFwdAutoStartResponse(BaseModel):
     auto_start: bool
     message: str
+
+
+# security_assessment.py schemas (#6042)
+
+
+class CreateAssessmentRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    target: str = Field(..., min_length=1, description="Target IP, CIDR, or hostname")
+    scope: Optional[list[str]] = Field(None)
+    training_mode: bool = Field(False)
+    metadata: Optional[dict[str, Any]] = None
+
+
+class AdvancePhaseRequest(BaseModel):
+    reason: str = Field("", description="Reason for phase transition")
+    target_phase: Optional[str] = Field(None)
+
+
+class AddHostRequest(BaseModel):
+    ip: str = Field(..., description="Host IP address")
+    hostname: Optional[str] = None
+    status: str = Field("up")
+    metadata: Optional[dict[str, Any]] = None
+
+
+class AddPortRequest(BaseModel):
+    host_ip: str = Field(..., description="Host IP address")
+    port: int = Field(..., ge=1, le=65535)
+    protocol: str = Field("tcp")
+    state: str = Field("open")
+    service: Optional[str] = None
+    version: Optional[str] = None
+
+
+class AddVulnerabilityRequest(BaseModel):
+    host_ip: str = Field(..., description="Affected host IP")
+    cve_id: Optional[str] = None
+    title: str = Field("")
+    severity: str = Field("unknown")
+    description: str = ""
+    affected_service: Optional[str] = None
+    affected_port: Optional[int] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+class AddFindingRequest(BaseModel):
+    finding_type: str = Field(..., description="Type of finding")
+    description: str = ""
+    data: Optional[dict[str, Any]] = None
+
+
+class ParseToolOutputRequest(BaseModel):
+    output: str = Field(..., min_length=1, description="Raw tool output")
+    tool: Optional[str] = Field(None, description="Tool name (auto-detect if not provided)")
+
+
+class RecoverErrorRequest(BaseModel):
+    target_phase: str = Field(..., description="Phase to recover to")
+    reason: str = Field("Manual recovery")
