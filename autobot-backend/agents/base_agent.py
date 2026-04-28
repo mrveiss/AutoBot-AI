@@ -150,6 +150,11 @@ class BaseAgent(ABC):
         self._message_handlers = {}
         self._handlers_lock = threading.Lock()
 
+        # Per-agent diary (fire-and-forget; never blocks a turn)
+        from memory.agent_diary import AgentDiaryService
+
+        self._diary = AgentDiaryService()
+
         logger.info(
             "Initialized %s agent in %s mode", agent_type, deployment_mode.value
         )
@@ -296,6 +301,20 @@ class BaseAgent(ABC):
                 self.total_execution_time += execution_time
 
             response.execution_time = execution_time
+
+            # Fire-and-forget diary write — never blocks the caller (#5071)
+            _diary_entry = (
+                f"action={request.action} status={response.status} "
+                f"exec={execution_time:.2f}s"
+            )[:200]
+            asyncio.create_task(
+                self._diary.write(
+                    self.agent_type,
+                    request.request_id,
+                    _diary_entry,
+                    topic="turn",
+                )
+            )
 
             # Publish OBSERVATION event with any artifacts the agent collected (#4094)
             await self._publish_completion_observation(request, response, task_id)

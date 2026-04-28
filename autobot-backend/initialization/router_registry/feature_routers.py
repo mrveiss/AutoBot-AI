@@ -473,6 +473,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
     # Issue #5070: verbatim conversational-memory lane
     ("api.verbatim_memory", "/verbatim-memory", ["memory"], "verbatim_memory"),
+    # Issue #5071: per-agent diary with background append and runtime discovery
+    ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
     # Issue #5061: First-run onboarding presets + doctor
