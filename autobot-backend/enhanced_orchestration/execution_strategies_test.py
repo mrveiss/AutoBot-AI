@@ -1,0 +1,238 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Unit tests for ExecutionStrategyHandler. Issue #6421."""
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
+from enhanced_orchestration.types import (
+    AgentTask,
+    ExecutionStrategy,
+    WorkflowDependencies,
+    WorkflowPlan,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _task(task_id: str, deps: list = None) -> AgentTask:
+    return AgentTask(
+        task_id=task_id,
+        agent_type="test_agent",
+        action="test",
+        inputs={},
+        dependencies=deps or [],
+    )
+
+
+def _plan(tasks, strategy=ExecutionStrategy.SEQUENTIAL, deps_graph=None) -> WorkflowPlan:
+    return WorkflowPlan(
+        plan_id="plan-1",
+        goal="test",
+        strategy=strategy,
+        tasks=tasks,
+        dependencies_graph=deps_graph or {},
+        estimated_duration=1.0,
+        resource_requirements={},
+        success_criteria=[],
+    )
+
+
+def _completed(task_id: str) -> dict:
+    return {"status": "completed", "output": {}, "execution_time": 0.0, "agent": "test_agent"}
+
+
+def _failed(task_id: str) -> dict:
+    return {"status": "failed", "error": "err", "agent": "test_agent"}
+
+
+def _deps_met(task: AgentTask, results: dict) -> bool:
+    return all(
+        results.get(dep, {}).get("status") == "completed" for dep in task.dependencies
+    )
+
+
+def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5):
+    execute_fn = execute_fn or (lambda task, ctx: asyncio.coroutine(lambda: _completed(task.task_id))())
+    deps_met_fn = deps_met_fn or _deps_met
+
+    async def _noop_coord(channel):
+        pass
+
+    deps = WorkflowDependencies(
+        execute_single_task=execute_fn,
+        topological_sort_tasks=lambda tasks, graph: tasks,
+        dependencies_met=deps_met_fn,
+        group_pipeline_stages=lambda tasks, graph: [tasks],
+        enhance_task_for_collaboration=lambda task, channel: task,
+        coordinate_collaboration=_noop_coord,
+    )
+    return ExecutionStrategyHandler(
+        max_parallel_tasks=max_parallel,
+        resource_semaphore=asyncio.Semaphore(max_parallel),
+        deps=deps,
+    )
+
+
+# ---------------------------------------------------------------------------
+# execute_sequential
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sequential_executes_all_tasks():
+    tasks = [_task("t1"), _task("t2"), _task("t3")]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_sequential(_plan(tasks))
+    assert executed == ["t1", "t2", "t3"]
+    assert all(results[tid]["status"] == "completed" for tid in ["t1", "t2", "t3"])
+
+
+@pytest.mark.asyncio
+async def test_sequential_stops_on_required_task_failure():
+    tasks = [_task("t1"), _task("t2"), _task("t3")]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t2":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_sequential(_plan(tasks))
+    assert "t3" not in executed
+    assert results["t2"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_sequential_continues_after_optional_task_failure():
+    t2 = _task("t2")
+    t2.metadata["optional"] = True
+    tasks = [_task("t1"), t2, _task("t3")]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t2":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    await handler.execute_sequential(_plan(tasks))
+    assert "t3" in executed
+
+
+# ---------------------------------------------------------------------------
+# execute_parallel
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_parallel_executes_independent_tasks():
+    tasks = [_task("t1"), _task("t2"), _task("t3")]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_parallel(_plan(tasks, ExecutionStrategy.PARALLEL))
+    assert set(executed) == {"t1", "t2", "t3"}
+    assert all(results[tid]["status"] == "completed" for tid in ["t1", "t2", "t3"])
+
+
+@pytest.mark.asyncio
+async def test_parallel_deadlock_detection(caplog):
+    """Tasks whose dependencies can never be satisfied must fail, not loop (#6420)."""
+    t1 = _task("t1", deps=["t_missing"])
+
+    async def execute(task, ctx):
+        return _completed(task.task_id)  # pragma: no cover
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_parallel(_plan([t1], ExecutionStrategy.PARALLEL))
+    assert results["t1"]["status"] == "failed"
+    assert "deadlock" in results["t1"]["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_parallel_respects_max_parallel_tasks():
+    tasks = [_task(f"t{i}") for i in range(10)]
+    concurrency_peak = 0
+    active = 0
+
+    async def execute(task, ctx):
+        nonlocal concurrency_peak, active
+        active += 1
+        concurrency_peak = max(concurrency_peak, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute, max_parallel=3)
+    await handler.execute_parallel(_plan(tasks, ExecutionStrategy.PARALLEL))
+    assert concurrency_peak <= 3
+
+
+# ---------------------------------------------------------------------------
+# execute_adaptive — strategy switching
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_adaptive_switches_to_sequential_on_high_failure():
+    tasks = [_task(f"t{i}") for i in range(4)]
+    call_count = 0
+
+    async def execute(task, ctx):
+        nonlocal call_count
+        call_count += 1
+        return _failed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_adaptive(_plan(tasks, ExecutionStrategy.ADAPTIVE))
+    assert all(results[t.task_id]["status"] == "failed" for t in tasks)
+
+
+# ---------------------------------------------------------------------------
+# WorkflowDependencies injection
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_dependencies_fields_wired_correctly():
+    """Ensure all 6 callables are accessible via named deps fields."""
+    sentinel = object()
+    deps = WorkflowDependencies(
+        execute_single_task=sentinel,
+        topological_sort_tasks=sentinel,
+        dependencies_met=sentinel,
+        group_pipeline_stages=sentinel,
+        enhance_task_for_collaboration=sentinel,
+        coordinate_collaboration=sentinel,
+    )
+    handler = ExecutionStrategyHandler(
+        max_parallel_tasks=1,
+        resource_semaphore=asyncio.Semaphore(1),
+        deps=deps,
+    )
+    assert handler._execute_single_task is sentinel
+    assert handler._topological_sort_tasks is sentinel
+    assert handler._dependencies_met is sentinel
+    assert handler._group_pipeline_stages is sentinel
+    assert handler._enhance_task_for_collaboration is sentinel
+    assert handler._coordinate_collaboration is sentinel
