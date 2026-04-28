@@ -80,6 +80,7 @@ except ImportError:
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
 from autobot_types import TaskComplexity
+from agents.agent_client import AgentRegistry as _AgentClientRegistry
 
 try:
     from agents.gemma_classification_agent import GemmaClassificationAgent
@@ -254,7 +255,6 @@ class Orchestrator:
         self._perf = PerformanceTracker(self.agent_capabilities)
 
         # Agent router — selection, resolution, capability coverage (#6393/#6392)
-        from agents.agent_client import AgentRegistry as _AgentClientRegistry
         self._agent_router = AgentRouter(
             agent_capabilities=self.agent_capabilities,
             performance_tracker=self._perf,

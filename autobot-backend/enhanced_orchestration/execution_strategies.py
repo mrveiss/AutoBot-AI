@@ -174,7 +174,7 @@ class ExecutionStrategyHandler:
 
         # Start collaboration coordinator
         coordinator_task = asyncio.create_task(
-            self._coordinate_collaboration(plan, collab_channel)
+            self._coordinate_collaboration(collab_channel)
         )
 
         # Execute tasks with collaboration
