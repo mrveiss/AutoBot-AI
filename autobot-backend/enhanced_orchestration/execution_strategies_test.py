@@ -59,8 +59,12 @@ def _deps_met(task: AgentTask, results: dict) -> bool:
     )
 
 
+async def _default_execute(task, ctx):
+    return _completed(task.task_id)
+
+
 def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5):
-    execute_fn = execute_fn or (lambda task, ctx: asyncio.coroutine(lambda: _completed(task.task_id))())
+    execute_fn = execute_fn or _default_execute
     deps_met_fn = deps_met_fn or _deps_met
 
     async def _noop_coord(channel):
@@ -207,6 +211,84 @@ async def test_adaptive_switches_to_sequential_on_high_failure():
     handler = _make_handler(execute_fn=execute)
     results = await handler.execute_adaptive(_plan(tasks, ExecutionStrategy.ADAPTIVE))
     assert all(results[t.task_id]["status"] == "failed" for t in tasks)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_deadlock_detection():
+    """execute_adaptive must not loop forever when dependencies can never be met (#6429)."""
+    t1 = _task("t1", deps=["t_missing"])
+
+    handler = _make_handler()
+    results = await handler.execute_adaptive(_plan([t1], ExecutionStrategy.ADAPTIVE))
+    assert results["t1"]["status"] == "failed"
+    assert "deadlock" in results["t1"]["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# _execute_parallel_batch zip/filter fix (#6430)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_parallel_batch_skips_tasks_with_unmet_deps():
+    """Tasks with unmet deps must not be removed from pending or get wrong results (#6430)."""
+    t_ready = _task("t_ready")
+    t_blocked = _task("t_blocked", deps=["t_missing"])
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    pending = [t_ready, t_blocked]
+    results = {}
+    await handler._execute_parallel_batch(pending, results)
+
+    assert "t_ready" in executed
+    assert "t_blocked" not in executed
+    assert t_blocked in pending  # blocked task stays in pending
+    assert results.get("t_ready", {}).get("status") == "completed"
+    assert "t_blocked" not in results
+
+
+# ---------------------------------------------------------------------------
+# execute_collaborative coordinator cleanup (#6431)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_collaborative_coordinator_awaited_on_cancel():
+    """coordinator_task must be awaited after cancel so finally/unsubscribe runs (#6431)."""
+    cleanup_ran = False
+
+    async def _coordinator(channel):
+        nonlocal cleanup_ran
+        try:
+            await asyncio.sleep(9999)
+        finally:
+            cleanup_ran = True
+
+    async def execute(task, ctx):
+        return _completed(task.task_id)
+
+    deps = WorkflowDependencies(
+        execute_single_task=execute,
+        topological_sort_tasks=lambda tasks, graph: tasks,
+        dependencies_met=lambda task, results: True,
+        group_pipeline_stages=lambda tasks, graph: [tasks],
+        enhance_task_for_collaboration=lambda task, channel: task,
+        coordinate_collaboration=_coordinator,
+    )
+    handler = ExecutionStrategyHandler(
+        max_parallel_tasks=5,
+        resource_semaphore=asyncio.Semaphore(5),
+        deps=deps,
+    )
+    from enhanced_orchestration.types import ExecutionStrategy, WorkflowPlan
+    plan = _plan([_task("t1")], ExecutionStrategy.COLLABORATIVE)
+    await handler.execute_collaborative(plan)
+    assert cleanup_ran, "coordinator finally block must run before execute_collaborative returns"
 
 
 # ---------------------------------------------------------------------------

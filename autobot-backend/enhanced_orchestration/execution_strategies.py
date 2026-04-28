@@ -179,8 +179,12 @@ class ExecutionStrategyHandler:
             result = await future
             results[task.task_id] = result
 
-        # Stop coordinator
+        # Stop coordinator and wait for its cleanup (finally/unsubscribe) to complete (#6431)
         coordinator_task.cancel()
+        try:
+            await coordinator_task
+        except asyncio.CancelledError:
+            pass
 
         return results
 
@@ -204,17 +208,14 @@ class ExecutionStrategyHandler:
         """Execute tasks in parallel batch."""
         batch_size = min(self.max_parallel_tasks, len(pending_tasks))
         batch_tasks = pending_tasks[:batch_size]
+        ready_tasks = [t for t in batch_tasks if self._dependencies_met(t, results)]
 
         batch_results = await asyncio.gather(
-            *[
-                self._execute_single_task(task, results)
-                for task in batch_tasks
-                if self._dependencies_met(task, results)
-            ]
+            *[self._execute_single_task(task, results) for task in ready_tasks]
         )
 
         completed, failed = 0, 0
-        for task, result in zip(batch_tasks, batch_results):
+        for task, result in zip(ready_tasks, batch_results):
             results[task.task_id] = result
             pending_tasks.remove(task)
             if result.get("status") == "completed":
@@ -261,6 +262,16 @@ class ExecutionStrategyHandler:
             else:
                 c, f = await self._execute_sequential_step(pending_tasks, results)
 
+            if c == 0 and f == 0 and pending_tasks:
+                # No progress made — dependency deadlock (#6429)
+                logger.error(
+                    "Dependency deadlock in adaptive: %d tasks unresolvable, failing them",
+                    len(pending_tasks),
+                )
+                for task in pending_tasks:
+                    results[task.task_id] = task.to_failed_result("Dependency deadlock")
+                break
+
             completed_tasks += c
             failed_tasks += f
 
@@ -269,6 +280,14 @@ class ExecutionStrategyHandler:
     async def _wait_for_dependencies(
         self, task: AgentTask, results: Dict[str, Any]
     ) -> None:
-        """Wait for task dependencies to complete."""
+        """Wait for task dependencies to complete, or raise if a dep is in a terminal failed state."""
         while not self._dependencies_met(task, results):
+            failed_deps = [
+                dep for dep in task.dependencies
+                if results.get(dep, {}).get("status") == "failed"
+            ]
+            if failed_deps:
+                raise RuntimeError(
+                    f"Task {task.task_id} cannot run: dependency {failed_deps[0]} failed"
+                )
             await asyncio.sleep(TimingConstants.SHORT_DELAY)
