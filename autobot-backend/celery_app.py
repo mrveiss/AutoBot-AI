@@ -116,6 +116,11 @@ celery_app.conf.update(
         # Issue #544: System update tasks
         "tasks.run_system_update": {"queue": "deployments"},
         "tasks.check_available_updates": {"queue": "deployments"},
+        # Issue #5073: Memory write-path tasks (off chat hot path)
+        "memory.write_verbatim": {"queue": "memory"},
+        "memory.extract_facts": {"queue": "memory"},
+        "memory.update_graph": {"queue": "memory"},
+        "memory.compact_snapshot": {"queue": "memory"},
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager
