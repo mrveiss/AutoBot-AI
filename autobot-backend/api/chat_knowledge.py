@@ -40,12 +40,10 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history import ChatHistoryManager
@@ -57,7 +55,16 @@ from type_defs.common import Metadata
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    AddKnowledgeRequest,
+    AssociateFileRequest,
     ChatKnowledgeHealthResponse,
+    ChatKnowledgeSearchRequest,
+    CompileChatRequest,
+    CreateContextRequest,
+    FileAssociationType,
+    KnowledgeDecision,
+    KnowledgeDecisionRequest,
+    MarkFactsPreservedRequest,
     PreserveSessionFactsResponse,
     SessionFactsResponse,
 )
@@ -97,23 +104,6 @@ async def get_chat_knowledge_manager_instance(request: Request = None):
         )
 
     return new_manager
-
-
-class KnowledgeDecision(str, Enum):
-    """Decision for knowledge persistence"""
-
-    ADD_TO_KB = "add_to_kb"
-    KEEP_TEMPORARY = "keep_temporary"
-    DELETE = "delete"
-
-
-class FileAssociationType(str, Enum):
-    """Type of file association"""
-
-    REFERENCE = "reference"  # File referenced in chat
-    UPLOAD = "upload"  # File uploaded to chat
-    GENERATED = "generated"  # File generated during chat
-    MODIFIED = "modified"  # File modified during chat
 
 
 @dataclass
@@ -537,15 +527,6 @@ chat_knowledge_manager = None
 # API Endpoints
 
 
-class CreateContextRequest(BaseModel):
-    """Create chat context request (Issue #688: added user_id)."""
-
-    chat_id: str
-    topic: Optional[str] = None
-    keywords: Optional[List[str]] = None
-    user_id: Optional[str] = None  # Issue #688: Track user ownership
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_chat_context",
@@ -583,13 +564,6 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
     except Exception as e:
         logger.error("Failed to create context: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-class AssociateFileRequest(BaseModel):
-    chat_id: str
-    file_path: str
-    association_type: FileAssociationType
-    metadata: Optional[Metadata] = None
 
 
 @with_error_handling(
@@ -683,12 +657,6 @@ async def upload_file_to_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class AddKnowledgeRequest(BaseModel):
-    chat_id: str
-    content: str
-    metadata: Optional[Metadata] = None
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_temporary_knowledge",
@@ -741,12 +709,6 @@ async def get_pending_knowledge_decisions(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class KnowledgeDecisionRequest(BaseModel):
-    chat_id: str
-    knowledge_id: str
-    decision: KnowledgeDecision
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_knowledge_decision",
@@ -777,12 +739,6 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class CompileChatRequest(BaseModel):
-    chat_id: str
-    title: Optional[str] = None
-    include_system_messages: bool = False
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compile_chat_to_knowledge",
@@ -811,12 +767,6 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class SearchRequest(BaseModel):
-    query: str
-    chat_id: Optional[str] = None
-    include_temporary: bool = True
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chat_knowledge",
@@ -828,7 +778,7 @@ class SearchRequest(BaseModel):
     error_code_prefix="CHAT_KNOWLEDGE",
 )
 @router.post("/search", response_model=DataResponse)
-async def search_chat_knowledge(request: SearchRequest):
+async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
     """Search knowledge across chats or within specific chat"""
     try:
         results = await chat_knowledge_manager.search_chat_knowledge(
@@ -921,13 +871,6 @@ async def health_check():
 # ============================================================================
 # Session Facts Endpoints (Issue #547)
 # ============================================================================
-
-
-class MarkFactsPreservedRequest(BaseModel):
-    """Request model for marking facts as preserved/important."""
-
-    fact_ids: List[str]
-    preserve: bool = True
 
 
 @with_error_handling(

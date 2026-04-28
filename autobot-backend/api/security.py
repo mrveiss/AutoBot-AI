@@ -12,39 +12,30 @@ Includes:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from api.schemas_system import (
+    CommandApprovalRequest,
+    CommandApprovalResponse,
+    DomainSecurityStatsResponse,
+    SecurityStatusResponse,
+    ThreatIntelStatusResponse,
+    URLCheckRequest,
+    URLCheckResponse,
+)
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
-from type_defs.common import Metadata
 from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
-class CommandApprovalRequest(BaseModel):
-    command_id: str
-    approved: bool
-
-
-class CommandApprovalResponse(BaseModel):
-    success: bool
-    message: str
-
-
-class SecurityStatusResponse(BaseModel):
-    security_enabled: bool
-    command_security_enabled: bool
-    docker_sandbox_enabled: bool
-    pending_approvals: List[Metadata]
 
 
 @with_error_handling(
@@ -249,42 +240,6 @@ async def get_audit_log(request: Request, limit: int = 100):
 # ============================================================================
 # THREAT INTELLIGENCE ENDPOINTS (Issue #67)
 # ============================================================================
-
-
-class URLCheckRequest(BaseModel):
-    """Request model for URL reputation check."""
-
-    url: str = Field(..., description="URL to check for threats")
-
-
-class URLCheckResponse(BaseModel):
-    """Response model for URL reputation check."""
-
-    success: bool
-    url: str
-    overall_score: float
-    threat_level: str
-    virustotal_score: Optional[float] = None
-    urlvoid_score: Optional[float] = None
-    sources_checked: int
-    cached: bool
-    message: Optional[str] = None
-
-
-class ThreatIntelStatusResponse(BaseModel):
-    """Response model for threat intelligence service status."""
-
-    any_service_configured: bool
-    virustotal: Dict[str, Any]
-    urlvoid: Dict[str, Any]
-    cache_stats: Dict[str, Any]
-
-
-class DomainSecurityStatsResponse(BaseModel):
-    """Response model for domain security statistics."""
-
-    success: bool
-    stats: Dict[str, Any]
 
 
 @with_error_handling(

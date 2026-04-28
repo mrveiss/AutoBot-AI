@@ -5,13 +5,16 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from type_defs.common import Metadata
+from utils.path_validation import contains_path_traversal
 
 
 # ---------------------------------------------------------------------------
@@ -1059,17 +1062,6 @@ class MemoryRelationInvalidateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # knowledge_models.py classes (merged from knowledge_models.py — Issue #5996)
 # ---------------------------------------------------------------------------
-
-import re
-from datetime import datetime
-from enum import Enum
-from typing import List, Optional
-
-from pydantic import Field, field_validator
-
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from type_defs.common import Metadata
-from utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
 _VALID_TAG_OPERATIONS = frozenset({"add", "remove"})
@@ -3925,3 +3917,62 @@ class DevelopmentAnalysisRequest(BaseModel):
 class ContentClassificationRequest(BaseModel):
     content: str = Field(..., min_length=1)
     classification_types: Optional[List[str]] = None
+
+
+# chat_knowledge.py schemas (#6042)
+
+
+class KnowledgeDecision(str, Enum):
+    ADD_TO_KB = "add_to_kb"
+    KEEP_TEMPORARY = "keep_temporary"
+    DELETE = "delete"
+
+
+class FileAssociationType(str, Enum):
+    REFERENCE = "reference"
+    UPLOAD = "upload"
+    GENERATED = "generated"
+    MODIFIED = "modified"
+
+
+class CreateContextRequest(BaseModel):
+    chat_id: str
+    topic: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    user_id: Optional[str] = None
+
+
+class AssociateFileRequest(BaseModel):
+    chat_id: str
+    file_path: str
+    association_type: FileAssociationType
+    metadata: Optional[Metadata] = None
+
+
+class AddKnowledgeRequest(BaseModel):
+    chat_id: str
+    content: str
+    metadata: Optional[Metadata] = None
+
+
+class KnowledgeDecisionRequest(BaseModel):
+    chat_id: str
+    knowledge_id: str
+    decision: KnowledgeDecision
+
+
+class CompileChatRequest(BaseModel):
+    chat_id: str
+    title: Optional[str] = None
+    include_system_messages: bool = False
+
+
+class ChatKnowledgeSearchRequest(BaseModel):
+    query: str
+    chat_id: Optional[str] = None
+    include_temporary: bool = True
+
+
+class MarkFactsPreservedRequest(BaseModel):
+    fact_ids: List[str]
+    preserve: bool = True

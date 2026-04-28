@@ -2303,3 +2303,51 @@ class ParseToolOutputRequest(BaseModel):
 class RecoverErrorRequest(BaseModel):
     target_phase: str = Field(..., description="Phase to recover to")
     reason: str = Field("Manual recovery")
+
+
+# security.py schemas (#6042)
+
+
+class CommandApprovalRequest(BaseModel):
+    command_id: str
+    approved: bool
+
+
+class CommandApprovalResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class SecurityStatusResponse(BaseModel):
+    security_enabled: bool
+    command_security_enabled: bool
+    docker_sandbox_enabled: bool
+    pending_approvals: List[Metadata]
+
+
+class URLCheckRequest(BaseModel):
+    url: str = Field(..., description="URL to check for threats")
+
+
+class URLCheckResponse(BaseModel):
+    success: bool
+    url: str
+    overall_score: float
+    threat_level: str
+    virustotal_score: Optional[float] = None
+    urlvoid_score: Optional[float] = None
+    sources_checked: int
+    cached: bool
+    message: Optional[str] = None
+
+
+class ThreatIntelStatusResponse(BaseModel):
+    any_service_configured: bool
+    virustotal: Dict[str, Any]
+    urlvoid: Dict[str, Any]
+    cache_stats: Dict[str, Any]
+
+
+class DomainSecurityStatsResponse(BaseModel):
+    success: bool
+    stats: Dict[str, Any]

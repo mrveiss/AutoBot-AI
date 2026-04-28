@@ -1428,3 +1428,67 @@ class SignupResponse(BaseModel):
     success: bool
     message: str
     username: str | None = None
+
+
+# user_management/organizations.py schemas (#6042)
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    slug: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(default_factory=dict)
+    subscription_tier: str = Field("free")
+    max_users: int = Field(-1)
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = None
+    subscription_tier: Optional[str] = None
+    max_users: Optional[int] = None
+
+
+class OrganizationResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: Optional[str]
+    settings: dict
+    subscription_tier: str
+    max_users: int
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class OrganizationListResponse(BaseModel):
+    organizations: List[OrganizationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class OrganizationCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    organization: OrganizationResponse
+
+
+class OrganizationDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class OrganizationStatsResponse(BaseModel):
+    organization_id: str
+    name: str
+    slug: str
+    subscription_tier: str
+    users: dict
+    teams: dict
+    is_active: bool
+    created_at: Optional[str]
