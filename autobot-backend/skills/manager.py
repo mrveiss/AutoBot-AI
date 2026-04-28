@@ -183,6 +183,82 @@ class SkillManager:
             by_category.setdefault(category, []).append(skill_info)
         return by_category
 
+    async def sync_external_repo(self, repo_id: str) -> List[Dict[str, Any]]:
+        """Import skill packages from an external SkillRepo and persist them.
+
+        Looks up the SkillRepo by *repo_id*, delegates to
+        :class:`~skills.external_importer.ExternalSkillImporter` for git repos
+        or HTTP catalogs, persists the resulting SkillPackage rows (SANDBOXED),
+        and updates the repo's ``skill_count`` and ``last_synced`` timestamp.
+
+        Args:
+            repo_id: Primary key of the SkillRepo to sync.
+
+        Returns:
+            List of dicts ``{"name": ..., "version": ..., "id": ...}`` for
+            each newly imported package.
+
+        Raises:
+            ValueError: If the repo is not found or its type is unsupported.
+            RuntimeError: If the underlying import fails (e.g. git not available).
+        """
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from autobot_shared.time_utils import now_utc
+        from skills.db import get_skills_engine
+        from skills.external_importer import ExternalSkillImporter
+        from skills.models import RepoType, SkillPackage, SkillRepo
+
+        engine = get_skills_engine()
+        async with AsyncSession(engine) as session:
+            result = await session.execute(select(SkillRepo).where(SkillRepo.id == repo_id))
+            repo = result.scalar_one_or_none()
+            if repo is None:
+                raise ValueError(f"SkillRepo '{repo_id}' not found")
+
+            importer = ExternalSkillImporter()
+            if repo.repo_type == RepoType.GIT:
+                packages = await importer.import_git_repo(repo.url, repo_id=repo_id)
+            elif repo.repo_type == RepoType.HTTP:
+                catalog_entries = await importer.import_http_catalog(repo.url)
+                packages = []
+                for entry in catalog_entries:
+                    try:
+                        pkg = await importer.install_from_catalog(
+                            entry.get("name", "unknown"), entry, repo_id=repo_id
+                        )
+                        packages.append(pkg)
+                    except ValueError as exc:
+                        logger.warning("Skipping catalog entry: %s", exc)
+            else:
+                raise ValueError(
+                    f"sync_external_repo does not support repo_type '{repo.repo_type}'"
+                    " — use skills.sync for GIT/LOCAL/MCP repo discovery"
+                )
+
+            imported: List[Dict[str, Any]] = []
+            for pkg in packages:
+                existing = await session.scalar(
+                    select(SkillPackage).where(SkillPackage.name == pkg.name)
+                )
+                if existing is not None:
+                    logger.debug("Skill '%s' already in DB, skipping", pkg.name)
+                    continue
+                session.add(pkg)
+                imported.append({"name": pkg.name, "version": pkg.version, "id": pkg.id})
+
+            repo.skill_count = len(imported)
+            repo.last_synced = now_utc()
+            await session.commit()
+
+        logger.info(
+            "sync_external_repo: imported %d package(s) from repo %s",
+            len(imported),
+            repo_id,
+        )
+        return imported
+
     def search_skills(self, query: str) -> List[Dict[str, Any]]:
         """Search skills by name, description, or tags."""
         query_lower = query.lower()
