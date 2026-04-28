@@ -10,11 +10,11 @@ Contains execution strategy implementations for workflow orchestration.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from constants.threshold_constants import TimingConstants
 
-from .types import AgentTask, ExecutionStrategy, WorkflowPlan
+from .types import AgentTask, ExecutionStrategy, WorkflowDependencies, WorkflowPlan
 
 logger = logging.getLogger(__name__)
 
@@ -26,34 +26,16 @@ class ExecutionStrategyHandler:
         self,
         max_parallel_tasks: int,
         resource_semaphore: asyncio.Semaphore,
-        execute_single_task: Callable,
-        topological_sort_tasks: Callable,
-        dependencies_met: Callable,
-        group_pipeline_stages: Callable,
-        enhance_task_for_collaboration: Callable,
-        coordinate_collaboration: Callable,
-    ):
-        """
-        Initialize strategy handler with required dependencies.
-
-        Args:
-            max_parallel_tasks: Maximum concurrent tasks
-            resource_semaphore: Semaphore for resource management
-            execute_single_task: Function to execute a single task
-            topological_sort_tasks: Function to sort tasks by dependencies
-            dependencies_met: Function to check if dependencies are satisfied
-            group_pipeline_stages: Function to group tasks into pipeline stages
-            enhance_task_for_collaboration: Function to enhance tasks for collaboration
-            coordinate_collaboration: Coroutine for coordination
-        """
+        deps: WorkflowDependencies,
+    ) -> None:
         self.max_parallel_tasks = max_parallel_tasks
         self.resource_semaphore = resource_semaphore
-        self._execute_single_task = execute_single_task
-        self._topological_sort_tasks = topological_sort_tasks
-        self._dependencies_met = dependencies_met
-        self._group_pipeline_stages = group_pipeline_stages
-        self._enhance_task_for_collaboration = enhance_task_for_collaboration
-        self._coordinate_collaboration = coordinate_collaboration
+        self._execute_single_task = deps.execute_single_task
+        self._topological_sort_tasks = deps.topological_sort_tasks
+        self._dependencies_met = deps.dependencies_met
+        self._group_pipeline_stages = deps.group_pipeline_stages
+        self._enhance_task_for_collaboration = deps.enhance_task_for_collaboration
+        self._coordinate_collaboration = deps.coordinate_collaboration
         self.coordination_prefix = "autobot:orchestrator:coord:"
 
     async def execute_by_strategy(self, plan: WorkflowPlan) -> Dict[str, Any]:
@@ -130,9 +112,15 @@ class ExecutionStrategyHandler:
                         results[task.task_id] = result
                         running_tasks.remove((task, future))
                         logger.info("Completed parallel task %s", task.task_id)
-            else:
-                # No tasks running, wait a bit
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)
+            elif pending_tasks:
+                # No running tasks but pending remain — dependency deadlock (#6420)
+                logger.error(
+                    "Dependency deadlock: %d tasks unresolvable, failing them",
+                    len(pending_tasks),
+                )
+                for task in pending_tasks:
+                    results[task.task_id] = task.to_failed_result("Dependency deadlock")
+                break
 
         return results
 

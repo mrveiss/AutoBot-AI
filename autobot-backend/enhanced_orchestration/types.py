@@ -11,7 +11,7 @@ Contains enums and dataclasses for the enhanced orchestration system.
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List, Optional, Set
 
 if TYPE_CHECKING:
     from .success_criteria import SuccessCriteria
@@ -128,6 +128,22 @@ class WorkflowPlan:
     structured_criteria: List["SuccessCriteria"] = field(default_factory=list)
     fallback_plans: List["WorkflowPlan"] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class WorkflowDependencies:
+    """Groups the callable dependencies injected into ExecutionStrategyHandler (#6422).
+
+    Replaces 6 positional Callable params with a single named container, making
+    the constructor testable and the dependency surface explicit.
+    """
+
+    execute_single_task: Callable
+    topological_sort_tasks: Callable
+    dependencies_met: Callable
+    group_pipeline_stages: Callable
+    enhance_task_for_collaboration: Callable
+    coordinate_collaboration: Callable
 
 
 @dataclass

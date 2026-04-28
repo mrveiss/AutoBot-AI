@@ -16,7 +16,7 @@ from enhanced_orchestration.agent_router import AgentRouter
 from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
-from enhanced_orchestration.types import AgentTask, WorkflowPlan
+from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
 from enhanced_orchestration.workflow_planning import WorkflowPlanner as StrategyPlanner
 from event_manager import get_event_manager as _get_event_manager
 from orchestration.performance_tracker import PerformanceTracker
@@ -60,12 +60,14 @@ class WorkflowRunner:
             self._strategy_handler = ExecutionStrategyHandler(
                 max_parallel_tasks=self.max_parallel_tasks,
                 resource_semaphore=self.resource_semaphore,
-                execute_single_task=self._execute_single_agent_task,
-                topological_sort_tasks=self._strategy_planner.topological_sort_tasks,
-                dependencies_met=self._strategy_planner.dependencies_met,
-                group_pipeline_stages=self._strategy_planner.group_pipeline_stages,
-                enhance_task_for_collaboration=self._strategy_planner.enhance_task_for_collaboration,
-                coordinate_collaboration=self._collab.coordinate_collaboration,
+                deps=WorkflowDependencies(
+                    execute_single_task=self._execute_single_agent_task,
+                    topological_sort_tasks=self._strategy_planner.topological_sort_tasks,
+                    dependencies_met=self._strategy_planner.dependencies_met,
+                    group_pipeline_stages=self._strategy_planner.group_pipeline_stages,
+                    enhance_task_for_collaboration=self._strategy_planner.enhance_task_for_collaboration,
+                    coordinate_collaboration=self._collab.coordinate_collaboration,
+                ),
             )
         return self._strategy_handler
 

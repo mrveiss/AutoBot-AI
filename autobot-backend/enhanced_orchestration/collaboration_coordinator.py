@@ -54,8 +54,9 @@ class CollaborationCoordinator:
                         {"type": "context_update", "shared_context": shared_context},
                     )
         except asyncio.CancelledError:
-            await pubsub.unsubscribe(collab_channel)
             raise
+        finally:
+            await pubsub.unsubscribe(collab_channel)
 
     async def broadcast_to_agents(self, channel: str, data: Dict[str, Any]) -> None:
         await self._ensure_redis()
