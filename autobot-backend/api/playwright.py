@@ -15,6 +15,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
+from research_browser_manager import get_research_browser_manager
 from services.playwright_service import (
     get_playwright_service,
     playwright_service,
@@ -23,6 +24,8 @@ from services.playwright_service import (
     test_frontend_embedded,
 )
 from api.schemas_common import DataResponse
+import base64
+
 from api.schemas_code import (
     PlaywrightBrowserActionResponse,
     PlaywrightCapabilitiesResponse,
@@ -35,6 +38,7 @@ from api.schemas_code import (
     PlaywrightSearchRequest,
     PlaywrightStatusResponse,
     PlaywrightWorkerStatusResponse,
+    SnapshotWithRegionsResponse,
 )
 from api.schemas_system import PlaywrightEmbeddedResultResponse
 
@@ -49,6 +53,11 @@ class TestMessageRequest(BaseModel):
 
 class FrontendTestRequest(BaseModel):
     frontend_url: str = _ssot_config.frontend_url
+
+
+class SnapshotWithRegionsRequest(BaseModel):
+    session_id: str
+    goal: str = ""  # optional hint for filtering
 
 
 # Browser VM connection
@@ -749,3 +758,113 @@ async def get_capabilities():
             "description": "Docker container with native API integration",
         },
     }
+
+
+# JavaScript used by snapshot_with_regions to walk the DOM and collect regions.
+_JS_COLLECT_REGIONS = """
+() => {
+  const results = [];
+  const seen = new Set();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  while (walker.nextNode()) {
+    const el = walker.currentNode;
+    const rect = el.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    if (area < 20) continue;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+    if (rect.width === 0 || rect.height === 0) continue;
+    const key = `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)},${Math.round(rect.height)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const role = el.getAttribute('role') || el.tagName.toLowerCase();
+    const textPreview = (el.textContent || '').trim().slice(0, 80);
+    if (!textPreview && !el.getAttribute('aria-label') && !el.getAttribute('alt')) continue;
+    let selector = el.tagName.toLowerCase();
+    if (el.id) selector = `#${el.id}`;
+    else if (el.className && typeof el.className === 'string') {
+      const cls = el.className.trim().split(/\\s+/)[0];
+      if (cls) selector = `.${cls}`;
+    }
+    let xpath = '';
+    let node = el;
+    while (node && node !== document.body) {
+      const tag = node.tagName.toLowerCase();
+      const idx = Array.from(node.parentElement?.children || []).filter(c => c.tagName === node.tagName).indexOf(node) + 1;
+      xpath = `/${tag}[${idx}]${xpath}`;
+      node = node.parentElement;
+    }
+    xpath = `/html/body${xpath}`;
+    results.push({
+      selector,
+      xpath,
+      rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+      textPreview: textPreview || el.getAttribute('aria-label') || el.getAttribute('alt') || '',
+      role
+    });
+  }
+  return results.slice(0, 200);
+}
+"""
+
+
+@router.post(
+    "/snapshot-with-regions",
+    response_model=DataResponse[SnapshotWithRegionsResponse],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="snapshot_with_regions",
+    error_code_prefix="PLAYWRIGHT",
+)
+async def snapshot_with_regions(request: SnapshotWithRegionsRequest):
+    """
+    Take a screenshot of a research browser session and return detected page regions.
+
+    Returns a base64 PNG screenshot together with a list of interactive DOM regions
+    (selector, xpath, bounding rect, text preview, ARIA role) so the frontend can
+    overlay clickable highlights for scraping-template creation. (#5136)
+    """
+    manager = get_research_browser_manager()
+    session = manager.get_session(request.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.page is None:
+        raise HTTPException(status_code=400, detail="Browser page not initialized")
+
+    logger.info(
+        "snapshot-with-regions: session=%s goal=%r", request.session_id, request.goal
+    )
+
+    screenshot_bytes: bytes = await session.page.screenshot(type="png")
+    screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+    raw_regions: list = await session.page.evaluate(_JS_COLLECT_REGIONS)
+
+    viewport_size = session.page.viewport_size or {}
+
+    regions = [
+        {
+            "selector": r.get("selector", ""),
+            "xpath": r.get("xpath", ""),
+            "rect": r.get("rect", {"x": 0, "y": 0, "w": 0, "h": 0}),
+            "text_preview": r.get("textPreview", ""),
+            "role": r.get("role", ""),
+        }
+        for r in raw_regions
+    ]
+
+    logger.info(
+        "snapshot-with-regions: captured %d regions for session %s",
+        len(regions),
+        request.session_id,
+    )
+
+    return DataResponse(
+        data=SnapshotWithRegionsResponse(
+            screenshot=screenshot_b64,
+            regions=regions,
+            viewport=dict(viewport_size),
+        )
+    )

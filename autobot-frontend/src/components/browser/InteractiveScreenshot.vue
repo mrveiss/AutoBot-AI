@@ -14,8 +14,25 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createLogger } from '@/utils/logger'
 
 const { t } = useI18n()
+const logger = createLogger('InteractiveScreenshot')
+
+interface RegionRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+interface PageRegion {
+  selector: string
+  xpath: string
+  rect: RegionRect
+  textPreview: string
+  role: string
+}
 
 interface Props {
   screenshot: string | null
@@ -23,6 +40,8 @@ interface Props {
   interactive?: boolean
   viewportWidth?: number
   viewportHeight?: number
+  regions?: PageRegion[]
+  markRegionsMode?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -30,15 +49,24 @@ const props = withDefaults(defineProps<Props>(), {
   interactive: true,
   viewportWidth: 1280,
   viewportHeight: 720,
+  regions: () => [],
+  markRegionsMode: false,
 })
 
 const emit = defineEmits<{
   interact: [payload: { action: string; params: Record<string, unknown> }]
+  regionsSelected: [regions: Array<{ selector: string; xpath: string; label: string }>]
 }>()
 
 const showTypeOverlay = ref(false)
 const typeText = ref('')
 const imgRef = ref<HTMLImageElement | null>(null)
+
+// Region-marking state (#5136)
+const hoveredRegion = ref<number | null>(null)
+const selectedRegions = ref<Array<{ selector: string; xpath: string; label: string }>>([])
+const popupRegionIndex = ref<number | null>(null)
+const popupLabel = ref('')
 
 const screenshotSrc = computed(() =>
   props.screenshot ? `data:image/png;base64,${props.screenshot}` : null
@@ -89,6 +117,56 @@ function submitType() {
   typeText.value = ''
   showTypeOverlay.value = false
 }
+
+// Region-marking helpers (#5136)
+function regionStyle(rect: RegionRect): Record<string, string> {
+  const img = imgRef.value
+  if (!img) return {}
+  const imgRect = img.getBoundingClientRect()
+  const scaleX = imgRect.width / props.viewportWidth
+  const scaleY = imgRect.height / props.viewportHeight
+  return {
+    position: 'absolute',
+    left: `${rect.x * scaleX}px`,
+    top: `${rect.y * scaleY}px`,
+    width: `${rect.w * scaleX}px`,
+    height: `${rect.h * scaleY}px`,
+    pointerEvents: 'all',
+    cursor: 'pointer',
+  }
+}
+
+function popupStyle(rect: RegionRect): Record<string, string> {
+  const img = imgRef.value
+  if (!img) return {}
+  const imgRect = img.getBoundingClientRect()
+  const scaleX = imgRect.width / props.viewportWidth
+  const scaleY = imgRect.height / props.viewportHeight
+  return {
+    position: 'absolute',
+    left: `${rect.x * scaleX}px`,
+    top: `${(rect.y + rect.h) * scaleY + 4}px`,
+    zIndex: '50',
+  }
+}
+
+function openPopup(index: number): void {
+  popupRegionIndex.value = index
+  popupLabel.value = ''
+}
+
+function saveRegion(index: number | null): void {
+  if (index === null || !props.regions) return
+  const region = props.regions[index]
+  selectedRegions.value.push({
+    selector: region.selector,
+    xpath: region.xpath,
+    label: popupLabel.value || region.textPreview.slice(0, 20),
+  })
+  logger.debug('Region saved', { selector: region.selector, label: popupLabel.value })
+  emit('regionsSelected', [...selectedRegions.value])
+  popupRegionIndex.value = null
+}
 </script>
 
 <template>
@@ -107,6 +185,35 @@ function submitType() {
       <div v-if="loading" class="loading-overlay">
         <div class="loading-spinner" />
       </div>
+
+      <!-- Region-marking overlay (#5136) -->
+      <template v-if="markRegionsMode && regions && regions.length > 0">
+        <div
+          v-for="(region, i) in regions"
+          :key="i"
+          class="region-overlay"
+          :class="{ 'region-hovered': hoveredRegion === i }"
+          :style="regionStyle(region.rect)"
+          @mouseenter="hoveredRegion = i"
+          @mouseleave="hoveredRegion = null"
+          @click.stop="openPopup(i)"
+        />
+        <div
+          v-if="popupRegionIndex !== null"
+          class="region-popup"
+          :style="popupStyle(regions[popupRegionIndex].rect)"
+          @click.stop
+        >
+          <div class="region-popup-selector">{{ regions[popupRegionIndex].selector }}</div>
+          <input
+            v-model="popupLabel"
+            placeholder="Label (e.g. title, price)"
+            class="region-popup-input"
+          />
+          <button class="region-popup-save" @click="saveRegion(popupRegionIndex)">Save</button>
+          <button class="region-popup-cancel" @click="popupRegionIndex = null">Cancel</button>
+        </div>
+      </template>
     </div>
 
     <!-- No screenshot placeholder -->
@@ -312,5 +419,69 @@ function submitType() {
   color: white;
   cursor: pointer;
   font-size: var(--text-xs);
+}
+
+/* Region-marking overlay (#5136) */
+.region-overlay {
+  position: absolute;
+  border: 2px solid transparent;
+  transition: border-color 0.1s;
+}
+
+.region-overlay.region-hovered {
+  border-color: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.region-popup {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.region-popup-selector {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.region-popup-input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.region-popup-save,
+.region-popup-cancel {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.region-popup-save {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  margin-right: 4px;
+}
+
+.region-popup-cancel {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #475569;
 }
 </style>
