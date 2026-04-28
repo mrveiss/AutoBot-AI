@@ -80,6 +80,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/components/chat/ChatInterface.vue')
       },
       {
+        path: 'terminal',
+        name: 'chat-terminal',
+        component: () => import('@/components/chat/ChatInterface.vue'),
+        meta: { chatTab: 'terminal', requiresAuth: true, title: 'Chat — Terminal' }
+      },
+      {
+        path: 'novnc',
+        name: 'chat-novnc',
+        component: () => import('@/components/chat/ChatInterface.vue'),
+        meta: { chatTab: 'novnc', requiresAuth: true, title: 'Chat — Remote Desktop' }
+      },
+      {
         path: ':sessionId',
         name: 'chat-session',
         component: () => import('@/components/chat/ChatInterface.vue'),

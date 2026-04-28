@@ -268,6 +268,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -318,6 +319,10 @@ import MultiModelChat from './MultiModelChat.vue'
 
 // i18n
 const { t } = useI18n()
+
+// Router — tab routes (#6415)
+const route = useRoute()
+const router = useRouter()
 
 // Stores and controller
 const store = useChatStore()
@@ -462,8 +467,9 @@ const pendingCommand = ref({
 })
 const currentWorkflowId = ref<string | null>(null)
 
-// Tab state
-const activeTab = ref<string>('chat')
+// Tab state — initialized from route meta so /chat/terminal and /chat/novnc deep-link correctly
+const activeTab = ref<string>((route.meta.chatTab as string) ?? 'chat')
+watch(() => route.meta.chatTab, (tab: unknown) => { activeTab.value = (tab as string) ?? 'chat' })
 
 // Issue #690: Overseer Agent State
 const overseerEnabled = ref(false)
@@ -680,15 +686,12 @@ const handleContentLoadingTimeout = () => {
   logger.warn('Content loading timed out')
 }
 
-// Tab change handler - ensures local tab state change without router navigation
+// Tab change handler — updates local state and syncs URL to the named tab route (#6415)
 const handleTabChange = (tabKey: string) => {
   logger.debug('Tab change requested:', tabKey)
-
-  // Prevent any router navigation and only update local state
-  // This fixes the Terminal tab issue where it was triggering unwanted navigation
   activeTab.value = tabKey
-
-  // Log successful tab change
+  const routeName = tabKey === 'chat' ? 'chat-default' : `chat-${tabKey}`
+  router.push({ name: routeName }).catch(() => {})
   logger.debug('Active tab changed to:', activeTab.value)
 }
 
@@ -814,7 +817,7 @@ const onCommandApproved = async (commandData: any) => {
   // The backend polling loop will detect the approval and execute the command.
 
   // Switch to terminal tab to show execution
-  activeTab.value = 'terminal'
+  handleTabChange('terminal')
 
   // Close dialog
   showCommandDialog.value = false
