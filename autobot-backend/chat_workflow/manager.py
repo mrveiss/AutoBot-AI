@@ -2812,6 +2812,18 @@ before summarizing.
             "[ChatWorkflowManager] Initial prompt length: %d characters",
             len(llm_params["prompt"]),
         )
+
+        # Issue #5073: pre-compact hook — fire-and-forget before returning so
+        # the snapshot is enqueued before the next LLM call consumes the context.
+        asyncio.create_task(
+            self._fire_pre_compact_hook(
+                session_id=session.session_id,
+                conversation_history=session.conversation_history or [],
+                user_id=context.get("user_id") if context else None,
+                model_name=llm_params.get("model", ""),
+            )
+        )
+
         return llm_params
 
     def _create_llm_iteration_context(
@@ -2892,11 +2904,13 @@ before summarizing.
             session_id, workflow_messages, combined_response
         )
 
-        # Issue #5070: fire-and-forget verbatim memory append (non-blocking)
+        # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
+        # Replaces the direct verbatim-store asyncio.create_task from #5070 with
+        # a Celery-backed stop hook so writes are durable and off the hot path.
         user_id = context.get("user_id") if context else None
         turn = len([m for m in workflow_messages if m.type == "response"])
         asyncio.create_task(
-            self._append_verbatim_turn(session_id, turn, message, combined_response, user_id)
+            self._fire_stop_hook(session_id, message, combined_response, user_id, turn)
         )
 
     async def _append_verbatim_turn(
@@ -2935,6 +2949,62 @@ before summarizing.
             logger.warning(
                 "VerbatimStore append failed for session %s: %s", session_id, exc
             )
+
+    async def _fire_stop_hook(
+        self,
+        session_id: str,
+        user_message: str,
+        assistant_response: str,
+        user_id: Optional[str],
+        turn_number: int,
+    ) -> None:
+        """Invoke stop hook to enqueue memory tasks after turn completion.
+
+        Issue #5073: Delegates to chat_workflow.stop_hook.on_turn_complete
+        which enqueues write_verbatim + extract_facts Celery tasks.
+        Called via asyncio.create_task — never blocks the response stream.
+        """
+        from chat_workflow.stop_hook import on_turn_complete
+
+        await on_turn_complete(
+            session_id=session_id,
+            user_message=user_message,
+            assistant_response=assistant_response,
+            user_id=user_id,
+            turn_number=turn_number,
+        )
+
+    async def _fire_pre_compact_hook(
+        self,
+        session_id: str,
+        conversation_history: List[Dict[str, Any]],
+        user_id: Optional[str],
+        model_name: str,
+    ) -> None:
+        """Invoke pre-compact hook to snapshot session before context overflow.
+
+        Issue #5073: Delegates to chat_workflow.compact_hook.on_pre_compact
+        which enqueues compact_snapshot_task when usage ≥ 85 %.
+        Called via asyncio.create_task — never blocks the response stream.
+        """
+        from chat_workflow.compact_hook import on_pre_compact
+
+        # Convert WorkflowSession history dicts to the format expected by the hook.
+        messages = [
+            {"role": "user", "content": entry.get("user", "")}
+            for entry in conversation_history
+            if entry.get("user")
+        ] + [
+            {"role": "assistant", "content": entry.get("assistant", "")}
+            for entry in conversation_history
+            if entry.get("assistant")
+        ]
+        await on_pre_compact(
+            session_id=session_id,
+            messages=messages,
+            user_id=user_id,
+            model_name=model_name,
+        )
 
     @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
