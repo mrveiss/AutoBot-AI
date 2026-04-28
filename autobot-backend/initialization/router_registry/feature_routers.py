@@ -475,6 +475,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.verbatim_memory", "/verbatim-memory", ["memory"], "verbatim_memory"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # Issue #5061: First-run onboarding presets + doctor
+    ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
     (
         "api.diagnostics",
         "/api/diagnostics",
