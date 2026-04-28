@@ -819,17 +819,34 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         )
 
         system_prompt = self._get_system_prompt(language=language)
-        # Issue #3787: Prepend always-loaded compact memory summary.
+        # Issue #5066: Tiered L0-L3 context wake-up (A/B against legacy path).
+        # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
+        # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
+        # When false the pre-existing unconditional EssentialStory path is used.
         try:
-            from memory.essential_story import EssentialStoryGenerator
+            from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
 
-            story = await EssentialStoryGenerator().generate(
-                model_name=selected_model
-            )
-            if story:
-                system_prompt = story + "\n\n" + system_prompt
-        except Exception as _ess_exc:
-            logger.warning("EssentialStory injection failed: %s", _ess_exc)
+            if TIERED_CONTEXT_ENABLED:
+                tiered_ctx = await TieredContextBuilder().build(
+                    user_message=message,
+                    model_name=selected_model,
+                    session_id=session.session_id,
+                    memory_graph=getattr(self, "memory_graph", None),
+                    knowledge_service=self.knowledge_service if use_knowledge else None,
+                )
+                if tiered_ctx:
+                    system_prompt = tiered_ctx + "\n\n" + system_prompt
+            else:
+                # Issue #3787: legacy always-loaded compact memory summary.
+                from memory.essential_story import EssentialStoryGenerator
+
+                story = await EssentialStoryGenerator().generate(
+                    model_name=selected_model
+                )
+                if story:
+                    system_prompt = story + "\n\n" + system_prompt
+        except Exception as _ctx_exc:
+            logger.warning("Context injection failed: %s", _ctx_exc)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 
