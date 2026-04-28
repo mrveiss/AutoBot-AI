@@ -10,25 +10,25 @@
       </div>
       <div class="header-actions">
         <button class="btn-action-primary" @click="showCreateModal = true">
-          <i class="fas fa-user-plus"></i>
+          <Icon name="user-plus" />
           Add User
         </button>
         <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" :spin="loading" />
           Refresh
         </button>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" @click="error = null"><i class="fas fa-times"></i></button>
+      <button class="btn-dismiss" @click="error = null"><Icon name="times" /></button>
     </div>
 
     <!-- Search bar -->
     <div class="search-bar">
-      <i class="fas fa-search search-icon"></i>
+      <Icon name="search" class="search-icon" />
       <input
         v-model="searchQuery"
         type="text"
@@ -41,7 +41,7 @@
     <!-- Users table -->
     <div class="table-section">
       <div v-if="loading && users.length === 0" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i> Loading users…
+        <Icon name="sync-alt" :spin="true" /> Loading users…
       </div>
 
       <table v-else class="data-table">
@@ -86,7 +86,7 @@
                 title="Deactivate"
                 @click="toggleActive(user, false)"
               >
-                <i class="fas fa-ban"></i>
+                <Icon name="ban" />
               </button>
               <button
                 v-else
@@ -94,14 +94,14 @@
                 title="Activate"
                 @click="toggleActive(user, true)"
               >
-                <i class="fas fa-check-circle"></i>
+                <Icon name="check-circle" />
               </button>
               <button
                 class="btn-icon btn-danger"
                 title="Delete"
                 @click="confirmDelete(user)"
               >
-                <i class="fas fa-trash"></i>
+                <Icon name="trash" />
               </button>
             </td>
           </tr>
@@ -114,11 +114,11 @@
       <!-- Pagination -->
       <div v-if="total > pageSize" class="pagination">
         <button :disabled="page === 0" class="btn-page" @click="changePage(-1)">
-          <i class="fas fa-chevron-left"></i>
+          <Icon name="chevron-left" />
         </button>
         <span class="page-info">{{ page + 1 }} / {{ totalPages }}</span>
         <button :disabled="page >= totalPages - 1" class="btn-page" @click="changePage(1)">
-          <i class="fas fa-chevron-right"></i>
+          <Icon name="chevron-right" />
         </button>
       </div>
     </div>
@@ -128,7 +128,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>Add User</h3>
-          <button class="btn-close" @click="showCreateModal = false"><i class="fas fa-times"></i></button>
+          <button class="btn-close" @click="showCreateModal = false"><Icon name="times" /></button>
         </div>
         <form class="modal-body" @submit.prevent="createUser">
           <div class="form-group">
@@ -151,7 +151,7 @@
           <div class="modal-footer">
             <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
             <button type="submit" class="btn-action-primary" :disabled="creating">
-              <i v-if="creating" class="fas fa-spinner fa-spin"></i>
+              <Icon v-if="creating" name="sync-alt" :spin="true" />
               Create User
             </button>
           </div>
@@ -182,6 +182,7 @@ import { ref, computed, onMounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('AdminUsersView')
 

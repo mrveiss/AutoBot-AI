@@ -11,11 +11,11 @@
             :class="['btn-action-secondary', { 'btn-polling-active': isPolling }]"
             @click="togglePolling"
           >
-            <i :class="isPolling ? 'fas fa-pause' : 'fas fa-play'"></i>
+            <Icon :name="isPolling ? 'pause' : 'play'" />
             {{ isPolling ? $t('views.auditLogs.pauseUpdates') : $t('views.auditLogs.autoRefresh') }}
           </button>
           <button class="btn-action-danger" @click="showCleanupModal = true">
-            <i class="fas fa-trash-alt"></i>
+            <Icon name="trash" />
             {{ $t('views.auditLogs.cleanup') }}
           </button>
         </div>
@@ -27,31 +27,31 @@
           :class="['tab-btn', { active: activeTab === 'dashboard' }]"
           @click="activeTab = 'dashboard'"
         >
-          <i class="fas fa-chart-pie"></i>
+          <Icon name="chart-pie" />
           {{ $t('views.auditLogs.dashboard') }}
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'logs' }]"
           @click="activeTab = 'logs'"
         >
-          <i class="fas fa-list-alt"></i>
+          <Icon name="list-alt" />
           {{ $t('views.auditLogs.auditLogs') }}
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'failures' }]"
           @click="loadFailuresTab"
         >
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           {{ $t('views.auditLogs.failedOperations') }}
         </button>
       </div>
 
       <!-- Error Banner -->
       <div v-if="initError" class="error-banner">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         <span>{{ initError }}</span>
         <button class="btn-dismiss" @click="initError = null">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -142,16 +142,16 @@
         <div class="modal-content" @click.stop>
           <div class="modal-header">
             <h3>
-              <i class="fas fa-trash-alt"></i>
+              <Icon name="trash" />
               {{ $t('views.auditLogs.cleanupTitle') }}
             </h3>
             <button class="modal-close" @click="showCleanupModal = false">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
           <div class="modal-body">
             <div class="warning-banner">
-              <i class="fas fa-exclamation-triangle"></i>
+              <Icon name="exclamation-triangle" />
               <span>{{ $t('views.auditLogs.cleanupWarning') }}</span>
             </div>
             <div class="cleanup-form">
@@ -181,7 +181,7 @@
               :disabled="!cleanupConfirmed"
               @click="performCleanup"
             >
-              <i class="fas fa-trash-alt"></i>
+              <Icon name="trash" />
               {{ $t('views.auditLogs.deleteOldLogs') }}
             </button>
           </div>
@@ -199,6 +199,7 @@ import AuditStatistics from '@/components/audit/AuditStatistics.vue'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
+import Icon from '@/components/ui/Icon.vue'
 import type { AuditFilter, AuditEntry } from '@/types/audit'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -400,10 +401,6 @@ async function performCleanup() {
   margin-bottom: var(--spacing-4);
 }
 
-.error-banner i:first-child {
-  font-size: var(--text-lg);
-}
-
 .error-banner span {
   flex: 1;
   font-size: var(--text-sm);
@@ -527,9 +524,6 @@ async function performCleanup() {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-}
-
-.modal-header h3 i {
   color: var(--color-error);
 }
 
@@ -561,10 +555,6 @@ async function performCleanup() {
   color: var(--color-warning);
   font-size: var(--text-sm);
   margin-bottom: var(--spacing-4);
-}
-
-.warning-banner i {
-  font-size: var(--text-lg);
 }
 
 .cleanup-form {

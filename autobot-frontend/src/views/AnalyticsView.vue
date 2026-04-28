@@ -79,7 +79,7 @@
             :aria-selected="isDevToolsActive"
             aria-label="Dev Tools"
           >
-            <i class="fas fa-bolt tab-icon-fa" aria-hidden="true"></i>
+            <Icon name="bolt" class="tab-icon-svg" aria-hidden="true" />
             <span>Dev Tools</span>
           </router-link>
           <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
@@ -91,7 +91,7 @@
             :aria-selected="isUsageActive"
             :aria-label="$t('analytics.views.tabs.usageAria')"
           >
-            <i class="fas fa-chart-bar tab-icon-fa" aria-hidden="true"></i>
+            <Icon name="chart-bar" class="tab-icon-svg" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.usage') }}</span>
           </router-link>
         </nav>
@@ -108,6 +108,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import Icon from '@/components/ui/Icon.vue'
 
 const route = useRoute()
 
@@ -142,9 +143,11 @@ const isUsageActive = computed(() => {
 <style scoped>
 /* Issue #901: Technical Precision Analytics View Design */
 
-.tab-icon-fa {
+.tab-icon-svg {
   font-size: var(--text-base);
   flex-shrink: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .analytics-view {

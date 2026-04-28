@@ -14,7 +14,7 @@ Issue #753: User preference management interface
       <div class="page-header">
         <div class="header-content">
           <h1 class="page-title">
-            <i class="fas fa-cog"></i>
+            <Icon name="cog" />
             Settings
           </h1>
           <p class="page-description">
@@ -29,49 +29,49 @@ Issue #753: User preference management interface
           @click="activeTab = 'appearance'"
           :class="['settings-tab', { active: activeTab === 'appearance' }]"
         >
-          <i class="fas fa-paint-brush"></i>
+          <Icon name="paint-brush" />
           Appearance
         </button>
         <button
           @click="activeTab = 'language'"
           :class="['settings-tab', { active: activeTab === 'language' }]"
         >
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           {{ $t('settings.language') }}
         </button>
         <button
           @click="activeTab = 'voice'"
           :class="['settings-tab', { active: activeTab === 'voice' }]"
         >
-          <i class="fas fa-microphone"></i>
+          <Icon name="microphone" />
           Voice
         </button>
         <button
           @click="activeTab = 'webresearch'"
           :class="['settings-tab', { active: activeTab === 'webresearch' }]"
         >
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           {{ $t('settings.webResearch.title') }}
         </button>
         <button
           @click="activeTab = 'apikeys'"
           :class="['settings-tab', { active: activeTab === 'apikeys' }]"
         >
-          <i class="fas fa-key"></i>
+          <Icon name="key" />
           {{ $t('settings.apiKeys.stepKeys') }}
         </button>
         <button
           @click="activeTab = 'connection'"
           :class="['settings-tab', { active: activeTab === 'connection' }]"
         >
-          <i class="fas fa-plug"></i>
+          <Icon name="plug" />
           {{ $t('settings.connection.title') }}
         </button>
         <button
           @click="activeTab = 'featureflags'"
           :class="['settings-tab', { active: activeTab === 'featureflags' }]"
         >
-          <i class="fas fa-shield-alt"></i>
+          <Icon name="shield-alt" />
           Feature Flags
         </button>
       </div>
@@ -81,7 +81,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'appearance'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-paint-brush"></i>
+              <Icon name="paint-brush" />
               Appearance
             </h2>
             <p class="section-description">{{ $t('settings.appearanceDesc') }}</p>
@@ -94,7 +94,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'language'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-globe"></i>
+              <Icon name="globe" />
               {{ $t('settings.language') }}
             </h2>
             <p class="section-description">{{ $t('settings.languageDesc') }}</p>
@@ -107,7 +107,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'voice'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-microphone"></i>
+              <Icon name="microphone" />
               Voice
             </h2>
             <p class="section-description">{{ $t('settings.voiceDesc') }}</p>
@@ -120,7 +120,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'webresearch'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-search"></i>
+              <Icon name="search" />
               {{ $t('settings.webResearch.title') }}
             </h2>
             <p class="section-description">{{ $t('settings.webResearch.desc') }}</p>
@@ -133,14 +133,14 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'apikeys'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-key"></i>
+              <Icon name="key" />
               {{ $t('settings.apiKeys.stepKeys') }}
             </h2>
             <p class="section-description">{{ $t('settings.apiKeys.configureKeysDescription') }}</p>
           </div>
           <div class="section-content">
             <button class="open-wizard-btn" @click="showApiKeyWizard = true">
-              <i class="fas fa-magic"></i>
+              <Icon name="magic" />
               {{ $t('settings.apiKeys.wizardTitle') }}
             </button>
           </div>
@@ -149,7 +149,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'connection'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-plug"></i>
+              <Icon name="plug" />
               {{ $t('settings.connection.title') }}
             </h2>
             <p class="section-description">{{ $t('settings.connection.desc') }}</p>
@@ -162,7 +162,7 @@ Issue #753: User preference management interface
         <section v-if="activeTab === 'featureflags'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
-              <i class="fas fa-shield-alt"></i>
+              <Icon name="shield-alt" />
               Feature Flags
             </h2>
             <p class="section-description">Manage feature flags, enforcement modes, and access control</p>
@@ -186,6 +186,7 @@ import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsP
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -240,8 +241,9 @@ function onApiKeysSaved(): void {
   margin: var(--spacing-0);
 }
 
-.page-title i {
-  font-size: var(--text-2xl);
+.page-title svg {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -283,8 +285,9 @@ function onApiKeysSaved(): void {
   margin: 0 0 var(--spacing-xs) 0;
 }
 
-.section-title i {
-  font-size: var(--text-lg);
+.section-title svg {
+  width: var(--text-lg);
+  height: var(--text-lg);
   color: var(--color-primary);
 }
 
@@ -361,8 +364,9 @@ function onApiKeysSaved(): void {
     font-size: var(--text-2xl);
   }
 
-  .page-title i {
-    font-size: var(--text-xl);
+  .page-title svg {
+    width: var(--text-xl);
+    height: var(--text-xl);
   }
 
   .section-header {
