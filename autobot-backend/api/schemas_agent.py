@@ -968,6 +968,7 @@ class AgentTaskData(BaseModel):
     """Base for agent execution payload models that invoke AI Stack multi-agent queries."""
 
     agents_used: List[str]
+    execution_time: float
     result: Optional[Dict[str, Any]] = None
 
 
@@ -976,7 +977,6 @@ class EnhancedGoalData(AgentTaskData):
 
     goal: str
     coordination_mode: str
-    execution_time: float
     priority: Optional[str] = None
     enhanced_context_used: bool
     knowledge_base_integrated: bool
@@ -988,7 +988,6 @@ class MultiAgentCoordinationData(AgentTaskData):
 
     task: str
     coordination_strategy: str
-    coordination_time: float
     subtasks_count: int
     dependencies_count: int
     timestamp: str
