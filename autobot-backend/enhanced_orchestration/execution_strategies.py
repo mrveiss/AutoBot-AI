@@ -59,14 +59,18 @@ class ExecutionStrategyHandler:
         for task in sorted_tasks:
             logger.info("Executing task %s (%s)", task.task_id, task.agent_type)
 
-            # Wait for dependencies
-            await self._wait_for_dependencies(task, results)
+            try:
+                await self._wait_for_dependencies(task, results)
+            except RuntimeError as exc:
+                results[task.task_id] = task.to_failed_result(str(exc))
+                if not task.metadata.get("optional", False):
+                    logger.error("Required task %s blocked by failed dep, stopping", task.task_id)
+                    break
+                continue
 
-            # Execute task
             result = await self._execute_single_task(task, results)
             results[task.task_id] = result
 
-            # Check if we should continue
             if result.get("status") == "failed" and not task.metadata.get(
                 "optional", False
             ):
@@ -143,13 +147,17 @@ class ExecutionStrategyHandler:
                 ]
             )
 
-            # Collect results and prepare pipeline data for next stage
+            stage_failed = False
             for task, result in zip(stage_tasks, stage_results):
                 results[task.task_id] = result
-
-                # Extract outputs for pipeline
                 if result.get("status") == "completed" and "output" in result:
                     pipeline_data.update(result["output"])
+                if result.get("status") == "failed" and not task.metadata.get("optional", False):
+                    stage_failed = True
+
+            if stage_failed:
+                logger.error("Pipeline stage %d has required failures, stopping", stage_num + 1)
+                break
 
         return results
 
