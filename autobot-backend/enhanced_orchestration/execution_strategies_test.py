@@ -4,8 +4,6 @@
 """Unit tests for ExecutionStrategyHandler. Issue #6421."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
@@ -138,6 +136,131 @@ async def test_sequential_continues_after_optional_task_failure():
     handler = _make_handler(execute_fn=execute)
     await handler.execute_sequential(_plan(tasks))
     assert "t3" in executed
+
+
+@pytest.mark.asyncio
+async def test_sequential_records_failed_result_when_dep_failed():
+    """execute_sequential must record a failed result (not raise) when a dep fails (#6438).
+
+    t1 is optional so the loop doesn't break after t1 fails; t2 depends on t1 so
+    _wait_for_dependencies raises RuntimeError — must be caught and recorded, not propagated.
+    """
+    t1 = _task("t1")
+    t1.metadata["optional"] = True
+    t2 = _task("t2", deps=["t1"])
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t1":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_sequential(_plan([t1, t2]))
+    assert results["t1"]["status"] == "failed"
+    assert results["t2"]["status"] == "failed"
+    assert "t2" not in executed
+
+
+@pytest.mark.asyncio
+async def test_sequential_continues_when_blocked_dep_is_optional():
+    """Optional task blocked by a failed dep must not stop the workflow (#6438).
+
+    t1 optional (fails), t2 optional (dep on t1 → RuntimeError → recorded failed, skip),
+    t3 required (no deps) → must still execute.
+    """
+    t1 = _task("t1")
+    t1.metadata["optional"] = True
+    t2 = _task("t2", deps=["t1"])
+    t2.metadata["optional"] = True
+    t3 = _task("t3")
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t1":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_sequential(_plan([t1, t2, t3]))
+    assert "t3" in executed
+    assert results["t3"]["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# execute_pipeline stage failure (#6439)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_stops_after_required_stage_failure():
+    """execute_pipeline must not run stage 2 when stage 1 has a required failure (#6439)."""
+    t1 = _task("t1")
+    t2 = _task("t2")
+    stage1, stage2 = [t1], [t2]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t1":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    deps = __import__("enhanced_orchestration.types", fromlist=["WorkflowDependencies"]).WorkflowDependencies(
+        execute_single_task=execute,
+        topological_sort_tasks=lambda tasks, graph: tasks,
+        dependencies_met=lambda task, results: True,
+        group_pipeline_stages=lambda tasks, graph: [stage1, stage2],
+        enhance_task_for_collaboration=lambda task, channel: task,
+        coordinate_collaboration=lambda channel: __import__("asyncio").sleep(0),
+    )
+    from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
+    import asyncio
+    handler = ExecutionStrategyHandler(
+        max_parallel_tasks=5,
+        resource_semaphore=asyncio.Semaphore(5),
+        deps=deps,
+    )
+    results = await handler.execute_pipeline(_plan([t1, t2]))
+    assert results["t1"]["status"] == "failed"
+    assert "t2" not in executed
+
+
+@pytest.mark.asyncio
+async def test_pipeline_continues_when_failed_stage_task_is_optional():
+    """execute_pipeline must proceed to next stage when only optional tasks fail (#6439)."""
+    t1 = _task("t1")
+    t1.metadata["optional"] = True
+    t2 = _task("t2")
+    stage1, stage2 = [t1], [t2]
+    executed = []
+
+    async def execute(task, ctx):
+        executed.append(task.task_id)
+        if task.task_id == "t1":
+            return _failed(task.task_id)
+        return _completed(task.task_id)
+
+    deps = __import__("enhanced_orchestration.types", fromlist=["WorkflowDependencies"]).WorkflowDependencies(
+        execute_single_task=execute,
+        topological_sort_tasks=lambda tasks, graph: tasks,
+        dependencies_met=lambda task, results: True,
+        group_pipeline_stages=lambda tasks, graph: [stage1, stage2],
+        enhance_task_for_collaboration=lambda task, channel: task,
+        coordinate_collaboration=lambda channel: __import__("asyncio").sleep(0),
+    )
+    from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
+    import asyncio
+    handler = ExecutionStrategyHandler(
+        max_parallel_tasks=5,
+        resource_semaphore=asyncio.Semaphore(5),
+        deps=deps,
+    )
+    results = await handler.execute_pipeline(_plan([t1, t2]))
+    assert "t2" in executed
+    assert results["t2"]["status"] == "completed"
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +408,7 @@ async def test_collaborative_coordinator_awaited_on_cancel():
         resource_semaphore=asyncio.Semaphore(5),
         deps=deps,
     )
-    from enhanced_orchestration.types import ExecutionStrategy, WorkflowPlan
+    from enhanced_orchestration.types import ExecutionStrategy
     plan = _plan([_task("t1")], ExecutionStrategy.COLLABORATIVE)
     await handler.execute_collaborative(plan)
     assert cleanup_ran, "coordinator finally block must run before execute_collaborative returns"
