@@ -34,8 +34,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
+from services.audit.audit_log import AuditAction, audit_record
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from middleware.proxy_utils import get_client_ip
 from type_defs.common import Metadata
@@ -718,6 +719,16 @@ async def create_secret(
             secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
         audit_log("CREATE", secret.id, http_request, details=f"name={request.name}")
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        audit_record(
+            user_id=str((_user or {}).get("user_id", "unknown")),
+            action=AuditAction.API_KEY_CREATE,
+            resource_type="secret",
+            resource_id=secret.id,
+            ip_address=http_request.client.host if http_request.client else "unknown",
+            session_id=None,
+            outcome="success",
+        )
         return JSONResponse(
             status_code=201,
             content={
@@ -1074,6 +1085,16 @@ async def delete_secret(
             raise HTTPException(status_code=404, detail="Secret not found")
 
         audit_log("DELETE", secret_id, http_request)
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        audit_record(
+            user_id=str((_user or {}).get("user_id", "unknown")),
+            action=AuditAction.API_KEY_REVOKE,
+            resource_type="secret",
+            resource_id=secret_id,
+            ip_address=http_request.client.host if http_request.client else "unknown",
+            session_id=None,
+            outcome="success",
+        )
         return JSONResponse(
             status_code=200,
             content={"status": "success", "message": "Secret deleted successfully"},
