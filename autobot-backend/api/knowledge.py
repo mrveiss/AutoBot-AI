@@ -46,8 +46,9 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field, field_validator
 
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.audit.audit_log import AuditAction, audit_record
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
@@ -796,6 +797,17 @@ async def add_text_to_knowledge(
 
     fact_id = await _store_fact_in_kb(kb_to_use, text, metadata)
 
+    _user = get_auth_middleware().get_user_from_request(req)
+    audit_record(
+        user_id=str((_user or {}).get("user_id", "unknown")),
+        action=AuditAction.KNOWLEDGE_ADD,
+        resource_type="knowledge_doc",
+        resource_id=fact_id,
+        ip_address=req.client.host if req and req.client else "unknown",
+        session_id=None,
+        outcome="success",
+    )
+
     return AddTextResponse(
         status="success",
         message="Fact stored successfully",
@@ -1047,6 +1059,17 @@ async def add_facts_to_knowledge(
 
     fact_id = await _store_fact_in_kb(kb_to_use, request.content, metadata)
 
+    _user = get_auth_middleware().get_user_from_request(req)
+    audit_record(
+        user_id=str((_user or {}).get("user_id", "unknown")),
+        action=AuditAction.KNOWLEDGE_ADD,
+        resource_type="knowledge_doc",
+        resource_id=fact_id,
+        ip_address=req.client.host if req and req.client else "unknown",
+        session_id=None,
+        outcome="success",
+    )
+
     return AddFactResponse(
         success=True,
         document_id=fact_id,
@@ -1157,6 +1180,17 @@ async def add_url_to_knowledge(
         url_metadata["board_id"] = request.board_id
 
     fact_id = await _store_fact_in_kb(kb_to_use, content, url_metadata)
+
+    _user = get_auth_middleware().get_user_from_request(req)
+    audit_record(
+        user_id=str((_user or {}).get("user_id", "unknown")),
+        action=AuditAction.KNOWLEDGE_ADD,
+        resource_type="knowledge_doc",
+        resource_id=fact_id,
+        ip_address=req.client.host if req and req.client else "unknown",
+        session_id=None,
+        outcome="success",
+    )
 
     return AddUrlResponse(
         success=True,
@@ -1359,6 +1393,17 @@ async def upload_file_to_knowledge(
             "type": "file",
             "filename": filename,
         },
+    )
+
+    _user = get_auth_middleware().get_user_from_request(req)
+    audit_record(
+        user_id=str((_user or {}).get("user_id", "unknown")),
+        action=AuditAction.KNOWLEDGE_ADD,
+        resource_type="knowledge_doc",
+        resource_id=fact_id,
+        ip_address=req.client.host if req and req.client else "unknown",
+        session_id=None,
+        outcome="success",
     )
 
     word_count = len(content.split())
@@ -2284,6 +2329,17 @@ async def clear_all_knowledge(
             raise HTTPException(status_code=500, detail="Failed to clear")
 
     logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
+    _user = get_auth_middleware().get_user_from_request(req)
+    audit_record(
+        user_id=str((_user or {}).get("user_id", "unknown")),
+        action=AuditAction.KNOWLEDGE_REMOVE,
+        resource_type="knowledge_doc",
+        resource_id="all",
+        ip_address=req.client.host if req and req.client else "unknown",
+        session_id=None,
+        outcome="success",
+        metadata={"items_removed": items_removed},
+    )
     return {
         "status": "success",
         "items_removed": items_removed,
