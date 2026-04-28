@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
+from type_defs.common import Metadata
 from user_management.schemas import UserResponse as _UserResponse
 
 
@@ -1492,3 +1493,62 @@ class OrganizationStatsResponse(BaseModel):
     teams: dict
     is_active: bool
     created_at: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# agent.py request schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class GoalPayload(BaseModel):
+    goal: str
+    use_phi2: bool = False
+    user_role: str = "user"
+
+
+class CommandApprovalPayload(BaseModel):
+    task_id: str
+    approved: bool
+    user_role: str = "user"
+
+
+class EnhancedGoalPayload(BaseModel):
+    """Enhanced goal payload with AI Stack integration."""
+
+    goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
+    agents: Optional[List[str]] = Field(None, description="Specific agents to use")
+    coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
+    priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
+    context: Optional[str] = Field(None, description="Additional context")
+    use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
+    include_reasoning: bool = Field(False, description="Include reasoning steps")
+    max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
+
+
+class MultiAgentTaskPayload(BaseModel):
+    """Multi-agent task coordination payload."""
+
+    task: str = Field(..., min_length=1, description="Task description")
+    agents: List[str] = Field(..., min_length=1, description="Agents to coordinate")
+    coordination_strategy: str = Field("adaptive", description="Coordination strategy")
+    subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
+    dependencies: Optional[List[Dict[str, str]]] = Field(None, description="Task dependencies")
+
+
+class AgentAnalysisRequest(BaseModel):
+    """Agent analysis request for development and optimization."""
+
+    analysis_type: str = Field("comprehensive", description="Analysis type")
+    target_path: Optional[str] = Field(None, description="Specific path to analyze")
+    include_performance: bool = Field(True, description="Include performance analysis")
+    include_optimization: bool = Field(True, description="Include optimization suggestions")
+
+
+class ResearchTaskRequest(BaseModel):
+    """Research task request using multiple research agents."""
+
+    research_query: str = Field(..., min_length=1, description="Research query")
+    research_depth: str = Field("comprehensive", description="Research depth")
+    include_web: bool = Field(True, description="Include web research")
+    include_code_search: bool = Field(False, description="Include code search")
+    sources: Optional[List[str]] = Field(None, description="Specific sources")

@@ -2351,3 +2351,71 @@ class ThreatIntelStatusResponse(BaseModel):
 class DomainSecurityStatsResponse(BaseModel):
     success: bool
     stats: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# agent_terminal.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class TerminalCreateSessionRequest(BaseModel):
+    """Request to create agent terminal session"""
+
+    agent_id: str = Field(..., description="Unique identifier for the agent")
+    agent_role: str = Field(..., description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)")
+    conversation_id: Optional[str] = Field(None, description="Chat conversation ID to link")
+    host: str = Field("main", description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)")
+    metadata: Optional[Dict] = Field(None, description="Additional session metadata")
+
+
+class TerminalExecuteCommandRequest(BaseModel):
+    """Request to execute command in agent session"""
+
+    command: str = Field(..., description="Command to execute")
+    description: Optional[str] = Field(None, description="Description of what command does")
+    force_approval: bool = Field(False, description="Force user approval even for safe commands")
+
+
+class TerminalApproveCommandRequest(BaseModel):
+    """Request to approve/deny pending command"""
+
+    approved: bool = Field(..., description="Whether command is approved")
+    user_id: Optional[str] = Field(None, description="User who made the decision")
+    comment: Optional[str] = Field(None, description="Optional comment or reason for the decision")
+    auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
+    remember_for_project: bool = Field(False, description="Remember approval for this project")
+    project_path: Optional[str] = Field(None, description="Project path for approval memory")
+
+
+class TerminalToolApprovalRequest(BaseModel):
+    """Request to approve/deny a pending agent tool (event-stream level approval)."""
+
+    approved: bool = Field(..., description="Whether the tool execution is approved")
+    comment: Optional[str] = Field(None, description="Optional reason for the decision")
+    task_id: Optional[str] = Field(None, description="Task ID from the APPROVAL_REQUIRED event")
+
+
+class TerminalInterruptRequest(BaseModel):
+    """Request to interrupt agent and take control"""
+
+    user_id: str = Field(..., description="User requesting control")
+
+
+class TerminalHostSelectionRequest(BaseModel):
+    """Request for agent to select an infrastructure host"""
+
+    agent_session_id: Optional[str] = Field(None, description="Agent terminal session ID")
+    command: Optional[str] = Field(None, description="Command to execute on host")
+    purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
+    preferred_host_id: Optional[str] = Field(None, description="Preferred host ID if any")
+    allow_auto_select: bool = Field(True, description="Allow auto-selection if default host is set")
+
+
+class TerminalHostSelectionResponse(BaseModel):
+    """Response to host selection request"""
+
+    request_id: str = Field(..., description="Unique request ID for tracking")
+    status: str = Field(..., description="pending_selection, selected, or cancelled")
+    selected_host_id: Optional[str] = Field(None, description="Selected host ID")
+    selected_host_name: Optional[str] = Field(None, description="Selected host name")
+    connection_info: Optional[Dict] = Field(None, description="Connection details (host, port, username)")

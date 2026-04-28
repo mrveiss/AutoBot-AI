@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from type_defs.common import Metadata
 
 
 class SessionMessagesData(BaseModel):
@@ -170,3 +172,59 @@ class SessionCheckpointClearData(BaseModel):
     """data payload for DELETE /sessions/{session_id}/checkpoints."""
 
     session_id: str
+
+
+# ---------------------------------------------------------------------------
+# chat_sessions.py request schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class SessionCreate(BaseModel):
+    """Session creation model"""
+
+    title: Optional[str] = Field(None, max_length=200, description="Session title")
+    team_id: Optional[str] = Field(None, description="Team ID for team-scoped sessions (#684)")
+    metadata: Optional[Metadata] = Field(default_factory=dict, description="Session metadata")
+
+
+class SessionUpdate(BaseModel):
+    """Session update model"""
+
+    title: Optional[str] = Field(None, max_length=200, description="New session title")
+    metadata: Optional[Metadata] = Field(None, description="Updated metadata")
+
+
+class ActivityCreate(BaseModel):
+    """Single activity creation model"""
+
+    activity_id: str = Field(..., description="Frontend-generated activity ID")
+    type: str = Field(..., description="Activity type: terminal, file, browser, desktop")
+    user_id: str = Field(..., description="User who performed the activity")
+    content: str = Field(..., max_length=10000, description="Activity content/description")
+    secrets_used: list[str] = Field(default_factory=list, description="Secret IDs used")
+    metadata: Optional[Metadata] = Field(default_factory=dict, description="Activity metadata")
+    timestamp: str = Field(..., description="ISO format timestamp from frontend")
+
+
+class ActivityBatchCreate(BaseModel):
+    """Batch activity creation model"""
+
+    activities: list[ActivityCreate] = Field(..., description="List of activities to create")
+
+
+class SessionShareRequest(BaseModel):
+    """Request to share a session with users"""
+
+    share_with: list[str] = Field(..., min_length=1, description="User IDs to share with")
+    include_knowledge: bool = Field(False, description="Include KB facts from this session")
+    knowledge_facts: Optional[list[str]] = Field(
+        None, description="Specific fact IDs to share (all if omitted)"
+    )
+
+
+class ChatResetRequest(BaseModel):
+    """Request model for chat reset"""
+
+    session_id: Optional[str] = Field(None, description="Session ID to reset (optional)")
+    clear_context: bool = Field(True, description="Clear conversation context")
+    keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")

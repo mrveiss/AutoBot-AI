@@ -17,13 +17,11 @@ import json
 import logging
 import shlex
 import time
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -32,21 +30,26 @@ from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from type_defs.common import Metadata
 from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 from api.schemas_common import AgentMessageResponse, DataResponse
 from api.schemas_agent import (
+    AgentAnalysisRequest,
     AgentCommandApprovalResponse,
     AgentCommandExecuteResponse,
     AgentHealthResponse,
     AgentAvailableData,
     AgentResearchData,
     AgentStatusData,
+    CommandApprovalPayload,
     DevelopmentAnalysisData,
     EnhancedGoalData,
+    EnhancedGoalPayload,
+    GoalPayload,
     MultiAgentCoordinationData,
+    MultiAgentTaskPayload,
+    ResearchTaskRequest,
 )
 
 router = APIRouter()
@@ -126,78 +129,6 @@ AGENT_CAPABILITIES = {
         ],
     },
 }
-
-# ====================================================================
-# Request/Response Models
-# ====================================================================
-
-
-class GoalPayload(BaseModel):
-    goal: str
-    use_phi2: bool = False
-    user_role: str = "user"
-
-
-class CommandApprovalPayload(BaseModel):
-    task_id: str
-    approved: bool
-    user_role: str = "user"
-
-
-class EnhancedGoalPayload(BaseModel):
-    """Enhanced goal payload with AI Stack integration (Issue #708 consolidation)."""
-
-    goal: str = Field(
-        ..., min_length=1, max_length=10000, description="Goal description"
-    )
-    agents: Optional[List[str]] = Field(None, description="Specific agents to use")
-    coordination_mode: str = Field(
-        "intelligent",
-        description="Coordination mode (parallel, sequential, intelligent)",
-    )
-    priority: str = Field(
-        "normal", description="Task priority (low, normal, high, urgent)"
-    )
-    context: Optional[str] = Field(None, description="Additional context")
-    use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
-    include_reasoning: bool = Field(False, description="Include reasoning steps")
-    max_execution_time: int = Field(
-        300, ge=30, le=1800, description="Max execution time in seconds"
-    )
-
-
-class MultiAgentTaskPayload(BaseModel):
-    """Multi-agent task coordination payload (Issue #708 consolidation)."""
-
-    task: str = Field(..., min_length=1, description="Task description")
-    agents: List[str] = Field(..., min_items=1, description="Agents to coordinate")
-    coordination_strategy: str = Field("adaptive", description="Coordination strategy")
-    subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
-    dependencies: Optional[List[Dict[str, str]]] = Field(
-        None, description="Task dependencies"
-    )
-
-
-class AgentAnalysisRequest(BaseModel):
-    """Agent analysis request for development and optimization (Issue #708 consolidation)."""
-
-    analysis_type: str = Field("comprehensive", description="Analysis type")
-    target_path: Optional[str] = Field(None, description="Specific path to analyze")
-    include_performance: bool = Field(True, description="Include performance analysis")
-    include_optimization: bool = Field(
-        True, description="Include optimization suggestions"
-    )
-
-
-class ResearchTaskRequest(BaseModel):
-    """Research task request using multiple research agents (Issue #708 consolidation)."""
-
-    research_query: str = Field(..., min_length=1, description="Research query")
-    research_depth: str = Field("comprehensive", description="Research depth")
-    include_web: bool = Field(True, description="Include web research")
-    include_code_search: bool = Field(False, description="Include code search")
-    sources: Optional[List[str]] = Field(None, description="Specific sources")
-
 
 async def _kill_timed_out_process(
     process: Optional[asyncio.subprocess.Process],
