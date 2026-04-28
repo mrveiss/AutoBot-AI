@@ -5,6 +5,7 @@
 Agent config, memory, and LLM schemas.
 """
 
+import uuid
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -1191,3 +1192,77 @@ class CollabRemoveResponse(BaseModel):
     success: bool
     session_id: str
     removed_user_id: str
+
+
+# user_management/teams.py schemas (#6042)
+
+
+class TeamCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(default_factory=dict)
+    is_default: bool = Field(False)
+
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+    settings: Optional[dict] = Field(None)
+
+
+class MembershipUpdate(BaseModel):
+    role: str = Field(..., description="New role (owner, admin, member)")
+
+
+class MemberResponse(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    email: str
+    display_name: Optional[str]
+    role: str
+    joined_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class TeamResponse(BaseModel):
+    id: uuid.UUID
+    org_id: uuid.UUID
+    name: str
+    description: Optional[str]
+    settings: dict
+    is_default: bool
+    member_count: int = 0
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
+class TeamListResponse(BaseModel):
+    teams: List[TeamResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class TeamCreatedResponse(BaseModel):
+    success: bool = True
+    message: str
+    team: TeamResponse
+
+
+class TeamDeletedResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class MemberAddedResponse(BaseModel):
+    success: bool = True
+    message: str
+    member: MemberResponse
+
+
+class MemberRemovedResponse(BaseModel):
+    success: bool = True
+    message: str

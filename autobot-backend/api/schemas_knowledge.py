@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from type_defs.common import Metadata
+
 
 # ---------------------------------------------------------------------------
 # Knowledge schemas
@@ -3789,3 +3791,90 @@ class MCPToolCallRequest(BaseModel):
 
     tool_name: str = Field(..., description="Name of the MCP tool to call")
     arguments: Dict = Field(default_factory=dict, description="Tool arguments")
+
+
+# memory.py schemas (#6042)
+
+_VALID_ENTITY_TYPES = frozenset({
+    "conversation", "bug_fix", "feature", "decision", "task",
+    "user_preference", "context", "learning", "research", "implementation",
+})
+_VALID_RELATION_TYPES = frozenset({
+    "relates_to", "depends_on", "implements", "fixes", "informs",
+    "guides", "follows", "contains", "blocks",
+})
+
+
+class EntityCreateRequest(BaseModel):
+    entity_type: str = Field(..., description="Type of entity")
+    name: str = Field(..., min_length=1, max_length=200)
+    observations: List[str] = Field(..., min_length=1)
+    metadata: Optional[Metadata] = Field(default_factory=dict)
+    tags: Optional[List[str]] = Field(default_factory=list)
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v):
+        if v not in _VALID_ENTITY_TYPES:
+            raise ValueError(f"entity_type must be one of: {_VALID_ENTITY_TYPES}")
+        return v
+
+
+class ObservationAddRequest(BaseModel):
+    observations: List[str] = Field(..., min_length=1)
+
+
+class RelationCreateRequest(BaseModel):
+    from_entity: str = Field(..., description="Source entity name")
+    to_entity: str = Field(..., description="Target entity name")
+    relation_type: str = Field(..., description="Type of relationship")
+    bidirectional: bool = Field(default=False)
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    metadata: Optional[Metadata] = Field(default_factory=dict)
+
+    @field_validator("relation_type")
+    @classmethod
+    def validate_relation_type(cls, v):
+        if v not in _VALID_RELATION_TYPES:
+            raise ValueError(f"relation_type must be one of: {_VALID_RELATION_TYPES}")
+        return v
+
+
+class InvalidateEntityRequest(BaseModel):
+    ended_at: Optional[str] = Field(default=None, description="ISO-8601 timestamp for valid_to")
+
+
+class InvalidateRelationRequest(BaseModel):
+    from_id: str = Field(..., description="Source entity UUID")
+    relation_type: str = Field(..., description="Type of the relation")
+    to_id: str = Field(..., description="Target entity UUID")
+    ended_at: Optional[str] = Field(default=None)
+
+
+class EntityResponse(BaseModel):
+    id: str
+    type: str
+    name: str
+    created_at: int
+    updated_at: int
+    observations: List[str]
+    metadata: Metadata
+
+
+class RelationResponse(BaseModel):
+    to: str
+    type: str
+    created_at: int
+    metadata: Metadata
+
+
+class GraphNodeResponse(BaseModel):
+    entity: EntityResponse
+    relations: Dict[str, List[RelationResponse]]
+
+
+class SearchResponse(BaseModel):
+    entities: List[EntityResponse]
+    total_count: int
+    query: str
+    filters: Metadata

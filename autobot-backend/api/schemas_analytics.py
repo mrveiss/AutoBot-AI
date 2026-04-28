@@ -1784,3 +1784,60 @@ class RumMetrics(BaseModel):
     websocket_events: Optional[List[RumWebSocketMetric]] = None
     resources: Optional[List[RumResourceMetric]] = None
     critical_issues: Optional[List[RumCriticalIssueMetric]] = None
+
+
+# analytics_cost.py schemas (#6042)
+
+
+class CostSummaryResponse(BaseModel):
+    period: dict
+    total_cost_usd: float
+    daily_costs: dict
+    by_model: dict
+    avg_daily_cost: float
+
+
+class CostTrendResponse(BaseModel):
+    period_days: int
+    total_cost_usd: float
+    daily_costs: dict
+    trend: str
+    growth_rate_percent: float
+    avg_daily_cost: float
+
+
+class SessionCostResponse(BaseModel):
+    session_id: str
+    found: bool
+    cost_usd: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    error: Optional[str] = None
+
+
+class BudgetAlertRequest(BaseModel):
+    name: str = Field(..., description="Alert name")
+    threshold_usd: float = Field(..., gt=0, description="Budget threshold in USD")
+    period: str = Field(..., pattern="^(daily|weekly|monthly)$", description="Alert period")
+    notify_at_percent: List[int] = Field(default=[50, 75, 90, 100])
+    enabled: bool = Field(default=True)
+
+
+class ModelPricingInfo(BaseModel):
+    model: str
+    input_price_per_1m: float
+    output_price_per_1m: float
+    provider: str
+
+
+class AgentBudgetRequest(BaseModel):
+    budget_monthly_usd: float = Field(..., gt=0, description="Monthly budget in USD")
+
+
+class AgentCostResponse(BaseModel):
+    agent_id: str
+    found: bool = False
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    call_count: int = 0

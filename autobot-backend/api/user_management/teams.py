@@ -12,7 +12,18 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from api.schemas_agent import (
+    MemberAddedResponse,
+    MemberRemovedResponse,
+    MemberResponse,
+    MembershipUpdate,
+    TeamCreate,
+    TeamCreatedResponse,
+    TeamDeletedResponse,
+    TeamListResponse,
+    TeamResponse,
+    TeamUpdate,
+)
 
 from api.user_management.dependencies import (
     get_team_service,
@@ -29,110 +40,6 @@ from user_management.services.team_service import (
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 logger = logging.getLogger(__name__)
-
-
-# -------------------------------------------------------------------------
-# Request/Response Models
-# -------------------------------------------------------------------------
-
-
-class TeamCreate(BaseModel):
-    """Request model for creating a team."""
-
-    name: str = Field(..., min_length=1, max_length=255, description="Team name")
-    description: Optional[str] = Field(
-        None, max_length=500, description="Team description"
-    )
-    settings: Optional[dict] = Field(default_factory=dict, description="Team settings")
-    is_default: bool = Field(False, description="Whether this is the default team")
-
-
-class TeamUpdate(BaseModel):
-    """Request model for updating a team."""
-
-    name: Optional[str] = Field(
-        None, min_length=1, max_length=255, description="Team name"
-    )
-    description: Optional[str] = Field(
-        None, max_length=500, description="Team description"
-    )
-    settings: Optional[dict] = Field(None, description="Team settings")
-
-
-class MembershipUpdate(BaseModel):
-    """Request model for updating membership."""
-
-    role: str = Field(..., description="New role (owner, admin, member)")
-
-
-class MemberResponse(BaseModel):
-    """Response model for team member."""
-
-    user_id: uuid.UUID
-    username: str
-    email: str
-    display_name: Optional[str]
-    role: str
-    joined_at: str
-
-    class Config:
-        from_attributes = True
-
-
-class TeamResponse(BaseModel):
-    """Response model for a team."""
-
-    id: uuid.UUID
-    org_id: uuid.UUID
-    name: str
-    description: Optional[str]
-    settings: dict
-    is_default: bool
-    member_count: int = 0
-    created_at: str
-    updated_at: str
-
-    class Config:
-        from_attributes = True
-
-
-class TeamListResponse(BaseModel):
-    """Response model for paginated team list."""
-
-    teams: List[TeamResponse]
-    total: int
-    limit: int
-    offset: int
-
-
-class TeamCreatedResponse(BaseModel):
-    """Response for team creation."""
-
-    success: bool = True
-    message: str
-    team: TeamResponse
-
-
-class TeamDeletedResponse(BaseModel):
-    """Response for team deletion."""
-
-    success: bool = True
-    message: str
-
-
-class MemberAddedResponse(BaseModel):
-    """Response for adding a member."""
-
-    success: bool = True
-    message: str
-    member: MemberResponse
-
-
-class MemberRemovedResponse(BaseModel):
-    """Response for removing a member."""
-
-    success: bool = True
-    message: str
 
 
 # -------------------------------------------------------------------------
