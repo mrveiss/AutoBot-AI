@@ -42,6 +42,7 @@ import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
 import AboutView from '@/views/AboutView.vue'
+import OnboardingWizard from '@/views/OnboardingWizard.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
 const routes: RouteRecordRaw[] = [
@@ -62,6 +63,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/dashboard',
     redirect: '/home'
+  },
+  // Issue #5061: First-run onboarding wizard
+  {
+    path: '/onboarding',
+    name: 'onboarding',
+    component: OnboardingWizard,
+    meta: {
+      title: 'Setup',
+      hideInNav: true,
+      hideFooter: true,
+      requiresAuth: true
+    }
   },
   {
     path: '/chat',
