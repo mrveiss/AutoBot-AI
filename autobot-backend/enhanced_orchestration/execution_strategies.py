@@ -62,8 +62,9 @@ class ExecutionStrategyHandler:
             try:
                 await self._wait_for_dependencies(task, results)
             except RuntimeError as exc:
-                results[task.task_id] = task.to_failed_result(str(exc))
-                if not task.metadata.get("optional", False):
+                result = task.to_failed_result(str(exc))
+                results[task.task_id] = result
+                if self._is_required_failure(task, result):
                     logger.error("Required task %s blocked by failed dep, stopping", task.task_id)
                     break
                 continue
@@ -71,9 +72,7 @@ class ExecutionStrategyHandler:
             result = await self._execute_single_task(task, results)
             results[task.task_id] = result
 
-            if result.get("status") == "failed" and not task.metadata.get(
-                "optional", False
-            ):
+            if self._is_required_failure(task, result):
                 logger.error("Required task %s failed, stopping workflow", task.task_id)
                 break
 
@@ -139,20 +138,22 @@ class ExecutionStrategyHandler:
         for stage_num, stage_tasks in enumerate(stages):
             logger.info("Executing pipeline stage %d/%d", stage_num + 1, len(stages))
 
-            # Execute stage tasks in parallel
             stage_results = await asyncio.gather(
                 *[
                     self._execute_single_task(task, {**results, **pipeline_data})
                     for task in stage_tasks
-                ]
+                ],
+                return_exceptions=True,
             )
 
             stage_failed = False
             for task, result in zip(stage_tasks, stage_results):
+                if isinstance(result, BaseException):
+                    result = task.to_failed_result(repr(result))
                 results[task.task_id] = result
                 if result.get("status") == "completed" and "output" in result:
                     pipeline_data.update(result["output"])
-                if result.get("status") == "failed" and not task.metadata.get("optional", False):
+                if self._is_required_failure(task, result):
                     stage_failed = True
 
             if stage_failed:
@@ -210,6 +211,9 @@ class ExecutionStrategyHandler:
 
         return current
 
+    def _is_required_failure(self, task: AgentTask, result: dict) -> bool:
+        return result.get("status") == "failed" and not task.metadata.get("optional", False)
+
     async def _execute_parallel_batch(
         self, pending_tasks: list, results: Dict[str, Any]
     ) -> Tuple[int, int]:
@@ -219,11 +223,14 @@ class ExecutionStrategyHandler:
         ready_tasks = [t for t in batch_tasks if self._dependencies_met(t, results)]
 
         batch_results = await asyncio.gather(
-            *[self._execute_single_task(task, results) for task in ready_tasks]
+            *[self._execute_single_task(task, results) for task in ready_tasks],
+            return_exceptions=True,
         )
 
         completed, failed = 0, 0
         for task, result in zip(ready_tasks, batch_results):
+            if isinstance(result, BaseException):
+                result = task.to_failed_result(repr(result))
             results[task.task_id] = result
             pending_tasks.remove(task)
             if result.get("status") == "completed":
@@ -288,14 +295,16 @@ class ExecutionStrategyHandler:
     async def _wait_for_dependencies(
         self, task: AgentTask, results: Dict[str, Any]
     ) -> None:
-        """Wait for task dependencies to complete, or raise if a dep is in a terminal failed state."""
+        """Wait for task dependencies to complete, or raise if a dep is in any terminal non-completed state."""
         while not self._dependencies_met(task, results):
-            failed_deps = [
+            terminal_deps = [
                 dep for dep in task.dependencies
-                if results.get(dep, {}).get("status") == "failed"
+                if dep in results and results[dep].get("status") != "completed"
             ]
-            if failed_deps:
+            if terminal_deps:
+                status = results[terminal_deps[0]].get("status")
                 raise RuntimeError(
-                    f"Task {task.task_id} cannot run: dependency {failed_deps[0]} failed"
+                    f"Task {task.task_id} cannot run: dependency {terminal_deps[0]}"
+                    f" is terminal (status={status})"
                 )
             await asyncio.sleep(TimingConstants.SHORT_DELAY)
