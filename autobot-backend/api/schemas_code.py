@@ -832,6 +832,33 @@ class PlaywrightCapabilitiesResponse(BaseModel):
     endpoints: List[str]
 
 
+class RegionRect(BaseModel):
+    """Bounding-box coordinates for a detected page region."""
+
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class PageRegion(BaseModel):
+    """A single interactive region detected on a browser page."""
+
+    selector: str
+    xpath: str
+    rect: RegionRect
+    text_preview: str
+    role: str
+
+
+class SnapshotWithRegionsResponse(BaseModel):
+    """Response for POST /playwright/snapshot-with-regions (#5136)."""
+
+    screenshot: str  # base64 PNG
+    regions: List[PageRegion]
+    viewport: Dict[str, Any]  # width, height, devicePixelRatio
+
+
 # ---------------------------------------------------------------------------
 # research_browser.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
