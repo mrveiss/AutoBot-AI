@@ -7,7 +7,9 @@ Agent config, memory, and LLM schemas.
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from models.session_collaboration import PermissionLevel
 
 
 # ---------------------------------------------------------------------------
@@ -1033,3 +1035,159 @@ class ComprehensiveResearchData(BaseModel):
 
     research: Dict[str, Any]
     web_research: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# agent_org.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class OrgNodeResponse(BaseModel):
+    """Single node in the org tree response (#1405)."""
+
+    agent_id: str
+    name: str
+    org_role: str
+    title: Optional[str] = None
+    capabilities: Optional[str] = None
+    direct_reports_count: int = 0
+    children: List["OrgNodeResponse"] = Field(default_factory=list)
+
+
+OrgNodeResponse.model_rebuild()
+
+
+class AgentSummary(BaseModel):
+    """Compact agent summary used in chain of command (#1405)."""
+
+    agent_id: str
+    name: str
+    org_role: str
+    title: Optional[str] = None
+
+
+class ChainOfCommandResponse(BaseModel):
+    """Ordered list from agent to org root (#1405)."""
+
+    chain: List[AgentSummary]
+
+
+class UpdateOrgRequest(BaseModel):
+    """Request body for PATCH /agents/{agent_id}/org (#1405)."""
+
+    reports_to: Optional[str] = Field(
+        default=None,
+        description="agent_id of the new manager, or null to clear",
+    )
+    org_role: Optional[str] = Field(
+        default=None,
+        description="One of: manager, coordinator, specialist, worker",
+    )
+    title: Optional[str] = Field(default=None, description="Human-readable job title")
+    capabilities: Optional[str] = Field(
+        default=None, description="Free-text capability description"
+    )
+
+
+class UpsertOrgRequest(BaseModel):
+    """Request body for PUT /agents/{agent_id}/org (#1405)."""
+
+    name: str
+    org_role: str = "worker"
+    reports_to: Optional[str] = None
+    title: Optional[str] = None
+    capabilities: Optional[str] = None
+
+
+class AgentDelegateRequest(BaseModel):
+    """Request body for POST /{manager_id}/delegate (#1753)."""
+
+    assignee_id: str = Field(..., description="Direct report to assign to")
+    task_description: str = Field(..., description="What the assignee should do")
+    context: Optional[Dict[str, Any]] = Field(
+        default=None, description="Extra context for the task"
+    )
+
+
+class DelegationResponse(BaseModel):
+    """Response for a task delegation (#1753)."""
+
+    id: str
+    delegator_id: str
+    assignee_id: str
+    task_description: str
+    status: str
+    escalated_to: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class DelegationStatusUpdate(BaseModel):
+    """Request body for PATCH /delegations/{id}/status (#1753)."""
+
+    status: str = Field(..., description="New status value")
+    result: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# collaboration.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class CollabInviteRequest(BaseModel):
+    """Request to invite user to session."""
+
+    user_id: str = Field(..., description="User ID to invite")
+    permission: PermissionLevel = Field(
+        ..., description="Permission level (owner/editor/viewer)"
+    )
+
+
+class CollabRemoveRequest(BaseModel):
+    """Request to remove collaborator."""
+
+    user_id: str = Field(..., description="User ID to remove")
+
+
+class CollabShareSecretRequest(BaseModel):
+    """Request to share secret with session participants."""
+
+    secret_id: str = Field(..., description="Secret ID to share")
+    participant_ids: Optional[List[str]] = Field(
+        None,
+        description="Specific participants (None = all with editor+)",
+    )
+
+
+class CollabParticipantResponse(BaseModel):
+    """Participant information."""
+
+    user_id: str
+    permission: str
+    is_owner: bool
+    online: bool = False
+
+
+class SessionParticipantsResponse(BaseModel):
+    """Session participants list."""
+
+    session_id: str
+    owner_id: str
+    participants: List[CollabParticipantResponse]
+    total_count: int
+
+
+class CollabInviteResponse(BaseModel):
+    """Invitation response."""
+
+    success: bool
+    session_id: str
+    invited_user_id: str
+    permission: str
+
+
+class CollabRemoveResponse(BaseModel):
+    """Remove collaborator response."""
+
+    success: bool
+    session_id: str
+    removed_user_id: str

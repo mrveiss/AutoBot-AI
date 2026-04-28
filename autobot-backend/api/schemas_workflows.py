@@ -6,6 +6,7 @@ Workflow, registry, RUM, elevation, advanced-control, state-tracking, and valida
 """
 
 import re
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -13,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.time_utils import now_utc
+from models.approval import ApprovalType
 from type_defs.common import Metadata
 
 
@@ -1506,3 +1508,96 @@ class WorkflowState(BaseModel):
     created_at: str = Field(default_factory=lambda: now_utc().isoformat())
     updated_at: str = Field(default_factory=lambda: now_utc().isoformat())
     metadata: Dict = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# approval_gates.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class AuthorTypeEnum(str, Enum):
+    """Valid author types for approval comments."""
+
+    HUMAN = "human"
+    AGENT = "agent"
+    SYSTEM = "system"
+
+
+class CreateApprovalRequest(BaseModel):
+    """Request body for creating an approval gate."""
+
+    title: str
+    approval_type: ApprovalType
+    description: Optional[str] = None
+    requested_by_agent: Optional[str] = None
+    workflow_id: Optional[str] = None
+    workflow_step: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    task_ids: Optional[List[str]] = None
+
+
+class ApprovalTransitionRequest(BaseModel):
+    """Request body for approve / reject / request-revision."""
+
+    comment: Optional[str] = None
+
+
+class ApprovalResubmitRequest(BaseModel):
+    """Request body for resubmitting after revision."""
+
+    description: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
+
+class ApprovalAddCommentRequest(BaseModel):
+    """Request body for adding a comment to an approval gate."""
+
+    body: str
+    author_type: AuthorTypeEnum = AuthorTypeEnum.HUMAN
+
+
+class ApprovalLinkTaskRequest(BaseModel):
+    """Request body for linking a task to an approval gate."""
+
+    task_id: str
+    task_type: str = "github_issue"
+
+
+class TaskApprovalLinkResponse(BaseModel):
+    """Response for a task-approval link."""
+
+    id: str
+    approval_id: str
+    task_id: str
+    task_type: str
+
+
+class ApprovalCommentResponse(BaseModel):
+    """Response for an approval gate comment."""
+
+    id: str
+    approval_id: str
+    author: str
+    author_type: str
+    body: str
+    created_at: Optional[str] = None
+
+
+class ApprovalGateResponse(BaseModel):
+    """Response for an approval gate."""
+
+    id: str
+    title: str
+    description: Optional[str] = None
+    approval_type: str
+    status: str
+    requested_by_agent: Optional[str] = None
+    decided_by_user: Optional[str] = None
+    workflow_id: Optional[str] = None
+    workflow_step: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    decided_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    comments: List[ApprovalCommentResponse] = Field(default_factory=list)
+    task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)

@@ -1698,3 +1698,92 @@ class IDEHealthResponse(BaseModel):
     rules_loaded: int
     disabled_rules: int
     cache_size: int
+
+
+
+# ---------------------------------------------------------------------------
+# openai_compat.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class OAIMessage(BaseModel):
+    role: str
+    content: str
+    name: Optional[str] = None
+
+
+class OAIStreamOptions(BaseModel):
+    include_usage: bool = False
+
+
+class ChatCompletionRequest(BaseModel):
+    model: str = "autobot-default"
+    messages: List[OAIMessage]
+    temperature: float = 0.7
+    max_tokens: Optional[int] = None
+    top_p: float = 1.0
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    stop: Optional[List[str]] = None
+    stream: bool = False
+    stream_options: Optional[OAIStreamOptions] = None
+    n: int = Field(default=1, ge=1)
+    user: Optional[str] = None
+
+
+class OAIChoiceMessage(BaseModel):
+    role: str
+    content: str
+
+
+class OAIChoice(BaseModel):
+    index: int
+    message: OAIChoiceMessage
+    finish_reason: str = "stop"
+
+
+class OAIUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class ChatCompletionResponse(BaseModel):
+    id: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: List[OAIChoice]
+    usage: OAIUsage
+
+
+class OAIDeltaMessage(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str] = None
+
+
+class OAIStreamChoice(BaseModel):
+    index: int
+    delta: OAIDeltaMessage
+    finish_reason: Optional[str] = None
+
+
+class ChatCompletionChunk(BaseModel):
+    id: str
+    object: str = "chat.completion.chunk"
+    created: int
+    model: str
+    choices: List[OAIStreamChoice]
+    usage: Optional[OAIUsage] = None
+
+
+class OAIModelCard(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = 0
+    owned_by: str = "autobot"
+
+
+class OAIModelListResponse(BaseModel):
+    object: str = "list"
+    data: List[OAIModelCard]

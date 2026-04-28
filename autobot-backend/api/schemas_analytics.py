@@ -1672,3 +1672,115 @@ class AlertThresholdRequest(BaseModel):
     component: str
     error_code: Optional[str] = None
     threshold: int
+
+
+# ---------------------------------------------------------------------------
+# rum.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class RumEvent(BaseModel):
+    type: str
+    timestamp: str
+    sessionId: str
+    url: str
+    userAgent: str
+    data: Metadata = {}
+
+
+class RumConfig(BaseModel):
+    enabled: bool = False
+    error_tracking: bool = True
+    performance_monitoring: bool = True
+    interaction_tracking: bool = False
+    session_recording: bool = False
+    sample_rate: int = 100
+    max_events_per_session: int = 1000
+    debug_mode: bool = False
+    log_to_backend: bool = True
+    log_level: str = "info"
+
+
+class RumPageMetrics(BaseModel):
+    """Page performance metrics from frontend."""
+
+    page: str
+    load_time_seconds: Optional[float] = None
+    fcp_seconds: Optional[float] = None
+    lcp_seconds: Optional[float] = None
+    tti_seconds: Optional[float] = None
+    dom_loaded_seconds: Optional[float] = None
+
+
+class RumApiCallMetric(BaseModel):
+    """Frontend API call metric."""
+
+    endpoint: str
+    method: str
+    status: str
+    latency_seconds: float
+    is_slow: bool = False
+    is_timeout: bool = False
+    error_type: Optional[str] = None
+
+
+class RumJsErrorMetric(BaseModel):
+    """JavaScript error metric."""
+
+    error_type: str
+    page: str
+    is_rejection: bool = False
+    component: Optional[str] = None
+
+
+class RumUserActionMetric(BaseModel):
+    """User action/interaction metric."""
+
+    action_type: str
+    page: str
+    form_name: Optional[str] = None
+    form_status: Optional[str] = None
+
+
+class RumSessionMetric(BaseModel):
+    """Session metric."""
+
+    event: str
+    duration_seconds: Optional[float] = None
+
+
+class RumWebSocketMetric(BaseModel):
+    """WebSocket event metric from frontend."""
+
+    event: str
+    direction: Optional[str] = None
+    event_type: Optional[str] = None
+
+
+class RumResourceMetric(BaseModel):
+    """Resource load metric."""
+
+    resource_type: str
+    load_time_seconds: float
+    is_slow: bool = False
+
+
+class RumCriticalIssueMetric(BaseModel):
+    """Critical issue from frontend."""
+
+    issue_type: str
+
+
+class RumMetrics(BaseModel):
+    """Batch of RUM metrics from frontend. Issue #476: Used for Prometheus metrics export."""
+
+    session_id: str
+    timestamp: str
+    page_metrics: Optional[RumPageMetrics] = None
+    api_calls: Optional[List[RumApiCallMetric]] = None
+    js_errors: Optional[List[RumJsErrorMetric]] = None
+    user_actions: Optional[List[RumUserActionMetric]] = None
+    session: Optional[RumSessionMetric] = None
+    websocket_events: Optional[List[RumWebSocketMetric]] = None
+    resources: Optional[List[RumResourceMetric]] = None
+    critical_issues: Optional[List[RumCriticalIssueMetric]] = None

@@ -5,9 +5,11 @@
 Knowledge base collection, category, fact, grounding, and audit schemas.
 """
 
+from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -3652,3 +3654,138 @@ class KnowledgeTagDeleteStyleResponse(BaseModel):
     status: str
     tag: str
     message: str
+
+
+# ---------------------------------------------------------------------------
+# conversation_files.py schemas (#6042)
+# ---------------------------------------------------------------------------
+
+
+class FileDestination(str, Enum):
+    """File transfer destination options."""
+
+    KNOWLEDGE_BASE = "kb"
+    SHARED = "shared"
+
+
+class ConversationFileInfo(BaseModel):
+    """Conversation file information model."""
+
+    file_id: str
+    filename: str
+    original_filename: str
+    size: int
+    mime_type: Optional[str] = None
+    session_id: str
+    uploaded_at: datetime
+    uploaded_by: str
+    file_path: str
+    extension: Optional[str] = None
+
+
+class ConversationFileListResponse(BaseModel):
+    """Response model for listing conversation files."""
+
+    session_id: str
+    files: List[ConversationFileInfo]
+    total_files: int
+    total_size: int
+    page: int = 1
+    page_size: int = 50
+
+
+class FileUploadResponse(BaseModel):
+    """Response model for file upload."""
+
+    success: bool
+    message: str
+    file_info: Optional[ConversationFileInfo] = None
+    upload_id: str
+
+
+class FileTransferRequest(BaseModel):
+    """Request model for file transfer operation."""
+
+    file_ids: List[str] = Field(
+        ..., min_length=1, description="List of file IDs to transfer"
+    )
+    destination: FileDestination = Field(
+        ..., description="Transfer destination (kb or shared)"
+    )
+    target_path: Optional[str] = Field(None, description="Target path in destination")
+    copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
+    tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
+
+    @field_validator("file_ids")
+    @classmethod
+    def validate_file_ids(cls, v):
+        """Validate that at least one file ID is provided."""
+        if not v:
+            raise ValueError("At least one file ID must be provided")
+        return v
+
+
+class FileTransferResponse(BaseModel):
+    """Response model for file transfer operation."""
+
+    success: bool
+    message: str
+    transferred_files: List[Dict[str, str]]
+    failed_files: List[Dict[str, str]]
+    total_transferred: int
+    total_failed: int
+
+
+class FilePreviewResponse(BaseModel):
+    """Response model for file preview."""
+
+    file_info: ConversationFileInfo
+    preview_available: bool
+    preview_content: Optional[str] = None
+    preview_type: Optional[str] = None
+
+
+class ConvFileCreateRequest(BaseModel):
+    """Request model for creating a new file."""
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(default="")
+    mime_type: str = Field(default="text/plain")
+
+
+class ConvFileRenameRequest(BaseModel):
+    """Request model for renaming a file."""
+
+    new_filename: str = Field(..., min_length=1, max_length=255)
+
+
+class ConvFileUpdateContentRequest(BaseModel):
+    """Request model for updating file content."""
+
+    content: str
+
+
+class ConvFileCopyRequest(BaseModel):
+    """Request model for copying a file."""
+
+    new_filename: Optional[str] = Field(
+        None, max_length=255, description="Optional new name for the copy"
+    )
+
+
+class AgentGenerateFileRequest(BaseModel):
+    """Request model for agent file generation."""
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str
+    file_type: str = Field(default="generated", description="File type tag")
+    mime_type: str = Field(default="text/plain")
+    agent_name: Optional[str] = Field(None, description="Name of generating agent")
+    metadata: Optional[Dict[str, str]] = Field(None, description="Extra metadata")
+
+
+class MCPToolCallRequest(BaseModel):
+    """Request model for MCP tool call dispatch."""
+
+    tool_name: str = Field(..., description="Name of the MCP tool to call")
+    arguments: Dict = Field(default_factory=dict, description="Tool arguments")
