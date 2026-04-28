@@ -11,7 +11,7 @@ Includes metrics and health tracking (Issue #4339).
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -89,6 +89,13 @@ class SkillFeedbackRequest(BaseModel):
 
     rating: int = Field(..., description="User rating (1-5)", ge=1, le=5)
     feedback: Optional[str] = Field(None, description="Feedback text")
+
+
+class SkillInstallRequest(BaseModel):
+    """Request body for installing a skill from the catalog."""
+
+    catalog_url: str = Field(..., description="HTTP URL of the catalog endpoint")
+    repo_id: Optional[str] = Field(None, description="SkillRepo.id to link the package to")
 
 
 # --- Endpoints ---
@@ -219,6 +226,87 @@ async def get_skill_traces(
             logger.debug("mcp_trace: failed to deserialise span: %s", exc)
 
     return {"skill": skill, "traces": traces, "total": len(traces)}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_catalog",
+    error_code_prefix="SKILLS",
+)
+@router.get("/catalog", summary="List external skill catalog entries", response_model=Dict[str, Any])
+async def list_catalog(
+    catalog_url: str = Query(..., description="HTTP URL of the remote skill catalog"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+) -> Dict[str, Any]:
+    """Fetch paginated skill entries from an HTTP catalog and return them with install actions.
+
+    Each returned entry includes an ``install_action`` field describing the
+    ``POST /skills/catalog/{name}/install`` endpoint to materialize the skill.
+    """
+    from skills.external_importer import ExternalSkillImporter
+
+    importer = ExternalSkillImporter()
+    try:
+        entries = await importer.import_http_catalog(catalog_url, page=page, page_size=page_size)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Annotate each entry with an install action hint
+    for entry in entries:
+        name = entry.get("name", "")
+        entry["install_action"] = f"POST /api/skills/catalog/{name}/install"
+
+    return {"catalog_url": catalog_url, "page": page, "page_size": page_size, "skills": entries, "total": len(entries)}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_catalog_skill",
+    error_code_prefix="SKILLS",
+)
+@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse)
+async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[str, Any]:
+    """Fetch a skill from a remote catalog and persist it as a SANDBOXED SkillPackage.
+
+    The catalog must expose a ``/skills/{name}`` endpoint (or equivalent) that
+    returns the catalog entry dict containing at minimum a ``skill_md`` field.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from skills.db import get_skills_engine
+    from skills.external_importer import ExternalSkillImporter
+    from skills.models import SkillPackage
+
+    importer = ExternalSkillImporter()
+    # Fetch the single-entry detail URL: catalog_url/name
+    detail_url = body.catalog_url.rstrip("/") + f"/{name}"
+    try:
+        entries = await importer.import_http_catalog(detail_url, page=1, page_size=1)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    if not entries:
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found in catalog at {body.catalog_url}")
+
+    entry = entries[0]
+    try:
+        pkg = await importer.install_from_catalog(name, entry, repo_id=body.repo_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    engine = get_skills_engine()
+    async with AsyncSession(engine) as session:
+        existing = await session.scalar(select(SkillPackage).where(SkillPackage.name == pkg.name))
+        if existing is not None:
+            raise HTTPException(status_code=409, detail=f"Skill '{name}' is already installed")
+        session.add(pkg)
+        await session.commit()
+        await session.refresh(pkg)
+
+    logger.info("Installed catalog skill '%s' (id=%s)", pkg.name, pkg.id)
+    return {"success": True, "id": pkg.id, "name": pkg.name, "version": pkg.version, "trust_level": pkg.trust_level}
 
 
 @with_error_handling(

@@ -12,9 +12,12 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from skills.models import GovernanceMode, TrustLevel
+from skills.models import GovernanceMode, SkillPackage, TrustLevel
+
+if TYPE_CHECKING:
+    pass  # future typing-only imports
 
 logger = logging.getLogger(__name__)
 REDIS_APPROVAL_CHANNEL = "skills:approvals:pending"
@@ -159,3 +162,29 @@ def _locked_result() -> ActivationResult:
         requires_human_review=False,
         reason="system is in locked mode — only admin can activate skills",
     )
+
+
+def block_auto_promotion_of_imported(skill: SkillPackage) -> bool:
+    """Return True if the skill was externally imported and must not be auto-promoted.
+
+    Externally imported skills are always SANDBOXED and require explicit admin
+    approval before they can be promoted to BUILTIN or TRUSTED.  This guard
+    prevents a compromised catalog from silently elevating a skill's trust.
+
+    Args:
+        skill: The SkillPackage row to inspect.
+
+    Returns:
+        True when the skill carries the ``external_import`` manifest flag and
+        should therefore be blocked from automatic promotion.
+    """
+    from skills.external_importer import is_externally_imported
+
+    if is_externally_imported(skill):
+        logger.info(
+            "Auto-promotion blocked for externally imported skill '%s' (trust_level=%s)",
+            skill.name,
+            skill.trust_level,
+        )
+        return True
+    return False

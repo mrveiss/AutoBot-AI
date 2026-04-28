@@ -1258,7 +1258,47 @@ class SkillRepoBrowseResponse(BaseModel):
     count: int
 
 
+# ---------------------------------------------------------------------------
+# skills/external catalog schemas  (Issue #5063)
+# ---------------------------------------------------------------------------
+
+
+class SkillCatalogEntry(BaseModel):
+    """Single skill entry returned by GET /skills/catalog."""
+
+    name: str
+    version: Optional[str] = None
+    description: Optional[str] = None
+    install_action: Optional[str] = None
+
+
+class SkillCatalogResponse(BaseModel):
+    """Response for GET /skills/catalog."""
+
+    catalog_url: str
+    page: int
+    page_size: int
+    skills: List[SkillCatalogEntry]
+    total: int
+
+
+class SkillInstallResponse(BaseModel):
+    """Response for POST /skills/catalog/{name}/install."""
+
+    success: bool
+    id: str
+    name: str
+    version: str
+    trust_level: str
+
+
+class SkillExternalSyncResponse(BaseModel):
+    """Response for POST /skills/repos/{id}/sync via SkillManager.sync_external_repo."""
+
+    imported: int
+    packages: List[Any]
+
+
 # permissions.py schemas are defined in schemas_system.py (PermissionRuleMutateResponse,
 # PermissionClearApprovalsResponse, PermissionStoreApprovalResponse,
-# PermissionMemoryStatsResponse) — already wired in permissions.py.    name: str
-    description: str
+# PermissionMemoryStatsResponse) — already wired in permissions.py.
