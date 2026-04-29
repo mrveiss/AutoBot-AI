@@ -45,7 +45,9 @@ import AboutView from '@/views/AboutView.vue'
 import OnboardingWizard from '@/views/OnboardingWizard.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
-const routes: RouteRecordRaw[] = [
+// Exported (#6499) so `nav-items-coverage.test.ts` can verify every top-level
+// `requiresAuth: true` route has a matching entry in `@/config/navItems`.
+export const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/home'
