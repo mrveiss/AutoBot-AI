@@ -24,19 +24,26 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
 from api.schemas_analytics import (
-    PatternLearningFeedbackResponse,
-    PatternLearningConfidenceResponse,
+    ActiveLearningQuery,
+    ConfidenceLevel,
+    ConfidenceScore,
+    FeedbackType,
+    LearningPhase,
+    PatternDefinition,
+    PatternFeedback,
     PatternLearningActiveLearningResponse,
-    PatternLearningRegisterResponse,
+    PatternLearningConfidenceResponse,
+    PatternLearningFeedbackResponse,
+    PatternLearningHealthResponse,
     PatternLearningHistoryResponse,
     PatternLearningLearnCycleResponse,
-    PatternLearningHealthResponse,
+    PatternLearningMetrics,
+    PatternLearningRegisterResponse,
+    PatternUpdate,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -48,51 +55,6 @@ router = APIRouter()
 # =============================================================================
 # Enums and Constants
 # =============================================================================
-
-
-class FeedbackType(str, Enum):
-    """Types of feedback developers can provide."""
-
-    CORRECT = "correct"  # Pattern match is accurate
-    INCORRECT = "incorrect"  # False positive
-    MISSED = "missed"  # False negative - pattern should have matched
-    PARTIAL = "partial"  # Partially correct
-    IRRELEVANT = "irrelevant"  # Not useful pattern
-
-
-class PatternCategory(str, Enum):
-    """Categories of patterns for organization."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    CODE_QUALITY = "code_quality"
-    ARCHITECTURE = "architecture"
-    ERROR_HANDLING = "error_handling"
-    CONCURRENCY = "concurrency"
-    DATA_FLOW = "data_flow"
-    CONTROL_FLOW = "control_flow"
-    STYLE = "style"
-    DOCUMENTATION = "documentation"
-
-
-class LearningPhase(str, Enum):
-    """Phases of the active learning pipeline."""
-
-    COLLECTING = "collecting"  # Gathering feedback
-    ANALYZING = "analyzing"  # Analyzing patterns
-    TRAINING = "training"  # Updating models
-    VALIDATING = "validating"  # Validating changes
-    DEPLOYED = "deployed"  # Changes active
-
-
-class ConfidenceLevel(str, Enum):
-    """Human-readable confidence levels."""
-
-    VERY_LOW = "very_low"  # < 0.2
-    LOW = "low"  # 0.2 - 0.4
-    MEDIUM = "medium"  # 0.4 - 0.6
-    HIGH = "high"  # 0.6 - 0.8
-    VERY_HIGH = "very_high"  # > 0.8
 
 
 # Confidence thresholds
@@ -121,90 +83,6 @@ MIN_FEEDBACK_FOR_CONFIDENCE = 3  # Minimum feedback count for reliable scoring
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class PatternFeedback(BaseModel):
-    """Feedback for a specific pattern match."""
-
-    pattern_id: str = Field(..., description="Unique identifier for the pattern")
-    feedback_type: FeedbackType = Field(..., description="Type of feedback")
-    file_path: str = Field(..., description="File where pattern was detected")
-    line_number: int = Field(..., description="Line number of pattern match")
-    code_snippet: Optional[str] = Field(None, description="Code snippet context")
-    developer_comment: Optional[str] = Field(None, description="Developer notes")
-    suggested_fix: Optional[str] = Field(None, description="Suggested improvement")
-    timestamp: Optional[datetime] = Field(None, description="Feedback timestamp")
-
-
-class PatternDefinition(BaseModel):
-    """Definition of a learnable pattern."""
-
-    pattern_id: str = Field(..., description="Unique pattern identifier")
-    name: str = Field(..., description="Human-readable pattern name")
-    description: str = Field(..., description="Pattern description")
-    category: PatternCategory = Field(..., description="Pattern category")
-    regex_patterns: List[str] = Field(
-        default_factory=list, description="Regex patterns"
-    )
-    ast_patterns: List[str] = Field(
-        default_factory=list, description="AST pattern descriptions"
-    )
-    examples: List[str] = Field(default_factory=list, description="Example matches")
-    counter_examples: List[str] = Field(
-        default_factory=list, description="Non-matching examples"
-    )
-    severity: str = Field(default="medium", description="Pattern severity")
-    enabled: bool = Field(default=True, description="Whether pattern is active")
-
-
-class ConfidenceScore(BaseModel):
-    """Confidence score for a pattern."""
-
-    pattern_id: str
-    score: float = Field(..., ge=0.0, le=1.0)
-    level: ConfidenceLevel
-    total_feedback: int
-    correct_count: int
-    incorrect_count: int
-    last_updated: datetime
-    trend: str  # "improving", "stable", "declining"
-
-
-class LearningMetrics(BaseModel):
-    """Metrics for the learning pipeline."""
-
-    total_patterns: int
-    total_feedback: int
-    average_confidence: float
-    high_confidence_patterns: int
-    low_confidence_patterns: int
-    patterns_improved: int
-    patterns_degraded: int
-    feedback_by_type: Dict[str, int]
-    feedback_by_category: Dict[str, int]
-    learning_rate: float
-    last_training_run: Optional[datetime]
-
-
-class ActiveLearningQuery(BaseModel):
-    """Query for active learning suggestions."""
-
-    pattern_id: str
-    code_snippet: str
-    predicted_match: bool
-    confidence: float
-    question: str  # Question to ask developer
-
-
-class PatternUpdate(BaseModel):
-    """Update to a pattern based on learning."""
-
-    pattern_id: str
-    update_type: str  # "regex_added", "regex_removed", "threshold_adjusted", etc.
-    old_value: Optional[Any]
-    new_value: Optional[Any]
-    reason: str
-    applied_at: datetime
 
 
 # =============================================================================
@@ -734,7 +612,7 @@ class PatternLearningEngine:
             return "declining"
         return "stable"
 
-    async def get_learning_metrics(self) -> LearningMetrics:
+    async def get_learning_metrics(self) -> PatternLearningMetrics:
         """Get comprehensive learning metrics."""
         await self.initialize()
 
@@ -770,7 +648,7 @@ class PatternLearningEngine:
                     cat = self.patterns[stats.pattern_id].category.value
                     feedback_by_category[cat] += 1
 
-        return LearningMetrics(
+        return PatternLearningMetrics(
             total_patterns=total_patterns,
             total_feedback=total_feedback,
             average_confidence=round(avg_confidence, 4),
@@ -1110,8 +988,8 @@ async def get_pattern_confidence(
     operation="get_learning_metrics",
     error_code_prefix="ANALYTICS_PATTERN_LEARNING",
 )
-@router.get("/metrics", response_model=LearningMetrics, summary="Get learning metrics")
-async def get_learning_metrics() -> LearningMetrics:
+@router.get("/metrics", response_model=PatternLearningMetrics, summary="Get learning metrics")
+async def get_learning_metrics() -> PatternLearningMetrics:
     """Get comprehensive metrics about the learning system."""
     engine = await get_learning_engine()
     return await engine.get_learning_metrics()
