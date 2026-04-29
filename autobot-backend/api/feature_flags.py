@@ -18,16 +18,15 @@ Endpoints:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
 from services.audit_logger import audit_log
-from services.feature_flags import EnforcementMode, FeatureFlags, get_feature_flags
+from services.feature_flags import FeatureFlags, get_feature_flags
 
 from .schemas_code import (
     AccessControlCleanupResponse,
@@ -36,6 +35,7 @@ from .schemas_code import (
     AccessControlUserMetricsResponse,
 )
 from .schemas_system import (
+    EnforcementModeUpdate,
     FeatureFlagEndpointRemoveResponse,
     FeatureFlagEndpointSetResponse,
     FeatureFlagEnforcementModeResponse,
@@ -45,33 +45,6 @@ from .schemas_system import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["admin", "feature-flags"])
-
-
-# Request/Response Models
-class EnforcementModeUpdate(BaseModel):
-    """Update enforcement mode request"""
-
-    mode: EnforcementMode = Field(..., description="New enforcement mode")
-
-
-class FeatureFlagInfo(BaseModel):
-    """Feature flag information"""
-
-    name: str
-    current_mode: str
-    description: str
-    available_modes: List[str]
-
-
-class ViolationStatistics(BaseModel):
-    """Access control violation statistics"""
-
-    total_violations: int
-    period_days: int
-    by_endpoint: Dict[str, int]
-    by_user: Dict[str, int]
-    by_day: Dict[str, int]
-    current_mode: str
 
 
 # Dependency for admin authentication

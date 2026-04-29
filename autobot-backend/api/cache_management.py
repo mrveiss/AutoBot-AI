@@ -26,6 +26,9 @@ from api.schemas_system import (
     InvalidateCacheResponse,
     RedisClearResponse,
     RedisStatsResponse,
+    SemanticCacheConfigUpdate,
+    SufficiencyConfigUpdate,
+    TopicCacheConfigUpdate,
     WarmCacheResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
@@ -729,15 +732,6 @@ async def semantic_cache_clear(
     return {"status": "cleared", **result}
 
 
-class SemanticCacheConfigUpdate(BaseModel):
-    """Request body for semantic cache config update."""
-
-    similarity_threshold: Optional[float] = None
-    max_collection_size: Optional[int] = None
-    response_ttl: Optional[int] = None
-    enabled: Optional[bool] = None
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="semantic_cache_config",
@@ -791,15 +785,6 @@ async def context_sufficiency_stats(
     return evaluator.get_stats()
 
 
-class SufficiencyConfigUpdate(BaseModel):
-    """Request body for sufficiency evaluator config update."""
-
-    enabled: Optional[bool] = None
-    keyword_threshold: Optional[float] = None
-    enable_llm_pass: Optional[bool] = None
-    llm_timeout: Optional[float] = None
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="context_sufficiency_config",
@@ -847,15 +832,6 @@ async def topic_cache_stats(
 
     cache = await get_topic_retrieval_cache()
     return cache.get_stats()
-
-
-class TopicCacheConfigUpdate(BaseModel):
-    """Request body for topic cache config update."""
-
-    similarity_threshold: Optional[float] = None
-    max_topics: Optional[int] = None
-    ttl: Optional[int] = None
-    enabled: Optional[bool] = None
 
 
 @with_error_handling(

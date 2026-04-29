@@ -4533,3 +4533,110 @@ class UpdateOrganizationPolicyRequest(BaseModel):
     """Request to update organization knowledge policy."""
 
     policy: OrganizationKnowledgePolicy
+
+
+# ---------------------------------------------------------------------------
+# graph_rag.py schemas
+# ---------------------------------------------------------------------------
+
+
+class GraphRAGSearchRequest(BaseModel):
+    """Request model for graph-aware RAG search."""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
+    start_entity: Optional[str] = Field(None, max_length=200, description="Optional starting entity name for graph traversal")
+    max_depth: int = Field(2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
+    max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
+    enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
+    timeout: Optional[float] = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v):
+        if not v.strip():
+            raise ValueError("Query cannot be empty or whitespace")
+        return v.strip()
+
+
+class GraphRAGSearchResponse(BaseModel):
+    """Response model for graph-aware RAG search."""
+
+    success: bool = Field(..., description="Whether the search succeeded")
+    results: List[Metadata] = Field(..., description="Search results")
+    metrics: Metadata = Field(..., description="Performance metrics")
+    request_id: str = Field(..., description="Unique request identifier")
+
+
+class GraphRAGHealthResponse(BaseModel):
+    """Response model for health check."""
+
+    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
+    components: Dict[str, str] = Field(..., description="Component health status")
+    timestamp: str = Field(..., description="Timestamp of health check")
+
+
+# ---------------------------------------------------------------------------
+# documents.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CreateDocumentRequest(BaseModel):
+    """Payload for creating a new AI document."""
+
+    title: str = Field(..., min_length=1, max_length=500)
+    content: str = Field(default="")
+    source_facts: List[str] = Field(default_factory=list)
+    source_session_id: Optional[str] = None
+    source_message_id: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateDocumentRequest(BaseModel):
+    """Partial-update payload — only supplied fields are applied."""
+
+    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    content: Optional[str] = None
+    tags: Optional[List[str]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class RefineDocumentRequest(BaseModel):
+    """Ask the AI to refine a specific section of the document."""
+
+    instruction: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Refinement instruction, e.g. 'make the introduction shorter'",
+    )
+    section: Optional[str] = Field(default=None, description="Optional section heading to scope the refinement")
+
+
+# ---------------------------------------------------------------------------
+# embeddings.py schemas
+# ---------------------------------------------------------------------------
+
+
+class EmbeddingProviderConfig(BaseModel):
+    """Embedding provider configuration model."""
+
+    provider: str
+    endpoint: str
+    selected_model: str
+    models: List[str] = []
+
+
+class EmbeddingConfig(BaseModel):
+    """Embedding configuration model."""
+
+    provider: str
+    providers: Dict[str, EmbeddingProviderConfig]
+
+
+class EmbeddingUpdate(BaseModel):
+    """Embedding configuration update request."""
+
+    provider: str
+    selected_model: str
+    endpoint: Optional[str] = None

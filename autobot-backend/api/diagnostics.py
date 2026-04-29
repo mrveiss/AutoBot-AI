@@ -21,13 +21,13 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
-from services.causal_inference_engine import (
-    CausalAnalysisReport,
-    CausalInferenceEngine,
+from api.schemas_system import (
+    FailureAnalysisRequest,
+    FailureAnalysisResponse,
+    HealthCheckResponse,
 )
-from api.schemas_common import DataResponse
+from services.causal_inference_engine import CausalInferenceEngine
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -45,31 +45,6 @@ def get_engine() -> CausalInferenceEngine:
     if _engine is None:
         _engine = CausalInferenceEngine()
     return _engine
-
-
-# =============================================================================
-# Request/Response Models
-# =============================================================================
-
-
-class FailureAnalysisRequest(BaseModel):
-    """Request to analyze a task failure."""
-
-    task_id: str
-    error_description: Optional[str] = None
-
-
-class FailureAnalysisResponse(BaseModel):
-    """Response from failure analysis."""
-
-    data: dict  # CausalAnalysisReport serialized
-
-
-class HealthCheckResponse(BaseModel):
-    """Health check response."""
-
-    status: str
-    engine_ready: bool
 
 
 # =============================================================================

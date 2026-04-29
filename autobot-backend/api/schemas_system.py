@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
+from services.feature_flags import EnforcementMode
 from type_defs.common import Metadata
 
 
@@ -3224,3 +3225,91 @@ class SpawnResponse(BaseModel):
     process_id: str
     status: str
     message: str
+
+
+# ---------------------------------------------------------------------------
+# diagnostics.py schemas
+# ---------------------------------------------------------------------------
+
+
+class FailureAnalysisRequest(BaseModel):
+    """Request to analyze a task failure."""
+
+    task_id: str
+    error_description: Optional[str] = None
+
+
+class FailureAnalysisResponse(BaseModel):
+    """Response from failure analysis."""
+
+    data: dict
+
+
+class HealthCheckResponse(BaseModel):
+    """Health check response."""
+
+    status: str
+    engine_ready: bool
+
+
+# ---------------------------------------------------------------------------
+# cache_management.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SemanticCacheConfigUpdate(BaseModel):
+    """Request body for semantic cache config update."""
+
+    similarity_threshold: Optional[float] = None
+    max_collection_size: Optional[int] = None
+    response_ttl: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+class SufficiencyConfigUpdate(BaseModel):
+    """Request body for sufficiency evaluator config update."""
+
+    enabled: Optional[bool] = None
+    keyword_threshold: Optional[float] = None
+    enable_llm_pass: Optional[bool] = None
+    llm_timeout: Optional[float] = None
+
+
+class TopicCacheConfigUpdate(BaseModel):
+    """Request body for topic cache config update."""
+
+    similarity_threshold: Optional[float] = None
+    max_topics: Optional[int] = None
+    ttl: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# feature_flags.py schemas
+# ---------------------------------------------------------------------------
+
+
+class EnforcementModeUpdate(BaseModel):
+    """Update enforcement mode request."""
+
+    mode: EnforcementMode = Field(..., description="New enforcement mode")
+
+
+class FeatureFlagInfo(BaseModel):
+    """Feature flag information."""
+
+    name: str
+    current_mode: str
+    description: str
+    available_modes: List[str]
+
+
+class ViolationStatistics(BaseModel):
+    """Access control violation statistics."""
+
+    total_violations: int
+    period_days: int
+    by_endpoint: Dict[str, int]
+    by_user: Dict[str, int]
+    by_day: Dict[str, int]
+    current_mode: str
