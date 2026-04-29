@@ -671,16 +671,6 @@ async def stream_chat_response(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_chats",
-    error_code_prefix="CHAT",
-)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_chats",
-    error_code_prefix="CHAT",
-)
 @router.get("/chats", response_model=DataResponse[List[Dict[str, Any]]])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -723,16 +713,6 @@ async def list_chats(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_message",
-    error_code_prefix="CHAT",
-)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_message",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat", response_model=DataResponse[ChatMessageData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -818,11 +798,6 @@ async def send_message(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stream_message",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_message",
@@ -924,11 +899,6 @@ async def chat_health_check(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="chat_statistics",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat_statistics",
@@ -1094,11 +1064,6 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_chat_message_by_id",
-    error_code_prefix="CHAT",
-)
 @router.post("/chats/{chat_id}/message", response_model=None)  # StreamingResponse — no Pydantic schema
 async def send_chat_message_by_id(
     chat_id: str,
@@ -1165,11 +1130,6 @@ async def _stream_graph_resume(
         yield f"data: {json.dumps(evt)}\n\n"
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="resume_chat_graph",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_chat_graph",
@@ -1315,11 +1275,6 @@ async def _merge_chat_messages(
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="save_chat_by_id",
-    error_code_prefix="CHAT",
-)
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 async def save_chat_by_id(
     chat_id: str,
@@ -1371,11 +1326,6 @@ async def save_chat_by_id(
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_chat_by_id",
-    error_code_prefix="CHAT",
-)
 @router.delete("/chats/{chat_id}", response_model=DataResponse[ChatDeleteData])
 async def delete_chat_by_id(
     chat_id: str,
@@ -1417,11 +1367,6 @@ async def delete_chat_by_id(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_direct_chat_response",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_direct_chat_response",
@@ -1862,11 +1807,6 @@ async def _generate_enhanced_stream(
     operation="enhanced_chat",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
-    error_code_prefix="CHAT",
-)
 @router.post("/enhanced", response_model=DataResponse[EnhancedChatData])
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
@@ -1935,11 +1875,6 @@ async def enhanced_chat(
     operation="stream_enhanced_chat",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stream_enhanced_chat",
-    error_code_prefix="CHAT",
-)
 @router.post("/stream-enhanced", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
@@ -1969,11 +1904,6 @@ async def stream_enhanced_chat(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat_health_check",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat_health_check",
@@ -2028,11 +1958,6 @@ async def enhanced_chat_health_check(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enhanced_chat_capabilities",
-    error_code_prefix="CHAT",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_chat_capabilities",
