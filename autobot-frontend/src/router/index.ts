@@ -84,7 +84,8 @@ const routes: RouteRecordRaw[] = [
       title: 'AI Assistant',
       icon: 'fas fa-robot',
       description: 'Chat with AI assistant',
-      requiresAuth: true
+      requiresAuth: true,
+      hideFooter: true
     },
     children: [
       {
@@ -692,6 +693,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Remote Desktop',
       requiresAuth: true,
+      hideFooter: true,
     },
   },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)

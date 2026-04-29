@@ -400,8 +400,8 @@
       </UnifiedLoadingView>
     </main>
 
-    <!-- Footer: About link (hidden on login page — /about requires auth) -->
-    <footer v-if="!isLoginPage && !isChatPage" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
+    <!-- Footer: About link (hidden on login page and routes with hideFooter meta) -->
+    <footer v-if="!isLoginPage && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
       <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
         {{ $t('nav.about') }}
       </router-link>
@@ -417,7 +417,7 @@
 
 <script lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
@@ -473,6 +473,7 @@ export default {
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
     const router = useRouter();
+    const route = useRoute();
 
     // Initialize user preferences system (Issue #753)
     import('@/composables/usePreferences').then(({ usePreferences }) => {
@@ -542,11 +543,9 @@ export default {
     const isLoading = computed(() => appStore?.isLoading || false);
     const hasErrors = computed(() => false); // No errors property in store
     const isLoginPage = computed(() =>
-      router.currentRoute.value.path === '/login' || !userStore.isAuthenticated
+      route.path === '/login' || !userStore.isAuthenticated
     );
-    const isChatPage = computed(() =>
-      router.currentRoute.value.path.startsWith('/chat')
-    );
+    const hideFooter = computed(() => !!route.meta.hideFooter);
 
     // Methods
     const toggleMobileNav = () => {
@@ -876,7 +875,7 @@ export default {
       isLoading,
       hasErrors,
       isLoginPage,
-      isChatPage,
+      hideFooter,
       navItems,
       slmAdminUrl,
       displayUsername,
