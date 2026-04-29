@@ -1647,3 +1647,36 @@ class PersonalityToggleRequest(BaseModel):
 class PersonalityStatusResponse(BaseModel):
     enabled: bool
     active_id: Optional[str]
+
+
+class SkillConfigUpdate(BaseModel):
+    """Request body for updating a skill's configuration."""
+
+    config: Dict[str, Any] = Field(..., description="Configuration values")
+
+
+class SkillActionRequest(BaseModel):
+    """Request body for executing a skill action."""
+
+    action: str = Field(..., description="Tool/action name to execute")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Action parameters")
+
+
+class UserSkillPreferences(BaseModel):
+    """Request body for updating user skill preferences."""
+
+    preferences: Dict[str, bool] = Field(..., description="Mapping of skill_name -> enabled")
+
+
+class SkillFeedbackRequest(BaseModel):
+    """Request body for submitting skill feedback."""
+
+    rating: int = Field(..., description="User rating (1-5)", ge=1, le=5)
+    feedback: Optional[str] = Field(None, description="Feedback text")
+
+
+class SkillInstallRequest(BaseModel):
+    """Request body for installing a skill from the catalog."""
+
+    catalog_url: str = Field(..., description="HTTP URL of the catalog endpoint")
+    repo_id: Optional[str] = Field(None, description="SkillRepo.id to link the package to")
