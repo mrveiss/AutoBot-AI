@@ -11,8 +11,11 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
+from services.personality_service import SUPPORTED_LANGUAGES
 from type_defs.common import Metadata
 from user_management.schemas import UserResponse as _UserResponse
+
+_PERSONALITY_VALID_TONES = {"direct", "professional", "casual", "technical"}
 
 
 # ---------------------------------------------------------------------------
@@ -1552,3 +1555,95 @@ class ResearchTaskRequest(BaseModel):
     include_web: bool = Field(True, description="Include web research")
     include_code_search: bool = Field(False, description="Include code search")
     sources: Optional[List[str]] = Field(None, description="Specific sources")
+
+
+class PersonalityProfileSummary(BaseModel):
+    id: str
+    name: str
+    is_system: bool
+    active: bool
+
+
+class PersonalityProfileDetail(BaseModel):
+    id: str
+    name: str
+    tagline: str
+    tone: str
+    character_traits: List[str]
+    operating_style: List[str]
+    off_limits: List[str]
+    custom_notes: str
+    is_system: bool
+    created_by: str
+    created_at: str
+    updated_at: str
+    voice_id: str = ""
+    voice_ids: Dict[str, str] = {}
+    language_code: str = "en"
+
+
+class PersonalityProfileCreate(BaseModel):
+    name: str
+    tagline: str = ""
+    tone: str = "direct"
+    character_traits: List[str] = []
+    operating_style: List[str] = []
+    off_limits: List[str] = []
+    custom_notes: str = ""
+    voice_id: str = ""
+    voice_ids: Dict[str, str] = {}
+    language_code: str = "en"
+
+    @field_validator("tone")
+    @classmethod
+    def tone_must_be_valid(cls, v: str) -> str:
+        if v not in _PERSONALITY_VALID_TONES:
+            raise ValueError(f"tone must be one of {sorted(_PERSONALITY_VALID_TONES)}")
+        return v
+
+    @field_validator("language_code")
+    @classmethod
+    def language_code_must_be_valid(cls, v: str) -> str:
+        if v not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
+            )
+        return v
+
+
+class PersonalityProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    tagline: Optional[str] = None
+    tone: Optional[str] = None
+    character_traits: Optional[List[str]] = None
+    operating_style: Optional[List[str]] = None
+    off_limits: Optional[List[str]] = None
+    custom_notes: Optional[str] = None
+    voice_id: Optional[str] = None
+    voice_ids: Optional[Dict[str, str]] = None
+    language_code: Optional[str] = None
+
+    @field_validator("tone")
+    @classmethod
+    def tone_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _PERSONALITY_VALID_TONES:
+            raise ValueError(f"tone must be one of {sorted(_PERSONALITY_VALID_TONES)}")
+        return v
+
+    @field_validator("language_code")
+    @classmethod
+    def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
+            )
+        return v
+
+
+class PersonalityToggleRequest(BaseModel):
+    enabled: bool
+
+
+class PersonalityStatusResponse(BaseModel):
+    enabled: bool
+    active_id: Optional[str]

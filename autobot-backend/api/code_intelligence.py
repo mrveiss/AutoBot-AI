@@ -22,17 +22,24 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
 from api.schemas_code import (
     CachedSecurityScoreResponse,
     ClearStuckResponse,
+    CodeIntelAnalysisRequest,
     CodeIntelligenceTaskStatusResponse,
+    CodeIntelQuickScanRequest,
+    CodeIntelSuggestionsRequest,
     FindingsPlaceholderResponse,
+    PerformanceAnalysisRequest,
+    PerformanceFileScanRequest,
+    RedisAnalysisRequest,
+    RedisFileScanRequest,
+    SecurityAnalysisRequest,
+    SecurityFileScanRequest,
     StartTaskResponse,
     SuggestionsResponse,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
@@ -673,45 +680,6 @@ async def _generate_report_response(
     )
 
 
-class AnalysisRequest(BaseModel):
-    """Request model for code analysis (directory or inline code)."""
-
-    path: Optional[str] = Field(
-        default=None,
-        description="Directory path to analyze",
-    )
-    code: Optional[str] = Field(
-        default=None,
-        description="Inline code to analyze",
-    )
-    language: Optional[str] = Field(
-        default=None,
-        description="Language of the inline code",
-    )
-    filename: Optional[str] = Field(
-        default=None,
-        description="Virtual filename for inline code",
-    )
-    include_suggestions: Optional[bool] = Field(
-        default=None,
-        description="Whether to include improvement suggestions",
-    )
-    exclude_dirs: Optional[list] = Field(
-        default=None,
-        description="Directories to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include",
-    )
-
-
-class QuickScanRequest(BaseModel):
-    """Request for quick single-file scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
@@ -724,7 +692,7 @@ class QuickScanRequest(BaseModel):
 )
 @router.post("/analyze", response_model=DataResponse)
 async def analyze_codebase(
-    request: AnalysisRequest,
+    request: CodeIntelAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -765,7 +733,7 @@ async def analyze_codebase(
         raise_internal_error("Analysis failed")
 
 
-def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
+def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
     """Analyze inline code snippet. Issue #1008."""
     code = request.code
     lines = code.split("\n")
@@ -829,15 +797,6 @@ def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
     )
 
 
-class SuggestionsRequest(BaseModel):
-    """Request model for code suggestions. Issue #1006."""
-
-    code: str = Field(..., description="Code to get suggestions for")
-    language: Optional[str] = Field(
-        default="python", description="Programming language"
-    )
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_suggestions",
@@ -850,7 +809,7 @@ class SuggestionsRequest(BaseModel):
 )
 @router.post("/suggestions", response_model=SuggestionsResponse)
 async def get_code_suggestions(
-    request: SuggestionsRequest,
+    request: CodeIntelSuggestionsRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Return code improvement suggestions. Issue #1006."""
@@ -884,7 +843,7 @@ async def get_code_suggestions(
 )
 @router.post("/scan-file", response_model=DataResponse)
 async def quick_scan_file(
-    request: QuickScanRequest,
+    request: CodeIntelQuickScanRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1020,29 +979,6 @@ async def get_supported_pattern_types(
 # =============================================================================
 # Redis Optimization Endpoints (Issue #220)
 # =============================================================================
-
-
-class RedisAnalysisRequest(BaseModel):
-    """Request model for Redis optimization analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory or file path to analyze for Redis optimizations",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Glob patterns to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include (info, low, medium, high, critical)",
-    )
-
-
-class RedisFileScanRequest(BaseModel):
-    """Request for scanning a single file for Redis optimizations."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
 
 
 @with_error_handling(
@@ -1281,29 +1217,6 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
 # ============================================================================
 # Security Analysis Endpoints (Issue #219)
 # ============================================================================
-
-
-class SecurityAnalysisRequest(BaseModel):
-    """Request model for security analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory path to analyze for security vulnerabilities",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include (info, low, medium, high, critical)",
-    )
-
-
-class SecurityFileScanRequest(BaseModel):
-    """Request for single file security scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
 
 
 @with_error_handling(
@@ -1573,29 +1486,6 @@ async def get_security_report(
 # ============================================================================
 # Performance Analysis Endpoints (Issue #222)
 # ============================================================================
-
-
-class PerformanceAnalysisRequest(BaseModel):
-    """Request model for performance analysis."""
-
-    path: str = Field(
-        ...,
-        description="Directory path to analyze for performance issues",
-    )
-    exclude_patterns: Optional[list] = Field(
-        default=None,
-        description="Patterns to exclude from analysis",
-    )
-    min_severity: Optional[str] = Field(
-        default=None,
-        description="Minimum severity level to include",
-    )
-
-
-class PerformanceFileScanRequest(BaseModel):
-    """Request for single file performance scan."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
 
 
 @with_error_handling(

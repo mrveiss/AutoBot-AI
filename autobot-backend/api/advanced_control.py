@@ -8,11 +8,8 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_SESSION_NOT_FOUND
@@ -23,6 +20,14 @@ from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
+from api.schemas_system import (
+    StreamingSessionRequest,
+    StreamingSessionResponse,
+    SystemMonitoringResponse,
+    TakeoverActionRequest,
+    TakeoverApprovalRequest,
+    TakeoverRequest,
+)
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
     AdvancedControlHealthResponse,
@@ -35,51 +40,6 @@ from api.schemas_workflows import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])
-
-
-# Request/Response Models
-class StreamingSessionRequest(BaseModel):
-    user_id: str
-    resolution: str = "1024x768"
-    depth: int = 24
-
-
-class StreamingSessionResponse(BaseModel):
-    session_id: str
-    vnc_port: int
-    novnc_port: Optional[int]
-    display: str
-    vnc_url: str
-    web_url: Optional[str]
-    websocket_endpoint: str
-
-
-class TakeoverRequest(BaseModel):
-    trigger: str
-    reason: str
-    requesting_agent: Optional[str] = None
-    affected_tasks: Optional[List[str]] = None
-    priority: str = "HIGH"
-    timeout_minutes: Optional[int] = None
-    auto_approve: bool = False
-
-
-class TakeoverApprovalRequest(BaseModel):
-    human_operator: str
-    takeover_scope: Optional[Metadata] = None
-
-
-class TakeoverActionRequest(BaseModel):
-    action_type: str
-    action_data: Metadata
-
-
-class SystemMonitoringResponse(BaseModel):
-    system_status: Metadata
-    active_sessions: List[Metadata]
-    pending_takeovers: List[Metadata]
-    active_takeovers: List[Metadata]
-    resource_usage: Metadata
 
 
 # Desktop Streaming Endpoints

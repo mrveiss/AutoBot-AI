@@ -14,7 +14,6 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -30,8 +29,14 @@ from models.heartbeat import (
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
 from api.schemas_system import (
+    HeartbeatConfigRequest,
+    HeartbeatConfigResponse,
+    HeartbeatRunResponse,
     HeartbeatTriggerResponse,
     HeartbeatWakeupQueuedResponse,
+    RunEventResponse,
+    WakeupRequestCreate,
+    WakeupRequestResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -55,79 +60,6 @@ def _get_scheduler() -> HeartbeatScheduler:
             detail="Heartbeat scheduler not initialised",
         )
     return _scheduler
-
-
-class HeartbeatConfigRequest(BaseModel):
-    """Request body to configure heartbeat for an agent."""
-
-    heartbeat_enabled: bool = False
-    heartbeat_interval_seconds: int = Field(default=300, ge=10)
-    max_run_duration_seconds: int = Field(default=600, ge=10)
-
-
-class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state."""
-
-    agent_id: str
-    heartbeat_enabled: bool
-    heartbeat_interval_seconds: int
-    max_run_duration_seconds: int
-    current_task_id: Optional[str]
-    last_heartbeat_at: Optional[str]
-    session_params: Optional[Dict[str, Any]]
-    extra: Optional[Dict[str, Any]]
-    created_at: Optional[str]
-    updated_at: Optional[str]
-
-
-class WakeupRequestCreate(BaseModel):
-    """Request body to queue a wakeup for an agent."""
-
-    priority: int = 0
-    context: Optional[Dict[str, Any]] = None
-    reason: Optional[str] = None
-
-
-class WakeupRequestResponse(BaseModel):
-    """Response for a queued wakeup request."""
-
-    id: str
-    agent_id: str
-    priority: int
-    context: Optional[Dict[str, Any]]
-    reason: Optional[str]
-    consumed: bool
-    consumed_at: Optional[str]
-    created_at: Optional[str]
-
-
-class RunEventResponse(BaseModel):
-    """Response for a single run event."""
-
-    id: str
-    event_type: str
-    message: Optional[str]
-    payload: Optional[Dict[str, Any]]
-    occurred_at: str
-
-
-class HeartbeatRunResponse(BaseModel):
-    """Response for a single heartbeat run."""
-
-    id: str
-    agent_id: str
-    status: str
-    trigger: str
-    wakeup_context: Optional[Dict[str, Any]]
-    started_at: Optional[str]
-    finished_at: Optional[str]
-    tokens_used: Optional[int]
-    cost_usd: Optional[float]
-    model: Optional[str]
-    provider: Optional[str]
-    error_message: Optional[str]
-    created_at: Optional[str]
-    events: List[RunEventResponse] = []
 
 
 @with_error_handling(
