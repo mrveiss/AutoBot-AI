@@ -9,17 +9,19 @@ Provides service status, health checks, and system information endpoints.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_system import (
+    ServiceStatus,
     ServicesHealthAggregateResponse,
     ServicesHealthDeprecatedResponse,
+    ServicesResponse,
     ServicesVMsStatusResponse,
+    SystemInfo,
+    VMStatus,
 )
 
 # Import existing monitoring functionality
@@ -142,47 +144,6 @@ def _build_default_services(redis_status_obj) -> list:
             message="Automation services running",
         ),
     ]
-
-
-class ServiceStatus(BaseModel):
-    """Service status model"""
-
-    name: str
-    status: str = Field(..., description="Service status: healthy, warning, error")
-    message: str = Field(..., description="Status description")
-    last_check: Optional[datetime] = None
-    response_time_ms: Optional[float] = None
-
-
-class SystemInfo(BaseModel):
-    """System information model"""
-
-    version: str
-    build: str
-    environment: str
-    uptime: float
-    services_count: int
-
-
-class VMStatus(BaseModel):
-    """VM status model"""
-
-    name: str
-    ip: str
-    status: str = Field(..., description="VM status: online, offline, unknown")
-    services: List[str] = Field(default_factory=list)
-    last_check: Optional[datetime] = None
-
-
-class ServicesResponse(BaseModel):
-    """Services list response"""
-
-    services: List[ServiceStatus]
-    total_count: int
-    healthy_count: int
-    error_count: int
-    warning_count: int
-    last_updated: datetime
 
 
 @with_error_handling(

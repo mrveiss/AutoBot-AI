@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
+from services.trigger_service import TriggerType
 from autobot_shared.time_utils import now_utc
 from models.approval import ApprovalType
 from type_defs.common import Metadata
@@ -1658,3 +1659,74 @@ class ProjectMgmtSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query or JQL")
     max_results: Optional[int] = Field(50, description="Maximum results")
+
+
+# ---------------------------------------------------------------------------
+# triggers.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TriggerCreateRequest(BaseModel):
+    """Request body for POST /api/triggers."""
+
+    trigger_type: TriggerType
+    workflow_id: str = Field(..., min_length=1)
+    config: Dict[str, Any] = Field(default_factory=dict)
+    conditions: List[Dict[str, Any]] = Field(default_factory=list)
+    enabled: bool = True
+
+    @field_validator("workflow_id")
+    @classmethod
+    def workflow_id_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("workflow_id must not be empty or whitespace")
+        return v
+
+
+class TriggerCreateResponse(BaseModel):
+    """Response body for POST /api/triggers."""
+
+    trigger_id: str
+    webhook_url: Optional[str] = None
+
+
+class TriggerListResponse(BaseModel):
+    """Response body for GET /api/triggers."""
+
+    triggers: List[Dict[str, Any]]
+    total: int
+
+
+class FireTriggerRequest(BaseModel):
+    """Optional request body for manually firing a trigger (internal/testing)."""
+
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# research_browser.py schemas
+# ---------------------------------------------------------------------------
+
+
+class BrowserResearchRequest(BaseModel):
+    conversation_id: str
+    url: str
+    extract_content: bool = True
+
+
+class SessionAction(BaseModel):
+    session_id: str
+    action: str
+    timeout_seconds: Optional[int] = 300
+
+
+class NavigationRequest(BaseModel):
+    url: str
+
+
+class CreateChatBrowserRequest(BaseModel):
+    """Request to create/get browser session for chat."""
+
+    conversation_id: str
+    headless: bool = False
+    initial_url: Optional[str] = None
