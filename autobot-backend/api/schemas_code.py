@@ -2008,3 +2008,70 @@ class ReusabilityReport(BaseModel):
     usage_patterns: List[str]
     refactor_suggestions: List[str]
     similar_declarations: List[str]
+
+
+class CodeIntelAnalysisRequest(BaseModel):
+    """Request model for code analysis (directory or inline code)."""
+
+    path: Optional[str] = Field(default=None, description="Directory path to analyze")
+    code: Optional[str] = Field(default=None, description="Inline code to analyze")
+    language: Optional[str] = Field(default=None, description="Language of the inline code")
+    filename: Optional[str] = Field(default=None, description="Virtual filename for inline code")
+    include_suggestions: Optional[bool] = Field(default=None, description="Whether to include improvement suggestions")
+    exclude_dirs: Optional[list] = Field(default=None, description="Directories to exclude from analysis")
+    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include")
+
+
+class CodeIntelQuickScanRequest(BaseModel):
+    """Request for quick single-file scan."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+class CodeIntelSuggestionsRequest(BaseModel):
+    """Request model for code suggestions."""
+
+    code: str = Field(..., description="Code to get suggestions for")
+    language: Optional[str] = Field(default="python", description="Programming language")
+
+
+class RedisAnalysisRequest(BaseModel):
+    """Request model for Redis optimization analysis."""
+
+    path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
+    exclude_patterns: Optional[list] = Field(default=None, description="Glob patterns to exclude from analysis")
+    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include (info, low, medium, high, critical)")
+
+
+class RedisFileScanRequest(BaseModel):
+    """Request for scanning a single file for Redis optimizations."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+class SecurityAnalysisRequest(BaseModel):
+    """Request model for security analysis."""
+
+    path: str = Field(..., description="Directory path to analyze for security vulnerabilities")
+    exclude_patterns: Optional[list] = Field(default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])")
+    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include (info, low, medium, high, critical)")
+
+
+class SecurityFileScanRequest(BaseModel):
+    """Request for single file security scan."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+class PerformanceAnalysisRequest(BaseModel):
+    """Request model for performance analysis."""
+
+    path: str = Field(..., description="Directory path to analyze for performance issues")
+    exclude_patterns: Optional[list] = Field(default=None, description="Patterns to exclude from analysis")
+    min_severity: Optional[str] = Field(default=None, description="Minimum severity level to include")
+
+
+class PerformanceFileScanRequest(BaseModel):
+    """Request for single file performance scan."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")

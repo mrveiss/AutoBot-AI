@@ -2419,3 +2419,193 @@ class TerminalHostSelectionResponse(BaseModel):
     selected_host_id: Optional[str] = Field(None, description="Selected host ID")
     selected_host_name: Optional[str] = Field(None, description="Selected host name")
     connection_info: Optional[Dict] = Field(None, description="Connection details (host, port, username)")
+
+
+class HeartbeatConfigRequest(BaseModel):
+    """Request body to configure heartbeat for an agent."""
+
+    heartbeat_enabled: bool = False
+    heartbeat_interval_seconds: int = Field(default=300, ge=10)
+    max_run_duration_seconds: int = Field(default=600, ge=10)
+
+
+class HeartbeatConfigResponse(BaseModel):
+    """Response for agent heartbeat config / runtime state."""
+
+    agent_id: str
+    heartbeat_enabled: bool
+    heartbeat_interval_seconds: int
+    max_run_duration_seconds: int
+    current_task_id: Optional[str]
+    last_heartbeat_at: Optional[str]
+    session_params: Optional[Dict[str, Any]]
+    extra: Optional[Dict[str, Any]]
+    created_at: Optional[str]
+    updated_at: Optional[str]
+
+
+class WakeupRequestCreate(BaseModel):
+    """Request body to queue a wakeup for an agent."""
+
+    priority: int = 0
+    context: Optional[Dict[str, Any]] = None
+    reason: Optional[str] = None
+
+
+class WakeupRequestResponse(BaseModel):
+    """Response for a queued wakeup request."""
+
+    id: str
+    agent_id: str
+    priority: int
+    context: Optional[Dict[str, Any]]
+    reason: Optional[str]
+    consumed: bool
+    consumed_at: Optional[str]
+    created_at: Optional[str]
+
+
+class RunEventResponse(BaseModel):
+    """Response for a single run event."""
+
+    id: str
+    event_type: str
+    message: Optional[str]
+    payload: Optional[Dict[str, Any]]
+    occurred_at: str
+
+
+class HeartbeatRunResponse(BaseModel):
+    """Response for a single heartbeat run."""
+
+    id: str
+    agent_id: str
+    status: str
+    trigger: str
+    wakeup_context: Optional[Dict[str, Any]]
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    tokens_used: Optional[int]
+    cost_usd: Optional[float]
+    model: Optional[str]
+    provider: Optional[str]
+    error_message: Optional[str]
+    created_at: Optional[str]
+    events: List[RunEventResponse] = []
+
+
+class StreamingSessionRequest(BaseModel):
+    user_id: str
+    resolution: str = "1024x768"
+    depth: int = 24
+
+
+class StreamingSessionResponse(BaseModel):
+    session_id: str
+    vnc_port: int
+    novnc_port: Optional[int]
+    display: str
+    vnc_url: str
+    web_url: Optional[str]
+    websocket_endpoint: str
+
+
+class TakeoverRequest(BaseModel):
+    trigger: str
+    reason: str
+    requesting_agent: Optional[str] = None
+    affected_tasks: Optional[List[str]] = None
+    priority: str = "HIGH"
+    timeout_minutes: Optional[int] = None
+    auto_approve: bool = False
+
+
+class TakeoverApprovalRequest(BaseModel):
+    human_operator: str
+    takeover_scope: Optional[Metadata] = None
+
+
+class TakeoverActionRequest(BaseModel):
+    action_type: str
+    action_data: Metadata
+
+
+class SystemMonitoringResponse(BaseModel):
+    system_status: Metadata
+    active_sessions: List[Metadata]
+    pending_takeovers: List[Metadata]
+    active_takeovers: List[Metadata]
+    resource_usage: Metadata
+
+
+class ScreenAnalysisRequest(BaseModel):
+    """Request for screen analysis"""
+
+    session_id: Optional[str] = Field(None, description="Optional session ID for context")
+    include_multimodal: bool = Field(True, description="Include multi-modal analysis")
+
+
+class ElementDetectionRequest(BaseModel):
+    """Request for element detection"""
+
+    element_type: Optional[str] = Field(None, description="Filter by element type")
+    min_confidence: float = Field(0.5, ge=0.0, le=1.0, description="Minimum confidence threshold")
+    session_id: Optional[str] = None
+
+
+class OCRRequest(BaseModel):
+    """Request for OCR text extraction"""
+
+    region: Optional[Dict[str, int]] = Field(
+        None,
+        description=(
+            "Region to extract text from {x, y, width, height}. If None,"
+            "analyzes full screen."
+        ),
+    )
+    session_id: Optional[str] = None
+
+
+class ElementInteractionRequest(BaseModel):
+    """Request for element interaction validation"""
+
+    element_id: str = Field(..., description="ID of element to interact with")
+    interaction_type: str = Field(..., description="Type of interaction to perform")
+    parameters: Optional[Metadata] = Field(None, description="Additional interaction parameters")
+
+
+class UIElementResponse(BaseModel):
+    """Response model for UI element"""
+
+    element_id: str
+    element_type: str
+    bbox: Dict[str, int]
+    center_point: List[int]
+    confidence: float
+    text_content: str
+    attributes: Metadata
+    possible_interactions: List[str]
+
+
+class ScreenAnalysisResponse(BaseModel):
+    """Response model for screen analysis"""
+
+    timestamp: float
+    ui_elements: List[UIElementResponse]
+    text_regions: List[Metadata]
+    dominant_colors: List[Metadata]
+    layout_structure: Metadata
+    automation_opportunities: List[Metadata]
+    context_analysis: Metadata
+    confidence_score: float
+    multimodal_analysis: Optional[List[Metadata]] = None
+
+
+class VisionHealthResponse(BaseModel):
+    """Health check response"""
+
+    status: str
+    analyzer_ready: bool
+    capabilities: List[str]
+    element_types_supported: List[str]
+    interaction_types_supported: List[str]

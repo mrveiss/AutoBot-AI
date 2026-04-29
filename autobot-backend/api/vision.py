@@ -10,24 +10,26 @@ Author: mrveiss
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
-from type_defs.common import Metadata
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
-from api.schemas_common import DataResponse
 from api.schemas_system import (
+    ElementDetectionRequest,
+    OCRRequest,
+    ScreenAnalysisRequest,
+    ScreenAnalysisResponse,
+    UIElementResponse,
     VisionDetectElementsResponse,
+    VisionHealthResponse,
     VisionOCRResponse,
     VisionAutomationOpportunitiesResponse,
     VisionElementTypesResponse,
@@ -50,86 +52,6 @@ def get_screen_analyzer() -> ScreenAnalyzer:
                 _screen_analyzer = ScreenAnalyzer()
                 logger.info("Screen analyzer initialized")
     return _screen_analyzer
-
-
-# Request/Response Models
-class ScreenAnalysisRequest(BaseModel):
-    """Request for screen analysis"""
-
-    session_id: Optional[str] = Field(
-        None, description="Optional session ID for context"
-    )
-    include_multimodal: bool = Field(True, description="Include multi-modal analysis")
-
-
-class ElementDetectionRequest(BaseModel):
-    """Request for element detection"""
-
-    element_type: Optional[str] = Field(None, description="Filter by element type")
-    min_confidence: float = Field(
-        0.5, ge=0.0, le=1.0, description="Minimum confidence threshold"
-    )
-    session_id: Optional[str] = None
-
-
-class OCRRequest(BaseModel):
-    """Request for OCR text extraction"""
-
-    region: Optional[Dict[str, int]] = Field(
-        None,
-        description=(
-            "Region to extract text from {x, y, width, height}. If None,"
-            "analyzes full screen."
-        ),
-    )
-    session_id: Optional[str] = None
-
-
-class ElementInteractionRequest(BaseModel):
-    """Request for element interaction validation"""
-
-    element_id: str = Field(..., description="ID of element to interact with")
-    interaction_type: str = Field(..., description="Type of interaction to perform")
-    parameters: Optional[Metadata] = Field(
-        None, description="Additional interaction parameters"
-    )
-
-
-class UIElementResponse(BaseModel):
-    """Response model for UI element"""
-
-    element_id: str
-    element_type: str
-    bbox: Dict[str, int]
-    center_point: List[int]
-    confidence: float
-    text_content: str
-    attributes: Metadata
-    possible_interactions: List[str]
-
-
-class ScreenAnalysisResponse(BaseModel):
-    """Response model for screen analysis"""
-
-    timestamp: float
-    ui_elements: List[UIElementResponse]
-    text_regions: List[Metadata]
-    dominant_colors: List[Metadata]
-    layout_structure: Metadata
-    automation_opportunities: List[Metadata]
-    context_analysis: Metadata
-    confidence_score: float
-    multimodal_analysis: Optional[List[Metadata]] = None
-
-
-class VisionHealthResponse(BaseModel):
-    """Health check response"""
-
-    status: str
-    analyzer_ready: bool
-    capabilities: List[str]
-    element_types_supported: List[str]
-    interaction_types_supported: List[str]
 
 
 # API Endpoints

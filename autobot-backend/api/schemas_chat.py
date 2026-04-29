@@ -10,10 +10,12 @@ to give FastAPI enough type information to generate correct OpenAPI schemas.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from constants.threshold_constants import CategoryDefaults
 from type_defs.common import Metadata
 
 
@@ -228,3 +230,89 @@ class ChatResetRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="Session ID to reset (optional)")
     clear_context: bool = Field(True, description="Clear conversation context")
     keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
+
+
+class ChatMessage(BaseModel):
+    """Chat message model for requests"""
+
+    content: str = Field(..., min_length=1, max_length=50000, description="Message content")
+    role: str = Field(
+        default=CategoryDefaults.ROLE_USER,
+        pattern="^(user|assistant|system)$",
+        description="Message role",
+    )
+    session_id: Optional[str] = Field(None, description="Chat session ID")
+    message_type: Optional[str] = Field("text", description="Message type")
+    metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
+    )
+
+
+class ChatResponse(BaseModel):
+    """Chat response model"""
+
+    content: str
+    role: str = CategoryDefaults.ROLE_ASSISTANT
+    session_id: str
+    message_id: str
+    timestamp: datetime
+    metadata: Metadata = Field(default_factory=dict)
+
+
+class MessageHistory(BaseModel):
+    """Message history response model"""
+
+    messages: List[Metadata]
+    session_id: str
+    total_count: int
+    page: int = 1
+    per_page: int = 50
+
+
+class EnhancedChatMessage(BaseModel):
+    """Enhanced chat message with AI Stack integration."""
+
+    content: str = Field(..., min_length=1, max_length=50000, description="Message content")
+    role: str = Field(
+        default=CategoryDefaults.ROLE_USER,
+        pattern="^(user|assistant|system)$",
+        description="Message role",
+    )
+    session_id: Optional[str] = Field(None, description="Chat session ID")
+    message_type: Optional[str] = Field("text", description="Message type")
+    metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
+    )
+    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
+    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
+    response_style: str = Field("conversational", description="Response style preference")
+    include_sources: bool = Field(True, description="Whether to include source citations")
+
+
+class ChatPreferences(BaseModel):
+    """Chat preferences for customizing AI behavior."""
+
+    response_length: str = Field("medium", description="Preferred response length (short, medium, long)")
+    technical_level: str = Field("adaptive", description="Technical complexity level")
+    include_reasoning: bool = Field(False, description="Include reasoning steps in responses")
+    fact_checking: bool = Field(True, description="Enable fact checking against knowledge base")
+
+
+class TranslateRequest(BaseModel):
+    """Request model for direct translation."""
+
+    text: str = Field(..., min_length=1, max_length=50000, description="Text to translate")
+    target_language: str = Field(..., min_length=1, max_length=50, description="Target language name")
+    source_language: Optional[str] = Field(None, description="Source language (auto-detect if omitted)")
+
+
+class DetectLanguageRequest(BaseModel):
+    """Request model for language detection."""
+
+    text: str = Field(..., min_length=1, max_length=50000, description="Text to detect language of")
