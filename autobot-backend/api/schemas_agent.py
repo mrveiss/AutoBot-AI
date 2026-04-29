@@ -1786,3 +1786,66 @@ class InferenceOptimizationSettings(BaseModel):
     local_vllm_multi_step: int = 8
     local_vllm_prefix_caching: bool = True
     local_vllm_async_output: bool = True
+
+
+# ---------------------------------------------------------------------------
+# a2a.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TaskSendRequest(BaseModel):
+    """Body for POST /tasks — submit a new A2A task."""
+
+    message: str = Field(..., description="The natural-language task to execute")
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional key-value context passed to the orchestrator")
+
+
+class TaskSendResponse(BaseModel):
+    """Immediate response when a task is accepted."""
+
+    id: str
+    state: str
+    trace_id: str
+
+
+class RemoteVerifyRequest(BaseModel):
+    """Body for POST /capabilities/verify."""
+
+    url: str = Field(..., description="Base URL of the remote agent to verify")
+
+
+# ---------------------------------------------------------------------------
+# agents_self_improvement.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TaskOutcomeResponse(BaseModel):
+    """Serialized task outcome record."""
+
+    task_type: str
+    goal: str
+    output_summary: str
+    strategy_used: str
+    score: float
+    rationale: str
+    timestamp: str
+
+
+class LearnedStrategyResponse(BaseModel):
+    """Serialized learned strategy record."""
+
+    task_type: str
+    best_approach: str
+    best_prompt_template: str
+    avg_score: float
+    sample_size: int
+    confidence: float
+    failure_patterns: List[str]
+    timestamp: str
+
+
+class ResetLearningResponse(BaseModel):
+    """Response for reset-learning operation."""
+
+    success: bool
+    message: str

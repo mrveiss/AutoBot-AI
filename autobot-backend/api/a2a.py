@@ -32,7 +32,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
 from a2a.agent_card import build_agent_card
 from a2a.capability_verifier import verify_local_card, verify_remote_card
@@ -48,6 +47,8 @@ from api.schemas_agent import (
     A2ASubmitTaskResponse,
     A2ATaskResponse,
     A2ATaskTraceResponse,
+    RemoteVerifyRequest,
+    TaskSendRequest,
     A2ACancelTaskResponse,
     A2AStatsResponse,
     A2ACapabilitiesResponse,
@@ -97,33 +98,6 @@ def _check_rate_limit(remote_addr: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
-
-
-class TaskSendRequest(BaseModel):
-    """Body for POST /tasks — submit a new A2A task."""
-
-    message: str = Field(..., description="The natural-language task to execute")
-    context: Optional[Dict[str, Any]] = Field(
-        None, description="Optional key-value context passed to the orchestrator"
-    )
-
-
-class TaskSendResponse(BaseModel):
-    """Immediate response when a task is accepted."""
-
-    id: str
-    state: str
-    trace_id: str
-
-
-class RemoteVerifyRequest(BaseModel):
-    """Body for POST /capabilities/verify."""
-
-    url: str = Field(..., description="Base URL of the remote agent to verify")
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

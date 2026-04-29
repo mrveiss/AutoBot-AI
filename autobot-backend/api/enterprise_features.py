@@ -8,11 +8,10 @@ Provides API endpoints for managing enterprise-grade features.
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -21,25 +20,15 @@ from enterprise_feature_manager import (
     FeatureStatus,
     get_enterprise_manager,
 )
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    BulkFeatureRequest,
+    FeatureEnableRequest,
+    PerformanceOptimizationRequest,
+)
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
-
-
-class FeatureEnableRequest(BaseModel):
-    feature_name: str
-    force: Optional[bool] = False
-
-
-class BulkFeatureRequest(BaseModel):
-    features: List[str]
-    enable_dependencies: Optional[bool] = True
-
-
-class PerformanceOptimizationRequest(BaseModel):
-    target_metrics: dict
-    optimization_level: Optional[str] = "balanced"  # conservative, balanced, aggressive
 
 
 def _process_feature_health_result(

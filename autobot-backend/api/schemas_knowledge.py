@@ -4640,3 +4640,30 @@ class EmbeddingUpdate(BaseModel):
     provider: str
     selected_model: str
     endpoint: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# enhanced_memory.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TaskCreateRequest(BaseModel):
+    task_name: str
+    description: str
+    priority: str = "medium"
+    agent_type: Optional[str] = None
+    inputs: Optional[Metadata] = None
+    parent_task_id: Optional[str] = None
+    metadata: Optional[Metadata] = None
+
+
+class TaskUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    outputs: Optional[Metadata] = None
+    error_message: Optional[str] = None
+
+
+class MarkdownReferenceRequest(BaseModel):
+    task_id: str
+    markdown_file_path: str
+    reference_type: str = "documentation"
