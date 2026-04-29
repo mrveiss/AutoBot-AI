@@ -5,6 +5,7 @@
 Analytics, cost, budget, usage, and metrics schemas.
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -1841,3 +1842,353 @@ class AgentCostResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     call_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_generation.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class RefactoringType(str, Enum):
+    """Types of code refactoring operations"""
+
+    EXTRACT_FUNCTION = "extract_function"
+    RENAME_VARIABLE = "rename_variable"
+    SIMPLIFY_CONDITIONAL = "simplify_conditional"
+    REMOVE_DUPLICATION = "remove_duplication"
+    ADD_TYPE_HINTS = "add_type_hints"
+    IMPROVE_NAMING = "improve_naming"
+    OPTIMIZE_LOOPS = "optimize_loops"
+    ADD_DOCSTRINGS = "add_docstrings"
+    CLEAN_IMPORTS = "clean_imports"
+    GENERAL = "general"
+
+
+class CodeLanguage(str, Enum):
+    """Supported programming languages"""
+
+    PYTHON = "python"
+    TYPESCRIPT = "typescript"
+    JAVASCRIPT = "javascript"
+    VUE = "vue"
+
+
+class GenerationStatus(str, Enum):
+    """Status of code generation request"""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
+
+
+class CodeGenerationRequest(BaseModel):
+    """Request model for code generation"""
+
+    description: str = Field(..., description="Natural language description of code to generate")
+    language: CodeLanguage = Field(default=CodeLanguage.PYTHON, description="Target language")
+    context: Optional[str] = Field(None, description="Additional context or requirements")
+    file_path: Optional[str] = Field(None, description="Target file path for context")
+    existing_code: Optional[str] = Field(None, description="Existing code to integrate with")
+
+
+class RefactoringRequest(BaseModel):
+    """Request model for code refactoring"""
+
+    code: str = Field(..., description="Code to refactor")
+    refactoring_type: RefactoringType = Field(default=RefactoringType.GENERAL)
+    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
+    file_path: Optional[str] = Field(None, description="Source file path for context")
+    preserve_comments: bool = Field(default=True)
+    preserve_formatting: bool = Field(default=False)
+
+
+class CodeGenValidationRequest(BaseModel):
+    """Request model for code validation"""
+
+    code: str = Field(..., description="Code to validate")
+    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
+
+
+class CodeGenRollbackRequest(BaseModel):
+    """Request model for code rollback"""
+
+    file_path: str = Field(..., description="File to rollback")
+    version_id: Optional[str] = Field(None, description="Specific version to rollback to")
+
+
+class CodeGenerationResponse(BaseModel):
+    """Response model for code generation"""
+
+    success: bool
+    generated_code: Optional[str] = None
+    validation: Optional[Dict[str, Any]] = None
+    tokens_used: int = 0
+    processing_time: float = 0.0
+    error: Optional[str] = None
+
+
+class RefactoringResponse(BaseModel):
+    """Response model for refactoring"""
+
+    success: bool
+    original_code: str
+    refactored_code: Optional[str] = None
+    diff: Optional[str] = None
+    changes: List[str] = []
+    validation: Optional[Dict[str, Any]] = None
+    tokens_used: int = 0
+    processing_time: float = 0.0
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# analytics_pattern_learning.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class FeedbackType(str, Enum):
+    """Types of feedback developers can provide."""
+
+    CORRECT = "correct"
+    INCORRECT = "incorrect"
+    MISSED = "missed"
+    PARTIAL = "partial"
+    IRRELEVANT = "irrelevant"
+
+
+class PatternCategory(str, Enum):
+    """Categories of patterns for organization."""
+
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    CODE_QUALITY = "code_quality"
+    ARCHITECTURE = "architecture"
+    ERROR_HANDLING = "error_handling"
+    CONCURRENCY = "concurrency"
+    DATA_FLOW = "data_flow"
+    CONTROL_FLOW = "control_flow"
+    STYLE = "style"
+    DOCUMENTATION = "documentation"
+
+
+class LearningPhase(str, Enum):
+    """Phases of the active learning pipeline."""
+
+    COLLECTING = "collecting"
+    ANALYZING = "analyzing"
+    TRAINING = "training"
+    VALIDATING = "validating"
+    DEPLOYED = "deployed"
+
+
+class ConfidenceLevel(str, Enum):
+    """Human-readable confidence levels."""
+
+    VERY_LOW = "very_low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very_high"
+
+
+class PatternFeedback(BaseModel):
+    """Feedback for a specific pattern match."""
+
+    pattern_id: str = Field(..., description="Unique identifier for the pattern")
+    feedback_type: FeedbackType = Field(..., description="Type of feedback")
+    file_path: str = Field(..., description="File where pattern was detected")
+    line_number: int = Field(..., description="Line number of pattern match")
+    code_snippet: Optional[str] = Field(None, description="Code snippet context")
+    developer_comment: Optional[str] = Field(None, description="Developer notes")
+    suggested_fix: Optional[str] = Field(None, description="Suggested improvement")
+    timestamp: Optional[datetime] = Field(None, description="Feedback timestamp")
+
+
+class PatternDefinition(BaseModel):
+    """Definition of a learnable pattern."""
+
+    pattern_id: str = Field(..., description="Unique pattern identifier")
+    name: str = Field(..., description="Human-readable pattern name")
+    description: str = Field(..., description="Pattern description")
+    category: PatternCategory = Field(..., description="Pattern category")
+    regex_patterns: List[str] = Field(default_factory=list, description="Regex patterns")
+    ast_patterns: List[str] = Field(default_factory=list, description="AST pattern descriptions")
+    examples: List[str] = Field(default_factory=list, description="Example matches")
+    counter_examples: List[str] = Field(default_factory=list, description="Non-matching examples")
+    severity: str = Field(default="medium", description="Pattern severity")
+    enabled: bool = Field(default=True, description="Whether pattern is active")
+
+
+class ConfidenceScore(BaseModel):
+    """Confidence score for a pattern."""
+
+    pattern_id: str
+    score: float = Field(..., ge=0.0, le=1.0)
+    level: ConfidenceLevel
+    total_feedback: int
+    correct_count: int
+    incorrect_count: int
+    last_updated: datetime
+    trend: str
+
+
+class PatternLearningMetrics(BaseModel):
+    """Metrics for the pattern learning pipeline."""
+
+    total_patterns: int
+    total_feedback: int
+    average_confidence: float
+    high_confidence_patterns: int
+    low_confidence_patterns: int
+    patterns_improved: int
+    patterns_degraded: int
+    feedback_by_type: Dict[str, int]
+    feedback_by_category: Dict[str, int]
+    learning_rate: float
+    last_training_run: Optional[datetime]
+
+
+class ActiveLearningQuery(BaseModel):
+    """Query for active learning suggestions."""
+
+    pattern_id: str
+    code_snippet: str
+    predicted_match: bool
+    confidence: float
+    question: str
+
+
+class PatternUpdate(BaseModel):
+    """Update to a pattern based on learning."""
+
+    pattern_id: str
+    update_type: str
+    old_value: Optional[Any]
+    new_value: Optional[Any]
+    reason: str
+    applied_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# analytics_continuous_learning.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class LearningEventType(str, Enum):
+    """Types of learning events."""
+
+    FILE_CHANGE = "file_change"
+    PATTERN_DETECTED = "pattern_detected"
+    FEEDBACK_RECEIVED = "feedback_received"
+    MODEL_UPDATED = "model_updated"
+    INSIGHT_GENERATED = "insight_generated"
+    THRESHOLD_CROSSED = "threshold_crossed"
+    ANOMALY_DETECTED = "anomaly_detected"
+
+
+class MonitoringState(str, Enum):
+    """States of the monitoring system."""
+
+    STOPPED = "stopped"
+    STARTING = "starting"
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPING = "stopping"
+
+
+class InsightType(str, Enum):
+    """Types of generated insights."""
+
+    NEW_PATTERN = "new_pattern"
+    PATTERN_EVOLUTION = "pattern_evolution"
+    FALSE_POSITIVE_TREND = "false_positive_trend"
+    PERFORMANCE_IMPROVEMENT = "performance_improvement"
+    DEVELOPER_PREFERENCE = "developer_preference"
+    CODE_QUALITY_TREND = "code_quality_trend"
+    SECURITY_CONCERN = "security_concern"
+
+
+class RetrainingReason(str, Enum):
+    """Reasons for triggering model retraining."""
+
+    SCHEDULED = "scheduled"
+    FEEDBACK_THRESHOLD = "feedback_threshold"
+    ACCURACY_DROP = "accuracy_drop"
+    NEW_PATTERNS = "new_patterns"
+    MANUAL = "manual"
+
+
+class LearningEvent(BaseModel):
+    """An event in the learning system."""
+
+    event_id: str
+    event_type: LearningEventType
+    timestamp: datetime
+    source: str
+    data: Dict[str, Any]
+    processed: bool = False
+
+
+class LearningInsight(BaseModel):
+    """A generated insight."""
+
+    insight_id: str
+    insight_type: InsightType
+    title: str
+    description: str
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    data: Dict[str, Any]
+    recommendations: List[str]
+    generated_at: datetime
+    expires_at: Optional[datetime] = None
+
+
+class ContinuousLearningMetrics(BaseModel):
+    """Metrics for the continuous learning system."""
+
+    total_events_processed: int
+    events_last_hour: int
+    events_last_day: int
+    patterns_learned: int
+    patterns_updated: int
+    false_positives_reduced: int
+    accuracy_improvement: float
+    last_retrain: Optional[datetime]
+    next_scheduled_retrain: Optional[datetime]
+    insights_generated: int
+    active_insights: int
+
+
+class LearningMonitoringStatus(BaseModel):
+    """Status of the monitoring system."""
+
+    state: MonitoringState
+    started_at: Optional[datetime]
+    uptime_seconds: int
+    files_monitored: int
+    directories_watched: List[str]
+    events_queue_size: int
+    last_event_time: Optional[datetime]
+
+
+class RetrainingRequest(BaseModel):
+    """Request for model retraining."""
+
+    reason: RetrainingReason = RetrainingReason.MANUAL
+    force: bool = False
+    patterns_to_focus: Optional[List[str]] = None
+
+
+class LearningConfig(BaseModel):
+    """Configuration for the learning system."""
+
+    monitoring_enabled: bool = True
+    auto_retrain_enabled: bool = True
+    insight_generation_enabled: bool = True
+    monitored_paths: List[str] = Field(default_factory=lambda: ["backend/", "src/"])
+    scan_interval_seconds: int = 300
+    retrain_interval_hours: int = 24
+    feedback_threshold: int = 50
+    accuracy_threshold: float = 0.7

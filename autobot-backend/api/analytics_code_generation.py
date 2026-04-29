@@ -24,11 +24,9 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
@@ -37,10 +35,18 @@ from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     CodeGenerationHealthResponse,
+    CodeGenerationRefactoringTypesResponse,
+    CodeGenerationRequest,
+    CodeGenerationResponse,
+    CodeGenerationStatsResponse,
     CodeGenerationValidateResponse,
     CodeGenerationVersionsResponse,
-    CodeGenerationStatsResponse,
-    CodeGenerationRefactoringTypesResponse,
+    CodeGenRollbackRequest,
+    CodeGenValidationRequest,
+    CodeLanguage,
+    RefactoringRequest,
+    RefactoringResponse,
+    RefactoringType,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -102,40 +108,6 @@ def _extract_language_stats(stats_data: dict) -> dict:
 # =============================================================================
 # Enums and Constants
 # =============================================================================
-
-
-class RefactoringType(str, Enum):
-    """Types of code refactoring operations"""
-
-    EXTRACT_FUNCTION = "extract_function"
-    RENAME_VARIABLE = "rename_variable"
-    SIMPLIFY_CONDITIONAL = "simplify_conditional"
-    REMOVE_DUPLICATION = "remove_duplication"
-    ADD_TYPE_HINTS = "add_type_hints"
-    IMPROVE_NAMING = "improve_naming"
-    OPTIMIZE_LOOPS = "optimize_loops"
-    ADD_DOCSTRINGS = "add_docstrings"
-    CLEAN_IMPORTS = "clean_imports"
-    GENERAL = "general"
-
-
-class CodeLanguage(str, Enum):
-    """Supported programming languages"""
-
-    PYTHON = "python"
-    TYPESCRIPT = "typescript"
-    JAVASCRIPT = "javascript"
-    VUE = "vue"
-
-
-class GenerationStatus(str, Enum):
-    """Status of code generation request"""
-
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
 
 
 # Prompt templates for different refactoring types
@@ -296,81 +268,6 @@ class RefactoringResult:
     validation: ValidationResult
     tokens_used: int = 0
     processing_time: float = 0.0
-
-
-# =============================================================================
-# Pydantic Models for API
-# =============================================================================
-
-
-class CodeGenerationRequest(BaseModel):
-    """Request model for code generation"""
-
-    description: str = Field(
-        ..., description="Natural language description of code to generate"
-    )
-    language: CodeLanguage = Field(
-        default=CodeLanguage.PYTHON, description="Target language"
-    )
-    context: Optional[str] = Field(
-        None, description="Additional context or requirements"
-    )
-    file_path: Optional[str] = Field(None, description="Target file path for context")
-    existing_code: Optional[str] = Field(
-        None, description="Existing code to integrate with"
-    )
-
-
-class RefactoringRequest(BaseModel):
-    """Request model for code refactoring"""
-
-    code: str = Field(..., description="Code to refactor")
-    refactoring_type: RefactoringType = Field(default=RefactoringType.GENERAL)
-    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
-    file_path: Optional[str] = Field(None, description="Source file path for context")
-    preserve_comments: bool = Field(default=True)
-    preserve_formatting: bool = Field(default=False)
-
-
-class ValidationRequest(BaseModel):
-    """Request model for code validation"""
-
-    code: str = Field(..., description="Code to validate")
-    language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
-
-
-class RollbackRequest(BaseModel):
-    """Request model for code rollback"""
-
-    file_path: str = Field(..., description="File to rollback")
-    version_id: Optional[str] = Field(
-        None, description="Specific version to rollback to"
-    )
-
-
-class CodeGenerationResponse(BaseModel):
-    """Response model for code generation"""
-
-    success: bool
-    generated_code: Optional[str] = None
-    validation: Optional[Dict[str, Any]] = None
-    tokens_used: int = 0
-    processing_time: float = 0.0
-    error: Optional[str] = None
-
-
-class RefactoringResponse(BaseModel):
-    """Response model for refactoring"""
-
-    success: bool
-    original_code: str
-    refactored_code: Optional[str] = None
-    diff: Optional[str] = None
-    changes: List[str] = []
-    validation: Optional[Dict[str, Any]] = None
-    tokens_used: int = 0
-    processing_time: float = 0.0
-    error: Optional[str] = None
 
 
 # =============================================================================
@@ -1050,7 +947,7 @@ async def refactor_code(
 @router.post("/validate", response_model=CodeGenerationValidateResponse)
 async def validate_code(
     admin_check: bool = Depends(check_admin_permission),
-    request: ValidationRequest = None,
+    request: CodeGenValidationRequest = None,
 ):
     """
     Validate code syntax and structure.
@@ -1103,7 +1000,7 @@ async def get_versions(
 )
 @router.post("/rollback", response_model=DataResponse)
 async def rollback_code(
-    admin_check: bool = Depends(check_admin_permission), request: RollbackRequest = None
+    admin_check: bool = Depends(check_admin_permission), request: CodeGenRollbackRequest = None
 ):
     """
     Rollback code to a previous version.

@@ -22,23 +22,31 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from api.schemas_analytics import (
+    ContinuousLearningFeedbackResponse,
+    ContinuousLearningGenerateInsightsResponse,
+    ContinuousLearningHealthResponse,
+    ContinuousLearningInsightsResponse,
+    ContinuousLearningMetrics,
+    ContinuousLearningRetrainResponse,
     ContinuousLearningStartStopResponse,
     ContinuousLearningStatusResponse,
-    ContinuousLearningFeedbackResponse,
-    ContinuousLearningRetrainResponse,
-    ContinuousLearningInsightsResponse,
-    ContinuousLearningGenerateInsightsResponse,
     ContinuousLearningUpdateConfigResponse,
-    ContinuousLearningHealthResponse,
+    InsightType,
+    LearningConfig,
+    LearningEvent,
+    LearningEventType,
+    LearningInsight,
+    LearningMonitoringStatus,
+    MonitoringState,
+    RetrainingReason,
+    RetrainingRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -50,50 +58,6 @@ router = APIRouter()
 # =============================================================================
 # Enums and Constants
 # =============================================================================
-
-
-class LearningEventType(str, Enum):
-    """Types of learning events."""
-
-    FILE_CHANGE = "file_change"
-    PATTERN_DETECTED = "pattern_detected"
-    FEEDBACK_RECEIVED = "feedback_received"
-    MODEL_UPDATED = "model_updated"
-    INSIGHT_GENERATED = "insight_generated"
-    THRESHOLD_CROSSED = "threshold_crossed"
-    ANOMALY_DETECTED = "anomaly_detected"
-
-
-class MonitoringState(str, Enum):
-    """States of the monitoring system."""
-
-    STOPPED = "stopped"
-    STARTING = "starting"
-    RUNNING = "running"
-    PAUSED = "paused"
-    STOPPING = "stopping"
-
-
-class InsightType(str, Enum):
-    """Types of generated insights."""
-
-    NEW_PATTERN = "new_pattern"
-    PATTERN_EVOLUTION = "pattern_evolution"
-    FALSE_POSITIVE_TREND = "false_positive_trend"
-    PERFORMANCE_IMPROVEMENT = "performance_improvement"
-    DEVELOPER_PREFERENCE = "developer_preference"
-    CODE_QUALITY_TREND = "code_quality_trend"
-    SECURITY_CONCERN = "security_concern"
-
-
-class RetrainingReason(str, Enum):
-    """Reasons for triggering model retraining."""
-
-    SCHEDULED = "scheduled"
-    FEEDBACK_THRESHOLD = "feedback_threshold"
-    ACCURACY_DROP = "accuracy_drop"
-    NEW_PATTERNS = "new_patterns"
-    MANUAL = "manual"
 
 
 # Thresholds for automated actions
@@ -109,80 +73,6 @@ THRESHOLDS = {
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class LearningEvent(BaseModel):
-    """An event in the learning system."""
-
-    event_id: str
-    event_type: LearningEventType
-    timestamp: datetime
-    source: str
-    data: Dict[str, Any]
-    processed: bool = False
-
-
-class Insight(BaseModel):
-    """A generated insight."""
-
-    insight_id: str
-    insight_type: InsightType
-    title: str
-    description: str
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    data: Dict[str, Any]
-    recommendations: List[str]
-    generated_at: datetime
-    expires_at: Optional[datetime] = None
-
-
-class LearningMetrics(BaseModel):
-    """Metrics for the learning system."""
-
-    total_events_processed: int
-    events_last_hour: int
-    events_last_day: int
-    patterns_learned: int
-    patterns_updated: int
-    false_positives_reduced: int
-    accuracy_improvement: float
-    last_retrain: Optional[datetime]
-    next_scheduled_retrain: Optional[datetime]
-    insights_generated: int
-    active_insights: int
-
-
-class MonitoringStatus(BaseModel):
-    """Status of the monitoring system."""
-
-    state: MonitoringState
-    started_at: Optional[datetime]
-    uptime_seconds: int
-    files_monitored: int
-    directories_watched: List[str]
-    events_queue_size: int
-    last_event_time: Optional[datetime]
-
-
-class RetrainingRequest(BaseModel):
-    """Request for model retraining."""
-
-    reason: RetrainingReason = RetrainingReason.MANUAL
-    force: bool = False
-    patterns_to_focus: Optional[List[str]] = None
-
-
-class LearningConfig(BaseModel):
-    """Configuration for the learning system."""
-
-    monitoring_enabled: bool = True
-    auto_retrain_enabled: bool = True
-    insight_generation_enabled: bool = True
-    monitored_paths: List[str] = Field(default_factory=lambda: ["backend/", "src/"])
-    scan_interval_seconds: int = 300
-    retrain_interval_hours: int = 24
-    feedback_threshold: int = 50
-    accuracy_threshold: float = 0.7
 
 
 # =============================================================================
@@ -228,7 +118,7 @@ class LearningPipeline:
         """Initialize learning pipeline with event tracking and statistics."""
         self.events: List[LearningEvent] = []
         self.pattern_stats: Dict[str, PatternStatistics] = {}
-        self.insights: List[Insight] = []
+        self.insights: List[LearningInsight] = []
         self.processed_count = 0
         self.last_retrain: Optional[datetime] = None
         self.accuracy_history: List[Tuple[datetime, float]] = []
@@ -258,7 +148,7 @@ class LearningPipeline:
         data: Dict[str, Any],
         recommendations: List[str],
         expires_days: int = 7,
-    ) -> Insight:
+    ) -> LearningInsight:
         """
         Create an Insight object with standardized ID generation and timestamps.
 
@@ -283,7 +173,7 @@ class LearningPipeline:
         hash_input = f"{id_prefix}_{pattern_id or ''}_{now.isoformat()}"
         insight_id = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
 
-        return Insight(
+        return LearningInsight(
             insight_id=insight_id,
             insight_type=insight_type,
             title=title,
@@ -477,7 +367,7 @@ class LearningPipeline:
 
     def _generate_active_pattern_insight(
         self, recent_patterns: List["PatternStats"]  # noqa: F821
-    ) -> Optional[Insight]:
+    ) -> Optional[LearningInsight]:
         """Generate insight for most active pattern (Issue #398: extracted)."""
         if not recent_patterns:
             return None
@@ -506,7 +396,7 @@ class LearningPipeline:
 
     def _generate_false_positive_insight(
         self, pattern: "PatternStats"  # noqa: F821
-    ) -> Optional[Insight]:
+    ) -> Optional[LearningInsight]:
         """Generate insight for high false positive pattern (Issue #398: extracted)."""
         total = pattern.true_positives + pattern.false_positives
         fp_rate = pattern.false_positives / total if total > 0 else 0
@@ -534,7 +424,7 @@ class LearningPipeline:
             ],
         )
 
-    def _generate_accuracy_improvement_insight(self) -> Optional[Insight]:
+    def _generate_accuracy_improvement_insight(self) -> Optional[LearningInsight]:
         """Generate insight for accuracy improvement (Issue #398: extracted)."""
         if len(self.accuracy_history) < 2:
             return None
@@ -566,7 +456,7 @@ class LearningPipeline:
             expires_days=30,
         )
 
-    async def generate_insights(self) -> List[Insight]:
+    async def generate_insights(self) -> List[LearningInsight]:
         """
         Generate insights from learning data (Issue #398: refactored).
 
@@ -604,7 +494,7 @@ class LearningPipeline:
         self.insights.extend(new_insights)
         return new_insights
 
-    def get_metrics(self) -> LearningMetrics:
+    def get_metrics(self) -> ContinuousLearningMetrics:
         """Get current learning metrics."""
         now = datetime.now(tz=timezone.utc)
         hour_ago = now - timedelta(hours=1)
@@ -632,7 +522,7 @@ class LearningPipeline:
             1 for i in self.insights if i.expires_at is None or i.expires_at > now
         )
 
-        return LearningMetrics(
+        return ContinuousLearningMetrics(
             total_events_processed=self.processed_count,
             events_last_hour=events_last_hour,
             events_last_day=events_last_day,
@@ -829,7 +719,7 @@ class FileMonitor:
             )
             await self.event_queue.put(event)
 
-    def get_status(self) -> MonitoringStatus:
+    def get_status(self) -> LearningMonitoringStatus:
         """Get monitoring status."""
         uptime = 0
         if self.started_at and self.state == MonitoringState.RUNNING:
@@ -844,7 +734,7 @@ class FileMonitor:
             )
             last_event = last_modified
 
-        return MonitoringStatus(
+        return LearningMonitoringStatus(
             state=self.state,
             started_at=self.started_at,
             uptime_seconds=uptime,
@@ -1013,7 +903,7 @@ class ContinuousLearningEngine:
 
     async def get_insights(
         self, active_only: bool = True, limit: int = 20
-    ) -> List[Insight]:
+    ) -> List[LearningInsight]:
         """Get generated insights."""
         now = datetime.now(tz=timezone.utc)
         insights = self.pipeline.insights
@@ -1025,7 +915,7 @@ class ContinuousLearningEngine:
 
         return sorted(insights, key=lambda i: i.generated_at, reverse=True)[:limit]
 
-    def get_metrics(self) -> LearningMetrics:
+    def get_metrics(self) -> ContinuousLearningMetrics:
         """Get learning metrics."""
         return self.pipeline.get_metrics()
 
@@ -1126,10 +1016,10 @@ async def get_status(
     operation="get_metrics",
     error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
 )
-@router.get("/metrics", summary="Get learning metrics", response_model=LearningMetrics)
+@router.get("/metrics", summary="Get learning metrics", response_model=ContinuousLearningMetrics)
 async def get_metrics(
     admin_check: bool = Depends(check_admin_permission),
-) -> LearningMetrics:
+) -> ContinuousLearningMetrics:
     """
     Get learning metrics.
 
@@ -1230,10 +1120,10 @@ async def generate_insights_now(
     operation="get_monitoring_status",
     error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
 )
-@router.get("/monitoring", summary="Get monitoring status", response_model=MonitoringStatus)
+@router.get("/monitoring", summary="Get monitoring status", response_model=LearningMonitoringStatus)
 async def get_monitoring_status(
     admin_check: bool = Depends(check_admin_permission),
-) -> MonitoringStatus:
+) -> LearningMonitoringStatus:
     """
     Get file monitoring status.
 
