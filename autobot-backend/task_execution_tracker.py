@@ -7,6 +7,7 @@ Integrates with orchestrator and agents to provide comprehensive execution track
 """
 
 import asyncio
+import json
 import logging
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_memory_manager_async import Priority  # Import Priority for backward compatibility
 from enhanced_memory_manager_async import (
@@ -25,6 +27,13 @@ from enhanced_memory_manager_async import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Phase 2 of #6495 — unified Redis pub/sub channels for in-flight task progress.
+# Wire format matches the legacy OperationProgressTracker so existing WebSocket
+# subscribers keep working unchanged.
+PROGRESS_CHANNEL_GLOBAL = "operations:progress"
+PROGRESS_KEY_PREFIX = "operation:"
+PROGRESS_KEY_SUFFIX = ":progress"
 
 
 class TaskType(Enum):
@@ -120,6 +129,92 @@ class TaskExecutionTracker:
             self.memory_manager.complete_task(task_id, outputs=task_context.outputs)
         self.active_tasks.pop(task_id, None)
         await self._execute_task_callbacks(task_id, "completed")
+
+    async def update_progress(
+        self,
+        task_id: str,
+        progress_percent: float,
+        current_step: str = "",
+        items_processed: int = 0,
+        total_items: int = 0,
+        estimated_remaining: float = 0.0,
+        details: Optional[Dict[str, Any]] = None,
+        operation_type: str = "",
+        name: str = "",
+        status: str = "running",
+    ) -> None:
+        """Emit fine-grained in-flight progress for a task (#6506 Phase 2 of #6495).
+
+        Persists the latest progress snapshot under Redis key
+        ``operation:{task_id}:progress`` and publishes it on two channels:
+
+        - ``operation:{task_id}:progress`` — per-task channel
+        - ``operations:progress`` — global channel
+
+        The wire format mirrors the legacy ``OperationProgressTracker`` so existing
+        WebSocket subscribers continue to work without modification.
+
+        Args:
+            task_id: Task identifier (the wire format calls this ``operation_id``).
+            progress_percent: Progress percentage (0-100).
+            current_step: Human-readable description of the current step.
+            items_processed: Number of items processed so far.
+            total_items: Total number of items to process.
+            estimated_remaining: Estimated seconds remaining.
+            details: Optional additional details for the progress event.
+            operation_type: Optional operation type tag for the broadcast envelope.
+            name: Optional human-readable operation name for the envelope.
+            status: Optional operation status string (defaults to ``"running"``).
+        """
+        try:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
+                return
+            payload = json.dumps(
+                {
+                    "type": "operation_progress",
+                    "operation_id": task_id,
+                    "operation_type": operation_type,
+                    "name": name,
+                    "status": status,
+                    "progress": {
+                        "current_step": current_step,
+                        "progress_percent": progress_percent,
+                        "items_processed": items_processed,
+                        "total_items": total_items,
+                        "estimated_remaining": estimated_remaining,
+                        "last_update": datetime.now(tz=timezone.utc).isoformat(),
+                        "details": details or {},
+                    },
+                }
+            )
+            per_task_channel = f"{PROGRESS_KEY_PREFIX}{task_id}{PROGRESS_KEY_SUFFIX}"
+            await redis_client.set(per_task_channel, payload)
+            await redis_client.publish(per_task_channel, payload)
+            await redis_client.publish(PROGRESS_CHANNEL_GLOBAL, payload)
+        except Exception as e:
+            logger.warning("Failed to broadcast progress update for %s: %s", task_id, e)
+
+    async def get_progress(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Read the latest progress snapshot for a task from Redis (#6506).
+
+        Returns the parsed JSON payload last written by :meth:`update_progress`,
+        or ``None`` if Redis is unavailable or no progress has been recorded.
+        """
+        try:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
+                return None
+            key = f"{PROGRESS_KEY_PREFIX}{task_id}{PROGRESS_KEY_SUFFIX}"
+            data = await redis_client.get(key)
+            if data is None:
+                return None
+            if isinstance(data, bytes):
+                data = data.decode("utf-8")
+            return json.loads(data)
+        except Exception as e:
+            logger.warning("Failed to read progress for %s: %s", task_id, e)
+            return None
 
     @asynccontextmanager
     async def track_task(
