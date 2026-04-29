@@ -10,14 +10,12 @@ hierarchical summarization, and document processing.
 
 import logging
 import re
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
-from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     KnowledgeGraphDocumentOverviewResponse,
     KnowledgeGraphDrillDownResponse,
@@ -26,6 +24,8 @@ from api.schemas_knowledge import (
     KnowledgeGraphEventTimelineResponse,
     KnowledgeGraphEventsResponse,
     KnowledgeGraphSummariesResponse,
+    PipelineRunRequest,
+    PipelineRunResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -37,36 +37,6 @@ _SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 
 
 # --- Request/Response Models ---
-
-
-class PipelineRunRequest(BaseModel):
-    """Request to run the ECL pipeline on a document."""
-
-    document_id: str = Field(..., description="Document ID to process")
-    config: Optional[dict] = Field(None, description="Pipeline configuration overrides")
-
-
-class PipelineRunResponse(BaseModel):
-    """Pipeline execution result."""
-
-    document_id: str
-    entities_count: int = 0
-    relationships_count: int = 0
-    events_count: int = 0
-    summaries_count: int = 0
-    chunks_count: int = 0
-    stages_completed: List[str] = []
-    errors: List[str] = []
-
-
-class EventSearchRequest(BaseModel):
-    """Temporal event search parameters."""
-
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    event_types: Optional[List[str]] = None
-    entity_name: Optional[str] = None
-    limit: int = Field(100, ge=1, le=500)
 
 
 # --- Pipeline Endpoints ---
@@ -201,6 +171,7 @@ async def search_events(
         from datetime import datetime, timezone
 
         from autobot_shared.redis_client import get_async_redis_client
+        from autobot_shared.time_utils import parse_utc_iso
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")

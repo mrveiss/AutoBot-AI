@@ -8,12 +8,18 @@ Issue #679: Organization-level knowledge policies, analytics, and controls.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
-from api.schemas_knowledge import KnowledgeOrganizationCleanupResponse, KnowledgeOrganizationPolicyResponse, KnowledgeOrganizationStatsResponse
+from api.schemas_knowledge import (
+    KnowledgeOrganizationCleanupResponse,
+    KnowledgeOrganizationPolicyResponse,
+    KnowledgeOrganizationStatsResponse,
+    OrganizationKnowledgePolicy,
+    OrganizationKnowledgeStats,
+    UpdateOrganizationPolicyRequest,
+)
 from auth_middleware import get_current_user
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
@@ -27,49 +33,6 @@ router = APIRouter(prefix="/knowledge/organization", tags=["knowledge-organizati
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class OrganizationKnowledgePolicy(BaseModel):
-    """Organization-wide knowledge policies."""
-
-    default_visibility: VisibilityLevel = Field(
-        default=VisibilityLevel.PRIVATE,
-        description="Default visibility for new knowledge",
-    )
-    allow_user_private: bool = Field(
-        default=True, description="Allow users to create private knowledge"
-    )
-    allow_user_shared: bool = Field(
-        default=True, description="Allow users to share knowledge"
-    )
-    allow_user_organization: bool = Field(
-        default=False, description="Allow non-admins to create org-wide knowledge"
-    )
-    require_approval_for_system: bool = Field(
-        default=True, description="Require admin approval for system-wide knowledge"
-    )
-    retention_days: Optional[int] = Field(
-        default=None, description="Knowledge retention period (None = indefinite)"
-    )
-
-
-class OrganizationKnowledgeStats(BaseModel):
-    """Organization knowledge statistics."""
-
-    organization_id: str
-    total_facts: int
-    by_visibility: Dict[str, int]
-    by_source: Dict[str, int]
-    total_size_bytes: int
-    user_count: int
-    team_count: int
-    top_contributors: List[Dict[str, str]]
-
-
-class UpdateOrganizationPolicyRequest(BaseModel):
-    """Request to update organization knowledge policy."""
-
-    policy: OrganizationKnowledgePolicy
 
 
 # =============================================================================

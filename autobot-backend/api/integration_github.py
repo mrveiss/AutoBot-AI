@@ -12,12 +12,15 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from api.schemas_workflows import (
+    GitHubCommentRequest,
+    GitHubConnectionTestRequest,
+    GitHubReviewRequest,
+)
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.github_integration import GitHubIntegration
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     GitHubCommitResponse,
     GitHubCommitsResponse,
@@ -46,38 +49,6 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 # Request/response models
 # ---------------------------------------------------------------------------
-
-
-class GitHubConnectionTestRequest(BaseModel):
-    """Request body for testing a GitHub token."""
-
-    token: str = Field(..., description="GitHub Personal Access Token")
-    base_url: Optional[str] = Field(
-        None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)"
-    )
-
-
-class GitHubReviewRequest(BaseModel):
-    """Request body for submitting a PR review."""
-
-    token: str = Field(..., description="GitHub Personal Access Token")
-    owner: str = Field(..., description="Repository owner (user or org)")
-    repo: str = Field(..., description="Repository name")
-    pull_number: int = Field(..., description="Pull request number")
-    body: str = Field(..., description="Review body text")
-    event: str = Field(
-        "COMMENT", description="Review event: APPROVE, REQUEST_CHANGES, or COMMENT"
-    )
-
-
-class GitHubCommentRequest(BaseModel):
-    """Request body for posting a PR comment."""
-
-    token: str = Field(..., description="GitHub Personal Access Token")
-    owner: str = Field(..., description="Repository owner")
-    repo: str = Field(..., description="Repository name")
-    pull_number: int = Field(..., description="Pull request number")
-    body: str = Field(..., description="Comment body text")
 
 
 # ---------------------------------------------------------------------------

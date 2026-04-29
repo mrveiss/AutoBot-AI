@@ -4425,3 +4425,111 @@ class KnowledgeAccessResponse(BaseModel):
     can_edit: bool
     can_share: bool
     can_delete: bool
+
+
+# ---------------------------------------------------------------------------
+# knowledge_graph_routes.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PipelineRunRequest(BaseModel):
+    """Request to run the ECL pipeline on a document."""
+
+    document_id: str = Field(..., description="Document ID to process")
+    config: Optional[dict] = Field(None, description="Pipeline configuration overrides")
+
+
+class PipelineRunResponse(BaseModel):
+    """Pipeline execution result."""
+
+    document_id: str
+    entities_count: int = 0
+    relationships_count: int = 0
+    events_count: int = 0
+    summaries_count: int = 0
+    chunks_count: int = 0
+    stages_completed: List[str] = []
+    errors: List[str] = []
+
+
+class EventSearchRequest(BaseModel):
+    """Temporal event search parameters."""
+
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    event_types: Optional[List[str]] = None
+    entity_name: Optional[str] = None
+    limit: int = Field(100, ge=1, le=500)
+
+
+# ---------------------------------------------------------------------------
+# knowledge_search_aggregator.py schemas
+# ---------------------------------------------------------------------------
+
+
+class UnifiedSearchRequest(BaseModel):
+    """Request model for unified knowledge search."""
+
+    query: str = Field(..., description="Search query text")
+    top_k: int = Field(10, ge=1, le=50, description="Max results from fact search")
+    doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
+    expand_relations: bool = Field(True, description="Include related facts via graph")
+    score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum relevance score")
+    include_sources: List[str] = Field(
+        default=["facts", "relations", "documentation"],
+        description="Which sources to search: facts, relations, documentation",
+    )
+
+
+class ContextRequest(BaseModel):
+    """Request model for getting LLM context."""
+
+    query: str = Field(..., description="User query for context retrieval")
+    max_context_length: int = Field(4000, ge=500, le=16000, description="Maximum context length in characters")
+    include_documentation: bool = Field(True, description="Include documentation in context")
+    include_relations: bool = Field(True, description="Include related facts in context")
+
+
+class GraphRequest(BaseModel):
+    """Request model for unified knowledge graph."""
+
+    max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
+    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
+    include_categories: bool = Field(True, description="Include category nodes")
+    include_relations: bool = Field(True, description="Include fact relations")
+    category_filter: Optional[str] = Field(None, description="Filter by category path")
+
+
+# ---------------------------------------------------------------------------
+# knowledge_organization.py schemas
+# ---------------------------------------------------------------------------
+
+
+class OrganizationKnowledgePolicy(BaseModel):
+    """Organization-wide knowledge policies."""
+
+    default_visibility: VisibilityLevel = Field(default=VisibilityLevel.PRIVATE, description="Default visibility for new knowledge")
+    allow_user_private: bool = Field(default=True, description="Allow users to create private knowledge")
+    allow_user_shared: bool = Field(default=True, description="Allow users to share knowledge")
+    allow_user_organization: bool = Field(default=False, description="Allow non-admins to create org-wide knowledge")
+    require_approval_for_system: bool = Field(default=True, description="Require admin approval for system-wide knowledge")
+    retention_days: Optional[int] = Field(default=None, description="Knowledge retention period (None = indefinite)")
+
+
+class OrganizationKnowledgeStats(BaseModel):
+    """Organization knowledge statistics."""
+
+    organization_id: str
+    total_facts: int
+    by_visibility: Dict[str, int]
+    by_source: Dict[str, int]
+    total_size_bytes: int
+    user_count: int
+    team_count: int
+    top_contributors: List[Dict[str, str]]
+
+
+class UpdateOrganizationPolicyRequest(BaseModel):
+    """Request to update organization knowledge policy."""
+
+    policy: OrganizationKnowledgePolicy

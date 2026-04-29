@@ -22,15 +22,17 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
 from api.schemas_knowledge import (
+    ContextRequest,
+    GraphRequest,
     KnowledgeDocumentationSearchResponse,
     KnowledgeDocumentationStatsResponse,
     KnowledgeUnifiedContextResponse,
     KnowledgeUnifiedGraphResponse,
     KnowledgeUnifiedSearchResponse,
     KnowledgeUnifiedStatsResponse,
+    UnifiedSearchRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
@@ -250,37 +252,6 @@ def get_documentation_searcher():
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class UnifiedSearchRequest(BaseModel):
-    """Request model for unified knowledge search."""
-
-    query: str = Field(..., description="Search query text")
-    top_k: int = Field(10, ge=1, le=50, description="Max results from fact search")
-    doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
-    expand_relations: bool = Field(True, description="Include related facts via graph")
-    score_threshold: float = Field(
-        0.3, ge=0.0, le=1.0, description="Minimum relevance score"
-    )
-    include_sources: List[str] = Field(
-        default=["facts", "relations", "documentation"],
-        description="Which sources to search: facts, relations, documentation",
-    )
-
-
-class ContextRequest(BaseModel):
-    """Request model for getting LLM context."""
-
-    query: str = Field(..., description="User query for context retrieval")
-    max_context_length: int = Field(
-        4000, ge=500, le=16000, description="Maximum context length in characters"
-    )
-    include_documentation: bool = Field(
-        True, description="Include documentation in context"
-    )
-    include_relations: bool = Field(
-        True, description="Include related facts in context"
-    )
 
 
 # ============================================================================
@@ -674,16 +645,6 @@ async def documentation_stats():
 # ============================================================================
 # Unified Knowledge Graph Endpoint (for KnowledgeGraph.vue)
 # ============================================================================
-
-
-class GraphRequest(BaseModel):
-    """Request model for unified knowledge graph."""
-
-    max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
-    include_categories: bool = Field(True, description="Include category nodes")
-    include_relations: bool = Field(True, description="Include fact relations")
-    category_filter: Optional[str] = Field(None, description="Filter by category path")
 
 
 def _create_category_node(category: Dict[str, Any]) -> Dict[str, Any]:

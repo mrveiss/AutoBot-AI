@@ -8,13 +8,13 @@ Provides intelligent model selection, performance tracking, and optimization sug
 
 import logging
 import time
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from api.schemas_agent import (
+    InferenceOptimizationSettings,
     LLMAvailableModelsResponse,
     LLMBenchmarkResponse,
     LLMInferenceMetricsResponse,
@@ -23,11 +23,13 @@ from api.schemas_agent import (
     LLMModelsComparisonResponse,
     LLMOptimizationConfigResponse,
     LLMOptimizationHealthResponse,
+    LLMOptimizationRequest,
     LLMOptimizationSuggestionsResponse,
     LLMProviderOptimizationSummaryResponse,
     LLMSelectModelResponse,
     LLMSystemResourcesResponse,
     LLMTrackPerformanceResponse,
+    ModelPerformanceData,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -39,61 +41,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 config = get_config_manager()
-
-
-class OptimizationRequest(BaseModel):
-    """Model for optimization requests"""
-
-    query: str
-    task_type: str = "chat"
-    max_response_time: Optional[float] = None
-    min_quality: Optional[float] = None
-    context_length: int = 0
-    user_preference: Optional[str] = None
-
-
-class ModelPerformanceData(BaseModel):
-    """Model for tracking performance data"""
-
-    model_name: str
-    response_time: float
-    response_tokens: int
-    success: bool
-    user_rating: Optional[float] = None
-
-
-class InferenceOptimizationSettings(BaseModel):
-    """Settings for inference optimization (Issue #717)."""
-
-    # Prompt compression
-    prompt_compression_enabled: bool = True
-    prompt_compression_ratio: float = 0.7
-    prompt_compression_min_length: int = 100
-    prompt_compression_preserve_code: bool = True
-    prompt_compression_aggressive: bool = False
-
-    # Response caching
-    cache_enabled: bool = True
-    cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
-
-    # Cloud optimizations
-    cloud_connection_pool_size: int = 100
-    cloud_batch_window_ms: int = 50
-    cloud_max_batch_size: int = 10
-    cloud_retry_max_attempts: int = 3
-    cloud_retry_base_delay: float = 1.0
-    cloud_retry_max_delay: float = 60.0
-
-    # Local optimizations (vLLM/Ollama)
-    local_speculation_enabled: bool = False
-    local_speculation_draft_model: str = ""
-    local_speculation_num_tokens: int = 5
-    local_speculation_use_ngram: bool = False
-    local_quantization_type: str = "none"
-    local_vllm_multi_step: int = 8
-    local_vllm_prefix_caching: bool = True
-    local_vllm_async_output: bool = True
 
 
 @with_error_handling(
@@ -183,7 +130,7 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
 )
 @router.post("/models/select", response_model=LLMSelectModelResponse)
 async def select_optimal_model(
-    request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)
+    request: LLMOptimizationRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """Select the optimal model for a given task
 

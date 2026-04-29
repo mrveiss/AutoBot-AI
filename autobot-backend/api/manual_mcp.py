@@ -17,14 +17,17 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
 from api.schemas_common import DataResponse
-from api.schemas_code import ManualMCPToolItem
+from api.schemas_code import (
+    ManPageRequest,
+    ManPageSearchRequest,
+    ManualMCPToolItem,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
@@ -42,37 +45,6 @@ _DOC_INDEX_CACHE_TTL = 3_600  # 1 hour
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
-
-
-class ManPageRequest(BaseModel):
-    """Request model for man page lookup."""
-
-    command: str = Field(..., description="Command name to look up (e.g. 'ls')")
-    section: Optional[str] = Field(
-        None,
-        description="Manual section (1-8). Defaults to section 1.",
-    )
-
-
-class ManPageSearchRequest(BaseModel):
-    """Request model for documentation index query."""
-
-    query: str = Field(..., description="Search query against the doc index")
-    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
-
-
-class ManPageResult(BaseModel):
-    """Structured man page result."""
-
-    command: str
-    section: str
-    title: str
-    synopsis: str
-    description: str
-    options: str
-    examples: str
-    see_also: str
-    cached: bool
 
 
 # ---------------------------------------------------------------------------
