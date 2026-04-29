@@ -13,7 +13,9 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from auth_middleware import get_current_user
 from pydantic import BaseModel, Field
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -199,12 +201,12 @@ async def _get_catalog() -> list[dict[str, Any]]:
     return _BUILTIN_CATALOG
 
 
+@router.get("/catalog", response_model=MarketplaceCatalogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_catalog",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/catalog", response_model=MarketplaceCatalogResponse)
 async def list_catalog(
     category: str = Query(default="all", description="Filter by category"),
     search: str | None = Query(default=None, description="Full-text search across name, description, tags"),
@@ -213,6 +215,9 @@ async def list_catalog(
         default="builtin",
         description="Marketplace source id; 'builtin' or a user-added source UUID (#6481)",
     ),
+    # Issue #6481: gate behind auth — `source_id != 'builtin'` triggers a server-side
+    # fetch of arbitrary URLs (SSRF surface). Anonymous callers should not access this.
+    user: dict = Depends(get_current_user),
 ) -> MarketplaceCatalogResponse:
     """
     List community marketplace catalog.

@@ -9,9 +9,12 @@ catalog URLs alongside the built-in AutoBot marketplace.
 """
 from __future__ import annotations
 
+import asyncio
+import ipaddress
 import json
 import logging
 import re
+import socket
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -21,7 +24,7 @@ import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, HttpUrl
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -130,29 +133,81 @@ def _validate_source_name(name: str) -> str:
     return name
 
 
-@router.get(
-    "/marketplaces",
-    response_model=MarketplaceSourcesResponse,
-)
+async def _resolve_safe_ip(host: str) -> str:
+    """SSRF guard: resolve `host` and reject anything that isn't a global
+    public address. Returns a single IP literal that the caller should
+    connect to directly so a TOCTOU DNS rebind cannot redirect the
+    follow-up request to a private address.
+
+    Blocks: loopback, RFC1918, link-local (incl. AWS metadata
+    169.254.169.254), unique-local IPv6, multicast, reserved.
+    """
+    try:
+        infos = await asyncio.get_event_loop().getaddrinfo(
+            host, None, type=socket.SOCK_STREAM
+        )
+    except (socket.gaierror, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not resolve marketplace host: {exc}",
+        ) from exc
+    safe_ip: Optional[str] = None
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if (
+            ip.is_loopback
+            or ip.is_private
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Marketplace URL resolves to a non-public address",
+            )
+        # Pick the first global address; we'll connect to it explicitly.
+        if safe_ip is None:
+            safe_ip = ip_str
+    if safe_ip is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Marketplace host has no usable IP",
+        )
+    return safe_ip
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_marketplaces",
     error_code_prefix="MARKETPLACE_SOURCES",
 )
-async def list_marketplaces() -> MarketplaceSourcesResponse:
-    """Issue #6481: list built-in + user-added marketplace sources."""
+@router.get(
+    "/marketplaces",
+    response_model=MarketplaceSourcesResponse,
+)
+async def list_marketplaces(
+    user: dict = Depends(get_current_user),
+) -> MarketplaceSourcesResponse:
+    """Issue #6481: list built-in + user-added marketplace sources.
+    Authenticated users only — source UUIDs would otherwise be enumerable
+    and feed the `/catalog?source_id=` SSRF surface."""
     return MarketplaceSourcesResponse(sources=await list_sources())
 
 
-@router.post(
-    "/marketplaces",
-    status_code=status.HTTP_201_CREATED,
-    response_model=MarketplaceSource,
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_marketplace",
     error_code_prefix="MARKETPLACE_SOURCES",
+)
+@router.post(
+    "/marketplaces",
+    status_code=status.HTTP_201_CREATED,
+    response_model=MarketplaceSource,
 )
 async def add_marketplace(
     request: MarketplaceSourceCreate,
@@ -184,15 +239,15 @@ async def add_marketplace(
     return source
 
 
-@router.delete(
-    "/marketplaces/{source_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_marketplace",
     error_code_prefix="MARKETPLACE_SOURCES",
+)
+@router.delete(
+    "/marketplaces/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
 )
 async def delete_marketplace(
     source_id: str,
@@ -222,19 +277,46 @@ async def delete_marketplace(
 async def _fetch_catalog_document(url: str) -> CatalogDocument:
     """Fetch and validate a catalog JSON document from a remote URL.
 
-    Bounded by `_FETCH_TIMEOUT_SECONDS` and `_MAX_CATALOG_BYTES`. Raises
+    Bounded by `_FETCH_TIMEOUT_SECONDS` and `_MAX_CATALOG_BYTES`. SSRF-hardened
+    via `_resolve_safe_ip` (blocks RFC1918/loopback/link-local) and
+    ``allow_redirects=False`` (defeats redirect-rebind). Raises
     HTTPException(400) on any fetch/parse/validation failure.
     """
+    _validate_url_scheme(url)
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Marketplace URL is missing host",
+        )
+    # Resolve to a public IP and connect to it directly. The Host header still
+    # carries the original hostname for TLS SNI / virtual hosting; the
+    # connector resolution map prevents DNS rebinding between resolve and connect.
+    safe_ip = await _resolve_safe_ip(host)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
+    resolver_map = {host: [{"hostname": host, "host": safe_ip, "port": port,
+                             "family": socket.AF_INET, "proto": 0, "flags": 0}]}
+
+    class _PinnedResolver(aiohttp.abc.AbstractResolver):
+        async def resolve(self, hostname, port_, family=socket.AF_INET):
+            return resolver_map.get(hostname, [])
+
+        async def close(self):
+            return None
+
+    connector = aiohttp.TCPConnector(resolver=_PinnedResolver(), use_dns_cache=False)
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as response:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            # allow_redirects=False — a redirect to an internal IP would bypass
+            # the SSRF guard. Reject any 3xx so the caller fixes the URL.
+            async with session.get(url, allow_redirects=False) as response:
                 if response.status != 200:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Marketplace URL returned HTTP {response.status}",
                     )
-                # Reject if the server advertises an enormous body up front.
                 content_length = response.headers.get("Content-Length")
                 if (
                     content_length
@@ -245,7 +327,6 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Marketplace catalog exceeds 4MB",
                     )
-                # Read with a hard cap regardless of Content-Length.
                 body = await response.content.read(_MAX_CATALOG_BYTES + 1)
                 if len(body) > _MAX_CATALOG_BYTES:
                     raise HTTPException(
