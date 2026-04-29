@@ -8,7 +8,7 @@ Knowledge base collection, category, fact, grounding, and audit schemas.
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -4053,3 +4053,191 @@ class EntityExtractionHealthResponse(BaseModel):
     status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
     components: Dict[str, str] = Field(..., description="Component health status")
     timestamp: str = Field(..., description="Timestamp of health check")
+
+
+# ---------------------------------------------------------------------------
+# multimodal.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CrossModalSearchRequest(BaseModel):
+    query: Union[str, bytes]
+    query_modality: str = Field(..., description="Type of query: text, image, audio")
+    target_modalities: Optional[List[str]] = Field(default=None, description="Target modalities to search")
+    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality")
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class TextProcessingRequest(BaseModel):
+    text: str = Field(..., description="Text content to process")
+    intent: str = Field(default="analysis", description="Processing intent")
+    metadata: Optional[Metadata] = Field(default=None)
+
+
+class EmbeddingRequest(BaseModel):
+    content: Union[str, bytes]
+    modality: str = Field(..., description="Content modality: text, image, audio")
+    preferred_device: Optional[str] = Field(default=None, description="Preferred processing device")
+
+
+class MultiModalResponse(BaseModel):
+    success: bool
+    result_id: str
+    modality: str
+    processing_time: float
+    confidence: float
+    result_data: Metadata
+    device_used: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class CrossModalSearchResponse(BaseModel):
+    query: str
+    query_modality: str
+    results: Dict[str, List[Metadata]]
+    total_found: int
+    processing_time: float
+
+
+# ---------------------------------------------------------------------------
+# natural_language_search.py schemas
+# ---------------------------------------------------------------------------
+
+
+class NLSearchRequest(BaseModel):
+    """Request model for natural language search."""
+
+    query: str = Field(..., description="Natural language query")
+    max_results: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, description="Maximum results to return")
+    include_explanations: bool = Field(default=True, description="Include LLM-generated explanations")
+    language_filter: Optional[str] = Field(default=None, description="Filter by programming language")
+
+
+class ParsedQueryResponse(BaseModel):
+    """Response model for parsed query."""
+
+    original_query: str
+    normalized_query: str
+    intent: str
+    domain: str
+    entities: List[str]
+    keywords: List[str]
+    search_terms: List[str]
+    confidence: float
+    question_type: str
+
+
+class SearchResultWithExplanation(BaseModel):
+    """Search result with optional explanation."""
+
+    file_path: str
+    line_number: int
+    content: str
+    confidence: float
+    summary: Optional[str] = None
+    explanation: Optional[str] = None
+    key_concepts: Optional[List[str]] = None
+
+
+class NLSearchResponse(BaseModel):
+    """Response model for natural language search."""
+
+    query: ParsedQueryResponse
+    results: List[SearchResultWithExplanation]
+    suggestions: List[Dict[str, Any]]
+    total_results: int
+    search_time_ms: float
+
+
+class QuerySuggestionResponse(BaseModel):
+    """Response model for query suggestions."""
+
+    suggestions: List[Dict[str, Any]]
+
+
+# ---------------------------------------------------------------------------
+# knowledge.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AddFactsRequest(BaseModel):
+    """Request model for adding text content to knowledge base."""
+
+    content: str = Field(..., min_length=1, max_length=100000, description="Text content")
+    title: str = Field(default="", max_length=500, description="Document title")
+    source: str = Field(default="Manual Entry", max_length=500, description="Content source")
+    category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
+    tags: List[str] = Field(default_factory=list, description="Tags for the content")
+    board_id: Optional[str] = Field(default=None, max_length=100, description="Board ID to scope this fact. None means global board.")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v):
+        if len(v) > 20:
+            raise ValueError("Maximum 20 tags allowed")
+        return [tag[:50] for tag in v]
+
+
+class AddUrlRequest(BaseModel):
+    """Request model for adding URL content to knowledge base."""
+
+    url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
+    title: str = Field(default="", max_length=500, description="Document title")
+    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
+    category: str = Field(default="web", max_length=100, description="Category")
+    tags: List[str] = Field(default_factory=list, description="Tags")
+    board_id: Optional[str] = Field(default=None, max_length=100, description="Board ID to scope this URL content. None means global board.")
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+
+class AudioIngestRequest(BaseModel):
+    """Request body for POST /api/knowledge_base/audio (URL-based ingestion)."""
+
+    url: str = Field(..., min_length=1, max_length=2000, description="YouTube URL or direct audio/video URL")
+    title: str = Field(default="", max_length=500)
+    category: str = Field(default="audio", max_length=100)
+    tags: List[str] = Field(default_factory=list)
+    whisper_model: str = Field(default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size")
+    language: Optional[str] = Field(default=None, max_length=10, description="ISO-639-1 language hint")
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list) -> list:
+        if len(v) > 20:
+            raise ValueError("Maximum 20 tags allowed")
+        return [str(t)[:50] for t in v]
+
+
+class DocsBrowseRequest(BaseModel):
+    """Request model for browsing indexed documentation."""
+
+    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')")
+    doc_type: Optional[str] = Field(default=None, max_length=50, description="Filter by document type (e.g., 'markdown', 'code')")
+    file_path_pattern: Optional[str] = Field(default=None, max_length=500, description="Filter by file path pattern (e.g., 'docs/api/')")
+    search_query: Optional[str] = Field(default=None, max_length=500, description="Optional text search within documents")
+    page: int = Field(default=1, ge=1, le=1000, description="Page number")
+    page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
+    sort_by: str = Field(default="indexed_at", pattern="^(indexed_at|title|category|file_path)$", description="Sort field")
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)$", description="Sort order")
+
+
+class OrgKnowledgeConfigPayload(BaseModel):
+    """Per-org LLM + embedding model config payload."""
+
+    llm_provider: Optional[str] = Field(default=None, max_length=64)
+    llm_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_model: Optional[str] = Field(default=None, max_length=256)
+    embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)

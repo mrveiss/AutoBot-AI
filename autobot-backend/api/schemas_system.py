@@ -2652,3 +2652,42 @@ class WakeWordReportFeedbackRequest(BaseModel):
     is_correct: bool = Field(
         ..., description="True if detection was correct, False if false positive"
     )
+
+
+# ---------------------------------------------------------------------------
+# prometheus_mcp.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PrometheusMCPTool(BaseModel):
+    """Standard MCP tool definition (Prometheus)"""
+
+    name: str
+    description: str
+    input_schema: Metadata
+
+
+class QueryMetricRequest(BaseModel):
+    """Request model for Prometheus metric query"""
+
+    query: str = Field(..., description="PromQL query expression")
+
+
+class QueryRangeRequest(BaseModel):
+    """Request model for Prometheus range query"""
+
+    query: str = Field(..., description="PromQL query expression")
+    duration: str = Field("1h", description="Time duration (e.g., '1h', '6h', '1d')")
+    step: str = Field("15s", description="Query resolution step (e.g., '15s', '1m')")
+
+
+class GetVMMetricsRequest(BaseModel):
+    """Request model for VM metrics"""
+
+    vm_ip: str = Field(..., description="VM IP address")
+
+
+class ListMetricsRequest(BaseModel):
+    """Request model for listing metrics"""
+
+    filter: str = Field("", description="Optional filter pattern (e.g., 'autobot_', 'node_')")
