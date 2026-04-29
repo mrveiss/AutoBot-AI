@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from auth_middleware import check_admin_permission
@@ -31,6 +30,12 @@ from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
 from api.schemas_common import DataResponse
+from api.schemas_analytics import (
+    EvolutionAnalysisRequest,
+    EvolutionAnalysisResponse,
+    EvolutionQualitySnapshot,
+    PatternSnapshot,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -214,50 +219,12 @@ def _filter_timeline_by_metrics(
     return filtered_timeline
 
 
-class QualitySnapshot(BaseModel):
-    """A point-in-time quality snapshot"""
-
-    timestamp: str
-    overall_score: float = Field(ge=0, le=100)
-    maintainability: float = Field(ge=0, le=100)
-    testability: float = Field(ge=0, le=100)
-    documentation: float = Field(ge=0, le=100)
-    complexity: float = Field(ge=0, le=100)
-    security: float = Field(ge=0, le=100)
-    performance: float = Field(ge=0, le=100)
-    total_files: int = 0
-    total_lines: int = 0
-    total_functions: int = 0
-    total_classes: int = 0
-    anti_patterns_count: int = 0
-    problems_count: int = 0
-
-
-class PatternSnapshot(BaseModel):
-    """Pattern adoption snapshot"""
-
-    timestamp: str
-    pattern_type: str
-    count: int
-    severity_distribution: Dict[str, int] = {}
-    top_files: List[str] = []
-
-
-class EvolutionTimelineRequest(BaseModel):
-    """Request for timeline data"""
-
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    granularity: str = "daily"  # hourly, daily, weekly, monthly
-    metrics: List[str] = ["overall_score", "complexity", "maintainability"]
-
-
 def get_evolution_redis():
     """Get Redis client for evolution data storage"""
     return get_redis_client(database="analytics")
 
 
-async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
+async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
     """Store a quality snapshot in Redis.
 
     Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
@@ -702,7 +669,7 @@ async def get_quality_trends(
 )
 @router.post("/snapshot", response_model=DataResponse)
 async def record_quality_snapshot(
-    snapshot: QualitySnapshot,
+    snapshot: EvolutionQualitySnapshot,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1199,33 +1166,6 @@ def _generate_demo_trends(days: int) -> Dict[str, Any]:
 # =============================================================================
 # Code Evolution Mining (Issue #243)
 # =============================================================================
-
-
-class EvolutionAnalysisRequest(BaseModel):
-    """Request to trigger code evolution analysis"""
-
-    repo_path: str = Field(description="Path to git repository to analyze")
-    start_date: Optional[str] = Field(
-        None, description="Start date for analysis (ISO format)"
-    )
-    end_date: Optional[str] = Field(
-        None, description="End date for analysis (ISO format)"
-    )
-    commit_limit: int = Field(
-        100, description="Maximum number of commits to analyze", ge=1, le=1000
-    )
-
-
-class EvolutionAnalysisResponse(BaseModel):
-    """Response from evolution analysis"""
-
-    status: str
-    message: str
-    commits_analyzed: int = 0
-    emerging_patterns: List[Dict[str, Any]] = []
-    declining_patterns: List[Dict[str, Any]] = []
-    refactorings_detected: int = 0
-    analysis_duration_seconds: float = 0.0
 
 
 async def _store_pattern_snapshots(analysis_result: Dict) -> int:

@@ -16,18 +16,22 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 from api.schemas_analytics import (
-    ConversationIntentsResponse,
-    ConversationFlowsResponse,
+    ConversationAnalysisResult,
     ConversationBottlenecksResponse,
-    ConversationDistributionResponse,
     ConversationDetectIntentResponse,
+    ConversationDistributionResponse,
+    ConversationFlow,
+    ConversationFlowsResponse,
+    ConversationIntentsResponse,
+    ConversationMetrics,
+    FlowBottleneck,
+    IntentPattern,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,64 +75,6 @@ def _is_session_in_range(session: Dict[str, Any], cutoff: datetime) -> bool:
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class IntentPattern(BaseModel):
-    """Represents a detected user intent pattern"""
-
-    intent_id: str
-    intent_name: str
-    pattern_regex: str
-    occurrences: int
-    success_rate: float
-    avg_turns_to_resolve: float
-    sample_queries: List[str] = Field(default_factory=list, max_length=5)
-
-
-class ConversationFlow(BaseModel):
-    """Represents a conversation flow path"""
-
-    flow_id: str
-    path: List[str]  # Sequence of intents
-    frequency: int
-    avg_duration_seconds: float
-    completion_rate: float
-    drop_off_point: Optional[str] = None
-
-
-class ConversationMetrics(BaseModel):
-    """Aggregated conversation metrics"""
-
-    total_conversations: int
-    total_messages: int
-    avg_messages_per_conversation: float
-    avg_conversation_duration_seconds: float
-    user_satisfaction_estimate: float
-    resolution_rate: float
-    escalation_rate: float
-
-
-class FlowBottleneck(BaseModel):
-    """Represents a bottleneck in conversation flows"""
-
-    bottleneck_id: str
-    location: str
-    description: str
-    impact_score: float  # 0-100
-    affected_conversations: int
-    suggested_improvements: List[str]
-
-
-class ConversationAnalysisResult(BaseModel):
-    """Full conversation analysis result"""
-
-    metrics: ConversationMetrics
-    intent_patterns: List[IntentPattern]
-    common_flows: List[ConversationFlow]
-    bottlenecks: List[FlowBottleneck]
-    hourly_distribution: Dict[str, int]
-    analysis_period: str
-    conversations_analyzed: int
 
 
 # ============================================================================

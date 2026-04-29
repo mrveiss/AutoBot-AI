@@ -2192,3 +2192,130 @@ class LearningConfig(BaseModel):
     retrain_interval_hours: int = 24
     feedback_threshold: int = 50
     accuracy_threshold: float = 0.7
+
+
+# ---------------------------------------------------------------------------
+# analytics_evolution.py schemas
+# ---------------------------------------------------------------------------
+
+
+class EvolutionQualitySnapshot(BaseModel):
+    """A point-in-time quality snapshot."""
+
+    timestamp: str
+    overall_score: float = Field(ge=0, le=100)
+    maintainability: float = Field(ge=0, le=100)
+    testability: float = Field(ge=0, le=100)
+    documentation: float = Field(ge=0, le=100)
+    complexity: float = Field(ge=0, le=100)
+    security: float = Field(ge=0, le=100)
+    performance: float = Field(ge=0, le=100)
+    total_files: int = 0
+    total_lines: int = 0
+    total_functions: int = 0
+    total_classes: int = 0
+    anti_patterns_count: int = 0
+    problems_count: int = 0
+
+
+class PatternSnapshot(BaseModel):
+    """Pattern adoption snapshot."""
+
+    timestamp: str
+    pattern_type: str
+    count: int
+    severity_distribution: Dict[str, int] = {}
+    top_files: List[str] = []
+
+
+class EvolutionTimelineRequest(BaseModel):
+    """Request for timeline data."""
+
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    granularity: str = "daily"
+    metrics: List[str] = ["overall_score", "complexity", "maintainability"]
+
+
+class EvolutionAnalysisRequest(BaseModel):
+    """Request to trigger code evolution analysis."""
+
+    repo_path: str = Field(description="Path to git repository to analyze")
+    start_date: Optional[str] = Field(None, description="Start date for analysis (ISO format)")
+    end_date: Optional[str] = Field(None, description="End date for analysis (ISO format)")
+    commit_limit: int = Field(100, description="Maximum number of commits to analyze", ge=1, le=1000)
+
+
+class EvolutionAnalysisResponse(BaseModel):
+    """Response from evolution analysis."""
+
+    status: str
+    message: str
+    commits_analyzed: int = 0
+    emerging_patterns: List[Dict[str, Any]] = []
+    declining_patterns: List[Dict[str, Any]] = []
+    refactorings_detected: int = 0
+    analysis_duration_seconds: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# analytics_conversation.py schemas
+# ---------------------------------------------------------------------------
+
+
+class IntentPattern(BaseModel):
+    """Represents a detected user intent pattern."""
+
+    intent_id: str
+    intent_name: str
+    pattern_regex: str
+    occurrences: int
+    success_rate: float
+    avg_turns_to_resolve: float
+    sample_queries: List[str] = Field(default_factory=list, max_length=5)
+
+
+class ConversationFlow(BaseModel):
+    """Represents a conversation flow path."""
+
+    flow_id: str
+    path: List[str]
+    frequency: int
+    avg_duration_seconds: float
+    completion_rate: float
+    drop_off_point: Optional[str] = None
+
+
+class ConversationMetrics(BaseModel):
+    """Aggregated conversation metrics."""
+
+    total_conversations: int
+    total_messages: int
+    avg_messages_per_conversation: float
+    avg_conversation_duration_seconds: float
+    user_satisfaction_estimate: float
+    resolution_rate: float
+    escalation_rate: float
+
+
+class FlowBottleneck(BaseModel):
+    """Represents a bottleneck in conversation flows."""
+
+    bottleneck_id: str
+    location: str
+    description: str
+    impact_score: float
+    affected_conversations: int
+    suggested_improvements: List[str]
+
+
+class ConversationAnalysisResult(BaseModel):
+    """Full conversation analysis result."""
+
+    metrics: ConversationMetrics
+    intent_patterns: List[IntentPattern]
+    common_flows: List[ConversationFlow]
+    bottlenecks: List[FlowBottleneck]
+    hourly_distribution: Dict[str, int]
+    analysis_period: str
+    conversations_analyzed: int
