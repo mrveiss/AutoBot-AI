@@ -5509,7 +5509,8 @@
         "gitUrlLabel": "Repository-URL",
         "gitRefLabel": "Branch oder Tag",
         "install": "Installieren",
-        "installing": "Wird installiert…"
+        "installing": "Wird installiert…",
+        "failed": "Installation fehlgeschlagen — Eingaben prüfen und erneut versuchen."
       },
       "pluginDetails": "Plugin details",
       "close": "Close",

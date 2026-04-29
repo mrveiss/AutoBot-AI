@@ -5822,7 +5822,8 @@
         "gitUrlLabel": "כתובת המאגר",
         "gitRefLabel": "ענף או תגית",
         "install": "התקנה",
-        "installing": "מתקין…"
+        "installing": "מתקין…",
+        "failed": "ההתקנה נכשלה — בדוק את הקלט ונסה שוב."
       },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",

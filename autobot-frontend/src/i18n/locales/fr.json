@@ -5509,7 +5509,8 @@
         "gitUrlLabel": "URL du dépôt",
         "gitRefLabel": "Branche ou tag",
         "install": "Installer",
-        "installing": "Installation…"
+        "installing": "Installation…",
+        "failed": "Échec de l'installation — vérifiez les entrées et réessayez."
       },
       "pluginDetails": "Plugin details",
       "close": "Close",

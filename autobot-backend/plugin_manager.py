@@ -90,7 +90,7 @@ class PluginInstallResponse(BaseModel):
 @with_error_handling(error_code_prefix="PLUGIN_INSTALL_UPLOAD")
 async def install_plugin_zip(
     file: UploadFile = File(..., description="Plugin ZIP archive"),
-    _admin: dict = Depends(check_admin_permission),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> PluginInstallResponse:
     """Issue #6464: Install a 3rd-party plugin from a ZIP upload."""
     result = await install_from_zip(file)
@@ -111,7 +111,7 @@ async def install_plugin_zip(
 @with_error_handling(error_code_prefix="PLUGIN_INSTALL_GIT")
 async def install_plugin_git(
     request: PluginInstallGitRequest,
-    _admin: dict = Depends(check_admin_permission),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> PluginInstallResponse:
     """Issue #6464: Install a 3rd-party plugin by cloning a Git repository."""
     result = await install_from_git(request.url, request.ref)

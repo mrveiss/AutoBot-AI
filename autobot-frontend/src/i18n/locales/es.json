@@ -5509,7 +5509,8 @@
         "gitUrlLabel": "URL del repositorio",
         "gitRefLabel": "Rama o etiqueta",
         "install": "Instalar",
-        "installing": "Instalando…"
+        "installing": "Instalando…",
+        "failed": "Instalación fallida — revisa los datos e inténtalo de nuevo."
       },
       "pluginDetails": "Plugin details",
       "close": "Close",

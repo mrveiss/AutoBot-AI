@@ -5822,7 +5822,8 @@
         "gitUrlLabel": "ریپوزٹری URL",
         "gitRefLabel": "برانچ یا ٹیگ",
         "install": "انسٹال",
-        "installing": "انسٹال ہو رہا ہے…"
+        "installing": "انسٹال ہو رہا ہے…",
+        "failed": "انسٹالیشن ناکام — ان پٹس چیک کریں اور دوبارہ کوشش کریں۔"
       },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",

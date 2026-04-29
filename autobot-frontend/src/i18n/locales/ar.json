@@ -5509,7 +5509,8 @@
         "gitUrlLabel": "عنوان المستودع",
         "gitRefLabel": "الفرع أو الوسم",
         "install": "تثبيت",
-        "installing": "جارٍ التثبيت…"
+        "installing": "جارٍ التثبيت…",
+        "failed": "فشل التثبيت — تحقق من الإدخالات وحاول مرة أخرى."
       },
       "pluginDetails": "Plugin details",
       "close": "إغلاق",

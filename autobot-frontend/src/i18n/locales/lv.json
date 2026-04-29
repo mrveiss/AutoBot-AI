@@ -5509,7 +5509,8 @@
         "gitUrlLabel": "Repozitorija URL",
         "gitRefLabel": "Zars vai tags",
         "install": "Instalēt",
-        "installing": "Instalē…"
+        "installing": "Instalē…",
+        "failed": "Instalēšana neizdevās — pārbaudiet ievadi un mēģiniet vēlreiz."
       },
       "pluginDetails": "Plugin details",
       "close": "Close",

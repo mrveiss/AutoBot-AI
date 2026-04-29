@@ -5822,7 +5822,8 @@
         "gitUrlLabel": "آدرس مخزن",
         "gitRefLabel": "شاخه یا برچسب",
         "install": "نصب",
-        "installing": "در حال نصب…"
+        "installing": "در حال نصب…",
+        "failed": "نصب ناموفق بود — ورودی‌ها را بررسی کنید و دوباره تلاش کنید."
       },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",

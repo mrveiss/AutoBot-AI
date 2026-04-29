@@ -137,7 +137,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlugins } from '@/composables/usePlugins'
 
 const props = defineProps<{ open: boolean }>()
@@ -146,7 +147,9 @@ const emit = defineEmits<{
   (e: 'installed', payload: { name: string; version: string }): void
 }>()
 
-const { installFromZip, installFromGit } = usePlugins()
+const { t } = useI18n()
+const { installFromZip, installFromGit, error: composableError } = usePlugins()
+let closeTimer: ReturnType<typeof setTimeout> | null = null
 
 const activeTab = ref<'zip' | 'git'>('zip')
 const zipFile = ref<File | null>(null)
@@ -200,14 +203,21 @@ async function submit() {
     if (result) {
       successMessage.value = `${result.name} v${result.version}`
       emit('installed', result)
-      setTimeout(() => emit('close'), 800)
+      closeTimer = setTimeout(() => emit('close'), 800)
     } else {
-      error.value = 'Install failed — check inputs and try again.'
+      error.value = composableError.value || t('views.plugins.install.failed')
     }
   } finally {
     busy.value = false
   }
 }
+
+onUnmounted(() => {
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
+})
 </script>
 
 <style scoped>
