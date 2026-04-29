@@ -253,11 +253,12 @@ const { sources, listSources } = useMarketplaceSources()
 const selectedSourceId = ref<string>('builtin')
 const manageSourcesOpen = ref(false)
 
-// If the currently selected source is removed, fall back to built-in so the
-// next catalog fetch doesn't 404 against a dangling UUID.
-watch(sources, (next) => {
+// If the currently selected source is removed, fall back to built-in and
+// refetch so the grid reflects the new selection (#6528).
+watch(sources, async (next) => {
   if (selectedSourceId.value !== 'builtin' && !next.some(s => s.id === selectedSourceId.value)) {
     selectedSourceId.value = 'builtin'
+    await fetchCatalog()
   }
 }, { deep: true })
 

@@ -238,10 +238,14 @@ async def list_catalog(
                 detail=f"Marketplace source '{source_id}' not found",
             )
         if not source.url:
-            catalog = await _get_catalog()
-        else:
-            remote_plugins = await fetch_remote_catalog(source.url)
-            catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
+            # Issue #6527: do NOT silently substitute the built-in catalog —
+            # surface the misconfiguration so the operator can fix the source.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Marketplace source '{source.name}' has no catalog URL configured",
+            )
+        remote_plugins = await fetch_remote_catalog(source.url)
+        catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
 
     # Filter by category
     if category != CatalogCategory.ALL:
