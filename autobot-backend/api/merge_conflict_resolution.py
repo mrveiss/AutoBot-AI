@@ -22,7 +22,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -36,6 +35,12 @@ from code_intelligence.merge_conflict_resolver import (
     analyze_repository,
 )
 from api.schemas_common import DataResponse
+from api.schemas_code import (
+    ApplyResolutionRequest,
+    ConflictAnalysisRequest,
+    ConflictResolutionRequest,
+    RepositoryAnalysisRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,59 +50,6 @@ router = APIRouter()
 # =============================================================================
 # Request/Response Models
 # =============================================================================
-
-
-class ConflictAnalysisRequest(BaseModel):
-    """Request model for conflict analysis."""
-
-    file_path: str = Field(
-        ...,
-        description="Path to file with merge conflicts",
-    )
-
-
-class ConflictResolutionRequest(BaseModel):
-    """Request model for conflict resolution."""
-
-    file_path: str = Field(
-        ...,
-        description="Path to file with merge conflicts",
-    )
-    strategy: Optional[str] = Field(
-        default=None,
-        description=(
-            "Resolution strategy: semantic_merge, accept_both, pattern_based, "
-            "accept_ours, accept_theirs, manual_review"
-        ),
-    )
-    safe_mode: bool = Field(
-        default=True,
-        description="Enable safe mode (require review for complex conflicts)",
-    )
-    validate: bool = Field(
-        default=True,
-        description="Validate resolved code for syntax errors",
-    )
-
-
-class RepositoryAnalysisRequest(BaseModel):
-    """Request model for repository-wide conflict analysis."""
-
-    repo_path: str = Field(
-        ...,
-        description="Path to git repository",
-    )
-
-
-class ApplyResolutionRequest(BaseModel):
-    """Request model for applying a resolution to file."""
-
-    file_path: str = Field(..., description="Path to file")
-    resolved_content: str = Field(..., description="Resolved file content")
-    create_backup: bool = Field(
-        default=True,
-        description="Create backup before applying",
-    )
 
 
 # =============================================================================

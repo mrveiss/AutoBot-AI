@@ -1601,3 +1601,60 @@ class ApprovalGateResponse(BaseModel):
     updated_at: Optional[str] = None
     comments: List[ApprovalCommentResponse] = Field(default_factory=list)
     task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# integration_project_management.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ConnectionTestRequest(BaseModel):
+    """Request to test project management connection."""
+
+    provider: str = Field(..., description="Provider: jira, trello, or asana")
+    base_url: Optional[str] = Field(None, description="Base URL for the service")
+    api_key: Optional[str] = Field(None, description="API key")
+    api_secret: Optional[str] = Field(None, description="API secret")
+    token: Optional[str] = Field(None, description="Auth token")
+    username: Optional[str] = Field(None, description="Username")
+    password: Optional[str] = Field(None, description="Password")
+
+
+class ProviderInfo(BaseModel):
+    """Information about a supported provider."""
+
+    provider: str
+    name: str
+    description: str
+    auth_type: str
+    base_url_required: bool
+    documentation_url: str
+
+
+class IssueCreateRequest(BaseModel):
+    """Request to create a new issue/card/task."""
+
+    title: str = Field(..., description="Issue title/name")
+    description: Optional[str] = Field(None, description="Description")
+    project_key: Optional[str] = Field(None, description="Project key (Jira) or ID (Trello/Asana)")
+    issue_type: Optional[str] = Field("Task", description="Issue type (Jira)")
+    list_id: Optional[str] = Field(None, description="List ID (Trello)")
+    workspace_gid: Optional[str] = Field(None, description="Workspace GID (Asana)")
+
+
+class IssueUpdateRequest(BaseModel):
+    """Request to update an issue/card/task."""
+
+    title: Optional[str] = Field(None, description="New title")
+    description: Optional[str] = Field(None, description="New description")
+    status: Optional[str] = Field(None, description="New status")
+    transition_id: Optional[str] = Field(None, description="Transition ID (Jira)")
+    list_id: Optional[str] = Field(None, description="Target list ID (Trello)")
+    completed: Optional[bool] = Field(None, description="Completion status (Asana)")
+
+
+class ProjectMgmtSearchRequest(BaseModel):
+    """Request to search issues."""
+
+    query: str = Field(..., description="Search query or JQL")
+    max_results: Optional[int] = Field(50, description="Maximum results")

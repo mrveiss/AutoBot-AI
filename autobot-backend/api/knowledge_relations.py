@@ -14,12 +14,18 @@ This eliminates the need for a separate AutoBotMemoryGraph system.
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
-from api.schemas_knowledge import KnowledgeRelationResultResponse, KnowledgeRelationTypesResponse
+from api.schemas_knowledge import (
+    CreateRelationRequest,
+    DeleteRelationRequest,
+    HybridSearchRequest,
+    KnowledgeRelationResultResponse,
+    KnowledgeRelationTypesResponse,
+    TraverseRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge_factory import get_or_create_knowledge_base
@@ -38,57 +44,6 @@ router = APIRouter(
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class CreateRelationRequest(BaseModel):
-    """Request model for creating a fact relation."""
-
-    source_fact_id: str = Field(..., description="ID of the source fact")
-    target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: str = Field(
-        ...,
-        description="Type of relation (e.g., relates_to, depends_on, implements)",
-    )
-    metadata: Optional[dict] = Field(
-        None, description="Optional metadata for the relation"
-    )
-
-
-class DeleteRelationRequest(BaseModel):
-    """Request model for deleting a fact relation."""
-
-    source_fact_id: str = Field(..., description="ID of the source fact")
-    target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: Optional[str] = Field(
-        None, description="Specific relation type to delete (None = all relations)"
-    )
-
-
-class TraverseRequest(BaseModel):
-    """Request model for graph traversal."""
-
-    start_fact_id: str = Field(..., description="Starting fact ID for traversal")
-    max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Optional list of relation types to follow"
-    )
-    include_fact_details: bool = Field(
-        False, description="Include full fact content in results"
-    )
-
-
-class HybridSearchRequest(BaseModel):
-    """Request model for hybrid (vector + graph) search."""
-
-    query: str = Field(..., description="Search query text")
-    top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
-    expand_relations: bool = Field(
-        True, description="Expand results with graph relations"
-    )
-    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
-    relation_types: Optional[List[str]] = Field(
-        None, description="Filter by relation types"
-    )
 
 
 # ============================================================================

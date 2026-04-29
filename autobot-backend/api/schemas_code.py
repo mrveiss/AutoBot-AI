@@ -2075,3 +2075,114 @@ class PerformanceFileScanRequest(BaseModel):
     """Request for single file performance scan."""
 
     file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+# ---------------------------------------------------------------------------
+# database_mcp.py schemas
+# ---------------------------------------------------------------------------
+
+_DB_MCP_MAX_RESULT_ROWS = 1000
+_DB_MCP_ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")
+
+
+class DatabaseMCPTool(BaseModel):
+    """Standard MCP tool definition (database)"""
+
+    name: str
+    description: str
+    input_schema: JSONObject
+
+
+class SQLQueryRequest(BaseModel):
+    """SQL query request model."""
+
+    database: str = Field(..., description="Database name from whitelist")
+    query: str = Field(..., description="SQL SELECT query (parameterized)")
+    params: Optional[List[Any]] = Field(default=None, description="Query parameters for ? placeholders")
+    limit: Optional[int] = Field(
+        default=100,
+        ge=1,
+        le=_DB_MCP_MAX_RESULT_ROWS,
+        description=f"Max rows to return (1-{_DB_MCP_MAX_RESULT_ROWS})",
+    )
+
+    @field_validator("query")
+    @classmethod
+    def validate_query_is_select(cls, v):
+        normalized = v.strip().upper()
+        if not normalized.startswith("SELECT"):
+            raise ValueError(
+                "Only SELECT queries allowed. Use execute_sql for modifications."
+            )
+        return v
+
+
+class SQLExecuteRequest(BaseModel):
+    """SQL execute request model (for INSERT/UPDATE/DELETE)."""
+
+    database: str = Field(..., description="Database name from whitelist")
+    statement: str = Field(..., description="SQL statement (INSERT/UPDATE/DELETE)")
+    params: Optional[List[Any]] = Field(default=None, description="Statement parameters for ? placeholders")
+
+    @field_validator("statement")
+    @classmethod
+    def validate_statement_type(cls, v):
+        normalized = v.strip().upper()
+        if not any(normalized.startswith(op) for op in _DB_MCP_ALLOWED_DML_OPERATIONS):
+            raise ValueError(
+                f"Only {', '.join(_DB_MCP_ALLOWED_DML_OPERATIONS)} statements allowed"
+            )
+        return v
+
+
+class SchemaRequest(BaseModel):
+    """Database schema request model."""
+
+    database: str = Field(..., description="Database name from whitelist")
+    table: Optional[str] = Field(default=None, description="Specific table to describe (optional)")
+
+
+class TableListRequest(BaseModel):
+    """List tables request model."""
+
+    database: str = Field(..., description="Database name from whitelist")
+
+
+# ---------------------------------------------------------------------------
+# merge_conflict_resolution.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ConflictAnalysisRequest(BaseModel):
+    """Request model for conflict analysis."""
+
+    file_path: str = Field(..., description="Path to file with merge conflicts")
+
+
+class ConflictResolutionRequest(BaseModel):
+    """Request model for conflict resolution."""
+
+    file_path: str = Field(..., description="Path to file with merge conflicts")
+    strategy: Optional[str] = Field(
+        default=None,
+        description=(
+            "Resolution strategy: semantic_merge, accept_both, pattern_based, "
+            "accept_ours, accept_theirs, manual_review"
+        ),
+    )
+    safe_mode: bool = Field(default=True, description="Enable safe mode (require review for complex conflicts)")
+    validate: bool = Field(default=True, description="Validate resolved code for syntax errors")
+
+
+class RepositoryAnalysisRequest(BaseModel):
+    """Request model for repository-wide conflict analysis."""
+
+    repo_path: str = Field(..., description="Path to git repository")
+
+
+class ApplyResolutionRequest(BaseModel):
+    """Request model for applying a resolution to file."""
+
+    file_path: str = Field(..., description="Path to file")
+    resolved_content: str = Field(..., description="Resolved file content")
+    create_backup: bool = Field(default=True, description="Create backup before applying")

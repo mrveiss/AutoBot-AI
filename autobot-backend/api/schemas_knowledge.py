@@ -4297,3 +4297,88 @@ class ConflictSchema(BaseModel):
     resolution: str
     chosen_fact: Optional[str] = None
     timestamp: float
+
+
+# ---------------------------------------------------------------------------
+# knowledge_relations.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CreateRelationRequest(BaseModel):
+    """Request model for creating a fact relation."""
+
+    source_fact_id: str = Field(..., description="ID of the source fact")
+    target_fact_id: str = Field(..., description="ID of the target fact")
+    relation_type: str = Field(..., description="Type of relation (e.g., relates_to, depends_on, implements)")
+    metadata: Optional[dict] = Field(None, description="Optional metadata for the relation")
+
+
+class DeleteRelationRequest(BaseModel):
+    """Request model for deleting a fact relation."""
+
+    source_fact_id: str = Field(..., description="ID of the source fact")
+    target_fact_id: str = Field(..., description="ID of the target fact")
+    relation_type: Optional[str] = Field(None, description="Specific relation type to delete (None = all relations)")
+
+
+class TraverseRequest(BaseModel):
+    """Request model for graph traversal."""
+
+    start_fact_id: str = Field(..., description="Starting fact ID for traversal")
+    max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
+    relation_types: Optional[List[str]] = Field(None, description="Optional list of relation types to follow")
+    include_fact_details: bool = Field(False, description="Include full fact content in results")
+
+
+class HybridSearchRequest(BaseModel):
+    """Request model for hybrid (vector + graph) search."""
+
+    query: str = Field(..., description="Search query text")
+    top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
+    expand_relations: bool = Field(True, description="Expand results with graph relations")
+    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
+    relation_types: Optional[List[str]] = Field(None, description="Filter by relation types")
+
+
+# ---------------------------------------------------------------------------
+# nl_database.py schemas
+# ---------------------------------------------------------------------------
+
+
+class NLQueryRequest(BaseModel):
+    """Request body for a natural language database query."""
+
+    question: str = Field(..., min_length=1, max_length=2048, description="Natural language question to translate into SQL")
+    db_id: str = Field(default="local", max_length=128, description="Database identifier. Use 'local' for autobot_data.db")
+    db_secret_id: Optional[str] = Field(default=None, max_length=128, description="Secret ID (from secrets manager) containing the database_url")
+
+
+class TrainRequest(BaseModel):
+    """Request body for training the NL service on an external database."""
+
+    db_id: str = Field(..., min_length=1, max_length=128, description="Unique identifier for this database connection")
+    db_secret_id: str = Field(..., max_length=128, description="Secret ID containing the database_url in the secrets manager")
+    db_type: str = Field(default="postgresql", description="Database type: postgresql, mysql, or sqlite")
+
+
+class NLQueryResponse(BaseModel):
+    """Response for a natural language query execution."""
+
+    question: str
+    sql: Optional[str]
+    results: List[Dict[str, Any]]
+    columns: List[str]
+    row_count: int
+    db_id: str
+    elapsed_ms: int
+    error: Optional[str] = None
+
+
+class TrainResponse(BaseModel):
+    """Response for a database schema training operation."""
+
+    success: bool
+    db_id: str
+    schema_length: Optional[int] = None
+    table_count: Optional[int] = None
+    error: Optional[str] = None
