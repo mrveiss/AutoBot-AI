@@ -209,7 +209,7 @@
 
 <script setup lang="ts">
 // Issue #1803 - Plugin and agent marketplace
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -252,6 +252,14 @@ const showInstalledOnly = ref(false)
 const { sources, listSources } = useMarketplaceSources()
 const selectedSourceId = ref<string>('builtin')
 const manageSourcesOpen = ref(false)
+
+// If the currently selected source is removed, fall back to built-in so the
+// next catalog fetch doesn't 404 against a dangling UUID.
+watch(sources, (next) => {
+  if (selectedSourceId.value !== 'builtin' && !next.some(s => s.id === selectedSourceId.value)) {
+    selectedSourceId.value = 'builtin'
+  }
+}, { deep: true })
 
 const visibleEntries = computed<MarketplaceEntry[]>(() => {
   if (!showInstalledOnly.value) return entries.value
