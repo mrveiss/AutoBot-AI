@@ -22,12 +22,16 @@ Endpoints:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
 
+from api.schemas_knowledge import (
+    GraphRAGHealthResponse,
+    GraphRAGSearchRequest,
+    GraphRAGSearchResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
@@ -46,57 +50,6 @@ logger = logging.getLogger(__name__)
 # ====================================================================
 # Request/Response Models
 # ====================================================================
-
-
-class GraphRAGSearchRequest(BaseModel):
-    """Request model for graph-aware RAG search."""
-
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Search query string"
-    )
-    start_entity: Optional[str] = Field(
-        None,
-        max_length=200,
-        description="Optional starting entity name for graph traversal",
-    )
-    max_depth: int = Field(
-        2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)"
-    )
-    max_results: int = Field(
-        5, ge=1, le=20, description="Maximum number of results to return"
-    )
-    enable_reranking: bool = Field(
-        True, description="Whether to apply cross-encoder reranking"
-    )
-    timeout: Optional[float] = Field(
-        None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)"
-    )
-
-    @validator("query")
-    def validate_query(cls, v):
-        """Validate query is not just whitespace."""
-        if not v.strip():
-            raise ValueError("Query cannot be empty or whitespace")
-        return v.strip()
-
-
-class GraphRAGSearchResponse(BaseModel):
-    """Response model for graph-aware RAG search."""
-
-    success: bool = Field(..., description="Whether the search succeeded")
-    results: List[Metadata] = Field(..., description="Search results")
-    metrics: Metadata = Field(..., description="Performance metrics")
-    request_id: str = Field(..., description="Unique request identifier")
-
-
-class GraphRAGHealthResponse(BaseModel):
-    """Response model for health check."""
-
-    status: str = Field(
-        ..., description="Service status (healthy, degraded, unhealthy)"
-    )
-    components: Dict[str, str] = Field(..., description="Component health status")
-    timestamp: str = Field(..., description="Timestamp of health check")
 
 
 # ====================================================================

@@ -10,11 +10,9 @@ Handles vector storage configuration and embedding model selection.
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -22,34 +20,11 @@ from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import EmbeddingUpdate
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["embeddings"])
-
-
-class EmbeddingProviderConfig(BaseModel):
-    """Embedding provider configuration model"""
-
-    provider: str
-    endpoint: str
-    selected_model: str
-    models: List[str] = []
-
-
-class EmbeddingConfig(BaseModel):
-    """Embedding configuration model"""
-
-    provider: str
-    providers: Dict[str, EmbeddingProviderConfig]
-
-
-class EmbeddingUpdate(BaseModel):
-    """Embedding configuration update request"""
-
-    provider: str
-    selected_model: str
-    endpoint: Optional[str] = None
 
 
 @with_error_handling(

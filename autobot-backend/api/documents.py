@@ -25,18 +25,22 @@ Each document is serialised as a JSON blob under the ``main`` Redis database:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_365_DAYS
 from models.document import AIDocument
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import AIDocumentListResponse, AIDocumentResponse
+from api.schemas_knowledge import (
+    AIDocumentListResponse,
+    AIDocumentResponse,
+    CreateDocumentRequest,
+    RefineDocumentRequest,
+    UpdateDocumentRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,42 +53,6 @@ _USER_INDEX_KEY = "autobot:ai_documents:by_user:{user_id}"
 # ============================================================================
 # Request / response schemas
 # ============================================================================
-
-
-class CreateDocumentRequest(BaseModel):
-    """Payload for creating a new AI document."""
-
-    title: str = Field(..., min_length=1, max_length=500)
-    content: str = Field(default="")
-    source_facts: List[str] = Field(default_factory=list)
-    source_session_id: Optional[str] = None
-    source_message_id: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class UpdateDocumentRequest(BaseModel):
-    """Partial-update payload — only supplied fields are applied."""
-
-    title: Optional[str] = Field(default=None, min_length=1, max_length=500)
-    content: Optional[str] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class RefineDocumentRequest(BaseModel):
-    """Ask the AI to refine a specific section of the document."""
-
-    instruction: str = Field(
-        ...,
-        min_length=1,
-        max_length=2000,
-        description="Refinement instruction, e.g. 'make the introduction shorter'",
-    )
-    section: Optional[str] = Field(
-        default=None,
-        description="Optional section heading to scope the refinement",
-    )
 
 
 # ============================================================================
