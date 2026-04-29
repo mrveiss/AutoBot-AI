@@ -4241,3 +4241,59 @@ class OrgKnowledgeConfigPayload(BaseModel):
     llm_model: Optional[str] = Field(default=None, max_length=256)
     embedding_model: Optional[str] = Field(default=None, max_length=256)
     embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)
+
+
+# ---------------------------------------------------------------------------
+# knowledge_grounding.py schemas
+# ---------------------------------------------------------------------------
+
+
+class GroundResponseRequest(BaseModel):
+    """Request to ground an agent response."""
+
+    query: str = Field(..., min_length=1, max_length=2000, description="User query")
+    agent_response: str = Field(..., min_length=1, max_length=5000, description="Agent response to ground")
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional context metadata")
+
+
+class VerifyClaimRequest(BaseModel):
+    """Request to verify a single claim."""
+
+    claim_text: str = Field(..., min_length=1, max_length=500)
+    subject: Optional[str] = Field(None, max_length=200)
+    predicate: Optional[str] = Field(None, max_length=200)
+    object: Optional[str] = Field(None, max_length=200)
+
+
+class ResolveConflictRequest(BaseModel):
+    """Request to resolve a conflict."""
+
+    chosen_fact: str = Field(..., min_length=1, description="Chosen fact ID")
+    reasoning: str = Field(..., min_length=10, max_length=1000)
+
+
+class GroundedResponseSchema(BaseModel):
+    """Schema for grounded response API response."""
+
+    response_id: str
+    original_query: str
+    response_text: str
+    verified_claims: List[Dict[str, Any]]
+    unverified_claims: List[Dict[str, Any]]
+    conflicts: List[Dict[str, Any]]
+    confidence_overall: float
+    requires_human_review: bool
+    timestamp: float
+
+
+class ConflictSchema(BaseModel):
+    """Schema for a conflict."""
+
+    conflict_id: str
+    claim_1_id: str
+    claim_2_id: Optional[str] = None
+    description: str
+    severity: str
+    resolution: str
+    chosen_fact: Optional[str] = None
+    timestamp: float
