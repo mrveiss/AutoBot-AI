@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "اختیاری"
+    "optional": "اختیاری",
+    "remove": "حذف"
   },
   "nav": {
     "chat": "گفتگو",
@@ -5891,7 +5892,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "مدیریت منابع بازار",
+        "hint": "آدرس‌های بازار سفارشی که کاتالوگ JSON از افزونه‌ها برمی‌گردانند را اضافه کنید.",
+        "addTitle": "افزودن بازار سفارشی",
+        "add": "افزودن منبع",
+        "adding": "در حال افزودن…",
+        "addFailed": "افزودن ناموفق بود — مطمئن شوید آدرس کاتالوگ معتبری برمی‌گرداند.",
+        "removeFailed": "حذف بازار ناموفق بود.",
+        "nameLabel": "نام نمایشی",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "آدرس کاتالوگ",
+        "descLabel": "توضیحات",
+        "builtin": "داخلی"
+      },
+      "manageSources": "مدیریت منابع"
     }
   },
   "featureFlags": {

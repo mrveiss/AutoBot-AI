@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "opcjonalne"
+    "optional": "opcjonalne",
+    "remove": "Usuń"
   },
   "chat": {
     "sendMessage": "Wyślij wiadomość...",
@@ -5552,7 +5553,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "Zarządzaj źródłami marketplace",
+        "hint": "Dodaj własne URL-e marketplace zwracające katalog JSON wtyczek.",
+        "addTitle": "Dodaj własny marketplace",
+        "add": "Dodaj źródło",
+        "adding": "Dodawanie…",
+        "addFailed": "Nie udało się dodać — sprawdź, czy URL zwraca poprawny katalog.",
+        "removeFailed": "Nie udało się usunąć marketplace.",
+        "nameLabel": "Wyświetlana nazwa",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "URL katalogu",
+        "descLabel": "Opis",
+        "builtin": "wbudowany"
+      },
+      "manageSources": "Zarządzaj źródłami"
     }
   },
   "auth": {

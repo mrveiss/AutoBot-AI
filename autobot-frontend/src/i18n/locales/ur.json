@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "اختیاری"
+    "optional": "اختیاری",
+    "remove": "ہٹائیں"
   },
   "nav": {
     "chat": "چیٹ",
@@ -5891,7 +5892,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "مارکیٹ پلیس ذرائع کا نظم کریں",
+        "hint": "اپنی مارکیٹ پلیس URLs شامل کریں جو پلگ انز کا JSON کیٹلاگ واپس کرتے ہیں۔",
+        "addTitle": "حسب ضرورت مارکیٹ پلیس شامل کریں",
+        "add": "ذریعہ شامل کریں",
+        "adding": "شامل کیا جا رہا ہے…",
+        "addFailed": "شامل کرنے میں ناکام — یقینی بنائیں کہ URL درست کیٹلاگ واپس کرتا ہے۔",
+        "removeFailed": "مارکیٹ پلیس ہٹانے میں ناکام۔",
+        "nameLabel": "ظاہر ہونے والا نام",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "کیٹلاگ URL",
+        "descLabel": "تفصیل",
+        "builtin": "بلٹ ان"
+      },
+      "manageSources": "ذرائع کا نظم"
     }
   },
   "featureFlags": {

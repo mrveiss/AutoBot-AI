@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "اختياري"
+    "optional": "اختياري",
+    "remove": "إزالة"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",
@@ -5552,7 +5553,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "إدارة مصادر السوق",
+        "hint": "أضف عناوين أسواق مخصصة تُرجع كتالوج JSON للمكونات.",
+        "addTitle": "إضافة سوق مخصص",
+        "add": "إضافة المصدر",
+        "adding": "جارٍ الإضافة…",
+        "addFailed": "فشلت الإضافة — تحقق من أن العنوان يُرجع كتالوجًا صالحًا.",
+        "removeFailed": "فشلت إزالة السوق.",
+        "nameLabel": "الاسم المعروض",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "عنوان الكتالوج",
+        "descLabel": "الوصف",
+        "builtin": "مدمج"
+      },
+      "manageSources": "إدارة المصادر"
     }
   },
   "auth": {

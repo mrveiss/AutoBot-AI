@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "optional"
+    "optional": "optional",
+    "remove": "Entfernen"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",
@@ -5552,7 +5553,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "Marktplatzquellen verwalten",
+        "hint": "Füge eigene Marktplatz-URLs hinzu, die einen JSON-Katalog von Plugins zurückgeben.",
+        "addTitle": "Eigenen Marktplatz hinzufügen",
+        "add": "Quelle hinzufügen",
+        "adding": "Hinzufügen…",
+        "addFailed": "Hinzufügen fehlgeschlagen — prüfe ob die URL einen gültigen Katalog liefert.",
+        "removeFailed": "Marktplatz konnte nicht entfernt werden.",
+        "nameLabel": "Anzeigename",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "Katalog-URL",
+        "descLabel": "Beschreibung",
+        "builtin": "integriert"
+      },
+      "manageSources": "Quellen verwalten"
     }
   },
   "auth": {

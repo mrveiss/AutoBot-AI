@@ -471,6 +471,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("plugin_manager", "", ["plugins"], "plugin_manager"),
     # Issue #1803: Plugin and agent marketplace — community catalog
     ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
+    # Issue #6481: User-extensible marketplace sources (custom marketplaces)
+    ("api.marketplace_sources", "/plugins", ["marketplace", "plugins"], "marketplace_sources"),
     # Issue #5070: verbatim conversational-memory lane
     ("api.verbatim_memory", "/verbatim-memory", ["memory"], "verbatim_memory"),
     # Issue #5071: per-agent diary with background append and runtime discovery

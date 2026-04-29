@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "opcional"
+    "optional": "opcional",
+    "remove": "Remover"
   },
   "chat": {
     "sendMessage": "Envie uma mensagem...",
@@ -5552,7 +5553,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "Gerenciar fontes do mercado",
+        "hint": "Adicione URLs de mercado personalizadas que retornem um catálogo JSON de plugins.",
+        "addTitle": "Adicionar mercado personalizado",
+        "add": "Adicionar fonte",
+        "adding": "Adicionando…",
+        "addFailed": "Falha ao adicionar — verifique se a URL retorna um catálogo válido.",
+        "removeFailed": "Falha ao remover o mercado.",
+        "nameLabel": "Nome exibido",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "URL do catálogo",
+        "descLabel": "Descrição",
+        "builtin": "integrado"
+      },
+      "manageSources": "Gerenciar fontes"
     }
   },
   "auth": {

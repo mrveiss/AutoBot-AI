@@ -81,7 +81,8 @@
     "hasMore": "Load more",
     "page": "Page",
     "previous": "Previous",
-    "optional": "optional"
+    "optional": "optional",
+    "remove": "Remove"
   },
   "chat": {
     "sendMessage": "Send a message...",
@@ -5595,7 +5596,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "Manage Marketplace Sources",
+        "hint": "Add custom marketplace URLs that return a JSON catalog of plugins.",
+        "addTitle": "Add custom marketplace",
+        "add": "Add source",
+        "adding": "Adding…",
+        "addFailed": "Failed to add marketplace — check the URL returns a valid catalog.",
+        "removeFailed": "Failed to remove marketplace.",
+        "nameLabel": "Display name",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "Catalog URL",
+        "descLabel": "Description",
+        "builtin": "built-in"
+      },
+      "manageSources": "Manage Sources"
     }
   },
   "auth": {
