@@ -80,7 +80,8 @@
     "deselectAll": "إلغاء تحديد الكل",
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "اختياري"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",
@@ -5497,7 +5498,20 @@
       "noNewPluginsHint": "All discovered plugins are already installed, or no plugin directories are configured.",
       "available": "available",
       "requires": "Requires",
-      "install": "Install",
+      "install": {
+        "button": "تثبيت",
+        "title": "تثبيت المكون الإضافي",
+        "zipTab": "رفع ZIP",
+        "gitTab": "من Git",
+        "zipHint": "ارفع ملف .zip يحتوي على plugin.json ورمز المكون.",
+        "zipPickFile": "اضغط لاختيار ملف .zip أو أفلته هنا",
+        "gitHint": "أدخل عنوان مستودع Git يحتوي على plugin.json في الجذر.",
+        "gitUrlLabel": "عنوان المستودع",
+        "gitRefLabel": "الفرع أو الوسم",
+        "install": "تثبيت",
+        "installing": "جارٍ التثبيت…",
+        "failed": "فشل التثبيت — تحقق من الإدخالات وحاول مرة أخرى."
+      },
       "pluginDetails": "Plugin details",
       "close": "إغلاق",
       "name": "الاسم",

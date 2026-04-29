@@ -23,6 +23,28 @@
             />
           </svg>
         </button>
+        <!-- Issue #6464: Install plugin from ZIP/Git -->
+        <button
+          v-if="!isMarketplaceActive"
+          class="btn-install"
+          @click="installModalOpen = true"
+        >
+          <svg
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            class="install-icon"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          {{ $t('views.plugins.install.button') }}
+        </button>
       </div>
 
       <!-- Error Banner -->
@@ -368,6 +390,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Install plugin modal — Issue #6464 -->
+    <PluginInstallModal
+      :open="installModalOpen"
+      @close="installModalOpen = false"
+      @installed="onPluginInstalled"
+    />
   </div>
 </template>
 
@@ -382,6 +411,7 @@ import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
+import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -404,6 +434,13 @@ const {
 } = usePlugins()
 
 const activeTab = ref<'installed' | 'discover'>('installed')
+const installModalOpen = ref(false)
+
+async function onPluginInstalled(): Promise<void> {
+  await listPlugins()
+  await discoverPlugins()
+  activeTab.value = 'discover'
+}
 const actionLoading = ref<Record<string, boolean>>({})
 
 // Modal state
@@ -601,6 +638,32 @@ onMounted(async () => {
 
 .refresh-icon.spinning {
   animation: spin 1s linear infinite;
+}
+
+/* ---- Install Button — Issue #6464 ---- */
+.btn-install {
+  background: var(--color-info);
+  border: 1px solid var(--color-info);
+  color: white;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-left: var(--spacing-sm);
+  transition: filter var(--duration-150) var(--ease-in-out);
+}
+
+.btn-install:hover {
+  filter: brightness(1.1);
+}
+
+.install-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Error Banner ---- */
