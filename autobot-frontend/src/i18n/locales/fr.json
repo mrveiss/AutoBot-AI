@@ -1243,7 +1243,9 @@
         "audit": "Audit",
         "auditAria": "Audit logs",
         "usage": "Utilisation",
-        "usageAria": "Utilisation & Coûts"
+        "usageAria": "Utilisation & Coûts",
+        "operations": "Opérations",
+        "operationsAria": "Opérations de longue durée"
       }
     },
     "header": {

@@ -764,7 +764,9 @@
         "audit": "Audit",
         "auditAria": "Audit logs",
         "usage": "שימוש",
-        "usageAria": "שימוש & עלויות"
+        "usageAria": "שימוש & עלויות",
+        "operations": "תפעול",
+        "operationsAria": "פעולות ארוכות טווח"
       }
     },
     "header": {

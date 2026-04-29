@@ -94,6 +94,18 @@
             <Icon name="chart-bar" class="tab-icon-svg" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.usage') }}</span>
           </router-link>
+          <!-- Issue #4270: Operations moved from standalone nav into analytics tab -->
+          <router-link
+            to="/analytics/operations"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isOperationsActive }"
+            role="tab"
+            :aria-selected="isOperationsActive"
+            :aria-label="$t('analytics.views.tabs.operationsAria')"
+          >
+            <Icon name="list-alt" class="tab-icon-svg" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.operations') }}</span>
+          </router-link>
         </nav>
       </div>
 
@@ -137,6 +149,10 @@ const isDevToolsActive = computed(() => {
 
 const isUsageActive = computed(() => {
   return route.path === '/analytics/usage' || route.path.startsWith('/analytics/usage/')
+})
+
+const isOperationsActive = computed(() => {
+  return route.path === '/analytics/operations' || route.path.startsWith('/analytics/operations/')
 })
 </script>
 

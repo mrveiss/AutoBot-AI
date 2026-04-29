@@ -764,7 +764,9 @@
         "audit": "Audit",
         "auditAria": "Audit logs",
         "usage": "استعمال",
-        "usageAria": "استعمال اور اخراجات"
+        "usageAria": "استعمال اور اخراجات",
+        "operations": "آپریشنز",
+        "operationsAria": "طویل مدتی آپریشنز"
       }
     },
     "header": {
