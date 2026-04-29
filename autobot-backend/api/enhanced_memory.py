@@ -14,8 +14,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
+from api.schemas_knowledge import (
+    MarkdownReferenceRequest,
+    TaskCreateRequest,
+    TaskUpdateRequest,
+)
 from api.schemas_agent import (
     MemoryActiveTasksResponse,
     MemoryCleanupResponse,
@@ -40,7 +44,6 @@ from enhanced_memory_manager_async import (
 )
 from markdown_reference_system import MarkdownReferenceSystem
 from task_execution_tracker import get_task_tracker
-from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -103,28 +106,6 @@ async def get_memory_manager() -> (
                 _sync_memory_manager = EnhancedMemoryManager()
                 _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
     return memory_manager, _markdown_system
-
-
-class TaskCreateRequest(BaseModel):
-    task_name: str
-    description: str
-    priority: str = "medium"  # low, medium, high, critical
-    agent_type: Optional[str] = None
-    inputs: Optional[Metadata] = None
-    parent_task_id: Optional[str] = None
-    metadata: Optional[Metadata] = None
-
-
-class TaskUpdateRequest(BaseModel):
-    status: Optional[str] = None  # pending, in_progress, completed, failed, cancelled
-    outputs: Optional[Metadata] = None
-    error_message: Optional[str] = None
-
-
-class MarkdownReferenceRequest(BaseModel):
-    task_id: str
-    markdown_file_path: str
-    reference_type: str = "documentation"
 
 
 # Health check moved to consolidated health service

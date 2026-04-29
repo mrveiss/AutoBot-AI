@@ -5,10 +5,9 @@
 """CI/CD integration API endpoints."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
@@ -24,6 +23,12 @@ from api.schemas_code import (
     CICDPipelinesResponse,
     CICDPipelineTriggerResponse,
 )
+from api.schemas_workflows import (
+    CICDConnectionTestRequest,
+    CICDProvider,
+    CICDProviderInfo,
+    PipelineTriggerRequest,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -33,35 +38,6 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-CICDProvider = Literal["jenkins", "gitlab", "circleci"]
-
-
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing CI/CD connection."""
-
-    provider: CICDProvider = Field(..., description="CI/CD provider type")
-    base_url: str = Field(..., description="Base URL of the CI/CD service")
-    credentials: Dict[str, str] = Field(..., description="Authentication credentials")
-
-
-class PipelineTriggerRequest(BaseModel):
-    """Request model for triggering a pipeline."""
-
-    confirm: bool = Field(
-        False, description="Confirmation flag - must be true to trigger"
-    )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Pipeline parameters"
-    )
-
-
-class ProviderInfo(BaseModel):
-    """CI/CD provider information."""
-
-    id: str = Field(..., description="Provider identifier")
-    name: str = Field(..., description="Provider display name")
-    description: str = Field(..., description="Provider description")
-    auth_type: str = Field(..., description="Authentication type")
 
 
 @with_error_handling(
@@ -70,7 +46,7 @@ class ProviderInfo(BaseModel):
     error_code_prefix="INTEGRATION_CICD",
 )
 @router.post("/test-connection", response_model=CICDConnectionTestResponse)
-async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
+async def test_connection(request: CICDConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a CI/CD provider.
 
     Args:
@@ -102,27 +78,27 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
     operation="list_providers",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.get("/providers", response_model=List[ProviderInfo])
-async def list_providers() -> List[ProviderInfo]:
+@router.get("/providers", response_model=List[CICDProviderInfo])
+async def list_providers() -> List[CICDProviderInfo]:
     """List supported CI/CD providers.
 
     Returns:
         List of supported provider information
     """
     return [
-        ProviderInfo(
+        CICDProviderInfo(
             id="jenkins",
             name="Jenkins",
             description="Jenkins automation server",
             auth_type="basic",
         ),
-        ProviderInfo(
+        CICDProviderInfo(
             id="gitlab",
             name="GitLab CI",
             description="GitLab integrated CI/CD",
             auth_type="token",
         ),
-        ProviderInfo(
+        CICDProviderInfo(
             id="circleci",
             name="CircleCI",
             description="CircleCI continuous integration",

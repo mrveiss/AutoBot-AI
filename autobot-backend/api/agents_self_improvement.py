@@ -12,7 +12,12 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+
+from api.schemas_agent import (
+    LearnedStrategyResponse,
+    ResetLearningResponse,
+    TaskOutcomeResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -42,38 +47,6 @@ def _get_learner():
 
         _pattern_learner = TaskPatternLearner()
     return _pattern_learner
-
-
-class TaskOutcomeResponse(BaseModel):
-    """Serialized task outcome record."""
-
-    task_type: str
-    goal: str
-    output_summary: str
-    strategy_used: str
-    score: float
-    rationale: str
-    timestamp: str
-
-
-class LearnedStrategyResponse(BaseModel):
-    """Serialized learned strategy record."""
-
-    task_type: str
-    best_approach: str
-    best_prompt_template: str
-    avg_score: float
-    sample_size: int
-    confidence: float
-    failure_patterns: List[str]
-    timestamp: str
-
-
-class ResetLearningResponse(BaseModel):
-    """Response for reset-learning operation."""
-
-    success: bool
-    message: str
 
 
 @with_error_handling(

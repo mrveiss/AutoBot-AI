@@ -7,7 +7,7 @@ Workflow, registry, RUM, elevation, advanced-control, state-tracking, and valida
 
 import re
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -1981,3 +1981,55 @@ class GitHubCommentRequest(BaseModel):
     repo: str = Field(..., description="Repository name")
     pull_number: int = Field(..., description="Pull request number")
     body: str = Field(..., description="Comment body text")
+
+
+# ---------------------------------------------------------------------------
+# integration_cicd.py schemas
+# ---------------------------------------------------------------------------
+
+
+CICDProvider = Literal["jenkins", "gitlab", "circleci"]
+
+
+class CICDConnectionTestRequest(BaseModel):
+    """Request model for testing CI/CD connection."""
+
+    provider: CICDProvider = Field(..., description="CI/CD provider type")
+    base_url: str = Field(..., description="Base URL of the CI/CD service")
+    credentials: Dict[str, str] = Field(..., description="Authentication credentials")
+
+
+class PipelineTriggerRequest(BaseModel):
+    """Request model for triggering a pipeline."""
+
+    confirm: bool = Field(False, description="Confirmation flag - must be true to trigger")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Pipeline parameters")
+
+
+class CICDProviderInfo(BaseModel):
+    """CI/CD provider information."""
+
+    id: str = Field(..., description="Provider identifier")
+    name: str = Field(..., description="Provider display name")
+    description: str = Field(..., description="Provider description")
+    auth_type: str = Field(..., description="Authentication type")
+
+
+# ---------------------------------------------------------------------------
+# enterprise_features.py schemas
+# ---------------------------------------------------------------------------
+
+
+class FeatureEnableRequest(BaseModel):
+    feature_name: str
+    force: Optional[bool] = False
+
+
+class BulkFeatureRequest(BaseModel):
+    features: List[str]
+    enable_dependencies: Optional[bool] = True
+
+
+class PerformanceOptimizationRequest(BaseModel):
+    target_metrics: dict
+    optimization_level: Optional[str] = "balanced"
