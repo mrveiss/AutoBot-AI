@@ -80,7 +80,8 @@
     },
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "facultatif"
   },
   "chat": {
     "sendMessage": "Envoyer un message...",
@@ -5497,7 +5498,19 @@
       "noNewPluginsHint": "All discovered plugins are already installed, or no plugin directories are configured.",
       "available": "available",
       "requires": "Requires",
-      "install": "Install",
+      "install": {
+        "button": "Installer",
+        "title": "Installer le plugin",
+        "zipTab": "Téléverser ZIP",
+        "gitTab": "Depuis Git",
+        "zipHint": "Téléversez une archive .zip contenant plugin.json et le code du plugin.",
+        "zipPickFile": "Cliquez pour choisir un fichier .zip ou déposez-le ici",
+        "gitHint": "Saisissez l'URL d'un dépôt Git contenant un plugin.json à la racine.",
+        "gitUrlLabel": "URL du dépôt",
+        "gitRefLabel": "Branche ou tag",
+        "install": "Installer",
+        "installing": "Installation…"
+      },
       "pluginDetails": "Plugin details",
       "close": "Close",
       "name": "Name",

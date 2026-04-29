@@ -182,6 +182,44 @@ export function usePlugins() {
     }
   }
 
+  // Issue #6464: install 3rd-party plugins from ZIP or Git URL
+  async function installFromZip(file: File): Promise<{ name: string; version: string } | null> {
+    error.value = null
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const data = await wrap(() =>
+        ApiClient.post(`${getApiBase()}/plugins/install/upload`, form),
+      ) as { name: string; version: string }
+      await discoverPlugins()
+      return { name: data.name, version: data.version }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to install plugin from ZIP'
+      error.value = msg
+      logger.error('installFromZip error: %s', msg)
+      return null
+    }
+  }
+
+  async function installFromGit(
+    url: string,
+    ref?: string,
+  ): Promise<{ name: string; version: string } | null> {
+    error.value = null
+    try {
+      const data = await wrap(() =>
+        ApiClient.post(`${getApiBase()}/plugins/install/git`, { url, ref: ref || null }),
+      ) as { name: string; version: string }
+      await discoverPlugins()
+      return { name: data.name, version: data.version }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to install plugin from Git'
+      error.value = msg
+      logger.error('installFromGit error: %s', msg)
+      return null
+    }
+  }
+
   return {
     plugins,
     discovered,
@@ -197,5 +235,7 @@ export function usePlugins() {
     getPluginInfo,
     getPluginConfig,
     updatePluginConfig,
+    installFromZip,
+    installFromGit,
   }
 }

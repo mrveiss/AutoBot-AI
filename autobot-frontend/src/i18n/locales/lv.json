@@ -80,7 +80,8 @@
     },
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "pēc izvēles"
   },
   "chat": {
     "sendMessage": "Nosūtīt ziņu...",
@@ -5497,7 +5498,19 @@
       "noNewPluginsHint": "All discovered plugins are already installed, or no plugin directories are configured.",
       "available": "available",
       "requires": "Requires",
-      "install": "Install",
+      "install": {
+        "button": "Instalēt",
+        "title": "Instalēt spraudni",
+        "zipTab": "Augšupielādēt ZIP",
+        "gitTab": "No Git",
+        "zipHint": "Augšupielādējiet .zip arhīvu, kas satur plugin.json un spraudņa kodu.",
+        "zipPickFile": "Noklikšķiniet, lai izvēlētos .zip failu, vai nometiet to šeit",
+        "gitHint": "Ievadiet Git repozitorija URL, kas satur plugin.json saknē.",
+        "gitUrlLabel": "Repozitorija URL",
+        "gitRefLabel": "Zars vai tags",
+        "install": "Instalēt",
+        "installing": "Instalē…"
+      },
       "pluginDetails": "Plugin details",
       "close": "Close",
       "name": "Name",

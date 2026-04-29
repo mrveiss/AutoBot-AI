@@ -80,7 +80,8 @@
     "deselectAll": "בטל בחירת הכל",
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "אופציונלי"
   },
   "nav": {
     "chat": "צ'אט",
@@ -5810,7 +5811,19 @@
       "invalidJson": "Invalid JSON — please fix before saving.",
       "author": "Author",
       "noPluginsLoaded": "No plugins loaded",
-      "install": "Install",
+      "install": {
+        "button": "התקנה",
+        "title": "התקנת תוסף",
+        "zipTab": "העלאת ZIP",
+        "gitTab": "מ-Git",
+        "zipHint": "העלה קובץ .zip המכיל plugin.json וקוד התוסף.",
+        "zipPickFile": "לחץ כדי לבחור קובץ .zip או גרור אותו לכאן",
+        "gitHint": "הזן כתובת של מאגר Git המכיל plugin.json בשורש.",
+        "gitUrlLabel": "כתובת המאגר",
+        "gitRefLabel": "ענף או תגית",
+        "install": "התקנה",
+        "installing": "מתקין…"
+      },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",
       "hooks": "Hooks",

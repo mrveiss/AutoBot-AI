@@ -80,7 +80,8 @@
     "deselectAll": "سب کی انتخاب ختم کریں",
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "اختیاری"
   },
   "nav": {
     "chat": "چیٹ",
@@ -5810,7 +5811,19 @@
       "invalidJson": "Invalid JSON — please fix before saving.",
       "author": "Author",
       "noPluginsLoaded": "No plugins loaded",
-      "install": "Install",
+      "install": {
+        "button": "انسٹال",
+        "title": "پلگ ان انسٹال کریں",
+        "zipTab": "ZIP اپ لوڈ",
+        "gitTab": "Git سے",
+        "zipHint": "plugin.json اور پلگ ان کوڈ پر مشتمل .zip فائل اپ لوڈ کریں۔",
+        "zipPickFile": ".zip فائل منتخب کرنے کیلئے کلک کریں یا یہاں چھوڑ دیں",
+        "gitHint": "Git ریپوزٹری کا URL درج کریں جس میں روٹ پر plugin.json ہو۔",
+        "gitUrlLabel": "ریپوزٹری URL",
+        "gitRefLabel": "برانچ یا ٹیگ",
+        "install": "انسٹال",
+        "installing": "انسٹال ہو رہا ہے…"
+      },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",
       "hooks": "Hooks",

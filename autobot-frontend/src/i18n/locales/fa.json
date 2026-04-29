@@ -80,7 +80,8 @@
     "deselectAll": "لغو انتخاب همه",
     "page": "Page",
     "hasMore": "Load more",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "اختیاری"
   },
   "nav": {
     "chat": "گفتگو",
@@ -5810,7 +5811,19 @@
       "invalidJson": "Invalid JSON — please fix before saving.",
       "author": "Author",
       "noPluginsLoaded": "No plugins loaded",
-      "install": "Install",
+      "install": {
+        "button": "نصب",
+        "title": "نصب افزونه",
+        "zipTab": "بارگذاری ZIP",
+        "gitTab": "از Git",
+        "zipHint": "یک فایل .zip شامل plugin.json و کد افزونه بارگذاری کنید.",
+        "zipPickFile": "برای انتخاب فایل .zip کلیک کنید یا آن را اینجا رها کنید",
+        "gitHint": "آدرس مخزن Git حاوی plugin.json در ریشه را وارد کنید.",
+        "gitUrlLabel": "آدرس مخزن",
+        "gitRefLabel": "شاخه یا برچسب",
+        "install": "نصب",
+        "installing": "در حال نصب…"
+      },
       "configJsonLabel": "Plugin configuration JSON",
       "unload": "Unload",
       "hooks": "Hooks",

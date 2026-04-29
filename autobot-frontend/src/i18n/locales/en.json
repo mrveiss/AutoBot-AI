@@ -80,7 +80,8 @@
     "deselectAll": "Deselect All",
     "hasMore": "Load more",
     "page": "Page",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "optional"
   },
   "chat": {
     "sendMessage": "Send a message...",
@@ -5540,7 +5541,19 @@
       "noNewPluginsHint": "All discovered plugins are already installed, or no plugin directories are configured.",
       "available": "available",
       "requires": "Requires",
-      "install": "Install",
+      "install": {
+        "button": "Install",
+        "title": "Install Plugin",
+        "zipTab": "Upload ZIP",
+        "gitTab": "From Git",
+        "zipHint": "Upload a .zip archive containing plugin.json and plugin code.",
+        "zipPickFile": "Click to choose a .zip file or drop it here",
+        "gitHint": "Enter the URL of a Git repository containing a plugin.json at its root.",
+        "gitUrlLabel": "Repository URL",
+        "gitRefLabel": "Branch or tag",
+        "install": "Install",
+        "installing": "Installing…"
+      },
       "pluginDetails": "Plugin details",
       "close": "Close",
       "name": "Name",
