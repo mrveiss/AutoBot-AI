@@ -2186,3 +2186,55 @@ class ApplyResolutionRequest(BaseModel):
     file_path: str = Field(..., description="Path to file")
     resolved_content: str = Field(..., description="Resolved file content")
     create_backup: bool = Field(default=True, description="Create backup before applying")
+
+
+# ---------------------------------------------------------------------------
+# anti_pattern.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AntiPatternAnalysisRequest(BaseModel):
+    """Request model for anti-pattern analysis."""
+
+    root_path: str = Field(default=".", description="Root path to analyze")
+    patterns: List[str] = Field(default=["**/*.py"], description="Glob patterns for files to include")
+    exclude_patterns: List[str] = Field(
+        default=[
+            "__pycache__",
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "test_",
+            "_test.py",
+        ],
+        description="Patterns to exclude from analysis",
+    )
+
+
+class SeveritySummary(BaseModel):
+    """Summary of issues by severity."""
+
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+
+
+class AntiPatternSummary(BaseModel):
+    """Summary information about detected anti-patterns."""
+
+    total_issues: int
+    severity_counts: SeveritySummary
+    health_score: float
+    summary_by_type: dict
+    analysis_time_seconds: float
+
+
+class AnalysisResponse(BaseModel):
+    """Response model for anti-pattern analysis."""
+
+    success: bool
+    summary: AntiPatternSummary
+    anti_patterns: List[dict]
+    recommendations: List[str]

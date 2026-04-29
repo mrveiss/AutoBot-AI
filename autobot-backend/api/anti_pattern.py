@@ -16,9 +16,14 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_code import (
+    AnalysisResponse,
+    AntiPatternAnalysisRequest,
+    AntiPatternSummary,
+    SeveritySummary,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -153,58 +158,6 @@ def _get_health_grade(score: float) -> tuple:
     return "F", "Critical"
 
 
-# ============ Request/Response Models ============
-
-
-class AnalysisRequest(BaseModel):
-    """Request model for anti-pattern analysis"""
-
-    root_path: str = Field(default=".", description="Root path to analyze")
-    patterns: List[str] = Field(
-        default=["**/*.py"], description="Glob patterns for files to include"
-    )
-    exclude_patterns: List[str] = Field(
-        default=[
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-        ],
-        description="Patterns to exclude from analysis",
-    )
-
-
-class SeveritySummary(BaseModel):
-    """Summary of issues by severity"""
-
-    critical: int = 0
-    high: int = 0
-    medium: int = 0
-    low: int = 0
-
-
-class AntiPatternSummary(BaseModel):
-    """Summary information about detected anti-patterns"""
-
-    total_issues: int
-    severity_counts: SeveritySummary
-    health_score: float
-    summary_by_type: dict
-    analysis_time_seconds: float
-
-
-class AnalysisResponse(BaseModel):
-    """Response model for anti-pattern analysis"""
-
-    success: bool
-    summary: AntiPatternSummary
-    anti_patterns: List[dict]
-    recommendations: List[str]
-
-
 # ============ API Endpoints ============
 
 
@@ -219,7 +172,7 @@ class AnalysisResponse(BaseModel):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_anti_patterns(request: AnalysisRequest):
+async def analyze_anti_patterns(request: AntiPatternAnalysisRequest):
     """
     Analyze codebase for anti-patterns.
 
@@ -320,7 +273,7 @@ async def get_cached_analysis():
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/god-classes", response_model=DataResponse)
-async def detect_god_classes(request: AnalysisRequest):
+async def detect_god_classes(request: AntiPatternAnalysisRequest):
     """
     Detect only God Class anti-patterns.
 
@@ -375,7 +328,7 @@ async def detect_god_classes(request: AnalysisRequest):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/circular-dependencies", response_model=DataResponse)
-async def detect_circular_dependencies(request: AnalysisRequest):
+async def detect_circular_dependencies(request: AntiPatternAnalysisRequest):
     """
     Detect circular dependencies in the codebase.
 
@@ -425,7 +378,7 @@ async def detect_circular_dependencies(request: AnalysisRequest):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/feature-envy", response_model=DataResponse)
-async def detect_feature_envy(request: AnalysisRequest):
+async def detect_feature_envy(request: AntiPatternAnalysisRequest):
     """
     Detect Feature Envy anti-pattern.
 
@@ -476,7 +429,7 @@ async def detect_feature_envy(request: AnalysisRequest):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/code-smells", response_model=DataResponse)
-async def detect_code_smells(request: AnalysisRequest):
+async def detect_code_smells(request: AntiPatternAnalysisRequest):
     """
     Detect general code smells.
 
@@ -538,7 +491,7 @@ async def detect_code_smells(request: AnalysisRequest):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/dead-code", response_model=DataResponse)
-async def detect_dead_code(request: AnalysisRequest):
+async def detect_dead_code(request: AntiPatternAnalysisRequest):
     """
     Detect potentially dead (unreferenced) code.
 
@@ -588,7 +541,7 @@ async def detect_dead_code(request: AnalysisRequest):
     error_code_prefix="ANTI_PATTERN",
 )
 @router.post("/health-score", response_model=DataResponse)
-async def get_health_score(request: AnalysisRequest):
+async def get_health_score(request: AntiPatternAnalysisRequest):
     """
     Get codebase health score based on anti-pattern analysis.
 

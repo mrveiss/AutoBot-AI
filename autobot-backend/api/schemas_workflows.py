@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
+from constants.path_constants import PATH
 from services.trigger_service import TriggerType
 from autobot_shared.time_utils import now_utc
 from models.approval import ApprovalType
@@ -1730,3 +1731,60 @@ class CreateChatBrowserRequest(BaseModel):
     conversation_id: str
     headless: bool = False
     initial_url: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# long_running_operations.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CodebaseIndexingRequest(BaseModel):
+    """Request model for codebase indexing operations."""
+
+    codebase_path: str = Field(default=str(PATH.PROJECT_ROOT), description="Path to codebase to index")
+    file_patterns: List[str] = Field(
+        default=["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"],
+        description="File patterns to include",
+    )
+    include_tests: bool = Field(default=True, description="Include test files")
+    include_docs: bool = Field(default=True, description="Include documentation files")
+    max_file_size: int = Field(default=1024 * 1024, description="Maximum file size in bytes")
+    priority: str = Field(default="normal", description="Operation priority")
+
+
+class TestSuiteRequest(BaseModel):
+    """Request model for comprehensive test suite operations."""
+
+    test_path: str = Field(default=str(PATH.TESTS_DIR), description="Path to test directory")
+    test_patterns: List[str] = Field(default=["test_*.py", "*_test.py"], description="Test file patterns")
+    test_types: List[str] = Field(
+        default=["unit", "integration", "performance"],
+        description="Types of tests to run",
+    )
+    parallel_execution: bool = Field(default=True, description="Run tests in parallel")
+    timeout_per_test: int = Field(default=300, description="Timeout per individual test in seconds")
+    priority: str = Field(default="high", description="Operation priority")
+
+
+class KnowledgeBaseRequest(BaseModel):
+    """Request model for knowledge base operations."""
+
+    source_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to populate from")
+    document_types: List[str] = Field(default=["code", "docs", "config"], description="Document types to include")
+    chunk_size: int = Field(default=1000, description="Chunk size for text processing")
+    overlap: int = Field(default=200, description="Overlap between chunks")
+    force_reindex: bool = Field(default=False, description="Force reindexing of existing documents")
+    priority: str = Field(default="normal", description="Operation priority")
+
+
+class SecurityScanRequest(BaseModel):
+    """Request model for security scan operations."""
+
+    scan_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to scan")
+    scan_types: List[str] = Field(
+        default=["vulnerability", "dependency", "secrets"],
+        description="Types of security scans",
+    )
+    severity_threshold: str = Field(default="medium", description="Minimum severity to report")
+    include_dependencies: bool = Field(default=True, description="Scan dependencies")
+    priority: str = Field(default="high", description="Operation priority")

@@ -2319,3 +2319,120 @@ class ConversationAnalysisResult(BaseModel):
     hourly_distribution: Dict[str, int]
     analysis_period: str
     conversations_analyzed: int
+
+
+# ---------------------------------------------------------------------------
+# analytics_maintenance.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MaintenanceRecommendationResponse(BaseModel):
+    """Maintenance recommendation response model."""
+
+    id: str
+    title: str
+    description: str
+    priority: str
+    category: str
+    affected_component: str
+    predicted_issue: str
+    confidence: float
+    recommended_action: str
+    estimated_impact: str
+    detected_at: str
+    metadata: dict = Field(default_factory=dict)
+
+
+class ResourceOptimizationResponse(BaseModel):
+    """Resource optimization response model."""
+
+    id: str
+    resource_type: str
+    title: str
+    current_usage: dict
+    recommended_change: str
+    expected_savings: dict
+    implementation_effort: str
+    priority: str
+    details: str
+
+
+class DashboardResponse(BaseModel):
+    """Unified dashboard response model."""
+
+    generated_at: str
+    period_days: int
+    health: dict
+    cost: dict
+    agents: dict
+    engagement: dict
+    maintenance: dict
+    optimization: dict
+
+
+class CustomReportRequest(BaseModel):
+    """Custom report generation request."""
+
+    report_type: str = Field(default="executive", description="Report type: executive, technical, cost, performance")
+    days: int = Field(default=30, ge=1, le=365, description="Days to include")
+    include_sections: Optional[List[str]] = Field(
+        default=None,
+        description="Sections to include: cost, agents, behavior, maintenance, optimization",
+    )
+
+
+# ---------------------------------------------------------------------------
+# analytics_log_patterns.py schemas
+# ---------------------------------------------------------------------------
+
+
+class LogPattern(BaseModel):
+    """Represents a discovered log pattern."""
+
+    pattern_id: str
+    pattern_template: str
+    occurrences: int
+    first_seen: str
+    last_seen: str
+    log_levels: List[str]
+    sources: List[str]
+    sample_messages: List[str] = Field(default_factory=list, max_length=5)
+    frequency_per_hour: float = 0.0
+    is_error_pattern: bool = False
+    is_anomaly: bool = False
+
+
+class LogAnomaly(BaseModel):
+    """Represents a detected anomaly in logs."""
+
+    anomaly_id: str
+    anomaly_type: str
+    severity: str
+    description: str
+    timestamp: str
+    affected_sources: List[str]
+    metric_before: float
+    metric_after: float
+    confidence: float
+
+
+class LogTrend(BaseModel):
+    """Represents a trend in log data."""
+
+    trend_id: str
+    metric_name: str
+    direction: str
+    change_percent: float
+    time_period: str
+    data_points: List[Dict[str, Any]]
+
+
+class PatternMiningResult(BaseModel):
+    """Result of pattern mining operation."""
+
+    patterns: List[LogPattern]
+    anomalies: List[LogAnomaly]
+    trends: List[LogTrend]
+    summary: Dict[str, Any]
+    analysis_time_ms: float
+    logs_analyzed: int

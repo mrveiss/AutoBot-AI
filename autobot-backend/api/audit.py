@@ -22,7 +22,6 @@ from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -34,48 +33,15 @@ from utils.catalog_http_exceptions import (
     raise_validation_error,
 )
 from api.schemas_common import DataResponse
+from api.schemas_system import (
+    AuditCleanupRequest,
+    AuditQueryRequest,
+    AuditQueryResponse,
+    AuditStatisticsResponse,
+)
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
-
-
-class AuditQueryRequest(BaseModel):
-    """Audit log query parameters"""
-
-    start_time: Optional[datetime] = Field(None, description="Start of time range")
-    end_time: Optional[datetime] = Field(None, description="End of time range")
-    operation: Optional[str] = Field(None, description="Filter by operation type")
-    user_id: Optional[str] = Field(None, description="Filter by user")
-    session_id: Optional[str] = Field(None, description="Filter by session")
-    vm_name: Optional[str] = Field(None, description="Filter by VM source")
-    result: Optional[AuditResult] = Field(None, description="Filter by result")
-    limit: int = Field(100, ge=1, le=1000, description="Maximum entries to return")
-    offset: int = Field(0, ge=0, description="Pagination offset")
-
-
-class AuditQueryResponse(BaseModel):
-    """Audit log query response"""
-
-    success: bool
-    total_returned: int
-    has_more: bool
-    entries: List[dict]
-    query: dict
-
-
-class AuditStatisticsResponse(BaseModel):
-    """Audit statistics response"""
-
-    success: bool
-    statistics: dict
-    vm_info: dict
-
-
-class CleanupRequest(BaseModel):
-    """Audit log cleanup request"""
-
-    days_to_keep: int = Field(90, ge=7, le=365, description="Days of logs to retain")
-    confirm: bool = Field(False, description="Confirm cleanup operation")
 
 
 def check_admin_permission(request: Request) -> bool:
@@ -411,7 +377,7 @@ async def get_failed_operations(
 @router.post("/cleanup", response_model=DataResponse)
 async def cleanup_old_logs(
     request: Request,
-    cleanup_request: CleanupRequest,
+    cleanup_request: AuditCleanupRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

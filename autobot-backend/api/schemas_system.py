@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
 from constants.threshold_constants import RetryConfig
+from services.audit_logger import AuditResult
 from type_defs.common import Metadata
 
 
@@ -2902,3 +2903,47 @@ class ClearHistoryRequest(BaseModel):
     """Request model for clearing thinking history."""
 
     session_id: Optional[str] = Field("default", description="Session to clear")
+
+
+# ---------------------------------------------------------------------------
+# audit.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AuditQueryRequest(BaseModel):
+    """Audit log query parameters."""
+
+    start_time: Optional[datetime] = Field(None, description="Start of time range")
+    end_time: Optional[datetime] = Field(None, description="End of time range")
+    operation: Optional[str] = Field(None, description="Filter by operation type")
+    user_id: Optional[str] = Field(None, description="Filter by user")
+    session_id: Optional[str] = Field(None, description="Filter by session")
+    vm_name: Optional[str] = Field(None, description="Filter by VM source")
+    result: Optional[AuditResult] = Field(None, description="Filter by result")
+    limit: int = Field(100, ge=1, le=1000, description="Maximum entries to return")
+    offset: int = Field(0, ge=0, description="Pagination offset")
+
+
+class AuditQueryResponse(BaseModel):
+    """Audit log query response."""
+
+    success: bool
+    total_returned: int
+    has_more: bool
+    entries: List[dict]
+    query: dict
+
+
+class AuditStatisticsResponse(BaseModel):
+    """Audit statistics response."""
+
+    success: bool
+    statistics: dict
+    vm_info: dict
+
+
+class AuditCleanupRequest(BaseModel):
+    """Audit log cleanup request."""
+
+    days_to_keep: int = Field(90, ge=7, le=365, description="Days of logs to retain")
+    confirm: bool = Field(False, description="Confirm cleanup operation")
