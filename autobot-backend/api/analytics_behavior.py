@@ -17,17 +17,14 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.user_behavior_analytics import UserEvent, get_behavior_analytics
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     BehaviorDailyStatsResponse,
     BehaviorEngagementResponse,
@@ -38,6 +35,8 @@ from api.schemas_analytics import (
     BehaviorRecentEventsResponse,
     BehaviorSummaryResponse,
     BehaviorTrackEventResponse,
+    TrackEventRequest,
+    UserJourneyResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,49 +46,6 @@ router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
-
-
-class TrackEventRequest(BaseModel):
-    """Request model for tracking user events"""
-
-    event_type: str = Field(
-        ..., description="Type of event (page_view, click, search, etc.)"
-    )
-    feature: str = Field(..., description="Feature area (chat, knowledge, tools, etc.)")
-    user_id: Optional[str] = Field(None, description="User ID if authenticated")
-    session_id: Optional[str] = Field(None, description="Session ID")
-    duration_ms: Optional[int] = Field(
-        None, ge=0, description="Duration in milliseconds"
-    )
-    metadata: Optional[dict] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
-
-
-class FeatureMetricsResponse(BaseModel):
-    """Response model for feature metrics"""
-
-    timestamp: str
-    features: dict
-    total_features: int
-
-
-class UserJourneyResponse(BaseModel):
-    """Response model for user journey"""
-
-    session_id: str
-    steps: list
-    total_steps: int
-    features_visited: list
-
-
-class EngagementMetricsResponse(BaseModel):
-    """Response model for engagement metrics"""
-
-    timestamp: str
-    metrics: dict
-    feature_popularity: list
-    most_popular_feature: Optional[str]
 
 
 # ============================================================================

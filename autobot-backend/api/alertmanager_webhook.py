@@ -9,13 +9,13 @@ Phase 3: Alert Migration (Issue #346)
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel
 
 from api.monitoring import ws_manager
 from api.schemas_system import (
+    AlertInstance,
+    AlertManagerWebhook,
     AlertManagerWebhookHealthResponse,
     AlertManagerWebhookReceiveResponse,
 )
@@ -24,51 +24,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
-
-
-class AlertAnnotations(BaseModel):
-    """Alert annotations from AlertManager"""
-
-    summary: str
-    description: str
-    recommendation: str | None = None
-
-
-class AlertLabels(BaseModel):
-    """Alert labels from AlertManager"""
-
-    alertname: str
-    severity: str
-    component: str
-    resource: str | None = None
-    service: str | None = None
-
-
-class AlertInstance(BaseModel):
-    """Single alert instance from AlertManager"""
-
-    status: str  # "firing" or "resolved"
-    labels: Dict[str, str]
-    annotations: Dict[str, str]
-    startsAt: str
-    endsAt: str | None = None
-    generatorURL: str
-    fingerprint: str
-
-
-class AlertManagerWebhook(BaseModel):
-    """AlertManager webhook payload structure"""
-
-    version: str
-    groupKey: str
-    truncatedAlerts: int = 0
-    status: str  # "firing" or "resolved"
-    receiver: str
-    groupLabels: Dict[str, str]
-    commonLabels: Dict[str, str]
-    commonAnnotations: Dict[str, str]
-    externalURL: str
-    alerts: List[AlertInstance]
 
 
 @with_error_handling(

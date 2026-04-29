@@ -13,7 +13,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -31,6 +30,12 @@ from api.schemas_code import (
     IntegrationDatabaseListResponse,
     IntegrationTablesListResponse,
 )
+from api.schemas_workflows import (
+    DBIntegrationQueryRequest,
+    DatabaseConnectionRequest,
+    DatabaseListRequest,
+    MongoQueryRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,55 +45,6 @@ router = APIRouter(
 )
 
 
-class DatabaseConnectionRequest(BaseModel):
-    """Request model for testing database connections."""
-
-    provider: str = Field(
-        ..., description="Database provider (postgresql/mysql/mongodb)"
-    )
-    host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(
-        None, description="Database port (default: provider-specific)"
-    )
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
-    database: str = Field("", description="Database name")
-
-
-class QueryRequest(BaseModel):
-    """Request model for executing database queries."""
-
-    query: str = Field(..., description="SQL query to execute (read-only)")
-    database: str = Field("", description="Target database name")
-    host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(None, description="Database port")
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
-
-
-class MongoQueryRequest(BaseModel):
-    """Request model for MongoDB collection queries."""
-
-    database: str = Field(..., description="Database name")
-    collection: str = Field(..., description="Collection name")
-    filter: Dict[str, Any] = Field(default_factory=dict, description="Query filter")
-    limit: int = Field(100, description="Maximum results to return")
-    host: str = Field("localhost", description="MongoDB host")
-    port: int = Field(27017, description="MongoDB port")
-    username: Optional[str] = Field(None, description="MongoDB username")
-    password: Optional[str] = Field(None, description="MongoDB password")
-
-
-class DatabaseListRequest(BaseModel):
-    """Request model for listing databases/tables."""
-
-    host: str = Field("localhost", description="Database host")
-    port: Optional[int] = Field(None, description="Database port")
-    username: Optional[str] = Field(None, description="Database username")
-    password: Optional[str] = Field(None, description="Database password")
-    database: Optional[str] = Field(
-        None, description="Database name (for table listing)"
-    )
 
 
 def _create_integration_config(
@@ -267,7 +223,7 @@ async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     error_code_prefix="INTEGRATION_DATABASE",
 )
 @router.post("/{provider}/query", response_model=IntegrationDatabaseQueryResponse)
-async def execute_database_query(provider: str, request: QueryRequest):
+async def execute_database_query(provider: str, request: DBIntegrationQueryRequest):
     """
     Execute a read-only query on a database.
 
