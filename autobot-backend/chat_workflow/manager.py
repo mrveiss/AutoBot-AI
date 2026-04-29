@@ -2913,43 +2913,6 @@ before summarizing.
             self._fire_stop_hook(session_id, message, combined_response, user_id, turn)
         )
 
-    async def _append_verbatim_turn(
-        self,
-        session_id: str,
-        turn: int,
-        user_message: str,
-        assistant_response: str,
-        user_id: Optional[str],
-    ) -> None:
-        """Append user + assistant turn to verbatim store (Issue #5070).
-
-        Called via asyncio.create_task — never blocks the response stream.
-        Errors are logged and swallowed so a verbatim-store failure cannot
-        affect the user-facing chat response.
-        """
-        try:
-            from memory.verbatim_store import get_verbatim_store
-
-            store = await get_verbatim_store()
-            await store.append(
-                session_id=session_id,
-                turn=turn,
-                role="user",
-                text=user_message,
-                user_id=user_id,
-            )
-            await store.append(
-                session_id=session_id,
-                turn=turn,
-                role="assistant",
-                text=assistant_response,
-                user_id=user_id,
-            )
-        except Exception as exc:
-            logger.warning(
-                "VerbatimStore append failed for session %s: %s", session_id, exc
-            )
-
     async def _fire_stop_hook(
         self,
         session_id: str,
