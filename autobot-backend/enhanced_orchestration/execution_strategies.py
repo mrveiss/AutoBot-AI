@@ -69,7 +69,7 @@ class ExecutionStrategyHandler:
                     break
                 continue
 
-            result = await self._execute_single_task(task, results)
+            result = await self._safe_execute(task, results)
             results[task.task_id] = result
 
             if self._is_required_failure(task, result):
@@ -97,7 +97,7 @@ class ExecutionStrategyHandler:
                 if len(running_tasks) < self.max_parallel_tasks:
                     logger.info("Starting parallel task %s", task.task_id)
                     task_future = asyncio.create_task(
-                        self._execute_single_task(task, results)
+                        self._safe_execute(task, results)
                     )
                     running_tasks.append((task, task_future))
 
@@ -140,16 +140,13 @@ class ExecutionStrategyHandler:
 
             stage_results = await asyncio.gather(
                 *[
-                    self._execute_single_task(task, {**results, **pipeline_data})
+                    self._safe_execute(task, {**results, **pipeline_data})
                     for task in stage_tasks
-                ],
-                return_exceptions=True,
+                ]
             )
 
             stage_failed = False
             for task, result in zip(stage_tasks, stage_results):
-                if isinstance(result, BaseException):
-                    result = task.to_failed_result(repr(result))
                 results[task.task_id] = result
                 if result.get("status") == "completed" and "output" in result:
                     pipeline_data.update(result["output"])
@@ -179,7 +176,7 @@ class ExecutionStrategyHandler:
         for task in plan.tasks:
             enhanced_task = self._enhance_task_for_collaboration(task, collab_channel)
             future = asyncio.create_task(
-                self._execute_single_task(enhanced_task, results)
+                self._safe_execute(enhanced_task, results)
             )
             task_futures.append((task, future))
 
@@ -214,6 +211,19 @@ class ExecutionStrategyHandler:
     def _is_required_failure(self, task: AgentTask, result: dict) -> bool:
         return result.get("status") == "failed" and not task.metadata.get("optional", False)
 
+    async def _safe_execute(self, task: AgentTask, ctx: Dict[str, Any]) -> dict:
+        """Run _execute_single_task and convert any unhandled Exception to a failed result (#6459).
+
+        CancelledError is re-raised so cooperative cancellation still works.
+        """
+        try:
+            return await self._execute_single_task(task, ctx)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("Task %s raised during execution", task.task_id)
+            return task.to_failed_result(repr(exc))
+
     async def _execute_parallel_batch(
         self, pending_tasks: list, results: Dict[str, Any]
     ) -> Tuple[int, int]:
@@ -223,14 +233,11 @@ class ExecutionStrategyHandler:
         ready_tasks = [t for t in batch_tasks if self._dependencies_met(t, results)]
 
         batch_results = await asyncio.gather(
-            *[self._execute_single_task(task, results) for task in ready_tasks],
-            return_exceptions=True,
+            *[self._safe_execute(task, results) for task in ready_tasks]
         )
 
         completed, failed = 0, 0
         for task, result in zip(ready_tasks, batch_results):
-            if isinstance(result, BaseException):
-                result = task.to_failed_result(repr(result))
             results[task.task_id] = result
             pending_tasks.remove(task)
             if result.get("status") == "completed":
@@ -248,7 +255,7 @@ class ExecutionStrategyHandler:
             if not self._dependencies_met(task, results):
                 continue
 
-            result = await self._execute_single_task(task, results)
+            result = await self._safe_execute(task, results)
             results[task.task_id] = result
             pending_tasks.remove(task)
 

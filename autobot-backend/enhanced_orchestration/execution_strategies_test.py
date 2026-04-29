@@ -243,6 +243,102 @@ async def test_pipeline_continues_when_failed_stage_task_is_optional():
 
 
 @pytest.mark.asyncio
+async def test_sequential_records_failed_result_when_task_raises():
+    """execute_sequential must convert task exceptions to failed results, not propagate (#6459)."""
+    t1 = _task("t1")
+    t1.metadata["optional"] = True
+    t2 = _task("t2")
+
+    async def execute(task, ctx):
+        if task.task_id == "t1":
+            raise ValueError("boom")
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_sequential(_plan([t1, t2]))
+    assert results["t1"]["status"] == "failed"
+    assert "boom" in results["t1"]["error"]
+    assert results["t2"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_parallel_records_failed_result_when_task_raises():
+    """execute_parallel must convert task exceptions to failed results, not propagate (#6459)."""
+    t_ok = _task("t_ok")
+    t_bad = _task("t_bad")
+
+    async def execute(task, ctx):
+        if task.task_id == "t_bad":
+            raise RuntimeError("kaboom")
+        return _completed(task.task_id)
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_parallel(_plan([t_ok, t_bad], ExecutionStrategy.PARALLEL))
+    assert results["t_ok"]["status"] == "completed"
+    assert results["t_bad"]["status"] == "failed"
+    assert "kaboom" in results["t_bad"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_collaborative_records_failed_result_when_task_raises():
+    """execute_collaborative must convert task exceptions to failed results AND still clean up coordinator (#6459)."""
+    cleanup_ran = False
+
+    async def _coordinator(channel):
+        nonlocal cleanup_ran
+        try:
+            await asyncio.sleep(9999)
+        finally:
+            cleanup_ran = True
+
+    async def execute(task, ctx):
+        raise ValueError("collab boom")
+
+    deps = WorkflowDependencies(
+        execute_single_task=execute,
+        topological_sort_tasks=lambda tasks, graph: tasks,
+        dependencies_met=lambda task, results: True,
+        group_pipeline_stages=lambda tasks, graph: [tasks],
+        enhance_task_for_collaboration=lambda task, channel: task,
+        coordinate_collaboration=_coordinator,
+    )
+    handler = ExecutionStrategyHandler(
+        max_parallel_tasks=5,
+        resource_semaphore=asyncio.Semaphore(5),
+        deps=deps,
+    )
+    results = await handler.execute_collaborative(_plan([_task("t1")], ExecutionStrategy.COLLABORATIVE))
+    assert results["t1"]["status"] == "failed"
+    assert "collab boom" in results["t1"]["error"]
+    assert cleanup_ran
+
+
+@pytest.mark.asyncio
+async def test_adaptive_records_failed_result_when_sequential_step_raises():
+    """execute_adaptive (via _execute_sequential_step) must convert task exceptions to failed results (#6459)."""
+    t_bad = _task("t_bad")
+
+    async def execute(task, ctx):
+        raise RuntimeError("adaptive boom")
+
+    handler = _make_handler(execute_fn=execute)
+    results = await handler.execute_adaptive(_plan([t_bad], ExecutionStrategy.ADAPTIVE))
+    assert results["t_bad"]["status"] == "failed"
+    assert "adaptive boom" in results["t_bad"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_safe_execute_propagates_cancelled_error():
+    """_safe_execute must NOT swallow CancelledError — cooperative cancellation must still work (#6459)."""
+    async def execute(task, ctx):
+        raise asyncio.CancelledError()
+
+    handler = _make_handler(execute_fn=execute)
+    with pytest.raises(asyncio.CancelledError):
+        await handler._safe_execute(_task("t1"), {})
+
+
+@pytest.mark.asyncio
 async def test_pipeline_records_failed_result_when_task_raises():
     """execute_pipeline must record a failed result when _execute_single_task raises (#6449)."""
     t1 = _task("t1")
