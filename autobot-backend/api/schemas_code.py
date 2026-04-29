@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from autobot_shared.ssot_config import PROJECT_ROOT
+from autobot_shared.ssot_config import PROJECT_ROOT, config as _ssot_config
 from constants.threshold_constants import QueryDefaults
 from type_defs.common import JSONObject
 
@@ -2238,3 +2238,57 @@ class AnalysisResponse(BaseModel):
     summary: AntiPatternSummary
     anti_patterns: List[dict]
     recommendations: List[str]
+
+
+# ---------------------------------------------------------------------------
+# playwright.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TestMessageRequest(BaseModel):
+    message: str = "what network scanning tools do we have available?"
+    frontend_url: str = Field(default_factory=lambda: _ssot_config.frontend_url)
+
+
+class FrontendTestRequest(BaseModel):
+    frontend_url: str = Field(default_factory=lambda: _ssot_config.frontend_url)
+
+
+class SnapshotWithRegionsRequest(BaseModel):
+    session_id: str
+    goal: str = ""
+
+
+# ---------------------------------------------------------------------------
+# mcp_registry.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MCPToolInfo(BaseModel):
+    """Information about an MCP tool."""
+
+    name: str
+    description: str
+    input_schema: JSONObject
+    bridge: str
+    endpoint: str
+
+
+class MCPBridgeInfo(BaseModel):
+    """Information about an MCP bridge."""
+
+    name: str
+    description: str
+    status: str
+    tool_count: int
+    endpoint: str
+    features: List[str]
+
+
+class MCPRegistryStats(BaseModel):
+    """Overall MCP registry statistics."""
+
+    total_bridges: int
+    total_tools: int
+    healthy_bridges: int
+    last_updated: str

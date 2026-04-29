@@ -10,12 +10,16 @@ streaming logs, sending signals, and listing processes per agent.
 
 import logging
 import os
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_system import (
+    SignalRequest,
+    SpawnRequest,
+    SpawnResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_utils import safe_http_detail
 from constants.threshold_constants import TimingConstants
@@ -43,33 +47,6 @@ def _get_service() -> ProcessAdapterService:
             status_code=503, detail="Process adapter service unavailable"
         )
     return _process_svc
-
-
-# -- Request / Response schemas --------------------------------------------
-
-
-class SpawnRequest(BaseModel):
-    """Body for POST /processes/spawn (#1406)."""
-
-    agent_id: str = Field(..., description="Agent that owns the process")
-    command: str = Field(..., description="Executable path or name")
-    args: List[str] = Field(default_factory=list, description="Command arguments")
-    timeout_seconds: int = Field(default=300, ge=1, le=86400)
-    task_id: Optional[str] = Field(default=None, description="Optional parent task ID")
-
-
-class SignalRequest(BaseModel):
-    """Body for POST /processes/{process_id}/signal (#1406)."""
-
-    signal: str = Field(..., description="Signal name: SIGTERM or SIGKILL")
-
-
-class SpawnResponse(BaseModel):
-    """Response for a successful spawn (#1406)."""
-
-    process_id: str
-    status: str
-    message: str
 
 
 # -- Endpoints -------------------------------------------------------------

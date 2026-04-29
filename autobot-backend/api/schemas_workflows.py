@@ -1879,3 +1879,34 @@ class WebhookMessageRequest(BaseModel):
     webhook_url: str = Field(..., description="Teams webhook URL")
     text: str = Field(..., description="Message text")
     title: Optional[str] = Field(None, description="Message title")
+
+
+# ---------------------------------------------------------------------------
+# sandbox.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SandboxExecuteRequest(BaseModel):
+    command: str
+    security_level: str = "high"
+    timeout: int = 300
+    execution_mode: str = "command"
+    enable_network: bool = False
+    environment: Optional[dict] = None
+
+
+class SandboxScriptRequest(BaseModel):
+    script_content: str
+    language: str = "bash"
+    security_level: str = "high"
+    timeout: int = 300
+    enable_network: bool = False
+    environment: Optional[dict] = None
+
+
+class SandboxBatchRequest(BaseModel):
+    commands: List[str]
+    security_level: str = "high"
+    timeout: int = 600
+    stop_on_error: bool = True
+    enable_network: bool = False

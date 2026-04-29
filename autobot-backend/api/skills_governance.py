@@ -4,12 +4,15 @@
 """Skills Governance API — gap detection, draft management, approvals, and governance config."""
 
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_agent import (
+    ApprovalDecision,
+    GapRequest,
+    GovernanceModeUpdate,
+)
 from api.schemas_code import (
     SkillsApprovalDecisionResponse,
     SkillsApprovalItem,
@@ -33,11 +36,9 @@ from skills.models import (
     SkillApproval,
     SkillPackage,
     SkillState,
-    TrustLevel,
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
-from autobot_shared.time_utils import now_utc
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -47,27 +48,6 @@ _GOVERNANCE_SINGLETON_ID = 1
 _STATUS_PENDING = "pending"
 _STATUS_APPROVED = "approved"
 _STATUS_REJECTED = "rejected"
-
-
-class GapRequest(BaseModel):
-    """Request body for generating a skill to fill a capability gap."""
-
-    task: str = Field(...)
-    agent_output: str = Field("")
-
-
-class ApprovalDecision(BaseModel):
-    """Request body for approving or rejecting a skill approval record."""
-
-    approved: bool
-    trust_level: TrustLevel = TrustLevel.MONITORED
-    notes: str = ""
-
-
-class GovernanceModeUpdate(BaseModel):
-    """Request body for updating the active governance mode."""
-
-    mode: GovernanceMode
 
 
 async def _get_skill_draft(session: AsyncSession, skill_id: str) -> SkillPackage:

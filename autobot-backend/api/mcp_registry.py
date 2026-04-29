@@ -38,7 +38,6 @@ from typing import List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -203,36 +202,6 @@ mcp_cache = MCPToolCache(ttl_seconds=CACHE_TTL_SECONDS)
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class MCPToolInfo(BaseModel):
-    """Information about an MCP tool"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-    bridge: str  # Which MCP bridge provides this tool
-    endpoint: str  # Full endpoint URL
-
-
-class MCPBridgeInfo(BaseModel):
-    """Information about an MCP bridge"""
-
-    name: str
-    description: str
-    status: str  # "healthy", "degraded", "unavailable"
-    tool_count: int
-    endpoint: str
-    features: List[str]
-
-
-class MCPRegistryStats(BaseModel):
-    """Overall MCP registry statistics"""
-
-    total_bridges: int
-    total_tools: int
-    healthy_bridges: int
-    last_updated: str
 
 
 # ============================================================================

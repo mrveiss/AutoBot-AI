@@ -13,7 +13,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
 from services.playwright_service import (
@@ -27,6 +26,7 @@ from api.schemas_common import DataResponse
 import base64
 
 from api.schemas_code import (
+    FrontendTestRequest,
     PlaywrightBrowserActionResponse,
     PlaywrightCapabilitiesResponse,
     PlaywrightHealthResponse,
@@ -38,26 +38,14 @@ from api.schemas_code import (
     PlaywrightSearchRequest,
     PlaywrightStatusResponse,
     PlaywrightWorkerStatusResponse,
+    SnapshotWithRegionsRequest,
     SnapshotWithRegionsResponse,
+    TestMessageRequest,
 )
 from api.schemas_system import PlaywrightEmbeddedResultResponse
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
-
-
-class TestMessageRequest(BaseModel):
-    message: str = "what network scanning tools do we have available?"
-    frontend_url: str = _ssot_config.frontend_url
-
-
-class FrontendTestRequest(BaseModel):
-    frontend_url: str = _ssot_config.frontend_url
-
-
-class SnapshotWithRegionsRequest(BaseModel):
-    session_id: str
-    goal: str = ""  # optional hint for filtering
 
 
 # Browser VM connection
