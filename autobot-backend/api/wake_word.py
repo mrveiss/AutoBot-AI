@@ -7,69 +7,27 @@ Issue #54 - Advanced Wake Word Detection Optimization
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AddWakeWordRequest,
+    WakeWordCheckRequest,
+    WakeWordCheckResponse,
+    WakeWordConfigRequest,
     WakeWordGetConfigResponse,
     WakeWordGetWordsResponse,
     WakeWordListeningStatusResponse,
+    WakeWordReportFeedbackRequest,
     WakeWordStatsResponse,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
-
-
-class WakeWordCheckRequest(BaseModel):
-    """Request to check text for wake word"""
-
-    text: str = Field(..., description="Text to check for wake word")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Recognition confidence"
-    )
-
-
-class WakeWordCheckResponse(BaseModel):
-    """Response for wake word check"""
-
-    detected: bool
-    wake_word: str = ""
-    confidence: float = 0.0
-    timestamp: float = 0.0
-    metadata: Metadata = {}
-
-
-class WakeWordConfigRequest(BaseModel):
-    """Request to update wake word configuration"""
-
-    enabled: bool = None
-    wake_words: List[str] = None
-    confidence_threshold: float = None
-    cooldown_seconds: float = None
-    adaptive_threshold: bool = None
-    max_false_positive_rate: float = None
-    max_cpu_percent: float = None  # Issue #927: CPU cap for always-on detection
-
-
-class AddWakeWordRequest(BaseModel):
-    """Request to add a new wake word"""
-
-    wake_word: str = Field(..., min_length=2, max_length=50)
-
-
-class ReportFeedbackRequest(BaseModel):
-    """Request to report detection feedback"""
-
-    is_correct: bool = Field(
-        ..., description="True if detection was correct, False if false positive"
-    )
 
 
 @with_error_handling(
@@ -297,7 +255,7 @@ async def reset_wake_word_stats() -> Metadata:
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/feedback", response_model=DataResponse)
-async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
+async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> Metadata:
     """
     Report feedback on the last wake word detection.
 

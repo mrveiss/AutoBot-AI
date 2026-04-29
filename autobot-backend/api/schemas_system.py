@@ -2609,3 +2609,46 @@ class VisionHealthResponse(BaseModel):
     capabilities: List[str]
     element_types_supported: List[str]
     interaction_types_supported: List[str]
+
+
+class WakeWordCheckRequest(BaseModel):
+    """Request to check text for wake word"""
+
+    text: str = Field(..., description="Text to check for wake word")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
+
+
+class WakeWordCheckResponse(BaseModel):
+    """Response for wake word check"""
+
+    detected: bool
+    wake_word: str = ""
+    confidence: float = 0.0
+    timestamp: float = 0.0
+    metadata: Metadata = {}
+
+
+class WakeWordConfigRequest(BaseModel):
+    """Request to update wake word configuration"""
+
+    enabled: bool = None
+    wake_words: List[str] = None
+    confidence_threshold: float = None
+    cooldown_seconds: float = None
+    adaptive_threshold: bool = None
+    max_false_positive_rate: float = None
+    max_cpu_percent: float = None
+
+
+class AddWakeWordRequest(BaseModel):
+    """Request to add a new wake word"""
+
+    wake_word: str = Field(..., min_length=2, max_length=50)
+
+
+class WakeWordReportFeedbackRequest(BaseModel):
+    """Request to report wake word detection feedback"""
+
+    is_correct: bool = Field(
+        ..., description="True if detection was correct, False if false positive"
+    )
