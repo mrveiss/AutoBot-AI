@@ -12,27 +12,15 @@
  * Emits @interact({ action, params }) for the parent to proxy to the backend.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, toRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/logger'
+import {
+  useRegionMarking,
+  type PageRegion,
+  type SelectedRegion,
+} from '@/composables/browser/useRegionMarking'
 
 const { t } = useI18n()
-const logger = createLogger('InteractiveScreenshot')
-
-interface RegionRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-interface PageRegion {
-  selector: string
-  xpath: string
-  rect: RegionRect
-  textPreview: string
-  role: string
-}
 
 interface Props {
   screenshot: string | null
@@ -55,18 +43,22 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   interact: [payload: { action: string; params: Record<string, unknown> }]
-  regionsSelected: [regions: Array<{ selector: string; xpath: string; label: string }>]
+  regionsSelected: [regions: SelectedRegion[]]
 }>()
 
 const showTypeOverlay = ref(false)
 const typeText = ref('')
 const imgRef = ref<HTMLImageElement | null>(null)
 
-// Region-marking state (#5136)
-const hoveredRegion = ref<number | null>(null)
-const selectedRegions = ref<Array<{ selector: string; xpath: string; label: string }>>([])
-const popupRegionIndex = ref<number | null>(null)
-const popupLabel = ref('')
+// Region-marking state (#5136) — extracted to composable (#6447)
+const { hoveredRegion, popupRegionIndex, popupLabel, regionStyle, popupStyle, openPopup, saveRegion } =
+  useRegionMarking({
+    regions: toRef(props, 'regions') as Ref<PageRegion[]>,
+    imgRef,
+    viewportWidth: toRef(props, 'viewportWidth') as Ref<number>,
+    viewportHeight: toRef(props, 'viewportHeight') as Ref<number>,
+    onRegionsSelected: (regions) => emit('regionsSelected', regions),
+  })
 
 const screenshotSrc = computed(() =>
   props.screenshot ? `data:image/png;base64,${props.screenshot}` : null
@@ -116,56 +108,6 @@ function submitType() {
   emit('interact', { action: 'type', params: { text: typeText.value } })
   typeText.value = ''
   showTypeOverlay.value = false
-}
-
-// Region-marking helpers (#5136)
-function regionStyle(rect: RegionRect): Record<string, string> {
-  const img = imgRef.value
-  if (!img) return {}
-  const imgRect = img.getBoundingClientRect()
-  const scaleX = imgRect.width / props.viewportWidth
-  const scaleY = imgRect.height / props.viewportHeight
-  return {
-    position: 'absolute',
-    left: `${rect.x * scaleX}px`,
-    top: `${rect.y * scaleY}px`,
-    width: `${rect.w * scaleX}px`,
-    height: `${rect.h * scaleY}px`,
-    pointerEvents: 'all',
-    cursor: 'pointer',
-  }
-}
-
-function popupStyle(rect: RegionRect): Record<string, string> {
-  const img = imgRef.value
-  if (!img) return {}
-  const imgRect = img.getBoundingClientRect()
-  const scaleX = imgRect.width / props.viewportWidth
-  const scaleY = imgRect.height / props.viewportHeight
-  return {
-    position: 'absolute',
-    left: `${rect.x * scaleX}px`,
-    top: `${(rect.y + rect.h) * scaleY + 4}px`,
-    zIndex: '50',
-  }
-}
-
-function openPopup(index: number): void {
-  popupRegionIndex.value = index
-  popupLabel.value = ''
-}
-
-function saveRegion(index: number | null): void {
-  if (index === null || !props.regions) return
-  const region = props.regions[index]
-  selectedRegions.value.push({
-    selector: region.selector,
-    xpath: region.xpath,
-    label: popupLabel.value || region.textPreview.slice(0, 20),
-  })
-  logger.debug('Region saved', { selector: region.selector, label: popupLabel.value })
-  emit('regionsSelected', [...selectedRegions.value])
-  popupRegionIndex.value = null
 }
 </script>
 
