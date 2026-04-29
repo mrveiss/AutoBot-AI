@@ -3097,3 +3097,130 @@ class CleanupResult(BaseModel):
     bytes_freed_human: str
     dry_run: bool
     errors: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# project.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PhaseStatusItem(BaseModel):
+    name: str
+    completion: float
+    is_active: bool
+    is_completed: bool
+    capabilities: int
+    implemented_capabilities: int
+
+
+class ProjectStatusResponse(BaseModel):
+    current_phase: str
+    total_phases: int
+    completed_phases: int
+    active_phases: int
+    overall_completion: float
+    next_suggested_phase: Optional[str]
+    phases: Dict[str, PhaseStatusItem]
+
+
+class ProjectReportResponse(BaseModel):
+    status: str
+    overall_completion: float
+    current_phase: str
+    total_phases: int
+    completed_phases: int
+    generated_at: str
+
+
+# ---------------------------------------------------------------------------
+# phases.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PhaseEntry(BaseModel):
+    id: str
+    name: str
+    completion: float
+    is_active: bool
+    is_completed: bool
+
+
+class PhasesStatusResponse(BaseModel):
+    status: str
+    service: str
+    phases: List[PhaseEntry]
+    timestamp: str
+
+
+class ValidationRunResponse(BaseModel):
+    status: str
+    message: str
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# redis_service.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ServiceOperationResponse(BaseModel):
+    """Service operation response."""
+
+    success: bool
+    operation: str = Field(..., description="Operation type: start, stop, restart")
+    message: str
+    duration_seconds: float
+    timestamp: datetime
+    new_status: str = Field(..., description="New service status: running, stopped, failed, unknown")
+    error: Optional[str] = None
+
+
+class ServiceStatusResponse(BaseModel):
+    """Service status response."""
+
+    status: str = Field(..., description="Service status: running, stopped, failed, unknown")
+    pid: Optional[int] = None
+    uptime_seconds: Optional[float] = None
+    memory_mb: Optional[float] = None
+    last_check: datetime
+
+
+class HealthStatusResponse(BaseModel):
+    """Health status response."""
+
+    overall_status: str = Field(..., description="Overall health: healthy, degraded, critical")
+    service_running: bool
+    connectivity: bool
+    response_time_ms: float
+    last_successful_command: Optional[datetime] = None
+    error_count_last_hour: int = 0
+    recommendations: list = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# process_management.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SpawnRequest(BaseModel):
+    """Body for POST /processes/spawn."""
+
+    agent_id: str = Field(..., description="Agent that owns the process")
+    command: str = Field(..., description="Executable path or name")
+    args: List[str] = Field(default_factory=list, description="Command arguments")
+    timeout_seconds: int = Field(default=300, ge=1, le=86400)
+    task_id: Optional[str] = Field(default=None, description="Optional parent task ID")
+
+
+class SignalRequest(BaseModel):
+    """Body for POST /processes/{process_id}/signal."""
+
+    signal: str = Field(..., description="Signal name: SIGTERM or SIGKILL")
+
+
+class SpawnResponse(BaseModel):
+    """Response for a successful spawn."""
+
+    process_id: str
+    status: str
+    message: str

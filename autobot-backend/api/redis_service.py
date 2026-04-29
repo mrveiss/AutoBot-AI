@@ -13,12 +13,15 @@ Features:
 """
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
+from api.schemas_system import (
+    HealthStatusResponse,
+    ServiceOperationResponse,
+    ServiceStatusResponse,
+)
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
@@ -115,47 +118,6 @@ def check_operator_permission(request: Request) -> str:
         )
 
     return user_data.get("username", "unknown")
-
-
-# Pydantic models
-class ServiceOperationResponse(BaseModel):
-    """Service operation response"""
-
-    success: bool
-    operation: str = Field(..., description="Operation type: start, stop, restart")
-    message: str
-    duration_seconds: float
-    timestamp: datetime
-    new_status: str = Field(
-        ..., description="New service status: running, stopped, failed, unknown"
-    )
-    error: Optional[str] = None
-
-
-class ServiceStatusResponse(BaseModel):
-    """Service status response"""
-
-    status: str = Field(
-        ..., description="Service status: running, stopped, failed, unknown"
-    )
-    pid: Optional[int] = None
-    uptime_seconds: Optional[float] = None
-    memory_mb: Optional[float] = None
-    last_check: datetime
-
-
-class HealthStatusResponse(BaseModel):
-    """Health status response"""
-
-    overall_status: str = Field(
-        ..., description="Overall health: healthy, degraded, critical"
-    )
-    service_running: bool
-    connectivity: bool
-    response_time_ms: float
-    last_successful_command: Optional[datetime] = None
-    error_count_last_hour: int = 0
-    recommendations: list = Field(default_factory=list)
 
 
 # API Endpoints

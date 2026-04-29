@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
+from skills.models import GovernanceMode, TrustLevel
 from type_defs.common import Metadata
 from user_management.schemas import UserResponse as _UserResponse
 
@@ -1680,3 +1681,29 @@ class SkillInstallRequest(BaseModel):
 
     catalog_url: str = Field(..., description="HTTP URL of the catalog endpoint")
     repo_id: Optional[str] = Field(None, description="SkillRepo.id to link the package to")
+
+
+# ---------------------------------------------------------------------------
+# skills_governance.py schemas
+# ---------------------------------------------------------------------------
+
+
+class GapRequest(BaseModel):
+    """Request body for generating a skill to fill a capability gap."""
+
+    task: str = Field(...)
+    agent_output: str = Field("")
+
+
+class ApprovalDecision(BaseModel):
+    """Request body for approving or rejecting a skill approval record."""
+
+    approved: bool
+    trust_level: TrustLevel = TrustLevel.MONITORED
+    notes: str = ""
+
+
+class GovernanceModeUpdate(BaseModel):
+    """Request body for updating the active governance mode."""
+
+    mode: GovernanceMode

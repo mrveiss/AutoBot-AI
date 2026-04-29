@@ -14,14 +14,18 @@ URLs. This module exposes the correct /api/project/* paths.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.time_utils import utc_timestamp
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from project_state_manager import get_project_state_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_system import (
+    PhaseStatusItem,
+    ProjectReportResponse,
+    ProjectStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,34 +35,6 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
-
-
-class PhaseStatusItem(BaseModel):
-    name: str
-    completion: float
-    is_active: bool
-    is_completed: bool
-    capabilities: int
-    implemented_capabilities: int
-
-
-class ProjectStatusResponse(BaseModel):
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    active_phases: int
-    overall_completion: float
-    next_suggested_phase: Optional[str]
-    phases: Dict[str, PhaseStatusItem]
-
-
-class ProjectReportResponse(BaseModel):
-    status: str
-    overall_completion: float
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    generated_at: str
 
 
 # ---------------------------------------------------------------------------
