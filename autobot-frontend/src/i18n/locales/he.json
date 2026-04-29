@@ -81,7 +81,8 @@
     "page": "Page",
     "hasMore": "Load more",
     "previous": "Previous",
-    "optional": "אופציונלי"
+    "optional": "אופציונלי",
+    "remove": "הסר"
   },
   "nav": {
     "chat": "צ'אט",
@@ -5891,7 +5892,22 @@
       "source": "Source",
       "loadError": "Failed to load marketplace catalog.",
       "installError": "Failed to install plugin.",
-      "uninstallError": "Failed to uninstall plugin."
+      "uninstallError": "Failed to uninstall plugin.",
+      "sources": {
+        "title": "ניהול מקורות שוק",
+        "hint": "הוסף כתובות שוק מותאמות אישית שמחזירות קטלוג JSON של תוספים.",
+        "addTitle": "הוסף שוק מותאם אישית",
+        "add": "הוסף מקור",
+        "adding": "מוסיף…",
+        "addFailed": "ההוספה נכשלה — ודא שהכתובת מחזירה קטלוג תקין.",
+        "removeFailed": "הסרת השוק נכשלה.",
+        "nameLabel": "שם תצוגה",
+        "namePlaceholder": "Acme Plugins",
+        "urlLabel": "כתובת הקטלוג",
+        "descLabel": "תיאור",
+        "builtin": "מובנה"
+      },
+      "manageSources": "נהל מקורות"
     }
   },
   "featureFlags": {

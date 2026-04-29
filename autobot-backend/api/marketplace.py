@@ -158,6 +158,27 @@ class MarketplaceCatalogResponse(BaseModel):
     sort_by: str
 
 
+def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[str, Any]:
+    """Issue #6481: shape an external CatalogPlugin dict to look like a
+    MarketplaceEntry. Missing fields get safe defaults so the existing
+    response model and frontend continue to work."""
+    return {
+        "name": plugin.get("name", ""),
+        "version": plugin.get("version", ""),
+        "display_name": plugin.get("name", "").replace("-", " ").title(),
+        "description": plugin.get("description", ""),
+        "author": plugin.get("author", source_name),
+        "category": plugin.get("category", "other"),
+        "tags": plugin.get("tags", []),
+        "entry_point": "",
+        "dependencies": [],
+        "hooks": [],
+        "downloads": 0,
+        "rating": 0.0,
+        "source_url": plugin.get("git_url", ""),
+    }
+
+
 async def _get_catalog() -> list[dict[str, Any]]:
     """Return catalog from Redis cache, seeding from built-in list if missing."""
     try:
@@ -188,6 +209,10 @@ async def list_catalog(
     category: str = Query(default="all", description="Filter by category"),
     search: str | None = Query(default=None, description="Full-text search across name, description, tags"),
     sort_by: str = Query(default="downloads", description="Sort field: downloads, rating, name, newest"),
+    source_id: str = Query(
+        default="builtin",
+        description="Marketplace source id; 'builtin' or a user-added source UUID (#6481)",
+    ),
 ) -> MarketplaceCatalogResponse:
     """
     List community marketplace catalog.
@@ -195,6 +220,7 @@ async def list_catalog(
     Returns all available plugins and agents with optional filtering.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6481: ?source_id= selects which marketplace catalog to query.
     """
     if category not in _VALID_CATEGORIES:
         raise HTTPException(
@@ -207,7 +233,25 @@ async def list_catalog(
             detail=f"Invalid sort_by '{sort_by}'. Valid: {sorted(_VALID_SORT)}",
         )
 
-    catalog = await _get_catalog()
+    if source_id == "builtin":
+        catalog = await _get_catalog()
+    else:
+        from api.marketplace_sources import (  # local import: avoid cycle
+            fetch_remote_catalog,
+            get_source_by_id,
+        )
+
+        source = await get_source_by_id(source_id)
+        if source is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Marketplace source '{source_id}' not found",
+            )
+        if not source.url:
+            catalog = await _get_catalog()
+        else:
+            remote_plugins = await fetch_remote_catalog(source.url)
+            catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
 
     # Filter by category
     if category != "all":
