@@ -10,15 +10,13 @@ Provides REST API access to GPU-accelerated multi-modal AI capabilities
 import logging
 import time
 import uuid
-from typing import Dict, List, Optional, Union
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel, Field
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import QueryDefaults
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -28,63 +26,20 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from type_defs.common import Metadata
 from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    CrossModalSearchRequest,
+    CrossModalSearchResponse,
+    EmbeddingRequest,
+    MultiModalResponse,
+    TextProcessingRequest,
+)
 from api.schemas_system import MultimodalHealthResponse
 
 logger = logging.getLogger(__name__)
 
 # Initialize router
 router = APIRouter(tags=["multimodal"])
-
-
-# Pydantic models for request/response
-class CrossModalSearchRequest(BaseModel):
-    query: Union[str, bytes]
-    query_modality: str = Field(..., description="Type of query: text, image, audio")
-    target_modalities: Optional[List[str]] = Field(
-        default=None, description="Target modalities to search"
-    )
-    limit: int = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        ge=1,
-        le=100,
-        description="Maximum results per modality",
-    )
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-
-
-class TextProcessingRequest(BaseModel):
-    text: str = Field(..., description="Text content to process")
-    intent: str = Field(default="analysis", description="Processing intent")
-    metadata: Optional[Metadata] = Field(default=None)
-
-
-class EmbeddingRequest(BaseModel):
-    content: Union[str, bytes]
-    modality: str = Field(..., description="Content modality: text, image, audio")
-    preferred_device: Optional[str] = Field(
-        default=None, description="Preferred processing device"
-    )
-
-
-class MultiModalResponse(BaseModel):
-    success: bool
-    result_id: str
-    modality: str
-    processing_time: float
-    confidence: float
-    result_data: Metadata
-    device_used: Optional[str] = None
-    error_message: Optional[str] = None
-
-
-class CrossModalSearchResponse(BaseModel):
-    query: str
-    query_modality: str
-    results: Dict[str, List[Metadata]]
-    total_found: int
-    processing_time: float
 
 
 # Helper functions

@@ -33,7 +33,7 @@ Related modules:
 import asyncio
 import json
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -44,12 +44,17 @@ from fastapi import (
     Query,
     Request,
 )
-from pydantic import BaseModel, Field, field_validator
-
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.audit.audit_log import AuditAction, audit_record
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from constants.threshold_constants import QueryDefaults
+from api.schemas_knowledge import (
+    AddFactsRequest,
+    AddUrlRequest,
+    AudioIngestRequest,
+    DocsBrowseRequest,
+    OrgKnowledgeConfigPayload,
+)
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -100,60 +105,6 @@ from utils.path_validation import contains_path_traversal
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
 # =============================================================================
-
-
-class AddFactsRequest(BaseModel):
-    """Request model for adding text content to knowledge base."""
-
-    content: str = Field(
-        ..., min_length=1, max_length=100000, description="Text content"
-    )
-    title: str = Field(default="", max_length=500, description="Document title")
-    source: str = Field(
-        default="Manual Entry", max_length=500, description="Content source"
-    )
-    category: str = Field(
-        default=CategoryDefaults.GENERAL, max_length=100, description="Category"
-    )
-    tags: List[str] = Field(default_factory=list, description="Tags for the content")
-    # Issue #3242: project-scoped board namespace
-    board_id: Optional[str] = Field(
-        default=None,
-        max_length=100,
-        description="Board ID to scope this fact. None means global board.",
-    )
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, v):
-        if len(v) > 20:
-            raise ValueError("Maximum 20 tags allowed")
-        return [tag[:50] for tag in v]  # Limit tag length
-
-
-class AddUrlRequest(BaseModel):
-    """Request model for adding URL content to knowledge base."""
-
-    url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
-    title: str = Field(default="", max_length=500, description="Document title")
-    method: str = Field(
-        default="fetch", pattern="^(fetch|raw)$", description="Fetch method"
-    )
-    category: str = Field(default="web", max_length=100, description="Category")
-    tags: List[str] = Field(default_factory=list, description="Tags")
-    # Issue #3242: project-scoped board namespace
-    board_id: Optional[str] = Field(
-        default=None,
-        max_length=100,
-        description="Board ID to scope this URL content. None means global board.",
-    )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, v):
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return v
 
 
 # File upload constants (Issue #549 Code Review)
@@ -1425,42 +1376,6 @@ async def upload_file_to_knowledge(
 _AUDIO_ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".mkv", ".webm"}
 # Max audio upload size: 200 MB
 _AUDIO_MAX_BYTES = 200 * 1024 * 1024
-
-
-class AudioIngestRequest(BaseModel):
-    """Request body for POST /api/knowledge_base/audio (URL-based ingestion)."""
-
-    url: str = Field(
-        ...,
-        min_length=1,
-        max_length=2000,
-        description="YouTube URL or direct audio/video URL",
-    )
-    title: str = Field(default="", max_length=500)
-    category: str = Field(default="audio", max_length=100)
-    tags: List[str] = Field(default_factory=list)
-    whisper_model: str = Field(
-        default="base",
-        pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$",
-        description="Whisper model size",
-    )
-    language: Optional[str] = Field(
-        default=None, max_length=10, description="ISO-639-1 language hint"
-    )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, v: str) -> str:
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return v
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, v: list) -> list:
-        if len(v) > 20:
-            raise ValueError("Maximum 20 tags allowed")
-        return [str(t)[:50] for t in v]
 
 
 async def _ingest_audio_source(
@@ -2889,41 +2804,6 @@ async def get_import_statistics(
 # =============================================================================
 
 
-class DocsBrowseRequest(BaseModel):
-    """Request model for browsing indexed documentation."""
-
-    category: Optional[str] = Field(
-        default=None,
-        max_length=100,
-        description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')",
-    )
-    doc_type: Optional[str] = Field(
-        default=None,
-        max_length=50,
-        description="Filter by document type (e.g., 'markdown', 'code')",
-    )
-    file_path_pattern: Optional[str] = Field(
-        default=None,
-        max_length=500,
-        description="Filter by file path pattern (e.g., 'docs/api/')",
-    )
-    search_query: Optional[str] = Field(
-        default=None,
-        max_length=500,
-        description="Optional text search within documents",
-    )
-    page: int = Field(default=1, ge=1, le=1000, description="Page number")
-    page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
-    sort_by: str = Field(
-        default="indexed_at",
-        pattern="^(indexed_at|title|category|file_path)$",
-        description="Sort field",
-    )
-    sort_order: str = Field(
-        default="desc", pattern="^(asc|desc)$", description="Sort order"
-    )
-
-
 async def _get_indexed_docs_from_redis(kb) -> list:
     """
     Get all indexed documentation metadata from Redis doc_hash keys.
@@ -3326,15 +3206,6 @@ async def control_documentation_watcher(
 # Admin-only endpoints for reading and writing an organization's persisted
 # LLM provider, LLM model, and embedding model. Config is resolved via the
 # fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
-
-
-class OrgKnowledgeConfigPayload(BaseModel):
-    """Per-org LLM + embedding model config payload (Issue #4451)."""
-
-    llm_provider: Optional[str] = Field(default=None, max_length=64)
-    llm_model: Optional[str] = Field(default=None, max_length=256)
-    embedding_model: Optional[str] = Field(default=None, max_length=256)
-    embedding_dimension: Optional[int] = Field(default=None, ge=1, le=65536)
 
 
 def _resolve_target_org_id(

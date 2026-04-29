@@ -15,14 +15,14 @@ from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
-from type_defs.common import Metadata
 from api.schemas_code import PrometheusMCPExecuteResponse
+from api.schemas_system import PrometheusMCPTool
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -33,42 +33,6 @@ router = APIRouter(
 # Prometheus configuration - use SSOT config
 _ssot = get_config()
 PROMETHEUS_URL = f"http://{_ssot.vm.redis}:{_ssot.port.prometheus}"
-
-
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class QueryMetricRequest(BaseModel):
-    """Request model for Prometheus metric query"""
-
-    query: str = Field(..., description="PromQL query expression")
-
-
-class QueryRangeRequest(BaseModel):
-    """Request model for Prometheus range query"""
-
-    query: str = Field(..., description="PromQL query expression")
-    duration: str = Field("1h", description="Time duration (e.g., '1h', '6h', '1d')")
-    step: str = Field("15s", description="Query resolution step (e.g., '15s', '1m')")
-
-
-class GetVMMetricsRequest(BaseModel):
-    """Request model for VM metrics"""
-
-    vm_ip: str = Field(..., description="VM IP address")
-
-
-class ListMetricsRequest(BaseModel):
-    """Request model for listing metrics"""
-
-    filter: str = Field(
-        "", description="Optional filter pattern (e.g., 'autobot_', 'node_')"
-    )
 
 
 # Issue #281: MCP tool definitions extracted from get_prometheus_mcp_tools
@@ -161,8 +125,8 @@ PROMETHEUS_MCP_TOOL_DEFINITIONS = (
     operation="get_prometheus_mcp_tools",
     error_code_prefix="PROMETHEUS_MCP",
 )
-@router.get("/mcp/tools", response_model=List[MCPTool])
-async def get_prometheus_mcp_tools() -> List[MCPTool]:
+@router.get("/mcp/tools", response_model=List[PrometheusMCPTool])
+async def get_prometheus_mcp_tools() -> List[PrometheusMCPTool]:
     """
     Get available MCP tools for Prometheus metrics.
 
@@ -179,7 +143,7 @@ async def get_prometheus_mcp_tools() -> List[MCPTool]:
     """
     # Issue #281: Build MCPTool instances from module-level definitions
     return [
-        MCPTool(name=name, description=desc, input_schema=schema)
+        PrometheusMCPTool(name=name, description=desc, input_schema=schema)
         for name, desc, schema in PROMETHEUS_MCP_TOOL_DEFINITIONS
     ]
 

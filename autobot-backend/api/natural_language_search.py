@@ -22,16 +22,16 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-
-from constants.threshold_constants import QueryDefaults
-from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     NLCodeExplanationResponse,
     NLDomainsResponse,
     NLIntentsResponse,
     NLQuerySuggestionsResponse,
     NLSearchHealthResponse,
+    NLSearchRequest,
+    NLSearchResponse,
+    ParsedQueryResponse,
+    SearchResultWithExplanation,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -987,64 +987,6 @@ CONCEPTS: <comma-separated list>
 # =============================================================================
 # API Models
 # =============================================================================
-
-
-class NLSearchRequest(BaseModel):
-    """Request model for natural language search."""
-
-    query: str = Field(..., description="Natural language query")
-    max_results: int = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
-        description="Maximum results to return",
-    )
-    include_explanations: bool = Field(
-        default=True, description="Include LLM-generated explanations"
-    )
-    language_filter: Optional[str] = Field(
-        default=None, description="Filter by programming language"
-    )
-
-
-class ParsedQueryResponse(BaseModel):
-    """Response model for parsed query."""
-
-    original_query: str
-    normalized_query: str
-    intent: str
-    domain: str
-    entities: List[str]
-    keywords: List[str]
-    search_terms: List[str]
-    confidence: float
-    question_type: str
-
-
-class SearchResultWithExplanation(BaseModel):
-    """Search result with optional explanation."""
-
-    file_path: str
-    line_number: int
-    content: str
-    confidence: float
-    summary: Optional[str] = None
-    explanation: Optional[str] = None
-    key_concepts: Optional[List[str]] = None
-
-
-class NLSearchResponse(BaseModel):
-    """Response model for natural language search."""
-
-    query: ParsedQueryResponse
-    results: List[SearchResultWithExplanation]
-    suggestions: List[Dict[str, Any]]
-    total_results: int
-    search_time_ms: float
-
-
-class QuerySuggestionResponse(BaseModel):
-    """Response model for query suggestions."""
-
-    suggestions: List[Dict[str, Any]]
 
 
 # =============================================================================
