@@ -7006,6 +7006,7 @@
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
+    "agentActivity": "Activity",
     "experiments": "Experiments",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
