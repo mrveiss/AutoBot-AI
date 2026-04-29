@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
@@ -24,6 +23,8 @@ from api.schemas_agent import (
     LLMInjectContextResponse,
     LLMPhaseInfoResponse,
     LLMSystemContextResponse,
+    PromptInjectionRequest,
+    QueryAnalysisRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_self_awareness import get_llm_self_awareness
@@ -34,24 +35,6 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for context level validation (Issue #326)
 VALID_CONTEXT_LEVELS = {"basic", "detailed", "full"}
 DETAILED_CONTEXT_LEVELS = {"detailed", "full"}
-
-
-class ContextRequest(BaseModel):
-    level: str = "basic"  # basic, detailed, full
-    include_history: bool = False
-    include_progression_rules: bool = False
-
-
-class PromptInjectionRequest(BaseModel):
-    prompt: str
-    context_level: str = "basic"
-    preserve_format: bool = True
-
-
-class QueryAnalysisRequest(BaseModel):
-    query: str
-    analyze_capabilities: bool = True
-    provide_recommendations: bool = True
 
 
 @with_error_handling(

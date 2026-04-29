@@ -1910,3 +1910,74 @@ class SandboxBatchRequest(BaseModel):
     timeout: int = 600
     stop_on_error: bool = True
     enable_network: bool = False
+
+
+# ---------------------------------------------------------------------------
+# marketplace.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MarketplaceEntry(BaseModel):
+    """A single marketplace catalog entry."""
+
+    name: str
+    version: str
+    display_name: str
+    description: str
+    author: str
+    category: str
+    tags: List[str] = Field(default_factory=list)
+    entry_point: str
+    dependencies: List[str] = Field(default_factory=list)
+    hooks: List[str] = Field(default_factory=list)
+    downloads: int = 0
+    rating: float = 0.0
+    source_url: str = ""
+
+
+class MarketplaceCatalogResponse(BaseModel):
+    """Response for catalog list."""
+
+    entries: List[MarketplaceEntry]
+    total: int
+    category: str
+    sort_by: str
+
+
+class InstallRequest(BaseModel):
+    """Request body for installing a marketplace plugin."""
+
+    plugin_name: str = Field(..., description="Name of the plugin to install from catalog")
+
+
+# ---------------------------------------------------------------------------
+# integration_github.py schemas
+# ---------------------------------------------------------------------------
+
+
+class GitHubConnectionTestRequest(BaseModel):
+    """Request body for testing a GitHub token."""
+
+    token: str = Field(..., description="GitHub Personal Access Token")
+    base_url: Optional[str] = Field(None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)")
+
+
+class GitHubReviewRequest(BaseModel):
+    """Request body for submitting a PR review."""
+
+    token: str = Field(..., description="GitHub Personal Access Token")
+    owner: str = Field(..., description="Repository owner (user or org)")
+    repo: str = Field(..., description="Repository name")
+    pull_number: int = Field(..., description="Pull request number")
+    body: str = Field(..., description="Review body text")
+    event: str = Field("COMMENT", description="Review event: APPROVE, REQUEST_CHANGES, or COMMENT")
+
+
+class GitHubCommentRequest(BaseModel):
+    """Request body for posting a PR comment."""
+
+    token: str = Field(..., description="GitHub Personal Access Token")
+    owner: str = Field(..., description="Repository owner")
+    repo: str = Field(..., description="Repository name")
+    pull_number: int = Field(..., description="Pull request number")
+    body: str = Field(..., description="Comment body text")

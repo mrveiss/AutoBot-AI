@@ -16,13 +16,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth_middleware import get_current_user
-from pydantic import BaseModel, Field
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    InstallRequest,
+    MarketplaceCatalogResponse,
     MarketplaceCategoriesResponse,
+    MarketplaceEntry,
     MarketplaceInstalledResponse,
     MarketplacePluginActionResponse,
 )
@@ -133,31 +134,6 @@ _VALID_CATEGORIES = {"all", "example", "analytics", "observability", "integratio
 _VALID_SORT = {"downloads", "rating", "name", "newest"}
 
 
-class MarketplaceEntry(BaseModel):
-    """A single marketplace catalog entry."""
-
-    name: str
-    version: str
-    display_name: str
-    description: str
-    author: str
-    category: str
-    tags: list[str] = Field(default_factory=list)
-    entry_point: str
-    dependencies: list[str] = Field(default_factory=list)
-    hooks: list[str] = Field(default_factory=list)
-    downloads: int = 0
-    rating: float = 0.0
-    source_url: str = ""
-
-
-class MarketplaceCatalogResponse(BaseModel):
-    """Response for catalog list."""
-
-    entries: list[MarketplaceEntry]
-    total: int
-    category: str
-    sort_by: str
 
 
 def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[str, Any]:
@@ -346,10 +322,6 @@ async def list_categories() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
-class InstallRequest(BaseModel):
-    """Request body for installing a marketplace plugin."""
-
-    plugin_name: str = Field(..., description="Name of the plugin to install from catalog")
 
 
 async def _get_installed() -> set[str]:

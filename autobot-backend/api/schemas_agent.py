@@ -1707,3 +1707,82 @@ class GovernanceModeUpdate(BaseModel):
     """Request body for updating the active governance mode."""
 
     mode: GovernanceMode
+
+
+# ---------------------------------------------------------------------------
+# llm_awareness.py schemas
+# ---------------------------------------------------------------------------
+
+
+class LLMContextRequest(BaseModel):
+    level: str = "basic"
+    include_history: bool = False
+    include_progression_rules: bool = False
+
+
+class PromptInjectionRequest(BaseModel):
+    prompt: str
+    context_level: str = "basic"
+    preserve_format: bool = True
+
+
+class QueryAnalysisRequest(BaseModel):
+    query: str
+    analyze_capabilities: bool = True
+    provide_recommendations: bool = True
+
+
+# ---------------------------------------------------------------------------
+# llm_optimization.py schemas
+# ---------------------------------------------------------------------------
+
+
+class LLMOptimizationRequest(BaseModel):
+    """Model for optimization requests."""
+
+    query: str
+    task_type: str = "chat"
+    max_response_time: Optional[float] = None
+    min_quality: Optional[float] = None
+    context_length: int = 0
+    user_preference: Optional[str] = None
+
+
+class ModelPerformanceData(BaseModel):
+    """Model for tracking performance data."""
+
+    model_name: str
+    response_time: float
+    response_tokens: int
+    success: bool
+    user_rating: Optional[float] = None
+
+
+class InferenceOptimizationSettings(BaseModel):
+    """Settings for inference optimization."""
+
+    prompt_compression_enabled: bool = True
+    prompt_compression_ratio: float = 0.7
+    prompt_compression_min_length: int = 100
+    prompt_compression_preserve_code: bool = True
+    prompt_compression_aggressive: bool = False
+
+    cache_enabled: bool = True
+    cache_l1_size: int = 100
+    cache_l2_ttl: int = 300
+
+    cloud_connection_pool_size: int = 100
+    cloud_batch_window_ms: int = 50
+    cloud_max_batch_size: int = 10
+    cloud_retry_max_attempts: int = 3
+    cloud_retry_base_delay: float = 1.0
+    cloud_retry_max_delay: float = 60.0
+
+    local_speculation_enabled: bool = False
+    local_speculation_draft_model: str = ""
+    local_speculation_num_tokens: int = 5
+    local_speculation_use_ngram: bool = False
+    local_quantization_type: str = "none"
+    local_vllm_multi_step: int = 8
+    local_vllm_prefix_caching: bool = True
+    local_vllm_async_output: bool = True
