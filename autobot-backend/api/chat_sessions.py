@@ -1394,7 +1394,7 @@ async def delete_session(
     operation="export_session",
     error_code_prefix="CHAT_SESSIONS",
 )
-@router.get("/chat/sessions/{session_id}/export", response_model=DataResponse)
+@router.get("/chat/sessions/{session_id}/export", response_model=None)
 async def export_session(session_id: str, request: Request, format: str = "json"):
     """
     Export a chat session in various formats.
