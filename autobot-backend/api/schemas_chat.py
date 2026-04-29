@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Typed payload models for chat_sessions.py DataResponse endpoints.
+Typed payload models for chat_sessions.py and chat.py DataResponse endpoints.
 
 One model per endpoint, named <Noun>Data, used as DataResponse[<Noun>Data]
 to give FastAPI enough type information to generate correct OpenAPI schemas.
@@ -177,6 +177,159 @@ class SessionCheckpointClearData(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# chat.py response schemas (#6410)
+# ---------------------------------------------------------------------------
+
+
+class ChatMessageData(BaseModel):
+    """data payload for POST /chat and POST /chat/message (alias).
+
+    Both endpoints return the dict produced by ``process_chat_message``
+    in chat.py.
+    """
+
+    content: str
+    role: str
+    session_id: str
+    message_id: Optional[str] = None
+    timestamp: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ChatHealthComponents(BaseModel):
+    """Component health subsection of ChatHealthData."""
+
+    chat_history_manager: str
+    llm_service: str
+
+
+class ChatHealthData(BaseModel):
+    """data payload for GET /chat/health.
+
+    Note: the /chat/health handler returns the health dict directly via
+    ``JSONResponse`` (without DataResponse wrapping). The response_model
+    annotation describes the conceptual ``data`` shape only.
+    """
+
+    status: str
+    timestamp: str
+    components: ChatHealthComponents
+
+
+class ChatStatsData(BaseModel):
+    """data payload for GET /chat/stats.
+
+    The handler proxies ``chat_history_manager.get_statistics()`` whose
+    keys vary by manager configuration; left untyped intentionally.
+    """
+
+    stats: Optional[Dict[str, Any]] = None
+
+
+class ChatSaveData(BaseModel):
+    """data payload for POST /chats/{chat_id}/save.
+
+    ``save_session`` returns ``None`` so the wrapped data is ``null`` in
+    practice; declared as Optional[Any] for forward compatibility.
+    """
+
+    result: Optional[Any] = None
+
+
+class ChatDeleteData(BaseModel):
+    """data payload for DELETE /chats/{chat_id}."""
+
+    session_id: str
+    deleted: Any
+
+
+class EnhancedChatData(BaseModel):
+    """data payload for POST /enhanced.
+
+    Mirrors ChatMessageData with an additional ``knowledge_sources``
+    field for KB-augmented enhanced chats.
+    """
+
+    content: str
+    role: str
+    session_id: str
+    message_id: Optional[str] = None
+    timestamp: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    knowledge_sources: Optional[List[Dict[str, Any]]] = None
+
+
+class EnhancedChatHealthData(BaseModel):
+    """data payload for GET /health-enhanced.
+
+    The handler returns the health dict directly via JSONResponse;
+    response_model describes the conceptual ``data`` shape only.
+    The ``components`` map is heterogeneous (per-component status
+    strings keyed by component name) so it is typed as Dict[str, Any].
+    """
+
+    status: str
+    timestamp: str
+    components: Dict[str, Any]
+    error: Optional[str] = None
+
+
+class EnhancedChatCapabilitiesData(BaseModel):
+    """data payload for GET /capabilities.
+
+    Some fields are absent on the fallback path when AI Stack is
+    unavailable (only ``enhanced_chat``, ``ai_stack_integration``,
+    ``knowledge_base_integration``, ``error`` are populated then).
+    """
+
+    enhanced_chat: bool
+    ai_stack_integration: bool
+    knowledge_base_integration: bool
+    source_citations: Optional[bool] = None
+    streaming_responses: Optional[bool] = None
+    multi_agent_coordination: Optional[bool] = None
+    available_agents: Optional[List[Any]] = None
+    response_styles: Optional[List[str]] = None
+    supported_languages: Optional[List[str]] = None
+    max_message_length: Optional[int] = None
+    context_window: Optional[int] = None
+    error: Optional[str] = None
+
+
+class TranslateData(BaseModel):
+    """data payload for POST /translate.
+
+    The handler returns the agent result dict directly via JSONResponse
+    (no DataResponse wrapping). Shape comes from
+    ``TranslationAgent.process_query``.
+    """
+
+    status: str
+    response: Optional[str] = None
+    response_text: Optional[str] = None
+    agent_type: Optional[str] = None
+    model_used: Optional[str] = None
+    token_usage: Optional[Dict[str, Any]] = None
+
+
+class DetectLanguageData(BaseModel):
+    """data payload for POST /detect-language.
+
+    Same envelope as ``TranslateData`` (both call
+    ``TranslationAgent.process_query``); the parsed
+    ``language``/``language_name``/``confidence`` JSON sits inside
+    ``response``/``response_text`` as a string.
+    """
+
+    status: str
+    response: Optional[str] = None
+    response_text: Optional[str] = None
+    agent_type: Optional[str] = None
+    model_used: Optional[str] = None
+    token_usage: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
 # chat_sessions.py request schemas (#6042)
 # ---------------------------------------------------------------------------
 
@@ -219,9 +372,7 @@ class SessionShareRequest(BaseModel):
 
     share_with: list[str] = Field(..., min_length=1, description="User IDs to share with")
     include_knowledge: bool = Field(False, description="Include KB facts from this session")
-    knowledge_facts: Optional[list[str]] = Field(
-        None, description="Specific fact IDs to share (all if omitted)"
-    )
+    knowledge_facts: Optional[list[str]] = Field(None, description="Specific fact IDs to share (all if omitted)")
 
 
 class ChatResetRequest(BaseModel):
