@@ -851,7 +851,7 @@ async def stream_message(
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/health", response_model=DataResponse[ChatHealthData])
+@router.get("/chat/health", response_model=ChatHealthData)
 async def chat_health_check(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1909,7 +1909,7 @@ async def stream_enhanced_chat(
     operation="enhanced_chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/health-enhanced", response_model=DataResponse[EnhancedChatHealthData])
+@router.get("/health-enhanced", response_model=EnhancedChatHealthData)
 async def enhanced_chat_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2025,7 +2025,7 @@ async def get_enhanced_chat_capabilities(
     operation="translate_text",
     error_code_prefix="CHAT",
 )
-@router.post("/translate", response_model=DataResponse[TranslateData])
+@router.post("/translate", response_model=TranslateData)
 async def translate_text(
     body: TranslateRequest,
     current_user: dict = Depends(get_current_user),
@@ -2059,7 +2059,7 @@ async def translate_text(
     operation="detect_language",
     error_code_prefix="CHAT",
 )
-@router.post("/detect-language", response_model=DataResponse[DetectLanguageData])
+@router.post("/detect-language", response_model=DetectLanguageData)
 async def detect_language(
     body: DetectLanguageRequest,
     current_user: dict = Depends(get_current_user),

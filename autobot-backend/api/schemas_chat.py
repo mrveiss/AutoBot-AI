@@ -204,11 +204,10 @@ class ChatHealthComponents(BaseModel):
 
 
 class ChatHealthData(BaseModel):
-    """data payload for GET /chat/health.
+    """Response shape for GET /chat/health (#6497).
 
-    Note: the /chat/health handler returns the health dict directly via
-    ``JSONResponse`` (without DataResponse wrapping). The response_model
-    annotation describes the conceptual ``data`` shape only.
+    Wire format is the model itself — no DataResponse envelope. The route
+    declares response_model=ChatHealthData directly.
     """
 
     status: str
@@ -217,10 +216,10 @@ class ChatHealthData(BaseModel):
 
 
 class ChatStatsData(BaseModel):
-    """data payload for GET /chat/stats.
+    """data payload for GET /chat/stats (#6490).
 
-    The handler proxies ``chat_history_manager.get_statistics()`` whose
-    keys vary by manager configuration; left untyped intentionally.
+    Wraps the dict returned by ChatHistoryManager.get_statistics() —
+    session_count, message_count, and a recent-sessions sample.
     """
 
     stats: Optional[Dict[str, Any]] = None
@@ -260,12 +259,11 @@ class EnhancedChatData(BaseModel):
 
 
 class EnhancedChatHealthData(BaseModel):
-    """data payload for GET /health-enhanced.
+    """Response shape for GET /health-enhanced (#6497).
 
-    The handler returns the health dict directly via JSONResponse;
-    response_model describes the conceptual ``data`` shape only.
-    The ``components`` map is heterogeneous (per-component status
-    strings keyed by component name) so it is typed as Dict[str, Any].
+    Wire format is the model itself — no DataResponse envelope. The
+    components map is heterogeneous (per-component status strings keyed
+    by component name) so it is typed as Dict[str, Any].
     """
 
     status: str
@@ -297,11 +295,10 @@ class EnhancedChatCapabilitiesData(BaseModel):
 
 
 class TranslateData(BaseModel):
-    """data payload for POST /translate.
+    """Response shape for POST /translate (#6497).
 
-    The handler returns the agent result dict directly via JSONResponse
-    (no DataResponse wrapping). Shape comes from
-    ``TranslationAgent.process_query``.
+    Wire format is the model itself — no DataResponse envelope. Shape
+    comes from TranslationAgent.process_query.
     """
 
     status: str
@@ -313,12 +310,12 @@ class TranslateData(BaseModel):
 
 
 class DetectLanguageData(BaseModel):
-    """data payload for POST /detect-language.
+    """Response shape for POST /detect-language (#6497).
 
-    Same envelope as ``TranslateData`` (both call
-    ``TranslationAgent.process_query``); the parsed
-    ``language``/``language_name``/``confidence`` JSON sits inside
-    ``response``/``response_text`` as a string.
+    Wire format is the model itself — no DataResponse envelope. Same
+    fields as TranslateData (both call TranslationAgent.process_query);
+    the parsed language/language_name/confidence JSON sits inside
+    response/response_text as a string.
     """
 
     status: str
