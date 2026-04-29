@@ -1,14 +1,14 @@
 <template>
   <div id="app" class="h-screen bg-autobot-bg-primary flex flex-col overflow-hidden">
     <!-- Skip Navigation Links -->
-    <div v-if="!isLoginPage" class="skip-links">
+    <div v-if="showAuthChrome" class="skip-links">
       <a href="#main-content" class="skip-link sr-only-focusable">{{ $t('nav.skipToContent') }}</a>
       <a href="#navigation" class="skip-link sr-only-focusable">{{ $t('nav.skipToNavigation') }}</a>
     </div>
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="!isLoginPage" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
+    <header v-if="showAuthChrome" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="min-height: 56px; height: auto;">
           <!-- Logo/Brand with System Status -->
@@ -400,8 +400,8 @@
       </UnifiedLoadingView>
     </main>
 
-    <!-- Footer: About link (hidden on login page and routes with hideFooter meta) -->
-    <footer v-if="!isLoginPage && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
+    <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
+    <footer v-if="showAuthChrome && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
       <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
         {{ $t('nav.about') }}
       </router-link>
@@ -542,9 +542,8 @@ export default {
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
     const hasErrors = computed(() => false); // No errors property in store
-    const isLoginPage = computed(() =>
-      route.path === '/login' || !userStore.isAuthenticated
-    );
+    const isPublicRoute = computed(() => !!route.meta.isPublic);
+    const showAuthChrome = computed(() => userStore.isAuthenticated && !isPublicRoute.value);
     const hideFooter = computed(() => !!route.meta.hideFooter);
 
     // Methods
@@ -876,7 +875,8 @@ export default {
       // Computed
       isLoading,
       hasErrors,
-      isLoginPage,
+      isPublicRoute,
+      showAuthChrome,
       hideFooter,
       navItems,
       slmAdminUrl,
