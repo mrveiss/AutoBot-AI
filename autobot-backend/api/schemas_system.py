@@ -2947,3 +2947,53 @@ class AuditCleanupRequest(BaseModel):
 
     days_to_keep: int = Field(90, ge=7, le=365, description="Days of logs to retain")
     confirm: bool = Field(False, description="Confirm cleanup operation")
+
+
+# ---------------------------------------------------------------------------
+# alertmanager_webhook.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AlertAnnotations(BaseModel):
+    """Alert annotations from AlertManager."""
+
+    summary: str
+    description: str
+    recommendation: Optional[str] = None
+
+
+class AlertLabels(BaseModel):
+    """Alert labels from AlertManager."""
+
+    alertname: str
+    severity: str
+    component: str
+    resource: Optional[str] = None
+    service: Optional[str] = None
+
+
+class AlertInstance(BaseModel):
+    """Single alert instance from AlertManager."""
+
+    status: str
+    labels: Dict[str, str]
+    annotations: Dict[str, str]
+    startsAt: str
+    endsAt: Optional[str] = None
+    generatorURL: str
+    fingerprint: str
+
+
+class AlertManagerWebhook(BaseModel):
+    """AlertManager webhook payload structure."""
+
+    version: str
+    groupKey: str
+    truncatedAlerts: int = 0
+    status: str
+    receiver: str
+    groupLabels: Dict[str, str]
+    commonLabels: Dict[str, str]
+    commonAnnotations: Dict[str, str]
+    externalURL: str
+    alerts: List[AlertInstance]

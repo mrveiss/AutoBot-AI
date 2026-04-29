@@ -17,20 +17,21 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     AgentAllPerformanceResponse,
     AgentComparisonResponse,
     AgentHistoryResponse,
+    AgentMetricsResponse,
     AgentPerformanceTrendsResponse,
     AgentRecentTasksResponse,
     AgentRecommendationsResponse,
     AgentTaskCompleteResponse,
+    CompleteTaskRequest,
+    TrackTaskRequest,
     AgentTaskStartResponse,
     AgentTypesResponse,
 )
@@ -42,61 +43,6 @@ router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
-
-
-class AgentMetricsResponse(BaseModel):
-    """Agent metrics response model"""
-
-    agent_id: str
-    agent_type: str
-    total_tasks: int
-    completed_tasks: int
-    failed_tasks: int
-    cancelled_tasks: int
-    timeout_tasks: int
-    avg_duration_ms: float
-    total_tokens_used: int
-    error_rate: float
-    success_rate: float
-    last_activity: Optional[str]
-
-
-class TaskRecordResponse(BaseModel):
-    """Task record response model"""
-
-    agent_id: str
-    agent_type: str
-    task_id: str
-    task_name: str
-    status: str
-    started_at: str
-    completed_at: Optional[str]
-    duration_ms: Optional[float]
-    tokens_used: Optional[int]
-    error_message: Optional[str]
-
-
-class TrackTaskRequest(BaseModel):
-    """Request to track a task start"""
-
-    agent_id: str = Field(..., description="Unique agent identifier")
-    agent_type: str = Field(..., description="Type of agent")
-    task_id: str = Field(..., description="Unique task identifier")
-    task_name: str = Field(..., description="Human-readable task name")
-    input_size: Optional[int] = Field(None, description="Size of input data")
-    metadata: Optional[dict] = Field(None, description="Additional metadata")
-
-
-class CompleteTaskRequest(BaseModel):
-    """Request to complete a task"""
-
-    task_id: str = Field(..., description="Task identifier")
-    status: str = Field(
-        ..., description="Final status (completed, failed, cancelled, timeout)"
-    )
-    output_size: Optional[int] = Field(None, description="Size of output data")
-    tokens_used: Optional[int] = Field(None, description="Tokens consumed")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
 
 
 # ============================================================================

@@ -1788,3 +1788,53 @@ class SecurityScanRequest(BaseModel):
     severity_threshold: str = Field(default="medium", description="Minimum severity to report")
     include_dependencies: bool = Field(default=True, description="Scan dependencies")
     priority: str = Field(default="high", description="Operation priority")
+
+
+# ---------------------------------------------------------------------------
+# integration_database.py schemas
+# ---------------------------------------------------------------------------
+
+
+class DatabaseConnectionRequest(BaseModel):
+    """Request model for testing database connections."""
+
+    provider: str = Field(..., description="Database provider (postgresql/mysql/mongodb)")
+    host: str = Field("localhost", description="Database host")
+    port: Optional[int] = Field(None, description="Database port (default: provider-specific)")
+    username: Optional[str] = Field(None, description="Database username")
+    password: Optional[str] = Field(None, description="Database password")
+    database: str = Field("", description="Database name")
+
+
+class DBIntegrationQueryRequest(BaseModel):
+    """Request model for executing database queries."""
+
+    query: str = Field(..., description="SQL query to execute (read-only)")
+    database: str = Field("", description="Target database name")
+    host: str = Field("localhost", description="Database host")
+    port: Optional[int] = Field(None, description="Database port")
+    username: Optional[str] = Field(None, description="Database username")
+    password: Optional[str] = Field(None, description="Database password")
+
+
+class MongoQueryRequest(BaseModel):
+    """Request model for MongoDB collection queries."""
+
+    database: str = Field(..., description="Database name")
+    collection: str = Field(..., description="Collection name")
+    filter: Dict[str, Any] = Field(default_factory=dict, description="Query filter")
+    limit: int = Field(100, description="Maximum results to return")
+    host: str = Field("localhost", description="MongoDB host")
+    port: int = Field(27017, description="MongoDB port")
+    username: Optional[str] = Field(None, description="MongoDB username")
+    password: Optional[str] = Field(None, description="MongoDB password")
+
+
+class DatabaseListRequest(BaseModel):
+    """Request model for listing databases/tables."""
+
+    host: str = Field("localhost", description="Database host")
+    port: Optional[int] = Field(None, description="Database port")
+    username: Optional[str] = Field(None, description="Database username")
+    password: Optional[str] = Field(None, description="Database password")
+    database: Optional[str] = Field(None, description="Database name (for table listing)")

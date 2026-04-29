@@ -2436,3 +2436,103 @@ class PatternMiningResult(BaseModel):
     summary: Dict[str, Any]
     analysis_time_ms: float
     logs_analyzed: int
+
+
+# ---------------------------------------------------------------------------
+# analytics_agents.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AgentMetricsResponse(BaseModel):
+    """Agent metrics response model."""
+
+    agent_id: str
+    agent_type: str
+    total_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    cancelled_tasks: int
+    timeout_tasks: int
+    avg_duration_ms: float
+    total_tokens_used: int
+    error_rate: float
+    success_rate: float
+    last_activity: Optional[str]
+
+
+class TaskRecordResponse(BaseModel):
+    """Task record response model."""
+
+    agent_id: str
+    agent_type: str
+    task_id: str
+    task_name: str
+    status: str
+    started_at: str
+    completed_at: Optional[str]
+    duration_ms: Optional[float]
+    tokens_used: Optional[int]
+    error_message: Optional[str]
+
+
+class TrackTaskRequest(BaseModel):
+    """Request to track a task start."""
+
+    agent_id: str = Field(..., description="Unique agent identifier")
+    agent_type: str = Field(..., description="Type of agent")
+    task_id: str = Field(..., description="Unique task identifier")
+    task_name: str = Field(..., description="Human-readable task name")
+    input_size: Optional[int] = Field(None, description="Size of input data")
+    metadata: Optional[dict] = Field(None, description="Additional metadata")
+
+
+class CompleteTaskRequest(BaseModel):
+    """Request to complete a task."""
+
+    task_id: str = Field(..., description="Task identifier")
+    status: str = Field(..., description="Final status (completed, failed, cancelled, timeout)")
+    output_size: Optional[int] = Field(None, description="Size of output data")
+    tokens_used: Optional[int] = Field(None, description="Tokens consumed")
+    error_message: Optional[str] = Field(None, description="Error message if failed")
+
+
+# ---------------------------------------------------------------------------
+# analytics_behavior.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TrackEventRequest(BaseModel):
+    """Request model for tracking user events."""
+
+    event_type: str = Field(..., description="Type of event (page_view, click, search, etc.)")
+    feature: str = Field(..., description="Feature area (chat, knowledge, tools, etc.)")
+    user_id: Optional[str] = Field(None, description="User ID if authenticated")
+    session_id: Optional[str] = Field(None, description="Session ID")
+    duration_ms: Optional[int] = Field(None, ge=0, description="Duration in milliseconds")
+    metadata: Optional[dict] = Field(default_factory=dict, description="Additional metadata")
+
+
+class FeatureMetricsResponse(BaseModel):
+    """Response model for feature metrics."""
+
+    timestamp: str
+    features: dict
+    total_features: int
+
+
+class UserJourneyResponse(BaseModel):
+    """Response model for user journey."""
+
+    session_id: str
+    steps: list
+    total_steps: int
+    features_visited: list
+
+
+class EngagementMetricsResponse(BaseModel):
+    """Response model for engagement metrics."""
+
+    timestamp: str
+    metrics: dict
+    feature_popularity: list
+    most_popular_feature: Optional[str]
