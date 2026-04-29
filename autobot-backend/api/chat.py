@@ -573,9 +573,9 @@ async def process_chat_message(
     config: Metadata,
     request_id: str,
     author_id: Optional[str] = None,
-) -> Metadata:
+) -> ChatMessageData:
     """Process a chat message and generate response (Issue #398: refactored,
-    Issue #3282: author_id for multi-user attribution)."""
+    Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
     _validate_session_id(message.session_id)
 
     # Get or create session
@@ -597,14 +597,14 @@ async def process_chat_message(
     # Store AI response (Issue #281: uses helper)
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
-    return {
-        "content": ai_response.get("content", ""),
-        "role": "assistant",
-        "session_id": session_id,
-        "message_id": ai_message_id,
-        "timestamp": utc_timestamp(),
-        "metadata": ai_response.get("metadata", {}),
-    }
+    return ChatMessageData(
+        content=ai_response.get("content", ""),
+        role="assistant",
+        session_id=session_id,
+        message_id=ai_message_id,
+        timestamp=utc_timestamp(),
+        metadata=ai_response.get("metadata", {}),
+    )
 
 
 # ====================================================================
@@ -636,7 +636,7 @@ async def _generate_llm_stream(
             response_data = await process_chat_message(
                 message, chat_history_manager, llm_service, None, None, {}, request_id
             )
-            yield f"data: {json.dumps({'type': 'complete', **response_data})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', **response_data.model_dump()})}\n\n"
 
         yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
@@ -811,7 +811,7 @@ async def send_message(
         media_type="application/json; charset=utf-8",
         content={
             "success": True,
-            "data": response_data,
+            "data": response_data.model_dump(),
             "message": "Message processed successfully",
             "request_id": request_id,
         },
@@ -1672,12 +1672,12 @@ async def _execute_enhanced_chat_pipeline(
     knowledge_base,
     request_id: str,
     preferences: Optional[ChatPreferences],
-) -> Metadata:
-    """Helper for process_enhanced_chat_message. Ref: #1088.
+) -> EnhancedChatData:
+    """Helper for process_enhanced_chat_message. Ref: #1088, #6502 (typed return).
 
     Runs the full enhanced chat pipeline: store user message, retrieve context,
     enrich with knowledge base, generate AI response, attach sources, store response,
-    and return the final result dict.
+    and return the final result.
     """
     await _store_enhanced_user_message(message, session_id, chat_history_manager)
 
@@ -1702,15 +1702,15 @@ async def _execute_enhanced_chat_pipeline(
 
     ai_message_id = await _store_enhanced_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
-    return {
-        "content": ai_response.get("content", ""),
-        "role": "assistant",
-        "session_id": session_id,
-        "message_id": ai_message_id,
-        "timestamp": utc_timestamp(),
-        "metadata": ai_response.get("metadata", {}),
-        "knowledge_sources": knowledge_sources if message.include_sources else None,
-    }
+    return EnhancedChatData(
+        content=ai_response.get("content", ""),
+        role="assistant",
+        session_id=session_id,
+        message_id=ai_message_id,
+        timestamp=utc_timestamp(),
+        metadata=ai_response.get("metadata", {}),
+        knowledge_sources=knowledge_sources if message.include_sources else None,
+    )
 
 
 async def process_enhanced_chat_message(
@@ -1720,7 +1720,7 @@ async def process_enhanced_chat_message(
     config: Metadata,
     request_id: str,
     preferences: Optional[ChatPreferences] = None,
-) -> Metadata:
+) -> EnhancedChatData:
     """
     Process a chat message with AI Stack enhanced capabilities.
 
@@ -1770,7 +1770,7 @@ async def _stream_ai_stack_response(
             message, chat_history_manager, None, {}, request_id, preferences
         )
 
-        content = response_data.get("content", "")
+        content = response_data.content or ""
         chunk_size = 50
 
         for i in range(0, len(content), chunk_size):
@@ -1788,8 +1788,8 @@ async def _stream_ai_stack_response(
         yield _format_sse_event(
             {
                 "type": "metadata",
-                "metadata": response_data.get("metadata", {}),
-                "sources": response_data.get("knowledge_sources"),
+                "metadata": response_data.metadata or {},
+                "sources": response_data.knowledge_sources,
                 "session_id": session_id,
             }
         )
@@ -1913,7 +1913,7 @@ async def enhanced_chat(
         )
 
         return create_chat_response(
-            response_data,
+            response_data.model_dump(),
             "Enhanced chat message processed successfully",
             request_id,
         )
