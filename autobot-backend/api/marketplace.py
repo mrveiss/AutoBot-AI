@@ -275,12 +275,12 @@ async def list_catalog(
     )
 
 
+@router.get("/catalog/{plugin_name}", response_model=MarketplaceEntry)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_catalog_entry",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/catalog/{plugin_name}", response_model=MarketplaceEntry)
 async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     """
     Get a single marketplace catalog entry by name.
@@ -299,12 +299,12 @@ async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
     return MarketplaceEntry(**entry)
 
 
+@router.get("/categories", response_model=MarketplaceCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_categories",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/categories", response_model=MarketplaceCategoriesResponse)
 async def list_categories() -> dict[str, list[str]]:
     """
     List valid plugin categories and sort options.
@@ -335,12 +335,12 @@ async def _get_installed() -> set[str]:
         return set()
 
 
+@router.get("/installed", response_model=MarketplaceInstalledResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_installed",
     error_code_prefix="MARKETPLACE",
 )
-@router.get("/installed", response_model=MarketplaceInstalledResponse)
 async def list_installed() -> dict[str, list[str]]:
     """
     List names of installed marketplace plugins.
@@ -351,12 +351,12 @@ async def list_installed() -> dict[str, list[str]]:
     return {"installed": sorted(installed)}
 
 
+@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=MarketplacePluginActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_plugin",
     error_code_prefix="MARKETPLACE",
 )
-@router.post("/install", status_code=status.HTTP_201_CREATED, response_model=MarketplacePluginActionResponse)
 async def install_plugin(body: InstallRequest) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
@@ -396,12 +396,12 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     return {"status": "installed", "plugin": body.plugin_name}
 
 
+@router.delete("/install/{plugin_name}", response_model=MarketplacePluginActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="uninstall_plugin",
     error_code_prefix="MARKETPLACE",
 )
-@router.delete("/install/{plugin_name}", response_model=MarketplacePluginActionResponse)
 async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
     """
     Remove a marketplace plugin from the installed set.

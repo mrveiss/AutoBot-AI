@@ -181,14 +181,14 @@ async def _resolve_safe_ip(host: str) -> str:
     return safe_ip
 
 
+@router.get(
+    "/marketplaces",
+    response_model=MarketplaceSourcesResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_marketplaces",
     error_code_prefix="MARKETPLACE_SOURCES",
-)
-@router.get(
-    "/marketplaces",
-    response_model=MarketplaceSourcesResponse,
 )
 async def list_marketplaces(
     user: dict = Depends(get_current_user),
@@ -199,15 +199,15 @@ async def list_marketplaces(
     return MarketplaceSourcesResponse(sources=await list_sources())
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_marketplace",
-    error_code_prefix="MARKETPLACE_SOURCES",
-)
 @router.post(
     "/marketplaces",
     status_code=status.HTTP_201_CREATED,
     response_model=MarketplaceSource,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_marketplace",
+    error_code_prefix="MARKETPLACE_SOURCES",
 )
 async def add_marketplace(
     request: MarketplaceSourceCreate,
@@ -239,15 +239,15 @@ async def add_marketplace(
     return source
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_marketplace",
-    error_code_prefix="MARKETPLACE_SOURCES",
-)
 @router.delete(
     "/marketplaces/{source_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_marketplace",
+    error_code_prefix="MARKETPLACE_SOURCES",
 )
 async def delete_marketplace(
     source_id: str,
