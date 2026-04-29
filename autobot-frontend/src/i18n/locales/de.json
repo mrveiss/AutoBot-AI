@@ -2194,7 +2194,6 @@
   },
   "knowledge": {
     "title": "Wissensdatenbank",
-    "search": "Wissen durchsuchen...",
     "upload": {
       "tagsPlaceholder": "Tags durch Kommas getrennt eingeben...",
       "selectCategory": "Kategorie auswählen...",

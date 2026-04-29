@@ -2194,7 +2194,6 @@
   },
   "knowledge": {
     "title": "Zināšanu bāze",
-    "search": "Meklēt zināšanas...",
     "upload": {
       "tagsPlaceholder": "Ievadiet birkas, atdalot ar komatiem...",
       "selectCategory": "Izvēlēties kategoriju...",

@@ -2194,7 +2194,6 @@
   },
   "knowledge": {
     "title": "Base de connaissances",
-    "search": "Rechercher...",
     "upload": {
       "tagsPlaceholder": "Saisir les tags séparés par des virgules...",
       "selectCategory": "Sélectionner une catégorie...",
