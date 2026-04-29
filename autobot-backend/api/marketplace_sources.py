@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _SOURCES_KEY = "plugins:marketplaces"
-_BUILTIN_ID = "builtin"
+# Public constant — imported by api.marketplace and consumed by the frontend
+# via openapi schemas. Single source of truth for the built-in source id (#6534).
+BUILTIN_SOURCE_ID = "builtin"
 _BUILTIN_NAME = "AutoBot Marketplace"
 _BUILTIN_DESCRIPTION = "Default AutoBot plugin marketplace"
 
@@ -86,7 +88,7 @@ class CatalogDocument(BaseModel):
 
 def _builtin_source() -> MarketplaceSource:
     return MarketplaceSource(
-        id=_BUILTIN_ID,
+        id=BUILTIN_SOURCE_ID,
         name=_BUILTIN_NAME,
         url=None,
         description=_BUILTIN_DESCRIPTION,
@@ -254,7 +256,7 @@ async def delete_marketplace(
     admin_check: bool = Depends(check_admin_permission),
 ) -> None:
     """Issue #6481: remove a custom marketplace source. Built-in is protected."""
-    if source_id == _BUILTIN_ID:
+    if source_id == BUILTIN_SOURCE_ID:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The built-in marketplace cannot be removed",
@@ -361,7 +363,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
 
 async def get_source_by_id(source_id: str) -> Optional[MarketplaceSource]:
     """Look up a single source by id (built-in or user-added)."""
-    if source_id == _BUILTIN_ID:
+    if source_id == BUILTIN_SOURCE_ID:
         return _builtin_source()
     redis = await get_async_redis_client(database="main")
     if redis is None:

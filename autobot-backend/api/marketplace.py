@@ -11,6 +11,7 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 
 import json
 import logging
+from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,6 +20,7 @@ from auth_middleware import get_current_user
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from api.marketplace_sources import BUILTIN_SOURCE_ID
 from api.schemas_workflows import (
     InstallRequest,
     MarketplaceCatalogResponse,
@@ -28,6 +30,29 @@ from api.schemas_workflows import (
     MarketplacePluginActionResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+
+class CatalogCategory(str, Enum):
+    """Marketplace plugin categories (#6534). Pydantic validates Query
+    parameters against this enum and OpenAPI emits a proper enum schema so
+    generated TypeScript clients get a union type instead of bare `string`.
+    """
+
+    ALL = "all"
+    EXAMPLE = "example"
+    ANALYTICS = "analytics"
+    OBSERVABILITY = "observability"
+    INTEGRATION = "integration"
+    AGENT = "agent"
+    TOOL = "tool"
+    OTHER = "other"  # closes #6526 — was the silent default in _remote_plugin_to_entry
+
+
+class CatalogSort(str, Enum):
+    DOWNLOADS = "downloads"
+    RATING = "rating"
+    NAME = "name"
+    NEWEST = "newest"
 
 logger = logging.getLogger(__name__)
 
@@ -130,12 +155,6 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
-_VALID_CATEGORIES = {"all", "example", "analytics", "observability", "integration", "agent", "tool"}
-_VALID_SORT = {"downloads", "rating", "name", "newest"}
-
-
-
-
 def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[str, Any]:
     """Issue #6481: shape an external CatalogPlugin dict to look like a
     MarketplaceEntry. Missing fields get safe defaults so the existing
@@ -146,7 +165,7 @@ def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[st
         "display_name": plugin.get("name", "").replace("-", " ").title(),
         "description": plugin.get("description", ""),
         "author": plugin.get("author", source_name),
-        "category": plugin.get("category", "other"),
+        "category": plugin.get("category", CatalogCategory.OTHER.value),
         "tags": plugin.get("tags", []),
         "entry_point": "",
         "dependencies": [],
@@ -184,14 +203,14 @@ async def _get_catalog() -> list[dict[str, Any]]:
     error_code_prefix="MARKETPLACE",
 )
 async def list_catalog(
-    category: str = Query(default="all", description="Filter by category"),
+    category: CatalogCategory = Query(default=CatalogCategory.ALL, description="Filter by category"),
     search: str | None = Query(default=None, description="Full-text search across name, description, tags"),
-    sort_by: str = Query(default="downloads", description="Sort field: downloads, rating, name, newest"),
+    sort_by: CatalogSort = Query(default=CatalogSort.DOWNLOADS, description="Sort field"),
     source_id: str = Query(
-        default="builtin",
-        description="Marketplace source id; 'builtin' or a user-added source UUID (#6481)",
+        default=BUILTIN_SOURCE_ID,
+        description=f"Marketplace source id; '{BUILTIN_SOURCE_ID}' or a user-added source UUID (#6481)",
     ),
-    # Issue #6481: gate behind auth — `source_id != 'builtin'` triggers a server-side
+    # Issue #6481: gate behind auth — non-builtin source_id triggers a server-side
     # fetch of arbitrary URLs (SSRF surface). Anonymous callers should not access this.
     user: dict = Depends(get_current_user),
 ) -> MarketplaceCatalogResponse:
@@ -202,19 +221,9 @@ async def list_catalog(
 
     Issue #1803: Plugin and agent marketplace.
     Issue #6481: ?source_id= selects which marketplace catalog to query.
+    Issue #6534: category/sort_by validated by Pydantic via CatalogCategory/CatalogSort enums.
     """
-    if category not in _VALID_CATEGORIES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid category '{category}'. Valid: {sorted(_VALID_CATEGORIES)}",
-        )
-    if sort_by not in _VALID_SORT:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid sort_by '{sort_by}'. Valid: {sorted(_VALID_SORT)}",
-        )
-
-    if source_id == "builtin":
+    if source_id == BUILTIN_SOURCE_ID:
         catalog = await _get_catalog()
     else:
         from api.marketplace_sources import (  # local import: avoid cycle
@@ -235,8 +244,8 @@ async def list_catalog(
             catalog = [_remote_plugin_to_entry(p, source.name) for p in remote_plugins]
 
     # Filter by category
-    if category != "all":
-        catalog = [e for e in catalog if e.get("category") == category]
+    if category != CatalogCategory.ALL:
+        catalog = [e for e in catalog if e.get("category") == category.value]
 
     # Full-text search across name, description, tags
     if search:
@@ -249,13 +258,13 @@ async def list_catalog(
         ]
 
     # Sort
-    if sort_by == "downloads":
+    if sort_by == CatalogSort.DOWNLOADS:
         catalog = sorted(catalog, key=lambda e: e.get("downloads", 0), reverse=True)
-    elif sort_by == "rating":
+    elif sort_by == CatalogSort.RATING:
         catalog = sorted(catalog, key=lambda e: e.get("rating", 0.0), reverse=True)
-    elif sort_by == "name":
+    elif sort_by == CatalogSort.NAME:
         catalog = sorted(catalog, key=lambda e: e.get("name", "").lower())
-    # "newest" keeps insertion order (most recently added last → reverse)
+    # CatalogSort.NEWEST keeps insertion order (most recently added last → reverse)
 
     entries = [MarketplaceEntry(**e) for e in catalog]
 
@@ -270,8 +279,8 @@ async def list_catalog(
     return MarketplaceCatalogResponse(
         entries=entries,
         total=len(entries),
-        category=category,
-        sort_by=sort_by,
+        category=category.value,
+        sort_by=sort_by.value,
     )
 
 
@@ -310,10 +319,11 @@ async def list_categories() -> dict[str, list[str]]:
     List valid plugin categories and sort options.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6534: derived from CatalogCategory/CatalogSort enums (single source of truth).
     """
     return {
-        "categories": sorted(_VALID_CATEGORIES),
-        "sort_options": sorted(_VALID_SORT),
+        "categories": sorted(c.value for c in CatalogCategory),
+        "sort_options": sorted(s.value for s in CatalogSort),
     }
 
 
