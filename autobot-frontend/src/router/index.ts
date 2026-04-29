@@ -57,7 +57,8 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Login',
       hideInNav: true,
-      requiresAuth: false
+      requiresAuth: false,
+      isPublic: true
     }
   },
   {
@@ -819,7 +820,8 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Permission Denied',
       hideInNav: true,
-      requiresAuth: false
+      requiresAuth: false,
+      isPublic: true
     }
   },
   {
