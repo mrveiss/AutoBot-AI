@@ -1838,3 +1838,44 @@ class DatabaseListRequest(BaseModel):
     username: Optional[str] = Field(None, description="Database username")
     password: Optional[str] = Field(None, description="Database password")
     database: Optional[str] = Field(None, description="Database name (for table listing)")
+
+
+# ---------------------------------------------------------------------------
+# integration_communication.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionRequest(BaseModel):
+    """Request model for testing communication provider connections."""
+
+    provider: str = Field(..., description="Provider name: slack, teams, or discord")
+    token: Optional[str] = Field(None, description="Bot token or API token")
+    webhook_url: Optional[str] = Field(None, description="Webhook URL (for Teams)")
+    base_url: Optional[str] = Field(None, description="Custom base URL (optional)")
+
+
+class SendMessageRequest(BaseModel):
+    """Request model for sending messages."""
+
+    channel: Optional[str] = Field(None, description="Channel ID or name (Slack)")
+    channel_id: Optional[str] = Field(None, description="Channel ID (Discord)")
+    text: Optional[str] = Field(None, description="Message text")
+    content: Optional[str] = Field(None, description="Message content (Discord)")
+    title: Optional[str] = Field(None, description="Message title (Teams)")
+
+
+class CommProviderInfo(BaseModel):
+    """Information about a supported communication provider."""
+
+    name: str
+    description: str
+    auth_type: str
+    required_fields: List[str]
+
+
+class WebhookMessageRequest(BaseModel):
+    """Request model for webhook messages."""
+
+    webhook_url: str = Field(..., description="Teams webhook URL")
+    text: str = Field(..., description="Message text")
+    title: Optional[str] = Field(None, description="Message title")

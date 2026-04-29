@@ -17,7 +17,6 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
 from api.schemas_knowledge import (
     KnowledgeAccessInfoResponse,
@@ -25,6 +24,8 @@ from api.schemas_knowledge import (
     KnowledgeScopedFactsResponse,
     KnowledgeShareResponse,
     KnowledgeUnshareResponse,
+    ShareKnowledgeRequest,
+    UpdatePermissionsRequest,
 )
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
@@ -41,57 +42,6 @@ router = APIRouter(prefix="/knowledge/collaboration", tags=["knowledge-collabora
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class KnowledgeScopeFilter(BaseModel):
-    """Filter for knowledge by scope."""
-
-    scope: Optional[VisibilityLevel] = Field(
-        default=None, description="Visibility level to filter by"
-    )
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID filter"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs to filter by"
-    )
-
-
-class ShareKnowledgeRequest(BaseModel):
-    """Request to share knowledge with users or groups."""
-
-    user_ids: Optional[List[str]] = Field(
-        default=None, description="User IDs to share with"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs to share with"
-    )
-
-
-class UpdatePermissionsRequest(BaseModel):
-    """Request to update knowledge permissions."""
-
-    visibility: VisibilityLevel = Field(description="New visibility level")
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID for org-level knowledge"
-    )
-    group_ids: Optional[List[str]] = Field(
-        default=None, description="Group IDs for group-level knowledge"
-    )
-
-
-class KnowledgeAccessResponse(BaseModel):
-    """Response with knowledge access details."""
-
-    fact_id: str
-    owner_id: str
-    visibility: VisibilityLevel
-    organization_id: Optional[str] = None
-    group_ids: List[str] = []
-    shared_with: List[str] = []
-    can_edit: bool
-    can_share: bool
-    can_delete: bool
 
 
 # =============================================================================

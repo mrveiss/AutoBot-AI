@@ -16,13 +16,12 @@ import mimetypes
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, field_validator
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -37,17 +36,19 @@ from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     AdminFileListResponse,
     AdminFileReadResponse,
     DirectoryCreateResponse,
+    DirectoryListing,
     DirectoryTreeResponse,
     FileDeleteResponse,
+    FileInfo,
     FilePreviewResponse,
     FileRenameResponse,
     FileStatsResponse,
     FileViewResponse,
+    FilesAPIUploadResponse,
 )
 
 router = APIRouter()
@@ -176,53 +177,6 @@ _DANGEROUS_EXTENSIONS = frozenset(
         ".msi",
     }
 )
-
-
-class FileInfo(BaseModel):
-    """File information model"""
-
-    name: str
-    path: str
-    is_directory: bool
-    size: Optional[int] = None
-    mime_type: Optional[str] = None
-    last_modified: datetime
-    permissions: str
-    extension: Optional[str] = None
-
-
-class DirectoryListing(BaseModel):
-    """Directory listing response model"""
-
-    current_path: str
-    parent_path: Optional[str] = None
-    files: List[FileInfo]
-    total_files: int
-    total_directories: int
-    total_size: int
-
-
-class FileUploadResponse(BaseModel):
-    """File upload response model"""
-
-    success: bool
-    message: str
-    file_info: Optional[FileInfo] = None
-    upload_id: Optional[str] = None
-
-
-class FileOperation(BaseModel):
-    """File operation request model"""
-
-    path: str
-
-    @field_validator("path")
-    @classmethod
-    def validate_path(cls, v):
-        """Validate path to prevent directory traversal attacks."""
-        if not v or ".." in v or v.startswith("/"):
-            raise ValueError("Invalid path")
-        return v
 
 
 def get_security_layer(request: Request) -> SecurityLayer:
@@ -695,7 +649,7 @@ async def _delete_directory_item(
     operation="upload_file",
     error_code_prefix="FILES",
 )
-@router.post("/upload", response_model=FileUploadResponse)
+@router.post("/upload", response_model=FilesAPIUploadResponse)
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
@@ -748,7 +702,7 @@ async def upload_file(
     # Audit logging (Issue #281: uses helper)
     _log_upload_audit(request, user_data, file, relative_path, len(content), overwrite)
 
-    return FileUploadResponse(
+    return FilesAPIUploadResponse(
         success=True,
         message=f"File '{file.filename}' uploaded successfully",
         file_info=file_info,

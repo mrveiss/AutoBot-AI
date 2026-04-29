@@ -13,9 +13,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from api.schemas_workflows import (
+    CommProviderInfo,
+    SendMessageRequest,
+    TestConnectionRequest,
+    WebhookMessageRequest,
+)
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.communication_integration import (
     DiscordIntegration,
@@ -30,42 +35,6 @@ router = APIRouter(
     tags=["integrations-communication"],
     dependencies=[Depends(check_admin_permission)],
 )
-
-
-class TestConnectionRequest(BaseModel):
-    """Request model for testing communication provider connections."""
-
-    provider: str = Field(..., description="Provider name: slack, teams, or discord")
-    token: Optional[str] = Field(None, description="Bot token or API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (for Teams)")
-    base_url: Optional[str] = Field(None, description="Custom base URL (optional)")
-
-
-class SendMessageRequest(BaseModel):
-    """Request model for sending messages."""
-
-    channel: Optional[str] = Field(None, description="Channel ID or name (Slack)")
-    channel_id: Optional[str] = Field(None, description="Channel ID (Discord)")
-    text: Optional[str] = Field(None, description="Message text")
-    content: Optional[str] = Field(None, description="Message content (Discord)")
-    title: Optional[str] = Field(None, description="Message title (Teams)")
-
-
-class ProviderInfo(BaseModel):
-    """Information about a supported communication provider."""
-
-    name: str
-    description: str
-    auth_type: str
-    required_fields: List[str]
-
-
-class WebhookMessageRequest(BaseModel):
-    """Request model for webhook messages."""
-
-    webhook_url: str = Field(..., description="Teams webhook URL")
-    text: str = Field(..., description="Message text")
-    title: Optional[str] = Field(None, description="Message title")
 
 
 @with_error_handling(
@@ -101,25 +70,25 @@ async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
 )
 @router.get(
     "/providers",
-    response_model=List[ProviderInfo],
+    response_model=List[CommProviderInfo],
     summary="List supported communication providers",
 )
-async def list_providers() -> List[ProviderInfo]:
+async def list_providers() -> List[CommProviderInfo]:
     """Return list of supported communication providers."""
     return [
-        ProviderInfo(
+        CommProviderInfo(
             name="slack",
             description="Slack workspace integration",
             auth_type="bot_token",
             required_fields=["token"],
         ),
-        ProviderInfo(
+        CommProviderInfo(
             name="teams",
             description="Microsoft Teams integration",
             auth_type="webhook_or_token",
             required_fields=["webhook_url or token"],
         ),
-        ProviderInfo(
+        CommProviderInfo(
             name="discord",
             description="Discord server integration",
             auth_type="bot_token",

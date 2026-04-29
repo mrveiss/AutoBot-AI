@@ -18,12 +18,17 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 from utils.catalog_http_exceptions import raise_server_error
+from api.schemas_system import (
+    CleanupResult,
+    StorageCategory,
+    StorageCleanupRequest,
+    StorageStats,
+)
 from api.schemas_workflows import (
     DataStorageCategoryDetailResponse,
     DataStorageConversationsSummaryResponse,
@@ -50,47 +55,6 @@ def _safe_data_path(user_segment: str) -> Path:
         raise HTTPException(status_code=400, detail="Invalid path")
 
 
-class StorageCategory(BaseModel):
-    """Storage category with size info."""
-
-    name: str
-    path: str
-    size_bytes: int
-    size_human: str
-    file_count: int
-    description: str
-    can_cleanup: bool = True
-    cleanup_type: str = "manual"
-
-
-class StorageStats(BaseModel):
-    """Overall storage statistics."""
-
-    total_size_bytes: int
-    total_size_human: str
-    total_files: int
-    total_directories: int
-    categories: list[StorageCategory]
-    last_cleanup: Optional[str] = None
-
-
-class CleanupRequest(BaseModel):
-    """Cleanup request model."""
-
-    category: str
-    older_than_days: int = 0
-    dry_run: bool = True
-
-
-class CleanupResult(BaseModel):
-    """Cleanup operation result."""
-
-    category: str
-    files_removed: int
-    bytes_freed: int
-    bytes_freed_human: str
-    dry_run: bool
-    errors: list[str] = []
 
 
 def format_size(size_bytes: int) -> str:
@@ -464,7 +428,7 @@ def _scan_and_remove_files(
 )
 @router.post("/cleanup", response_model=CleanupResult)
 async def cleanup_category(
-    request: CleanupRequest,
+    request: StorageCleanupRequest,
     _: None = Depends(check_admin_permission),
 ):
     """Clean up files in a storage category. Requires admin permission."""
