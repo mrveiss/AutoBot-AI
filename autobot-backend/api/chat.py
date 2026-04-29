@@ -29,10 +29,20 @@ from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.threshold_constants import TimingConstants
 
 from api.schemas_chat import (
+    ChatDeleteData,
+    ChatHealthData,
     ChatMessage,
+    ChatMessageData,
     ChatPreferences,
+    ChatSaveData,
+    ChatStatsData,
+    DetectLanguageData,
     DetectLanguageRequest,
+    EnhancedChatCapabilitiesData,
+    EnhancedChatData,
+    EnhancedChatHealthData,
     EnhancedChatMessage,
+    TranslateData,
     TranslateRequest,
 )
 from api.schemas_common import DataResponse
@@ -116,9 +126,7 @@ async def get_chat_workflow_manager(request: Request) -> Any:
         await manager.initialize()
         return manager
 
-    return await lazy_init_singleton_async(
-        request.app.state, "chat_workflow_manager", create_workflow_manager
-    )
+    return await lazy_init_singleton_async(request.app.state, "chat_workflow_manager", create_workflow_manager)
 
 
 # Simple utility functions to replace missing imports
@@ -130,9 +138,7 @@ def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str,
 
 def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
     """Log request context for debugging"""
-    logger.info(
-        "[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path
-    )
+    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
 
 
 # ====================================================================
@@ -152,9 +158,7 @@ def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
         return None
 
 
-def _should_start_new_streaming_group(
-    current_ts: datetime, last_streaming_ts: Optional[datetime]
-) -> bool:
+def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: Optional[datetime]) -> bool:
     """Check if a new streaming group should start (Issue #315)."""
     if last_streaming_ts is None:
         return False
@@ -221,9 +225,7 @@ def _get_message_signature(msg: Dict) -> tuple:
     return (msg.get("timestamp", ""), sender, text_content[:100])
 
 
-def _filter_preserved_messages(
-    existing: List[Dict], new: List[Dict], new_sigs: set, new_by_id: Dict
-) -> List[Dict]:
+def _filter_preserved_messages(existing: List[Dict], new: List[Dict], new_sigs: set, new_by_id: Dict) -> List[Dict]:
     """Filter existing messages to preserve backend-added ones (Issue #281: extracted)."""
     preserved = []
     for msg in existing:
@@ -273,9 +275,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
             msg_ts_str = msg.get("timestamp", "")
             current_ts = _parse_message_timestamp(msg_ts_str)
 
-            if current_ts and _should_start_new_streaming_group(
-                current_ts, last_streaming_ts
-            ):
+            if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
                 if current_group:
                     streaming_groups.append(current_group)
                 current_group = []
@@ -299,9 +299,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
     # Keep only the longest streaming message from each group
     for group in streaming_groups:
         if group:
-            longest = max(
-                group, key=lambda m: len(m.get("text", "") or m.get("content", ""))
-            )
+            longest = max(group, key=lambda m: len(m.get("text", "") or m.get("content", "")))
             final_merged.append(longest)
 
     return final_merged
@@ -423,9 +421,7 @@ async def _store_and_log_user_message(
     return user_message_id
 
 
-async def _get_chat_context(
-    chat_history_manager, session_id: str, model_name: Optional[str]
-) -> List[Dict]:
+async def _get_chat_context(chat_history_manager, session_id: str, model_name: Optional[str]) -> List[Dict]:
     """
     Get chat context from history with model-aware retrieval.
 
@@ -443,13 +439,9 @@ async def _get_chat_context(
         return []
 
     try:
-        recent_messages = await chat_history_manager.get_session_messages(
-            session_id, model_name=model_name
-        )
+        recent_messages = await chat_history_manager.get_session_messages(session_id, model_name=model_name)
         chat_context = recent_messages or []
-        logger.info(
-            f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
-        )
+        logger.info(f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}")
         return chat_context
     except Exception as e:
         logger.warning("Could not retrieve chat context: %s", e)
@@ -480,25 +472,20 @@ def _build_llm_context(
 
     if context_manager:
         message_limit = context_manager.get_message_limit(model_name)
-        logger.info(
-            f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})"
-        )
+        logger.info(f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})")
     else:
         message_limit = 20
         logger.warning("Context manager not available, using default limit")
 
     llm_context = [
-        {"role": msg.get("role", "user"), "content": msg.get("content", "")}
-        for msg in chat_context[-message_limit:]
+        {"role": msg.get("role", "user"), "content": msg.get("content", "")} for msg in chat_context[-message_limit:]
     ]
     llm_context.append({"role": message.role, "content": message.content})
 
     return llm_context
 
 
-async def _generate_ai_response(
-    llm_service, llm_context: List[Dict], session_id: str, request_id: str
-) -> Dict:
+async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> Dict:
     """
     Generate AI response using LLM service with fallback handling.
 
@@ -602,19 +589,13 @@ async def process_chat_message(
     chat_context = await _get_chat_context(chat_history_manager, session_id, model_name)
 
     # Build LLM context (Issue #281: uses helper)
-    llm_context = _build_llm_context(
-        chat_context, message, chat_history_manager, model_name
-    )
+    llm_context = _build_llm_context(chat_context, message, chat_history_manager, model_name)
 
     # Generate AI response (Issue #281: uses helper)
-    ai_response = await _generate_ai_response(
-        llm_service, llm_context, session_id, request_id
-    )
+    ai_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
 
     # Store AI response (Issue #281: uses helper)
-    ai_message_id = await _store_and_log_ai_response(
-        ai_response, session_id, request_id, chat_history_manager
-    )
+    ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
     return {
         "content": ai_response.get("content", ""),
@@ -700,13 +681,13 @@ async def stream_chat_response(
     operation="list_chats",
     error_code_prefix="CHAT",
 )
-@router.get("/chats", response_model=DataResponse)
+@router.get("/chats", response_model=DataResponse[List[Dict[str, Any]]])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_chats",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/chats", response_model=DataResponse)  # Frontend compatibility alias
+@router.get("/chat/chats", response_model=DataResponse[List[Dict[str, Any]]])  # Frontend compatibility alias
 async def list_chats(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -752,13 +733,13 @@ async def list_chats(
     operation="send_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat", response_model=DataResponse)
+@router.post("/chat", response_model=DataResponse[ChatMessageData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/message", response_model=DataResponse)  # Alternative endpoint
+@router.post("/chat/message", response_model=DataResponse[ChatMessageData])  # Alternative endpoint
 async def send_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -877,9 +858,7 @@ async def stream_message(
     llm_service = get_llm_service(request)
 
     # Return streaming response
-    return await stream_chat_response(
-        message, chat_history_manager, llm_service, request_id
-    )
+    return await stream_chat_response(message, chat_history_manager, llm_service, request_id)
 
 
 # ====================================================================
@@ -897,7 +876,7 @@ async def stream_message(
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/health", response_model=DataResponse)
+@router.get("/chat/health", response_model=DataResponse[ChatHealthData])
 async def chat_health_check(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -955,7 +934,7 @@ async def chat_health_check(
     operation="chat_statistics",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/stats", response_model=DataResponse)
+@router.get("/chat/stats", response_model=DataResponse[ChatStatsData])
 async def chat_statistics(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1085,9 +1064,7 @@ async def _stream_direct_response(
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
-        logger.error(
-            "[%s] Direct response streaming error: %s", request_id, e, exc_info=True
-        )
+        logger.error("[%s] Direct response streaming error: %s", request_id, e, exc_info=True)
         error_data = {
             "type": "error",
             "content": "Error processing command approval",
@@ -1126,9 +1103,7 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
-    request_data: dict = Body(
-        default={}
-    ),  # Issue #1302: was None, preventing context/knowledge
+    request_data: dict = Body(default={}),  # Issue #1302: was None, preventing context/knowledge
     request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
@@ -1174,9 +1149,7 @@ async def _stream_graph_resume(
         evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
         yield f"data: {json.dumps(evt)}\n\n"
 
-        async for msg in chat_workflow_manager.resume_graph(
-            session_id=chat_id, decision=decision
-        ):
+        async for msg in chat_workflow_manager.resume_graph(session_id=chat_id, decision=decision):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"
 
@@ -1347,7 +1320,7 @@ async def _merge_chat_messages(
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/save", response_model=DataResponse)
+@router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 async def save_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1403,7 +1376,7 @@ async def save_chat_by_id(
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.delete("/chats/{chat_id}", response_model=DataResponse)
+@router.delete("/chats/{chat_id}", response_model=DataResponse[ChatDeleteData])
 async def delete_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1474,9 +1447,7 @@ async def send_direct_chat_response(
     _validate_workflow_manager(chat_workflow_manager)
 
     return _create_streaming_response(
-        _stream_direct_response(
-            chat_workflow_manager, chat_id, message, remember_choice, request_id
-        )
+        _stream_direct_response(chat_workflow_manager, chat_id, message, remember_choice, request_id)
     )
 
 
@@ -1531,9 +1502,7 @@ async def _get_enhanced_chat_context(
     if hasattr(chat_history_manager, "get_session_messages"):
         try:
             model_name = message.metadata.get("model") if message.metadata else None
-            recent_messages = await chat_history_manager.get_session_messages(
-                session_id, model_name=model_name
-            )
+            recent_messages = await chat_history_manager.get_session_messages(session_id, model_name=model_name)
             chat_context = recent_messages or []
             logger.info(
                 "Retrieved %s messages for model %s",
@@ -1559,9 +1528,7 @@ async def _enhance_with_knowledge_base(
             kb_results = await knowledge_base.search(query=message.content, top_k=5)
             if kb_results:
                 knowledge_sources = kb_results
-                kb_summary = "\n".join(
-                    [f"- {item.get('content', '')[:300]}..." for item in kb_results[:3]]
-                )
+                kb_summary = "\n".join([f"- {item.get('content', '')[:300]}..." for item in kb_results[:3]])
                 enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
                 logger.info("Enhanced context with %s KB results", len(kb_results))
         except Exception as e:
@@ -1610,18 +1577,14 @@ async def _generate_ai_stack_chat_response(
         )
 
         return {
-            "content": ai_stack_response.get(
-                "response", ai_stack_response.get("content", "")
-            ),
+            "content": ai_stack_response.get("response", ai_stack_response.get("content", "")),
             "role": "assistant",
             "metadata": {
                 "source": "ai_stack",
                 "agent_used": ai_stack_response.get("agent", "chat"),
                 "confidence": ai_stack_response.get("confidence", 0.8),
                 "reasoning": (
-                    ai_stack_response.get("reasoning")
-                    if preferences and preferences.include_reasoning
-                    else None
+                    ai_stack_response.get("reasoning") if preferences and preferences.include_reasoning else None
                 ),
             },
         }
@@ -1642,8 +1605,7 @@ def _create_basic_chat_response() -> Metadata:
     """Create basic response without AI Stack."""
     return {
         "content": (
-            "Thank you for your message. I'm currently running in basic mode "
-            "without enhanced AI capabilities."
+            "Thank you for your message. I'm currently running in basic mode " "without enhanced AI capabilities."
         ),
         "role": "assistant",
         "metadata": {"source": "basic_chat"},
@@ -1719,13 +1681,9 @@ async def _execute_enhanced_chat_pipeline(
     """
     await _store_enhanced_user_message(message, session_id, chat_history_manager)
 
-    chat_context = await _get_enhanced_chat_context(
-        message, session_id, chat_history_manager
-    )
+    chat_context = await _get_enhanced_chat_context(message, session_id, chat_history_manager)
 
-    enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(
-        message, knowledge_base
-    )
+    enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(message, knowledge_base)
 
     if message.use_ai_stack:
         ai_response = await _generate_ai_stack_chat_response(
@@ -1740,13 +1698,9 @@ async def _execute_enhanced_chat_pipeline(
     else:
         ai_response = _create_basic_chat_response()
 
-    _enhance_response_with_sources(
-        ai_response, knowledge_sources, message.include_sources
-    )
+    _enhance_response_with_sources(ai_response, knowledge_sources, message.include_sources)
 
-    ai_message_id = await _store_enhanced_ai_response(
-        ai_response, session_id, request_id, chat_history_manager
-    )
+    ai_message_id = await _store_enhanced_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
     return {
         "content": ai_response.get("content", ""),
@@ -1790,9 +1744,7 @@ async def process_enhanced_chat_message(
 
     except Exception as e:
         logger.error("Error processing enhanced chat message: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to process enhanced chat message"
-        )
+        raise HTTPException(status_code=500, detail="Failed to process enhanced chat message")
 
 
 # ====================================================================
@@ -1855,10 +1807,7 @@ async def _stream_ai_stack_response(
 
 def _stream_enhanced_fallback_response(session_id: str):
     """Stream fallback response when AI Stack not enabled."""
-    fallback_msg = (
-        "Thank you for your message. Enhanced streaming requires AI Stack "
-        "integration."
-    )
+    fallback_msg = "Thank you for your message. Enhanced streaming requires AI Stack " "integration."
     return _format_sse_event(
         {
             "type": "chunk",
@@ -1878,9 +1827,7 @@ async def _generate_enhanced_stream(
     """Generate streaming response with AI Stack integration."""
     try:
         session_id = message.session_id or generate_chat_session_id()
-        yield _format_sse_event(
-            {"type": "start", "session_id": session_id, "enhanced": True}
-        )
+        yield _format_sse_event({"type": "start", "session_id": session_id, "enhanced": True})
 
         chat_history_manager = get_chat_history_manager(request)
 
@@ -1920,7 +1867,7 @@ async def _generate_enhanced_stream(
     operation="enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/enhanced", response_model=DataResponse)
+@router.post("/enhanced", response_model=DataResponse[EnhancedChatData])
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
@@ -2032,7 +1979,7 @@ async def stream_enhanced_chat(
     operation="enhanced_chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/health-enhanced", response_model=DataResponse)
+@router.get("/health-enhanced", response_model=DataResponse[EnhancedChatHealthData])
 async def enhanced_chat_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2091,7 +2038,7 @@ async def enhanced_chat_health_check(
     operation="get_enhanced_chat_capabilities",
     error_code_prefix="CHAT",
 )
-@router.get("/capabilities", response_model=DataResponse)
+@router.get("/capabilities", response_model=DataResponse[EnhancedChatCapabilitiesData])
 async def get_enhanced_chat_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2123,9 +2070,7 @@ async def get_enhanced_chat_capabilities(
             "context_window": 10,
         }
 
-        return create_chat_response(
-            capabilities, "Enhanced chat capabilities retrieved successfully"
-        )
+        return create_chat_response(capabilities, "Enhanced chat capabilities retrieved successfully")
 
     except Exception as e:
         logger.warning("Failed to get full capabilities: %s", e)
@@ -2155,7 +2100,7 @@ async def get_enhanced_chat_capabilities(
     operation="translate_text",
     error_code_prefix="CHAT",
 )
-@router.post("/translate", response_model=DataResponse)
+@router.post("/translate", response_model=DataResponse[TranslateData])
 async def translate_text(
     body: TranslateRequest,
     current_user: dict = Depends(get_current_user),
@@ -2189,7 +2134,7 @@ async def translate_text(
     operation="detect_language",
     error_code_prefix="CHAT",
 )
-@router.post("/detect-language", response_model=DataResponse)
+@router.post("/detect-language", response_model=DataResponse[DetectLanguageData])
 async def detect_language(
     body: DetectLanguageRequest,
     current_user: dict = Depends(get_current_user),
