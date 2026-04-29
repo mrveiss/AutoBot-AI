@@ -2194,7 +2194,6 @@
   },
   "knowledge": {
     "title": "Baza wiedzy",
-    "search": "Szukaj wiedzy...",
     "upload": {
       "tagsPlaceholder": "Wprowadź tagi oddzielone przecinkami...",
       "selectCategory": "Wybierz kategorię...",

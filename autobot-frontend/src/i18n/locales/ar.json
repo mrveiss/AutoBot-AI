@@ -2194,7 +2194,6 @@
   },
   "knowledge": {
     "title": "قاعدة المعرفة",
-    "search": "Search knowledge...",
     "upload": {
       "tagsPlaceholder": "Enter tags separated by commas...",
       "selectCategory": "Select category...",
