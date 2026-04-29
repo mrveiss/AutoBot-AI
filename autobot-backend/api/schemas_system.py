@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
 from constants.threshold_constants import RetryConfig
@@ -2997,3 +2997,103 @@ class AlertManagerWebhook(BaseModel):
     commonAnnotations: Dict[str, str]
     externalURL: str
     alerts: List[AlertInstance]
+
+
+# ---------------------------------------------------------------------------
+# files.py schemas
+# ---------------------------------------------------------------------------
+
+
+class FileInfo(BaseModel):
+    """File information model."""
+
+    name: str
+    path: str
+    is_directory: bool
+    size: Optional[int] = None
+    mime_type: Optional[str] = None
+    last_modified: datetime
+    permissions: str
+    extension: Optional[str] = None
+
+
+class DirectoryListing(BaseModel):
+    """Directory listing response model."""
+
+    current_path: str
+    parent_path: Optional[str] = None
+    files: List[FileInfo]
+    total_files: int
+    total_directories: int
+    total_size: int
+
+
+class FilesAPIUploadResponse(BaseModel):
+    """File upload response model."""
+
+    success: bool
+    message: str
+    file_info: Optional[FileInfo] = None
+    upload_id: Optional[str] = None
+
+
+class FileOperation(BaseModel):
+    """File operation request model."""
+
+    path: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, v):
+        """Validate path to prevent directory traversal attacks."""
+        if not v or ".." in v or v.startswith("/"):
+            raise ValueError("Invalid path")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# data_storage.py schemas
+# ---------------------------------------------------------------------------
+
+
+class StorageCategory(BaseModel):
+    """Storage category with size info."""
+
+    name: str
+    path: str
+    size_bytes: int
+    size_human: str
+    file_count: int
+    description: str
+    can_cleanup: bool = True
+    cleanup_type: str = "manual"
+
+
+class StorageStats(BaseModel):
+    """Overall storage statistics."""
+
+    total_size_bytes: int
+    total_size_human: str
+    total_files: int
+    total_directories: int
+    categories: List[StorageCategory]
+    last_cleanup: Optional[str] = None
+
+
+class StorageCleanupRequest(BaseModel):
+    """Cleanup request model."""
+
+    category: str
+    older_than_days: int = 0
+    dry_run: bool = True
+
+
+class CleanupResult(BaseModel):
+    """Cleanup operation result."""
+
+    category: str
+    files_removed: int
+    bytes_freed: int
+    bytes_freed_human: str
+    dry_run: bool
+    errors: List[str] = []
