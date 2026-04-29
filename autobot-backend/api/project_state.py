@@ -8,56 +8,24 @@ Exposes project development phase information and validation status
 """
 
 import logging
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
 from api.schemas_common import DataResponse
-from api.schemas_system import ProjectStateHealthResponse
+from api.schemas_system import (
+    PhaseStatus,
+    PhaseValidationModel,
+    ProjectStateHealthResponse,
+    ProjectStatus,
+    ValidationResultModel,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/project", tags=["project_state"])
-
-
-# Pydantic models for API responses
-class PhaseStatus(BaseModel):
-    name: str
-    completion: float
-    is_active: bool
-    is_completed: bool
-    capabilities: int
-    implemented_capabilities: int
-
-
-class ProjectStatus(BaseModel):
-    current_phase: str
-    total_phases: int
-    completed_phases: int
-    active_phases: int
-    overall_completion: float
-    next_suggested_phase: Optional[str]
-    phases: Dict[str, PhaseStatus]
-
-
-class ValidationResultModel(BaseModel):
-    check_name: str
-    status: str
-    score: float
-    details: str
-    timestamp: str
-
-
-class PhaseValidationModel(BaseModel):
-    phase_name: str
-    completion_percentage: float
-    is_completed: bool
-    capabilities: List[str]
-    validation_results: List[ValidationResultModel]
 
 
 @with_error_handling(

@@ -17,7 +17,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
 
 from auth_middleware import get_current_user
 from services.trigger_service import (
@@ -27,6 +26,11 @@ from services.trigger_service import (
     TriggerType,
 )
 from api.schemas_agent import WebhookAcceptedResponse
+from api.schemas_workflows import (
+    TriggerCreateRequest,
+    TriggerCreateResponse,
+    TriggerListResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -51,44 +55,6 @@ def get_trigger_service() -> TriggerService:
 # ---------------------------------------------------------------------------
 # Pydantic request / response models
 # ---------------------------------------------------------------------------
-
-
-class TriggerCreateRequest(BaseModel):
-    """Request body for POST /api/triggers."""
-
-    trigger_type: TriggerType
-    workflow_id: str = Field(..., min_length=1)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    conditions: List[Dict[str, Any]] = Field(default_factory=list)
-    enabled: bool = True
-
-    @field_validator("workflow_id")
-    @classmethod
-    def workflow_id_not_empty(cls, v: str) -> str:
-        """Ensure workflow_id is not blank after stripping whitespace."""
-        if not v.strip():
-            raise ValueError("workflow_id must not be empty or whitespace")
-        return v
-
-
-class TriggerCreateResponse(BaseModel):
-    """Response body for POST /api/triggers."""
-
-    trigger_id: str
-    webhook_url: Optional[str] = None
-
-
-class TriggerListResponse(BaseModel):
-    """Response body for GET /api/triggers."""
-
-    triggers: List[Dict[str, Any]]
-    total: int
-
-
-class FireTriggerRequest(BaseModel):
-    """Optional request body for manually firing a trigger (internal/testing)."""
-
-    payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

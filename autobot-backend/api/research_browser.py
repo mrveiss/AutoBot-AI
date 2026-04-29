@@ -10,21 +10,24 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.error_constants import ERR_SESSION_NOT_FOUND
-from constants.network_constants import NetworkConstants
 from api.schemas_common import DataResponse
 from api.schemas_code import ResearchBrowserHealthResponse
+from api.schemas_workflows import (
+    BrowserResearchRequest,
+    CreateChatBrowserRequest,
+    NavigationRequest,
+    SessionAction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,18 +46,6 @@ config = get_config_manager()
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-
-
-class ResearchRequest(BaseModel):
-    conversation_id: str
-    url: str
-    extract_content: bool = True
-
-
-class SessionAction(BaseModel):
-    session_id: str
-    action: str  # "wait", "manual_intervention", "save_mhtml", "extract_content"
-    timeout_seconds: Optional[int] = 300
 
 
 def _require_browser():
@@ -87,7 +78,7 @@ async def health_check():
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
-    status = "healthy" if research_browser_manager else "not_initialized"
+    status = "healthy" if get_research_browser_manager else "not_initialized"
 
     browser_service_url = ssot_config.browser_service_url
 
@@ -110,7 +101,7 @@ async def health_check():
     error_code_prefix="RESEARCH_BROWSER",
 )
 @router.post("/url", response_model=DataResponse)
-async def research_url(request: ResearchRequest):
+async def research_url(request: BrowserResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     _require_browser()
     result = await get_research_browser_manager().research_url(
@@ -317,10 +308,6 @@ async def list_sessions():
     )
 
 
-class NavigationRequest(BaseModel):
-    url: str
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_session",
@@ -449,14 +436,6 @@ def _get_browser_actions() -> list:
 
 # Chat Browser Session Management (Issue #73)
 # These endpoints tie browser sessions to chat conversations like terminal
-
-
-class CreateChatBrowserRequest(BaseModel):
-    """Request to create/get browser session for chat"""
-
-    conversation_id: str
-    headless: bool = False
-    initial_url: Optional[str] = None
 
 
 @with_error_handling(

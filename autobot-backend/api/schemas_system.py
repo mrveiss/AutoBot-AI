@@ -7,6 +7,7 @@ System health, cache, NPU worker, wake-word, and feature-flag schemas.
 
 import re
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
@@ -2691,3 +2692,213 @@ class ListMetricsRequest(BaseModel):
     """Request model for listing metrics"""
 
     filter: str = Field("", description="Optional filter pattern (e.g., 'autobot_', 'node_')")
+
+
+# ---------------------------------------------------------------------------
+# service_messages.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ServiceMessageResponse(BaseModel):
+    """Single serialised ServiceMessage."""
+
+    msg_id: str
+    ts: str
+    sender: str
+    receiver: str
+    msg_type: str
+    content: str
+    correlation_id: str
+    meta: dict = Field(default_factory=dict)
+
+
+class LatestMessagesResponse(BaseModel):
+    """Response for GET /latest."""
+
+    success: bool
+    count: int
+    messages: List[ServiceMessageResponse]
+
+
+class SingleMessageResponse(BaseModel):
+    """Response for GET /{msg_id}."""
+
+    success: bool
+    message: Optional[ServiceMessageResponse] = None
+
+
+class CorrelationChainResponse(BaseModel):
+    """Response for GET /chain/{correlation_id}."""
+
+    success: bool
+    correlation_id: str
+    count: int
+    messages: List[ServiceMessageResponse]
+
+
+# ---------------------------------------------------------------------------
+# project_state.py schemas
+# ---------------------------------------------------------------------------
+
+
+class PhaseStatus(BaseModel):
+    name: str
+    completion: float
+    is_active: bool
+    is_completed: bool
+    capabilities: int
+    implemented_capabilities: int
+
+
+class ProjectStatus(BaseModel):
+    current_phase: str
+    total_phases: int
+    completed_phases: int
+    active_phases: int
+    overall_completion: float
+    next_suggested_phase: Optional[str]
+    phases: Dict[str, PhaseStatus]
+
+
+class ValidationResultModel(BaseModel):
+    check_name: str
+    status: str
+    score: float
+    details: str
+    timestamp: str
+
+
+class PhaseValidationModel(BaseModel):
+    phase_name: str
+    completion_percentage: float
+    is_completed: bool
+    capabilities: List[str]
+    validation_results: List[ValidationResultModel]
+
+
+# ---------------------------------------------------------------------------
+# services.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ServiceStatus(BaseModel):
+    """Service status model."""
+
+    name: str
+    status: str = Field(..., description="Service status: healthy, warning, error")
+    message: str = Field(..., description="Status description")
+    last_check: Optional[datetime] = None
+    response_time_ms: Optional[float] = None
+
+
+class SystemInfo(BaseModel):
+    """System information model."""
+
+    version: str
+    build: str
+    environment: str
+    uptime: float
+    services_count: int
+
+
+class VMStatus(BaseModel):
+    """VM status model."""
+
+    name: str
+    ip: str
+    status: str = Field(..., description="VM status: online, offline, unknown")
+    services: List[str] = Field(default_factory=list)
+    last_check: Optional[datetime] = None
+
+
+class ServicesResponse(BaseModel):
+    """Services list response."""
+
+    services: List[ServiceStatus]
+    total_count: int
+    healthy_count: int
+    error_count: int
+    warning_count: int
+    last_updated: datetime
+
+
+# ---------------------------------------------------------------------------
+# structured_thinking_mcp.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ThinkingStage(str, Enum):
+    """Five cognitive stages for structured thinking."""
+
+    PROBLEM_DEFINITION = "Problem Definition"
+    RESEARCH = "Research"
+    ANALYSIS = "Analysis"
+    SYNTHESIS = "Synthesis"
+    CONCLUSION = "Conclusion"
+
+
+class StructuredThinkingMCPTool(BaseModel):
+    """Standard MCP tool definition (structured thinking)."""
+
+    name: str
+    description: str
+    input_schema: Metadata
+
+
+class ProcessThoughtRequest(BaseModel):
+    """Request model for processing a thought in structured framework."""
+
+    thought: str = Field(..., description="The content of the thought")
+    thought_number: int = Field(..., ge=1, description="Position in the thinking sequence")
+    total_thoughts: int = Field(..., ge=1, description="Expected total number of thoughts")
+    next_thought_needed: bool = Field(..., description="Whether more thoughts will follow")
+    stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
+    tags: Optional[List[str]] = Field(None, description="Keywords or categories for this thought")
+    axioms_used: Optional[List[str]] = Field(None, description="Fundamental principles applied")
+    assumptions_challenged: Optional[List[str]] = Field(None, description="Assumptions being questioned")
+    session_id: Optional[str] = Field("default", description="Thinking session identifier")
+
+    def to_thought_record(self) -> Metadata:
+        """Convert request to thought record for storage."""
+        return {
+            "thought_number": self.thought_number,
+            "thought": self.thought,
+            "total_thoughts": self.total_thoughts,
+            "next_thought_needed": self.next_thought_needed,
+            "stage": self.stage.value,
+            "tags": self.tags or [],
+            "axioms_used": self.axioms_used or [],
+            "assumptions_challenged": self.assumptions_challenged or [],
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
+    def get_progress_percentage(self) -> float:
+        """Calculate progress percentage."""
+        return (self.thought_number / self.total_thoughts) * 100
+
+    def get_session_key(self) -> str:
+        """Get session key with fallback."""
+        return self.session_id or "default"
+
+    def is_thinking_complete(self) -> bool:
+        """Check if thinking process is complete."""
+        return not self.next_thought_needed
+
+    def get_progress_message(self) -> str:
+        """Get formatted progress message."""
+        return (
+            f"Processed thought {self.thought_number}/{self.total_thoughts} "
+            f"in {self.stage.value} stage"
+        )
+
+
+class GenerateSummaryRequest(BaseModel):
+    """Request model for generating thinking summary."""
+
+    session_id: Optional[str] = Field("default", description="Session to summarize")
+
+
+class ClearHistoryRequest(BaseModel):
+    """Request model for clearing thinking history."""
+
+    session_id: Optional[str] = Field("default", description="Session to clear")
