@@ -19,9 +19,14 @@ from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from api.schemas_analytics import (
+    CustomReportRequest,
+    DashboardResponse,
+    MaintenanceRecommendationResponse,
+    ResourceOptimizationResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
@@ -51,64 +56,6 @@ router = APIRouter(tags=["analytics", "advanced"])
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
-
-
-class MaintenanceRecommendationResponse(BaseModel):
-    """Maintenance recommendation response model."""
-
-    id: str
-    title: str
-    description: str
-    priority: str
-    category: str
-    affected_component: str
-    predicted_issue: str
-    confidence: float
-    recommended_action: str
-    estimated_impact: str
-    detected_at: str
-    metadata: dict = Field(default_factory=dict)
-
-
-class ResourceOptimizationResponse(BaseModel):
-    """Resource optimization response model."""
-
-    id: str
-    resource_type: str
-    title: str
-    current_usage: dict
-    recommended_change: str
-    expected_savings: dict
-    implementation_effort: str
-    priority: str
-    details: str
-
-
-class DashboardResponse(BaseModel):
-    """Unified dashboard response model."""
-
-    generated_at: str
-    period_days: int
-    health: dict
-    cost: dict
-    agents: dict
-    engagement: dict
-    maintenance: dict
-    optimization: dict
-
-
-class CustomReportRequest(BaseModel):
-    """Custom report generation request."""
-
-    report_type: str = Field(
-        default="executive",
-        description="Report type: executive, technical, cost, performance",
-    )
-    days: int = Field(default=30, ge=1, le=365, description="Days to include")
-    include_sections: Optional[List[str]] = Field(
-        default=None,
-        description="Sections to include: cost, agents, behavior, maintenance, optimization",
-    )
 
 
 # ============================================================================
