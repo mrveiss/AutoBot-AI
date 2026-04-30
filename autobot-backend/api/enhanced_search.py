@@ -12,8 +12,13 @@ import time
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_knowledge import (
+    BenchmarkRequest,
+    NPUOptimizationRequest,
+    NPUSearchRequest,
+    NPUSearchResponse,
+)
 from ai_hardware_accelerator import HardwareDevice
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_llm_logger
@@ -21,7 +26,6 @@ from autobot_shared.logging_manager import get_llm_logger
 # Import NPU semantic search components
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     EnhancedSearchBenchmarkResponse,
     EnhancedSearchConnectivityResponse,
@@ -34,54 +38,6 @@ from api.schemas_knowledge import (
 logger = get_llm_logger("enhanced_search_api")
 
 router = APIRouter(tags=["Enhanced Search"])
-
-
-# Pydantic models for API
-class SearchRequest(BaseModel):
-    """Enhanced search request model."""
-
-    query: str = Field(..., description="Search query")
-    similarity_top_k: int = Field(
-        10, description="Number of results to return", ge=1, le=100
-    )
-    filters: Optional[Metadata] = Field(None, description="Optional metadata filters")
-    enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
-    force_device: Optional[str] = Field(
-        None, description="Force specific device (npu/gpu/cpu)"
-    )
-
-
-class SearchResponse(BaseModel):
-    """Enhanced search response model."""
-
-    query: str
-    results: List[Metadata]
-    metrics: Metadata
-    total_results: int
-    search_time_ms: float
-    device_used: str
-    cache_hit: bool = False
-
-
-class BenchmarkRequest(BaseModel):
-    """Benchmark request model."""
-
-    test_queries: List[str] = Field(..., description="List of test queries")
-    iterations: int = Field(
-        3, description="Number of iterations per query", ge=1, le=10
-    )
-
-
-class OptimizationRequest(BaseModel):
-    """Optimization request model."""
-
-    workload_type: str = Field(
-        "balanced",
-        description=(
-            "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
-            "balanced"
-        ),
-    )
 
 
 def _parse_force_device(force_device_str: Optional[str]) -> Optional[HardwareDevice]:
@@ -150,8 +106,8 @@ def _convert_metrics_to_api_format(metrics) -> dict:
     operation="enhanced_semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/semantic", response_model=SearchResponse)
-async def enhanced_semantic_search(request: SearchRequest):
+@router.post("/semantic", response_model=NPUSearchResponse)
+async def enhanced_semantic_search(request: NPUSearchRequest):
     """
     Perform NPU-enhanced semantic search.
 
@@ -189,7 +145,7 @@ async def enhanced_semantic_search(request: SearchRequest):
             metrics.device_used,
         )
 
-        return SearchResponse(
+        return NPUSearchResponse(
             query=request.query,
             results=results_data,
             metrics=metrics_data,
@@ -286,7 +242,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     error_code_prefix="ENHANCED_SEARCH",
 )
 @router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
-async def optimize_search_engine(request: OptimizationRequest):
+async def optimize_search_engine(request: NPUOptimizationRequest):
     """
     Optimize search engine for specific workload types.
 

@@ -4667,3 +4667,49 @@ class MarkdownReferenceRequest(BaseModel):
     task_id: str
     markdown_file_path: str
     reference_type: str = "documentation"
+
+
+# ---------------------------------------------------------------------------
+# enhanced_search.py schemas
+# ---------------------------------------------------------------------------
+
+
+class NPUSearchRequest(BaseModel):
+    """Enhanced search request model."""
+
+    query: str = Field(..., description="Search query")
+    similarity_top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
+    filters: Optional[Metadata] = Field(None, description="Optional metadata filters")
+    enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
+    force_device: Optional[str] = Field(None, description="Force specific device (npu/gpu/cpu)")
+
+
+class NPUSearchResponse(BaseModel):
+    """Enhanced search response model."""
+
+    query: str
+    results: List[Metadata]
+    metrics: Metadata
+    total_results: int
+    search_time_ms: float
+    device_used: str
+    cache_hit: bool = False
+
+
+class BenchmarkRequest(BaseModel):
+    """Benchmark request model."""
+
+    test_queries: List[str] = Field(..., description="List of test queries")
+    iterations: int = Field(3, description="Number of iterations per query", ge=1, le=10)
+
+
+class NPUOptimizationRequest(BaseModel):
+    """Optimization request model."""
+
+    workload_type: str = Field(
+        "balanced",
+        description=(
+            "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
+            "balanced"
+        ),
+    )
