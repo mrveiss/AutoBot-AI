@@ -2522,3 +2522,15 @@ class CompletionResponse(BaseModel):
     completion_time_ms: float
     source: str
     cached: bool = False
+
+
+# ---------------------------------------------------------------------------
+# development_speedup.py schemas
+# ---------------------------------------------------------------------------
+
+
+class DevelopmentSpeedupAnalysisRequest(BaseModel):
+    """Request model for development_speedup code analysis."""
+
+    root_path: str
+    analysis_type: str = "comprehensive"

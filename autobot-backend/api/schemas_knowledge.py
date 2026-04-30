@@ -4760,3 +4760,53 @@ class AIStackRAGQueryRequest(BaseModel):
     context: Optional[str] = Field(None, description="Additional context")
     max_results: int = Field(10, ge=1, le=30, description="Maximum results")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
+
+
+# ---------------------------------------------------------------------------
+# knowledge_boards.py schemas
+# ---------------------------------------------------------------------------
+
+# The implicit global board — never stored, always valid
+KNOWLEDGE_BOARD_GLOBAL_ID = "__global__"
+
+# Allowed characters for board IDs: lowercase letters, digits, hyphen, underscore
+_BOARD_ID_RE = re.compile(r"^[a-z0-9_-]{1,100}$")
+
+
+class CreateBoardRequest(BaseModel):
+    """Request model for creating a new knowledge board."""
+
+    board_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Stable identifier for the board (lowercase letters, digits, "
+            "hyphen, underscore). Auto-generated when omitted."
+        ),
+    )
+    name: str = Field(..., min_length=1, max_length=200, description="Human-readable board name")
+    description: str = Field(default="", max_length=500, description="Optional description")
+
+    @field_validator("board_id", mode="before")
+    @classmethod
+    def validate_board_id(cls, v):
+        if v is None:
+            return v
+        if v == KNOWLEDGE_BOARD_GLOBAL_ID:
+            raise ValueError("'__global__' is reserved and cannot be created")
+        if not _BOARD_ID_RE.match(v):
+            raise ValueError(
+                "board_id must only contain lowercase letters, digits, hyphen, or underscore"
+            )
+        return v
+
+
+# ---------------------------------------------------------------------------
+# knowledge_cognition.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SeedRequest(BaseModel):
+    """Optional body for the cognition store seed endpoint."""
+
+    manifest_path: str = "cognition_seed.yaml"

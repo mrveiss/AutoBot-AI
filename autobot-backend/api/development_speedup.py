@@ -12,7 +12,6 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from agents.development_speedup_agent import (
     analyze_codebase,
@@ -21,6 +20,7 @@ from agents.development_speedup_agent import (
 )
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.schemas_code import DevelopmentSpeedupAnalysisRequest
 from api.schemas_common import DataResponse, SuccessResponse
 
 router = APIRouter()
@@ -86,14 +86,6 @@ ANALYSIS_TYPE_HANDLERS: Dict[str, AnalysisHandler] = {
 VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
-class AnalysisRequest(BaseModel):
-    """Request model for code analysis."""
-
-    root_path: str
-    # Options: comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
-    analysis_type: str = "comprehensive"
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase_endpoint",
@@ -105,7 +97,7 @@ class AnalysisRequest(BaseModel):
     operation="analyze_codebase_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-async def analyze_codebase_endpoint(request: AnalysisRequest):
+async def analyze_codebase_endpoint(request: DevelopmentSpeedupAnalysisRequest):
     """
     Comprehensive codebase analysis for development speedup.
 
@@ -170,7 +162,7 @@ async def analyze_codebase_get(
     - path: Root directory path to analyze (required)
     - type: Analysis type (comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality)
     """
-    request = AnalysisRequest(root_path=path, analysis_type=type)
+    request = DevelopmentSpeedupAnalysisRequest(root_path=path, analysis_type=type)
     return await analyze_codebase_endpoint(request)
 
 

@@ -1873,3 +1873,40 @@ class AgentModelUpdate(BaseModel):
     agent_id: str
     model: str
     provider: Optional[str] = "ollama"
+
+
+# ---------------------------------------------------------------------------
+# bi_export_endpoints.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SavedReportRequest(BaseModel):
+    """Request to save a BI report configuration."""
+
+    name: str
+    report_type: str = "executive"
+    sections: List[str] = ["cost", "agents"]
+
+
+# ---------------------------------------------------------------------------
+# conversation_export.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ConversationImportRequest(BaseModel):
+    """Request body for importing a conversation."""
+
+    document: dict = Field(
+        ...,
+        description=(
+            "AutoBot conversation export document produced by the export endpoint "
+            "(format: autobot-conversation-v1)."
+        ),
+    )
+    on_conflict: str = Field(
+        default="skip",
+        description=(
+            "Conflict resolution strategy when session_id already exists. "
+            "One of: skip, replace, rename."
+        ),
+    )
