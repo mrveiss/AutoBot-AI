@@ -55,6 +55,9 @@ from utils.chat_utils import (
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
+# Issue #6559: Wire audit_record into session create/delete/export endpoints
+from services.audit import AuditAction, audit_record
+
 # ====================================================================
 # Router Configuration
 # ====================================================================
@@ -803,6 +806,23 @@ async def create_session(session_data: SessionCreate, request: Request):
     # Issue #4260: Wire SESSION_CREATE hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_create(session_id, context)
+
+    # Issue #6559: Audit session creation
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.SESSION_CREATE,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "title": session_title,
+            "team_id": session_data.team_id,
+            "request_id": request_id,
+        },
+        outcome="success",
+    )
+
     return create_chat_response(
         data=session,
         message="Session created successfully",
@@ -1374,6 +1394,24 @@ async def delete_session(
     # Issue #4260: Wire SESSION_DESTROY hook for extensions
     context = getattr(request.app.state, "context", {})
     await _emit_session_destroy(session_id, message_count, context)
+
+    # Issue #6559: Audit session deletion
+    user_data = get_auth_middleware().get_user_from_request(request)
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.SESSION_DELETE,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "file_action": file_action,
+            "message_count": message_count,
+            "request_id": request_id,
+        },
+        outcome="success",
+    )
+
     return _build_delete_session_response(
         session_id,
         request_id,
@@ -1416,6 +1454,26 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 
     log_chat_event(
         "session_exported", session_id, {"format": format, "request_id": request_id}
+    )
+
+    # Issue #6559: Audit session export
+    # TODO: AuditAction.SESSION_EXPORT does not exist in the enum yet — using
+    # ADMIN_ACTION with metadata.action="session.export" until the enum gains
+    # a dedicated value. See services/audit/audit_log.py.
+    user_data = get_auth_middleware().get_user_from_request(request)
+    audit_record(
+        user_id=str((user_data or {}).get("user_id", "unknown")),
+        action=AuditAction.ADMIN_ACTION,
+        resource_type="chat_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=session_id,
+        metadata={
+            "action": "session.export",
+            "format": format,
+            "request_id": request_id,
+        },
+        outcome="success",
     )
 
     return Response(
