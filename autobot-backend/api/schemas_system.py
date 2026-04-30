@@ -3622,3 +3622,22 @@ class VncProxyStatusResponse(BaseModel):
     accessible: bool
     status: Optional[int] = None
     error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# onboarding.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ApplyPresetRequest(BaseModel):
+    """Request body for applying an onboarding preset."""
+
+    preset_name: str
+    overrides: Dict[str, Any] = Field(default_factory=dict)
+
+
+class OnboardingStatus(BaseModel):
+    """Response model for GET /api/onboarding/status."""
+
+    preset_applied: bool
+    preset_name: Optional[str] = None

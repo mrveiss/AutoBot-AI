@@ -13,35 +13,18 @@ Provides first-run UX endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from api.schemas_common import DataResponse
+from api.schemas_system import ApplyPresetRequest, OnboardingStatus
 from onboarding.presets import get_all_presets, get_preset
 from onboarding.doctor import run_doctor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["onboarding"])
-
-
-# ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
-
-
-class ApplyPresetRequest(BaseModel):
-    preset_name: str
-    overrides: dict[str, Any] = {}
-
-
-class OnboardingStatus(BaseModel):
-    """Response model for GET /api/onboarding/status (#6452)."""
-
-    preset_applied: bool
-    preset_name: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

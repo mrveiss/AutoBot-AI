@@ -2344,3 +2344,53 @@ class DashboardGenerateRequest(BaseModel):
     include_trends: bool = True
     include_recommendations: bool = True
     refresh_interval: int = 30  # seconds
+
+
+# ---------------------------------------------------------------------------
+# integration_version_control.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ConnectionTestRequest(BaseModel):
+    """Request model for testing VCS connection."""
+
+    provider: str = Field(..., description="VCS provider (gitlab, bitbucket)")
+    api_key: str = Field(..., description="API key or access token")
+    settings: Dict[str, Any] = Field(
+        default_factory=dict, description="Provider-specific settings"
+    )
+
+
+class ProviderInfo(BaseModel):
+    """Information about a VCS provider."""
+
+    id: str = Field(..., description="Provider identifier")
+    name: str = Field(..., description="Provider display name")
+    description: str = Field(..., description="Provider description")
+    required_settings: List[str] = Field(
+        default_factory=list, description="Required configuration settings"
+    )
+    optional_settings: List[str] = Field(
+        default_factory=list, description="Optional configuration settings"
+    )
+
+
+# ---------------------------------------------------------------------------
+# orchestration.py schemas
+# ---------------------------------------------------------------------------
+
+
+class WorkflowRequest(BaseModel):
+    """Request body for orchestration workflow execution."""
+
+    goal: str
+    strategy: Optional[str] = None
+    context: Optional[dict] = None
+    max_parallel_tasks: Optional[int] = 5
+
+
+class AgentRecommendationRequest(BaseModel):
+    """Request body for agent recommendations from orchestrator."""
+
+    task_type: str
+    capabilities_needed: List[str]

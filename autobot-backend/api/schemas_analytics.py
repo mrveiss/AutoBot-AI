@@ -3246,3 +3246,31 @@ class UsageRecordRequest(BaseModel):
     agent_id: Optional[str] = None
     latency_ms: Optional[float] = None
     success: bool = True
+
+
+# ---------------------------------------------------------------------------
+# analytics_debt.py schemas
+# ---------------------------------------------------------------------------
+
+
+class DebtCalculationRequest(BaseModel):
+    """Request for technical debt calculation."""
+
+    target_path: str = Field(default=".", description="Path to analyze")
+    hourly_rate: float = Field(default=75.0, description="Developer hourly rate in USD")
+    include_categories: List[str] = Field(
+        default_factory=list, description="Categories to include (empty = all)"
+    )
+
+
+class DebtSummary(BaseModel):
+    """Summary of technical debt."""
+
+    total_items: int
+    total_hours: float
+    total_cost_usd: float
+    by_category: Dict[str, int]
+    by_severity: Dict[str, int]
+    top_files: List[Dict[str, Any]]
+    roi_ranking: List[Dict[str, Any]]
+    timestamp: str

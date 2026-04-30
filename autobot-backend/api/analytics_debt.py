@@ -23,8 +23,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_analytics import DebtCalculationRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
@@ -115,29 +115,6 @@ class DebtItem:
             "recommendation": self.recommendation,
             "tags": self.tags,
         }
-
-
-class DebtCalculationRequest(BaseModel):
-    """Request for debt calculation"""
-
-    target_path: str = Field(default=".", description="Path to analyze")
-    hourly_rate: float = Field(default=75.0, description="Developer hourly rate in USD")
-    include_categories: List[str] = Field(
-        default=[], description="Categories to include (empty = all)"
-    )
-
-
-class DebtSummary(BaseModel):
-    """Summary of technical debt"""
-
-    total_items: int
-    total_hours: float
-    total_cost_usd: float
-    by_category: Dict[str, int]
-    by_severity: Dict[str, int]
-    top_files: List[Dict[str, Any]]
-    roi_ranking: List[Dict[str, Any]]
-    timestamp: str
 
 
 # Debt calculation weights
