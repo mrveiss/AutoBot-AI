@@ -2351,8 +2351,13 @@ class DashboardGenerateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing VCS connection."""
+class VCSConnectionTestRequest(BaseModel):
+    """Request model for testing VCS connection (#6604).
+
+    Renamed from `ConnectionTestRequest` to disambiguate from the project-
+    management variant defined earlier in this module — same name, different
+    shape, last-definition-wins was masking the project-management caller.
+    """
 
     provider: str = Field(..., description="VCS provider (gitlab, bitbucket)")
     api_key: str = Field(..., description="API key or access token")
@@ -2361,8 +2366,13 @@ class ConnectionTestRequest(BaseModel):
     )
 
 
-class ProviderInfo(BaseModel):
-    """Information about a VCS provider."""
+class VCSProviderInfo(BaseModel):
+    """Information about a VCS provider (#6604).
+
+    Renamed from `ProviderInfo` to disambiguate from the project-management
+    `ProviderInfo` defined earlier in this module — same name, different shape,
+    last-definition-wins was masking the project-management caller.
+    """
 
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Provider display name")

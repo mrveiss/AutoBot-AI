@@ -15,7 +15,7 @@ from api.schemas_code import (
     VCSPullRequestsResponse,
     VCSRepositoriesResponse,
 )
-from api.schemas_workflows import ConnectionTestRequest, ProviderInfo
+from api.schemas_workflows import VCSConnectionTestRequest, VCSProviderInfo
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.version_control_integration import (
@@ -98,7 +98,7 @@ def _create_integration(provider: str, config: IntegrationConfig) -> Any:
     operation="test_connection",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
+async def test_connection(request: VCSConnectionTestRequest) -> IntegrationHealth:
     """Test VCS provider connection.
 
     Args:
@@ -132,13 +132,13 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
-@router.get("/providers", response_model=List[ProviderInfo])
+@router.get("/providers", response_model=List[VCSProviderInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_providers",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-async def get_providers() -> List[ProviderInfo]:
+async def get_providers() -> List[VCSProviderInfo]:
     """Get list of supported VCS providers.
 
     Returns:
@@ -147,7 +147,7 @@ async def get_providers() -> List[ProviderInfo]:
     providers = []
     for provider_id, info in SUPPORTED_PROVIDERS.items():
         providers.append(
-            ProviderInfo(
+            VCSProviderInfo(
                 id=provider_id,
                 name=info["name"],
                 description=info["description"],
