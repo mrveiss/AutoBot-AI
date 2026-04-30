@@ -4713,3 +4713,50 @@ class NPUOptimizationRequest(BaseModel):
             "balanced"
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# knowledge_ai_stack.py schemas (separate from existing knowledge schemas)
+# ---------------------------------------------------------------------------
+
+
+class AIStackEnhancedSearchRequest(BaseModel):
+    """Enhanced search request with AI Stack integration."""
+
+    query: str = Field(..., min_length=1, max_length=5000, description="Search query")
+    search_type: str = Field("comprehensive", description="Search type (precise, comprehensive, broad)")
+    max_results: int = Field(10, ge=1, le=50, description="Maximum results to return")
+    include_rag: bool = Field(True, description="Include RAG-enhanced results")
+    include_local: bool = Field(True, description="Include local knowledge base results")
+    confidence_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum confidence score")
+
+
+class AIStackKnowledgeExtractionRequest(BaseModel):
+    """Request model for knowledge extraction (AI Stack version)."""
+
+    content: str = Field(..., min_length=1, description="Content to extract knowledge from")
+    title: Optional[str] = Field(None, description="Content title")
+    source: Optional[str] = Field("api", description="Content source")
+    category: Optional[str] = Field("general", description="Content category")
+    content_type: str = Field("text", description="Content type (text, document, url)")
+    extraction_mode: str = Field("comprehensive", description="Extraction mode")
+    auto_store: bool = Field(True, description="Automatically store extracted knowledge")
+
+
+class DocumentAnalysisRequest(BaseModel):
+    """Request model for document analysis."""
+
+    documents: List[Metadata] = Field(..., description="Documents to analyze")
+    analysis_type: str = Field("comprehensive", description="Analysis type")
+    extract_entities: bool = Field(True, description="Extract entities")
+    generate_summary: bool = Field(True, description="Generate summary")
+
+
+class AIStackRAGQueryRequest(BaseModel):
+    """Request model for RAG queries (AI Stack version)."""
+
+    query: str = Field(..., min_length=1, max_length=5000, description="RAG query")
+    documents: Optional[List[Metadata]] = Field(None, description="Specific documents to query")
+    context: Optional[str] = Field(None, description="Additional context")
+    max_results: int = Field(10, ge=1, le=30, description="Maximum results")
+    include_reasoning: bool = Field(False, description="Include reasoning steps")
