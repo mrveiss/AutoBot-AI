@@ -18,18 +18,24 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_analytics import (
+    CFGAnalyzeFileRequest,
+    CFGAnalyzeRequest,
+    EdgeType,
+    IssueSeverity,
+    IssueType,
+    NodeType,
+)
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
@@ -44,66 +50,6 @@ _CONDITION_TYPES = (ast.Compare, ast.BoolOp)
 # ============================================================================
 # Enums and Constants
 # ============================================================================
-
-
-class NodeType(str, Enum):
-    """Types of CFG nodes."""
-
-    ENTRY = "entry"
-    EXIT = "exit"
-    STATEMENT = "statement"
-    CONDITION = "condition"
-    LOOP_HEADER = "loop_header"
-    LOOP_BODY = "loop_body"
-    TRY_BLOCK = "try_block"
-    EXCEPT_HANDLER = "except_handler"
-    FINALLY_BLOCK = "finally_block"
-    FUNCTION_DEF = "function_def"
-    CLASS_DEF = "class_def"
-    RETURN = "return"
-    RAISE = "raise"
-    BREAK = "break"
-    CONTINUE = "continue"
-    PASS = "pass"  # nosec B105 - enum value for Python pass statement
-
-
-class EdgeType(str, Enum):
-    """Types of CFG edges."""
-
-    SEQUENTIAL = "sequential"
-    TRUE_BRANCH = "true_branch"
-    FALSE_BRANCH = "false_branch"
-    LOOP_BACK = "loop_back"
-    BREAK_OUT = "break_out"
-    CONTINUE_BACK = "continue_back"
-    EXCEPTION = "exception"
-    FINALLY = "finally"
-    RETURN_EDGE = "return_edge"
-
-
-class IssueSeverity(str, Enum):
-    """Severity levels for detected issues."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
-
-
-class IssueType(str, Enum):
-    """Types of control flow issues."""
-
-    UNREACHABLE_CODE = "unreachable_code"
-    INFINITE_LOOP = "infinite_loop"
-    POTENTIAL_INFINITE_LOOP = "potential_infinite_loop"
-    DEAD_BRANCH = "dead_branch"
-    COMPLEX_CONDITION = "complex_condition"
-    HIGH_CYCLOMATIC_COMPLEXITY = "high_cyclomatic_complexity"
-    DEEP_NESTING = "deep_nesting"
-    MISSING_RETURN = "missing_return"
-    EMPTY_EXCEPT = "empty_except"
-    BARE_EXCEPT = "bare_except"
 
 
 # ============================================================================
@@ -1070,29 +1016,6 @@ class CFGBuilder(ast.NodeVisitor):
 # ============================================================================
 
 
-class AnalyzeRequest(BaseModel):
-    """Request to analyze source code."""
-
-    source_code: str = Field(..., description="Python source code to analyze")
-    file_path: str = Field(default="", description="Optional file path for context")
-
-
-class AnalyzeFileRequest(BaseModel):
-    """Request to analyze a file."""
-
-    file_path: str = Field(..., description="Path to Python file")
-
-
-class CFGResponse(BaseModel):
-    """Response containing CFG analysis."""
-
-    success: bool
-    graphs: List[Dict[str, Any]]
-    summary: Dict[str, Any]
-    issues: List[Dict[str, Any]]
-    analysis_time_ms: float
-
-
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -1152,7 +1075,7 @@ def _calculate_cfg_summary(
 )
 @router.post("/analyze", response_model=DataResponse)
 async def analyze_control_flow(
-    request: AnalyzeRequest,
+    request: CFGAnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
@@ -1213,7 +1136,7 @@ async def analyze_control_flow(
 )
 @router.post("/analyze-file", response_model=None)
 async def analyze_file_control_flow(
-    request: AnalyzeFileRequest,
+    request: CFGAnalyzeFileRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
@@ -1237,7 +1160,7 @@ async def analyze_file_control_flow(
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading file")
 
-    analyze_request = AnalyzeRequest(source_code=source_code, file_path=str(file_path))
+    analyze_request = CFGAnalyzeRequest(source_code=source_code, file_path=str(file_path))
     return await analyze_control_flow(analyze_request)
 
 
@@ -1299,7 +1222,7 @@ def _convert_cfg_to_dot(graph: ControlFlowGraph) -> Dict[str, str]:
 )
 @router.post("/export/dot", response_model=None)
 async def export_cfg_dot(
-    request: AnalyzeRequest,
+    request: CFGAnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
@@ -1329,7 +1252,7 @@ async def export_cfg_dot(
 )
 @router.post("/complexity", response_model=DataResponse)
 async def get_complexity_metrics(
-    request: AnalyzeRequest,
+    request: CFGAnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
@@ -1393,7 +1316,7 @@ async def get_complexity_metrics(
 )
 @router.post("/unreachable", response_model=DataResponse)
 async def detect_unreachable_code(
-    request: AnalyzeRequest,
+    request: CFGAnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
@@ -1434,7 +1357,7 @@ async def detect_unreachable_code(
 )
 @router.post("/infinite-loops", response_model=DataResponse)
 async def detect_infinite_loops(
-    request: AnalyzeRequest,
+    request: CFGAnalyzeRequest,
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """

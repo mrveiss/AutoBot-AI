@@ -23,11 +23,9 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
 
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
@@ -39,6 +37,12 @@ from api.schemas_agent import (
     LLMPatternsRecommendationsResponse,
     LLMPatternsRecordResponse,
     LLMPatternsStatsResponse,
+)
+from api.schemas_analytics import (
+    OptimizationType,
+    PromptAnalysisRequest,
+    PromptCategory,
+    UsageRecordRequest,
 )
 from redis.exceptions import RedisError
 
@@ -63,39 +67,6 @@ logger = logging.getLogger(__name__)
 
 # O(1) lookup optimization constant (Issue #326)
 EXPENSIVE_MODELS = {EXPENSIVE_MODEL_MARKER_OPUS, EXPENSIVE_MODEL_MARKER_GPT4}
-
-
-class PromptCategory(str, Enum):
-    """Categories of LLM prompts"""
-
-    CODE_GENERATION = "code_generation"
-    CODE_REVIEW = "code_review"
-    DOCUMENTATION = "documentation"
-    ANALYSIS = "analysis"
-    CHAT = "chat"
-    TASK_PLANNING = "task_planning"
-    TRANSLATION = "translation"
-    SUMMARIZATION = "summarization"
-    UNKNOWN = "unknown"
-
-
-class OptimizationType(str, Enum):
-    """Types of optimization opportunities"""
-
-    CACHE_PROMPT = "cache_prompt"
-    USE_SMALLER_MODEL = "use_smaller_model"
-    REDUCE_CONTEXT = "reduce_context"
-    BATCH_REQUESTS = "batch_requests"
-    TEMPLATE_REUSE = "template_reuse"
-
-
-class CostLevel(str, Enum):
-    """Cost level classification"""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 # Simple prompt categories that don't require expensive models (O(1) lookup)
@@ -225,56 +196,6 @@ class ModelUsageStats:
 # =============================================================================
 # Pydantic Models
 # =============================================================================
-
-
-class PromptAnalysisRequest(BaseModel):
-    """Request for prompt analysis"""
-
-    prompt: str = Field(..., description="The prompt to analyze")
-    model: Optional[str] = Field(None, description="Model used or planned")
-
-
-class UsageRecordRequest(BaseModel):
-    """Request to record LLM usage"""
-
-    prompt: str = Field(..., description="The prompt sent")
-    model: str = Field(..., description="Model used")
-    input_tokens: int = Field(..., description="Input token count")
-    output_tokens: int = Field(..., description="Output token count")
-    response_time: float = Field(..., description="Response time in seconds")
-    success: bool = Field(default=True)
-    session_id: Optional[str] = Field(None)
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_record_dict(
-        self,
-        prompt_hash: str,
-        prompt_preview: str,
-        category_value: str,
-        cost: float,
-    ) -> Dict[str, Any]:
-        """Convert to record dictionary for storage (Issue #372 - reduces feature envy)."""
-        return {
-            "prompt_hash": prompt_hash,
-            "prompt_preview": prompt_preview,
-            "category": category_value,
-            "model": self.model,
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "cost": cost,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "response_time": self.response_time,
-            "success": self.success,
-            "session_id": self.session_id,
-        }
-
-
-class DateRangeParams(BaseModel):
-    """Date range parameters"""
-
-    start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
-    end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
 
 # =============================================================================
