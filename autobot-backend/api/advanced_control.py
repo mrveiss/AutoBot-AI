@@ -19,7 +19,6 @@ from enhanced_memory_manager_async import TaskPriority
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     StreamingSessionRequest,
     StreamingSessionResponse,
@@ -30,11 +29,17 @@ from api.schemas_system import (
 )
 from api.schemas_workflows import (
     AdvancedControlActiveTakeoversListResponse,
+    AdvancedControlEmergencyStopResponse,
     AdvancedControlHealthResponse,
     AdvancedControlInfoResponse,
     AdvancedControlPendingTakeoversListResponse,
     AdvancedControlStreamingCapabilitiesResponse,
     AdvancedControlStreamingSessionListResponse,
+    AdvancedControlStreamingTerminateResponse,
+    AdvancedControlTakeoverActionResponse,
+    AdvancedControlTakeoverApproveResponse,
+    AdvancedControlTakeoverRequestResponse,
+    AdvancedControlTakeoverSessionStatusResponse,
     AdvancedControlTakeoverSystemStatusResponse,
 )
 
@@ -88,7 +93,7 @@ async def create_streaming_session(
     operation="terminate_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.delete("/streaming/{session_id}", response_model=DataResponse)
+@router.delete("/streaming/{session_id}", response_model=AdvancedControlStreamingTerminateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminate_streaming_session",
@@ -163,7 +168,7 @@ async def get_streaming_capabilities(
     operation="request_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/request", response_model=DataResponse)
+@router.post("/takeover/request", response_model=AdvancedControlTakeoverRequestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_takeover",
@@ -224,7 +229,7 @@ async def request_takeover(
     operation="approve_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/{request_id}/approve", response_model=DataResponse)
+@router.post("/takeover/{request_id}/approve", response_model=AdvancedControlTakeoverApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_takeover",
@@ -261,7 +266,7 @@ async def approve_takeover(
     operation="execute_takeover_action",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/action", response_model=DataResponse)
+@router.post("/takeover/sessions/{session_id}/action", response_model=AdvancedControlTakeoverActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_takeover_action",
@@ -298,7 +303,7 @@ async def execute_takeover_action(
     operation="pause_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/pause", response_model=DataResponse)
+@router.post("/takeover/sessions/{session_id}/pause", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pause_takeover_session",
@@ -325,7 +330,7 @@ async def pause_takeover_session(
     operation="resume_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/resume", response_model=DataResponse)
+@router.post("/takeover/sessions/{session_id}/resume", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_takeover_session",
@@ -354,7 +359,7 @@ async def resume_takeover_session(
     operation="complete_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/takeover/sessions/{session_id}/complete", response_model=DataResponse)
+@router.post("/takeover/sessions/{session_id}/complete", response_model=AdvancedControlTakeoverSessionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="complete_takeover_session",
@@ -511,7 +516,7 @@ async def get_system_status(
     operation="emergency_system_stop",
     error_code_prefix="ADVANCED_CONTROL",
 )
-@router.post("/system/emergency-stop", response_model=DataResponse)
+@router.post("/system/emergency-stop", response_model=AdvancedControlEmergencyStopResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="emergency_system_stop",
