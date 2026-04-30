@@ -18,7 +18,6 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     DashboardGenerateRequest,
     ValidationDashboardAlertsResponse,
@@ -26,7 +25,9 @@ from api.schemas_workflows import (
     ValidationDashboardMetricsResponse,
     ValidationDashboardRecommendationsResponse,
     ValidationDashboardReportResponse,
+    ValidationDashboardStatusResponse,
     ValidationDashboardTrendsResponse,
+    ValidationJudgeStatusResponse,
     ValidationJudgmentResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -156,7 +157,7 @@ def get_validation_judges() -> Optional[Metadata]:
     operation="get_dashboard_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=ValidationDashboardStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_status",
@@ -747,7 +748,7 @@ async def judge_agent_response(request: dict):
     operation="get_judge_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-@router.get("/judge_status", response_model=DataResponse)
+@router.get("/judge_status", response_model=ValidationJudgeStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_judge_status",
