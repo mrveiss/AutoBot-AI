@@ -15,18 +15,19 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from api.schemas_code import (
     TemplateCategoriesResponse,
     TemplateCreateWorkflowResponse,
     TemplateDetailResponse,
     TemplateExecuteResponse,
+    TemplateExecutionRequest,
     TemplateListResponse,
     TemplatePreviewResponse,
     TemplateSearchResponse,
     TemplateSecretsUsageResponse,
     TemplateStatsResponse,
+    TemplateValidationRequest,
     TemplateValidationResponse,
     TemplatesRootResponse,
 )
@@ -42,17 +43,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
-
-
-class TemplateExecutionRequest(BaseModel):
-    template_id: str
-    variables: Optional[Dict[str, str]] = None
-    auto_approve: bool = False
-
-
-class TemplateValidationRequest(BaseModel):
-    template_id: str
-    variables: Dict[str, str]
 
 
 def _generate_templates_cache_key(category, tags, complexity):

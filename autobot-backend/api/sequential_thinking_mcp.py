@@ -16,18 +16,18 @@ Enables agents to:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    SequentialThinkingMCPTool,
     SequentialThinkingMCPToolsResponse,
+    SequentialThinkingRequest,
     SequentialThinkingResponse,
     SequentialThinkingSessionListResponse,
     SequentialThinkingSessionResponse,
@@ -116,111 +116,6 @@ SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION = (
 )
 
 
-class MCPTool(BaseModel):
-    """Standard MCP tool definition"""
-
-    name: str
-    description: str
-    input_schema: Metadata
-
-
-class SequentialThinkingRequest(BaseModel):
-    """Request model for sequential thinking tool"""
-
-    thought: str = Field(..., description="Current thinking step and analysis")
-    thought_number: int = Field(
-        ..., ge=1, description="Current thought number in sequence"
-    )
-    total_thoughts: int = Field(
-        ..., ge=1, description="Estimated total thoughts needed"
-    )
-    next_thought_needed: bool = Field(
-        ..., description="Whether another thought step is needed"
-    )
-
-    # Optional revision/branching parameters
-    is_revision: Optional[bool] = Field(
-        False, description="Whether this revises previous thinking"
-    )
-    revises_thought: Optional[int] = Field(
-        None, ge=1, description="Which thought is being reconsidered"
-    )
-    branch_from_thought: Optional[int] = Field(
-        None, ge=1, description="Branching point thought number"
-    )
-    branch_id: Optional[str] = Field(None, description="Branch identifier")
-    needs_more_thoughts: Optional[bool] = Field(
-        False, description="If more thoughts are needed beyond initial estimate"
-    )
-
-    # Session management
-    session_id: Optional[str] = Field(
-        "default", description="Thinking session identifier"
-    )
-
-    def to_thought_record(self) -> Metadata:
-        """Convert to thought record for storage (Issue #372 - reduces feature envy).
-
-        Returns:
-            Dictionary containing thought record fields.
-        """
-        return {
-            "thought_number": self.thought_number,
-            "thought": self.thought,
-            "total_thoughts": self.total_thoughts,
-            "next_thought_needed": self.next_thought_needed,
-            "is_revision": self.is_revision,
-            "revises_thought": self.revises_thought,
-            "branch_from_thought": self.branch_from_thought,
-            "branch_id": self.branch_id,
-            "needs_more_thoughts": self.needs_more_thoughts,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    def get_progress_percentage(self) -> float:
-        """Calculate progress percentage (Issue #372 - reduces feature envy)."""
-        return (self.thought_number / self.total_thoughts) * 100
-
-    def get_session_key(self) -> str:
-        """Get session key with fallback (Issue #372 - reduces feature envy)."""
-        return self.session_id or "default"
-
-    def is_valid_thought_number(self) -> bool:
-        """Check if thought number is valid (Issue #372 - reduces feature envy)."""
-        return self.thought_number <= self.total_thoughts or self.needs_more_thoughts
-
-    def has_revision(self) -> bool:
-        """Check if this is a revision (Issue #372 - reduces feature envy)."""
-        return bool(self.is_revision)
-
-    def get_revision_info(self) -> Optional[Metadata]:
-        """Get revision info dict if this is a revision (Issue #372 - reduces feature envy)."""
-        if not self.is_revision:
-            return None
-        return {
-            "is_revision": True,
-            "revises_thought": self.revises_thought,
-        }
-
-    def has_branch(self) -> bool:
-        """Check if this is a branch (Issue #372 - reduces feature envy)."""
-        return bool(self.branch_from_thought)
-
-    def get_branch_info(self) -> Optional[Metadata]:
-        """Get branch info dict if this is a branch (Issue #372 - reduces feature envy)."""
-        if not self.branch_from_thought:
-            return None
-        return {
-            "branched": True,
-            "branch_from_thought": self.branch_from_thought,
-            "branch_id": self.branch_id,
-        }
-
-    def get_progress_message(self) -> str:
-        """Get progress message string (Issue #372 - reduces feature envy)."""
-        return f"Recorded thought {self.thought_number}/{self.total_thoughts}"
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sequential_thinking_mcp_tools",
@@ -232,7 +127,7 @@ class SequentialThinkingRequest(BaseModel):
     operation="get_sequential_thinking_mcp_tools",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
+async def get_sequential_thinking_mcp_tools() -> List[SequentialThinkingMCPTool]:
     """
     Get available MCP tools for sequential thinking.
 
@@ -240,7 +135,7 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     Reduced from 84 lines to ~10 lines (88% reduction).
     """
     name, description, input_schema = SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION
-    return [MCPTool(name=name, description=description, input_schema=input_schema)]
+    return [SequentialThinkingMCPTool(name=name, description=description, input_schema=input_schema)]
 
 
 def _enrich_thought_record(
