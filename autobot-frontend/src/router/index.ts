@@ -27,7 +27,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { createLogger } from '@/utils/debugUtils'
-import { getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 
 const logger = createLogger('Router');
 
@@ -992,6 +992,45 @@ router.beforeEach(async (to, from) => {
     if (to.name === 'login' && userStore.isAuthenticated) {
       logger.debug('User already authenticated, redirecting to home')
       return { path: '/home' }
+    }
+
+    // Onboarding redirect (#6452) — first-login users with no preset applied get
+    // routed to /onboarding. Skip for: the onboarding route itself, public routes,
+    // and unauthenticated traffic (already handled above).
+    // sessionStorage cache avoids hitting /api/onboarding/status on every nav —
+    // one fetch per browser session is enough; OnboardingWizard clears it on
+    // successful preset apply so the next nav re-checks.
+    if (
+      userStore.isAuthenticated &&
+      requiresAuth &&
+      to.path !== '/onboarding' &&
+      !to.matched.some(record => record.meta.isPublic === true)
+    ) {
+      let presetApplied = sessionStorage.getItem('onboarding_preset_applied')
+      if (presetApplied === null) {
+        try {
+          const resp = await fetch(`${getBackendUrl()}/api/onboarding/status`, {
+            credentials: 'include',
+            headers: { Accept: 'application/json' },
+          })
+          if (resp.ok) {
+            const data = await resp.json()
+            presetApplied = data?.preset_applied ? '1' : '0'
+            sessionStorage.setItem('onboarding_preset_applied', presetApplied)
+          } else {
+            // Fail-open on non-2xx — don't trap users in onboarding.
+            presetApplied = '1'
+          }
+        } catch (statusErr) {
+          // Fail-open on network error — don't trap users in onboarding.
+          logger.debug('Onboarding status check failed, continuing:', statusErr)
+          presetApplied = '1'
+        }
+      }
+      if (presetApplied === '0') {
+        logger.debug('Onboarding not complete — redirecting to /onboarding')
+        return { path: '/onboarding' }
+      }
     }
 
     // Check for expired tokens

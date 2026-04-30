@@ -37,6 +37,13 @@ class ApplyPresetRequest(BaseModel):
     overrides: dict[str, Any] = {}
 
 
+class OnboardingStatus(BaseModel):
+    """Response model for GET /api/onboarding/status (#6452)."""
+
+    preset_applied: bool
+    preset_name: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -93,6 +100,19 @@ async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
         )
 
         logger.info("Onboarding preset '%s' applied successfully", body.preset_name)
+
+        # Persist preset_applied flag — used by frontend onboarding redirect (#6452)
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            redis = await get_async_redis_client(database="main")
+            if redis:
+                await redis.set("onboarding:preset_applied", "1")
+                await redis.set("onboarding:preset_name", body.preset_name)
+        except Exception as flag_exc:
+            # Don't fail the apply if flag persistence has trouble — preset is already applied
+            logger.warning("Could not persist preset_applied flag: %s", flag_exc)
+
         return DataResponse(data={"preset": merged, "applied": applied})
 
     except Exception as exc:
@@ -102,6 +122,35 @@ async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
             status_code=500,
             detail=f"Failed to apply preset '{body.preset_name}': {exc}",
         ) from exc
+
+
+@router.get("/status", response_model=OnboardingStatus)
+async def onboarding_status() -> OnboardingStatus:
+    """Return whether a preset has been applied (#6452).
+
+    Used by the frontend router guard to decide whether to redirect new
+    users to /onboarding on first login. No auth required — called before
+    the main app loads.
+
+    Fail-open: if Redis is unreachable or read fails, return
+    ``preset_applied=True`` so users are never trapped in onboarding by
+    infrastructure issues.
+    """
+    from autobot_shared.redis_client import get_async_redis_client
+
+    try:
+        redis = await get_async_redis_client(database="main")
+        if not redis:
+            return OnboardingStatus(preset_applied=True)
+        flag = await redis.get("onboarding:preset_applied")
+        applied = flag == "1" or flag == b"1"
+        name_value = await redis.get("onboarding:preset_name") if applied else None
+        if isinstance(name_value, (bytes, bytearray)):
+            name_value = name_value.decode("utf-8")
+        return OnboardingStatus(preset_applied=applied, preset_name=name_value)
+    except Exception as exc:
+        logger.warning("Could not read preset_applied flag: %s — failing open", exc)
+        return OnboardingStatus(preset_applied=True)
 
 
 # ---------------------------------------------------------------------------
