@@ -29,16 +29,22 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from api.schemas_analytics import (
+    AnalyticsArchitectureConsistencyResponse,
+    AnalyticsArchitectureDiagramResponse,
+    AnalyticsArchitectureHealthResponse,
+    AnalyticsArchitectureLayersResponse,
     AnalyticsArchitecturePatternsResponse,
     AnalyticsArchitectureQuickScanResponse,
-    AnalyticsArchitectureLayersResponse,
-    AnalyticsArchitectureDiagramResponse,
-    AnalyticsArchitectureConsistencyResponse,
-    AnalyticsArchitectureHealthResponse,
+    ArchitectureAnalysisRequest,
+    ArchitectureLayer,
+    ArchitectureReport,
+    ConsistencyLevel,
+    PatternConsistency,
+    PatternMatch,
+    PatternType,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -55,65 +61,13 @@ _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 # =============================================================================
 
 
-class PatternType(str, Enum):
-    """Types of architectural patterns."""
-
-    # Creational Patterns
-    FACTORY = "factory"
-    ABSTRACT_FACTORY = "abstract_factory"
-    SINGLETON = "singleton"
-    BUILDER = "builder"
-    PROTOTYPE = "prototype"
-
-    # Structural Patterns
-    ADAPTER = "adapter"
-    BRIDGE = "bridge"
-    COMPOSITE = "composite"
-    DECORATOR = "decorator"
-    FACADE = "facade"
-    PROXY = "proxy"
-
-    # Behavioral Patterns
-    OBSERVER = "observer"
-    STRATEGY = "strategy"
-    COMMAND = "command"
-    STATE = "state"
-    TEMPLATE_METHOD = "template_method"
-    CHAIN_OF_RESPONSIBILITY = "chain_of_responsibility"
-
-    # Architectural Patterns
-    MVC = "mvc"
-    MVP = "mvp"
-    MVVM = "mvvm"
-    REPOSITORY = "repository"
-    SERVICE_LAYER = "service_layer"
-    DEPENDENCY_INJECTION = "dependency_injection"
-
-    # AutoBot-Specific
-    AUTOBOT_ROUTER = "autobot_router"
-    AUTOBOT_SERVICE = "autobot_service"
-    AUTOBOT_MANAGER = "autobot_manager"
-    AUTOBOT_HANDLER = "autobot_handler"
-    REDIS_CACHING = "redis_caching"
-    MCP_TOOL = "mcp_tool"
-
-
-# Module-level constants for O(1) lookups (Issue #326)
+# Module-level constants for O(1) lookups
 NAMING_CONSISTENCY_PATTERN_TYPES = {
     PatternType.REPOSITORY,
     PatternType.SERVICE_LAYER,
     PatternType.FACTORY,
 }
 CLASS_SUFFIX_INDICATORS = {"Repository", "Repo", "Service", "Factory"}
-
-
-class ConsistencyLevel(str, Enum):
-    """Levels of pattern consistency."""
-
-    CONSISTENT = "consistent"
-    MOSTLY_CONSISTENT = "mostly_consistent"
-    INCONSISTENT = "inconsistent"
-    UNKNOWN = "unknown"
 
 
 class Severity(str, Enum):
@@ -229,69 +183,6 @@ PATTERN_INDICATORS = {
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class PatternMatch(BaseModel):
-    """A detected pattern match."""
-
-    pattern_type: PatternType
-    file_path: str
-    class_name: Optional[str] = None
-    function_name: Optional[str] = None
-    line_number: int
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    indicators_found: List[str]
-    code_snippet: Optional[str] = None
-
-
-class PatternConsistency(BaseModel):
-    """Pattern consistency analysis."""
-
-    pattern_type: PatternType
-    consistency_level: ConsistencyLevel
-    total_instances: int
-    consistent_instances: int
-    violations: List[Dict[str, Any]]
-    recommendations: List[str]
-
-
-class ArchitectureLayer(BaseModel):
-    """An architectural layer in the system."""
-
-    name: str
-    description: str
-    components: List[str]
-    dependencies: List[str]
-    patterns_used: List[PatternType]
-
-
-class ArchitectureReport(BaseModel):
-    """Complete architecture analysis report."""
-
-    timestamp: datetime
-    total_files_analyzed: int
-    patterns_detected: Dict[str, int]
-    pattern_matches: List[PatternMatch]
-    consistency_analysis: List[PatternConsistency]
-    layers: List[ArchitectureLayer]
-    recommendations: List[str]
-    mermaid_diagram: str
-
-
-class AnalysisRequest(BaseModel):
-    """Request for architecture analysis."""
-
-    paths: List[str] = Field(
-        default_factory=lambda: ["backend/", "src/"],
-        description="Paths to analyze",
-    )
-    patterns_to_detect: Optional[List[PatternType]] = Field(
-        None, description="Specific patterns to look for"
-    )
-    include_autobot_patterns: bool = Field(
-        True, description="Include AutoBot-specific patterns"
-    )
-    generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
 
 
 # =============================================================================
@@ -1267,7 +1158,7 @@ async def get_analyzer() -> ArchitectureAnalyzer:
 @router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
 async def analyze_architecture(
     admin_check: bool = Depends(check_admin_permission),
-    request: AnalysisRequest = None,
+    request: ArchitectureAnalysisRequest = None,
 ) -> ArchitectureReport:
     """
     Perform comprehensive architecture analysis.

@@ -13,25 +13,26 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from auth_middleware import check_admin_permission
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 from api.schemas_analytics import (
+    HealthScore,
+    MetricCategory,
+    QualityComplexityResponse,
+    QualityDrillDownResponse,
+    QualityGrade,
     QualityHealthScoreResponse,
     QualityMetricsResponse,
     QualityPatternsResponse,
-    QualityComplexityResponse,
-    QualityTrendsResponse,
     QualitySnapshotResponse,
-    QualityDrillDownResponse,
+    QualityTrendsResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -43,84 +44,6 @@ router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_r
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class QualityGrade(str, Enum):
-    """Quality grades from A to F."""
-
-    A = "A"
-    B = "B"
-    C = "C"
-    D = "D"
-    F = "F"
-
-
-class MetricCategory(str, Enum):
-    """Categories of quality metrics."""
-
-    MAINTAINABILITY = "maintainability"
-    RELIABILITY = "reliability"
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    TESTABILITY = "testability"
-    DOCUMENTATION = "documentation"
-
-
-class QualityMetric(BaseModel):
-    """Individual quality metric."""
-
-    name: str
-    category: MetricCategory
-    value: float = Field(..., ge=0, le=100)
-    grade: QualityGrade
-    trend: float = Field(
-        default=0, description="Percentage change from previous period"
-    )
-    details: Optional[dict[str, Any]] = None
-
-
-class HealthScore(BaseModel):
-    """Overall codebase health score."""
-
-    overall: float = Field(..., ge=0, le=100)
-    grade: QualityGrade
-    trend: float = Field(default=0)
-    breakdown: dict[str, float] = Field(default_factory=dict)
-    recommendations: list[str] = Field(default_factory=list)
-
-
-class PatternDistribution(BaseModel):
-    """Distribution of code patterns."""
-
-    pattern_type: str
-    count: int
-    percentage: float
-    severity: str
-    examples: list[str] = Field(default_factory=list)
-
-
-class ComplexityMetrics(BaseModel):
-    """Code complexity analysis."""
-
-    average_cyclomatic: float
-    max_cyclomatic: int
-    average_cognitive: float
-    max_cognitive: int
-    hotspots: list[dict[str, Any]] = Field(default_factory=list)
-    distribution: dict[str, int] = Field(default_factory=dict)
-
-
-class QualitySnapshot(BaseModel):
-    """Complete quality snapshot at a point in time."""
-
-    timestamp: datetime
-    health_score: HealthScore
-    metrics: list[QualityMetric]
-    patterns: list[PatternDistribution]
-    complexity: ComplexityMetrics
-    file_count: int
-    line_count: int
-    issues_count: int
 
 
 # ============================================================================
