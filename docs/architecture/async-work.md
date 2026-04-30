@@ -3,8 +3,10 @@
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
 > - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _pending_
-> - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed (this document)**
-> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): _pending_
+> - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
+> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): partially landed
+>   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): **landed (this PR)**
+>   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): _pending design call_
 
 The async-work stack covers three sub-domains: **queue work → execute → report progress → schedule next**. Historically each had two or three parallel implementations; #6495 consolidates them onto one canonical primitive per sub-domain.
 
@@ -91,18 +93,44 @@ phase lands, three task-queue implementations coexist:
   carve-out for atomic claim semantics
 - `utils/background_task_manager.py` — to be deleted in Phase 1
 
-## Periodic schedulers (Phase 3 — pending)
+## Periodic schedulers
 
-See [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507). Decision tree
-once that phase lands:
+See [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507). The current
+landscape has **three patterns**, not two:
 
-| Caller need | Use |
-|---|---|
-| Cron-like periodic execution (`*/5 * * * *`, `@hourly`) | Celery Beat |
-| Event-driven wakeup (per-agent heartbeat) | `services/heartbeat_scheduler.py` |
+| Pattern | When to use | Implementation | Status |
+|---|---|---|---|
+| **Static cron** | Fixed schedules known at deploy time (knowledge cleanup, sync queue prune) | Celery Beat — `celery_app.conf.beat_schedule` | Deployed via `autobot-celery-beat.service` ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)) |
+| **Dynamic per-entity recurring** | Schedules created/edited/deleted at runtime via API (per-connector sync intervals) | `knowledge/connectors/scheduler.py` (`ConnectorScheduler`) | Has multi-worker bug ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) — needs design call before migration |
+| **Event-driven wakeup** | "Wake me when X happens" not "wake me every N minutes" (per-agent heartbeat with explicit wakeup events) | `services/heartbeat_scheduler.py` | Stable as-is, do not migrate |
 
-`services/scheduling/cron_scheduler.py` and `knowledge/connectors/scheduler.py`
-are scheduled for deletion in Phase 3.
+### Why three, not two
+
+The original [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507) plan
+folded `ConnectorScheduler` into Beat. That assumes connectors are static
+config — they aren't. Connectors are CRUD'd at runtime via `POST/DELETE
+/knowledge_base/connectors/...`, each with its own interval. Beat reads
+schedules from a static dict at startup; supporting dynamic schedules
+requires either `celery-redbeat` (extra dependency) or coordinating Beat
+restarts on every connector edit (terrible UX). Until that decision lands
+([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) the dynamic
+pattern stays separate.
+
+### Celery Beat ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555))
+
+- Single-instance — `autobot-celery-beat.service` deployed on exactly one host.
+- Reads schedules from `celery_app.conf.beat_schedule`.
+- Persists next-run state to `/var/lib/autobot/celerybeat-schedule` (file lock
+  prevents accidental multi-Beat startup on the same host).
+- Restarts cascade: `restart celery beat` handler triggered on template change.
+- Currently deployed schedules: `knowledge-cleanup-orphan-documents`,
+  `knowledge-cleanup-generated-files`, `knowledge-sync-queue-prune`. Add new
+  entries to `beat_schedule` and bump the deploy.
+
+### Dead surface deleted
+
+- `services/scheduling/cron_scheduler.py` — 44 LOC stub with no execution loop,
+  zero callers. Deleted in [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507).
 
 ## Cross-cutting
 
