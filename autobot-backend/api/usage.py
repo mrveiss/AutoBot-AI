@@ -21,33 +21,19 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from api.schemas_common import UsageRecordResponse
 from api.schemas_analytics import (
     UsageByUserAllResponse,
-    UsageSummaryResponse,
-    UsageByUserSingleResponse,
     UsageMyUsageResponse,
+    UsageRecordRequest,
+    UsageByUserSingleResponse,
+    UsageSummaryResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.llm_cost_tracker import get_cost_tracker
-
-
-class UsageRecordRequest(BaseModel):
-    """Request body for POST /api/usage/record. Issue #1807."""
-
-    provider: str
-    model: str
-    input_tokens: int
-    output_tokens: int
-    session_id: str | None = None
-    user_id: str | None = None
-    agent_id: str | None = None
-    latency_ms: float | None = None
-    success: bool = True
 
 
 logger = logging.getLogger(__name__)

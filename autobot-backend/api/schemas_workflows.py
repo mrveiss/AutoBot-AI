@@ -2331,3 +2331,16 @@ class ElevationAuthorization(BaseModel):
     request_id: str
     password: str
     remember_session: bool = False
+
+
+# ---------------------------------------------------------------------------
+# validation_dashboard.py schemas
+# ---------------------------------------------------------------------------
+
+
+class DashboardGenerateRequest(BaseModel):
+    """Request body for validation dashboard generation."""
+
+    include_trends: bool = True
+    include_recommendations: bool = True
+    refresh_interval: int = 30  # seconds

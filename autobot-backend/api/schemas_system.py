@@ -3578,3 +3578,47 @@ class GPUConfigUpdateRequest(BaseModel):
     """Request body for GPU optimization configuration updates."""
 
     updates: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# startup.py schemas
+# ---------------------------------------------------------------------------
+
+from enum import Enum as _StartupEnum
+
+
+class StartupPhase(str, _StartupEnum):
+    """Lifecycle phase the backend reports during boot."""
+
+    INITIALIZING = "initializing"
+    STARTING_SERVICES = "starting_services"
+    CONNECTING_BACKEND = "connecting_backend"
+    LOADING_KNOWLEDGE = "loading_knowledge"
+    READY = "ready"
+    ERROR = "error"
+
+
+class StartupMessage(BaseModel):
+    """Startup status message broadcast to UI clients during boot."""
+
+    phase: StartupPhase
+    message: str
+    progress: int  # 0-100
+    timestamp: str
+    icon: str
+    details: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# vnc_proxy.py schemas
+# ---------------------------------------------------------------------------
+
+
+class VncProxyStatusResponse(BaseModel):
+    """Response for VNC proxy status check."""
+
+    vnc_type: str
+    endpoint: str
+    accessible: bool
+    status: Optional[int] = None
+    error: Optional[str] = None

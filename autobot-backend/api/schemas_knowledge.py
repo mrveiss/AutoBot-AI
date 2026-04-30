@@ -4810,3 +4810,44 @@ class SeedRequest(BaseModel):
     """Optional body for the cognition store seed endpoint."""
 
     manifest_path: str = "cognition_seed.yaml"
+
+
+# ---------------------------------------------------------------------------
+# knowledge_rag_feedback.py schemas
+# ---------------------------------------------------------------------------
+
+from typing import Literal as _Literal
+
+
+class RagFeedbackRequest(BaseModel):
+    """Annotation feedback submitted from the source card accept/reject UI."""
+
+    source_url: str
+    title: str = ""
+    query: str
+    decision: _Literal["accepted", "rejected"]
+    user_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# knowledge_search_scoped.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ScopedSearchRequest(BaseModel):
+    """Scoped search request with automatic permission filtering."""
+
+    query: str = Field(..., min_length=1, description="Search query")
+    top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
+    mode: str = Field(
+        default="hybrid",
+        pattern="^(semantic|keyword|hybrid|auto)$",
+        description="Search mode",
+    )
+    category: Optional[str] = Field(default=None, description="Filter by category")
+    tags: Optional[List[str]] = Field(default=None, description="Filter by tags")
+    min_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Minimum score threshold"
+    )
+    enable_rag: bool = Field(default=False, description="Enable RAG enhancement")
+    enable_reranking: bool = Field(default=False, description="Enable reranking")

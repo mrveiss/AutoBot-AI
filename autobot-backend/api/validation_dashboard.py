@@ -17,10 +17,10 @@ from typing import Optional
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel
 
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    DashboardGenerateRequest,
     ValidationDashboardAlertsResponse,
     ValidationDashboardGenerateResponse,
     ValidationDashboardMetricsResponse,
@@ -149,12 +149,6 @@ def get_validation_judges() -> Optional[Metadata]:
                 _validation_judges = _try_create_validation_judges()
 
     return _validation_judges
-
-
-class DashboardGenerateRequest(BaseModel):
-    include_trends: bool = True
-    include_recommendations: bool = True
-    refresh_interval: int = 30  # seconds
 
 
 @with_error_handling(
