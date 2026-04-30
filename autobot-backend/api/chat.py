@@ -672,12 +672,12 @@ async def stream_chat_response(
 
 
 @router.get("/chats", response_model=DataResponse[List[Dict[str, Any]]])
+@router.get("/chat/chats", response_model=DataResponse[List[Dict[str, Any]]])  # Frontend compatibility alias
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_chats",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/chats", response_model=DataResponse[List[Dict[str, Any]]])  # Frontend compatibility alias
 async def list_chats(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -714,12 +714,12 @@ async def list_chats(
 
 
 @router.post("/chat", response_model=DataResponse[ChatMessageData])
+@router.post("/chat/message", response_model=DataResponse[ChatMessageData])  # Alternative endpoint
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/message", response_model=DataResponse[ChatMessageData])  # Alternative endpoint
 async def send_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -798,12 +798,12 @@ async def send_message(
     )
 
 
+@router.post("/chat/stream", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_message",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/stream", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_message(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
@@ -841,6 +841,7 @@ async def stream_message(
 # ====================================================================
 
 
+@router.get("/chat/health", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,
     operation="chat_health_check",
@@ -851,7 +852,6 @@ async def stream_message(
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/health", response_model=ChatHealthData)
 async def chat_health_check(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -899,12 +899,12 @@ async def chat_health_check(
     )
 
 
+@router.get("/chat/stats", response_model=DataResponse[ChatStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat_statistics",
     error_code_prefix="CHAT",
 )
-@router.get("/chat/stats", response_model=DataResponse[ChatStatsData])
 async def chat_statistics(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1059,12 +1059,12 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
         )
 
 
+@router.post("/chats/{chat_id}/message", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/message", response_model=None)  # StreamingResponse — no Pydantic schema
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1130,12 +1130,12 @@ async def _stream_graph_resume(
         yield f"data: {json.dumps(evt)}\n\n"
 
 
+@router.post("/chats/{chat_id}/resume", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_chat_graph",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/resume", response_model=None)  # StreamingResponse — no Pydantic schema
 async def resume_chat_graph(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1270,12 +1270,12 @@ async def _merge_chat_messages(
         return new_messages
 
 
+@router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 async def save_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1321,12 +1321,12 @@ async def save_chat_by_id(
     )
 
 
+@router.delete("/chats/{chat_id}", response_model=DataResponse[ChatDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
-@router.delete("/chats/{chat_id}", response_model=DataResponse[ChatDeleteData])
 async def delete_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1367,12 +1367,12 @@ async def delete_chat_by_id(
     )
 
 
+@router.post("/chat/direct", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_direct_chat_response",
     error_code_prefix="CHAT",
 )
-@router.post("/chat/direct", response_model=None)  # StreamingResponse — no Pydantic schema
 async def send_direct_chat_response(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -1802,12 +1802,12 @@ async def _generate_enhanced_stream(
 # ====================================================================
 
 
+@router.post("/enhanced", response_model=DataResponse[EnhancedChatData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/enhanced", response_model=DataResponse[EnhancedChatData])
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
@@ -1870,12 +1870,12 @@ async def enhanced_chat(
         )
 
 
+@router.post("/stream-enhanced", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_enhanced_chat",
     error_code_prefix="CHAT",
 )
-@router.post("/stream-enhanced", response_model=None)  # StreamingResponse — no Pydantic schema
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
@@ -1904,12 +1904,12 @@ async def stream_enhanced_chat(
     )
 
 
+@router.get("/health-enhanced", response_model=EnhancedChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat_health_check",
     error_code_prefix="CHAT",
 )
-@router.get("/health-enhanced", response_model=EnhancedChatHealthData)
 async def enhanced_chat_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1958,12 +1958,12 @@ async def enhanced_chat_health_check(
         )
 
 
+@router.get("/capabilities", response_model=DataResponse[EnhancedChatCapabilitiesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_chat_capabilities",
     error_code_prefix="CHAT",
 )
-@router.get("/capabilities", response_model=DataResponse[EnhancedChatCapabilitiesData])
 async def get_enhanced_chat_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -2015,6 +2015,7 @@ async def get_enhanced_chat_capabilities(
 # ====================================================================
 
 
+@router.post("/translate", response_model=TranslateData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="translate_text",
@@ -2025,7 +2026,6 @@ async def get_enhanced_chat_capabilities(
     operation="translate_text",
     error_code_prefix="CHAT",
 )
-@router.post("/translate", response_model=TranslateData)
 async def translate_text(
     body: TranslateRequest,
     current_user: dict = Depends(get_current_user),
@@ -2049,6 +2049,7 @@ async def translate_text(
     return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
 
 
+@router.post("/detect-language", response_model=DetectLanguageData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_language",
@@ -2059,7 +2060,6 @@ async def translate_text(
     operation="detect_language",
     error_code_prefix="CHAT",
 )
-@router.post("/detect-language", response_model=DetectLanguageData)
 async def detect_language(
     body: DetectLanguageRequest,
     current_user: dict = Depends(get_current_user),
