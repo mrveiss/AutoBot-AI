@@ -18,11 +18,12 @@ from pathlib import Path
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from api.schemas_system import (
     ClipboardSyncRequest,
     ConnectionSettings,
+    DesktopSessionState,
+    FindImageRequest,
     KeyboardTypeRequest,
     MacroListResponse,
     MacroRecording,
@@ -31,10 +32,12 @@ from api.schemas_system import (
     MouseDragRequest,
     MouseScrollRequest,
     RestoreStateResponse,
+    SessionActionLog,
     SessionActionLogResponse,
     SessionScreenshotSaveResponse,
     SessionScreenshotsResponse,
     SpecialKeyRequest,
+    VNCOCRRequest,
     VncDesktopContextResponse,
     VncFindImageResponse,
     VncOcrResponse,
@@ -42,7 +45,9 @@ from api.schemas_system import (
     VncRunningResponse,
     VncScreenshotResponse,
     VncStatusMessageResponse,
+    WaitForImageRequest,
     WaitForImageResponse,
+    WaitForTextRequest,
     WaitForTextResponse,
 )
 
@@ -1169,15 +1174,6 @@ async def delete_macro(
 # Area 5: Automation Features - OCR Text Recognition
 
 
-class OCRRequest(BaseModel):
-    """OCR text recognition request"""
-
-    region: Dict[str, int] = Field(
-        default_factory=dict,
-        description="Optional region {x, y, width, height}, empty for full screen",
-    )
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vnc_ocr_text",
@@ -1186,14 +1182,14 @@ class OCRRequest(BaseModel):
 @router.post("/ocr", response_model=VncOcrResponse)
 @with_error_handling(error_code_prefix="VNC_OCR")
 async def vnc_ocr_text(
-    request: OCRRequest, admin_check: bool = Depends(check_admin_permission)
+    request: VNCOCRRequest, admin_check: bool = Depends(check_admin_permission)
 ) -> Dict[str, object]:
     """
     Perform OCR text recognition on desktop screenshot.
     Issue #74 - Area 5: Automation Features.
 
     Args:
-        request: OCRRequest with optional region
+        request: VNCOCRRequest with optional region
 
     Returns:
         {"status": "success|error", "text": "recognized text", "message": "..."}
@@ -1250,15 +1246,6 @@ async def vnc_ocr_text(
 
 
 # Area 5: Automation Features - Image Template Matching
-
-
-class FindImageRequest(BaseModel):
-    """Find image on screen request"""
-
-    template_data: str = Field(..., description="Base64-encoded template image (PNG)")
-    threshold: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Match confidence threshold (0-1)"
-    )
 
 
 def _decode_images_for_matching(screen_b64: str, template_b64: str) -> tuple:
@@ -1385,18 +1372,6 @@ async def vnc_find_image(
 # Area 5: Automation Features - Wait Conditions
 
 
-class WaitForTextRequest(BaseModel):
-    """Wait for text to appear request"""
-
-    text: str = Field(..., description="Text to wait for")
-    timeout_seconds: int = Field(
-        default=30, ge=1, le=300, description="Timeout in seconds"
-    )
-    region: Dict[str, int] = Field(
-        default_factory=dict, description="Optional region to search"
-    )
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vnc_wait_for_text",
@@ -1422,7 +1397,7 @@ async def vnc_wait_for_text(
 
     while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Perform OCR
-        ocr_result = await vnc_ocr_text(OCRRequest(region=request.region))
+        ocr_result = await vnc_ocr_text(VNCOCRRequest(region=request.region))
 
         if ocr_result["status"] == "success":
             recognized_text = ocr_result["text"]
@@ -1442,14 +1417,6 @@ async def vnc_wait_for_text(
         "found": False,
         "message": f"Text '{request.text}' not found within {request.timeout_seconds}s",
     }
-
-
-class WaitForImageRequest(BaseModel):
-    """Wait for image to appear request"""
-
-    template_data: str = Field(..., description="Base64-encoded template image")
-    timeout_seconds: int = Field(default=30, ge=1, le=300)
-    threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 @with_error_handling(
@@ -1510,34 +1477,6 @@ async def vnc_wait_for_image(
 
 
 # Area 6: Session-Tied Desktop Views
-
-
-class DesktopSessionState(BaseModel):
-    """Desktop state tied to a chat session"""
-
-    session_id: str = Field(..., description="Chat session ID")
-    window_layout: Dict = Field(
-        default_factory=dict, description="Window positions and sizes"
-    )
-    active_applications: List[str] = Field(
-        default_factory=list, description="Running applications"
-    )
-    screenshots: List[str] = Field(
-        default_factory=list, description="Screenshot file paths"
-    )
-    action_log: List[Dict] = Field(
-        default_factory=list, description="VNC actions performed"
-    )
-    last_updated: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
-
-
-class SessionActionLog(BaseModel):
-    """Log entry for VNC action in a session"""
-
-    action_type: str = Field(..., description="Type of action performed")
-    params: Dict = Field(default_factory=dict)
-    timestamp: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
-    result: str = Field(default="success", description="Action result: success/error")
 
 
 # Global session state storage (in-memory for now, should be Redis-backed in production)

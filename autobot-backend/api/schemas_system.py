@@ -3443,3 +3443,60 @@ class SecretTransferRequest(BaseModel):
     secret_ids: List[str]
     target_scope: SecretScope
     target_chat_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# vnc_manager.py schemas
+# ---------------------------------------------------------------------------
+
+
+class VNCOCRRequest(BaseModel):
+    """OCR text recognition request (VNC desktop)."""
+
+    region: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Optional region {x, y, width, height}, empty for full screen",
+    )
+
+
+class FindImageRequest(BaseModel):
+    """Find image on screen request."""
+
+    template_data: str = Field(..., description="Base64-encoded template image (PNG)")
+    threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Match confidence threshold (0-1)")
+
+
+class WaitForTextRequest(BaseModel):
+    """Wait for text to appear request."""
+
+    text: str = Field(..., description="Text to wait for")
+    timeout_seconds: int = Field(default=30, ge=1, le=300, description="Timeout in seconds")
+    region: Dict[str, int] = Field(default_factory=dict, description="Optional region to search")
+
+
+class WaitForImageRequest(BaseModel):
+    """Wait for image to appear request."""
+
+    template_data: str = Field(..., description="Base64-encoded template image")
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+
+
+class DesktopSessionState(BaseModel):
+    """Desktop state tied to a chat session."""
+
+    session_id: str = Field(..., description="Chat session ID")
+    window_layout: Dict = Field(default_factory=dict, description="Window positions and sizes")
+    active_applications: List[str] = Field(default_factory=list, description="Running applications")
+    screenshots: List[str] = Field(default_factory=list, description="Screenshot file paths")
+    action_log: List[Dict] = Field(default_factory=list, description="VNC actions performed")
+    last_updated: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
+
+
+class SessionActionLog(BaseModel):
+    """Log entry for VNC action in a session."""
+
+    action_type: str = Field(..., description="Type of action performed")
+    params: Dict = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
+    result: str = Field(default="success", description="Action result: success/error")

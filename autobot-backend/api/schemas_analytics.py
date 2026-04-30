@@ -3028,3 +3028,137 @@ class ArchitectureAnalysisRequest(BaseModel):
     patterns_to_detect: Optional[List[PatternType]] = Field(None, description="Specific patterns to look for")
     include_autobot_patterns: bool = Field(True, description="Include AutoBot-specific patterns")
     generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
+
+
+# ---------------------------------------------------------------------------
+# analytics_dfa.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class TaintLevel(str, Enum):
+    """Taint levels for data flow tracking."""
+
+    UNTAINTED = "untainted"
+    PARTIALLY_TAINTED = "partially_tainted"
+    TAINTED = "tainted"
+    SANITIZED = "sanitized"
+
+
+class SourceType(str, Enum):
+    """Types of data sources."""
+
+    USER_INPUT = "user_input"
+    EXTERNAL_API = "external_api"
+    DATABASE = "database"
+    FILE = "file"
+    ENVIRONMENT = "environment"
+    NETWORK = "network"
+    PARAMETER = "parameter"
+    CONSTANT = "constant"
+
+
+class SinkType(str, Enum):
+    """Types of data sinks."""
+
+    DATABASE_QUERY = "database_query"
+    FILE_WRITE = "file_write"
+    NETWORK_SEND = "network_send"
+    SUBPROCESS = "subprocess"
+    EVAL = "eval"
+    HTML_OUTPUT = "html_output"
+    LOG_OUTPUT = "log_output"
+    RETURN_VALUE = "return_value"
+
+
+class VulnerabilityType(str, Enum):
+    """Types of security vulnerabilities."""
+
+    SQL_INJECTION = "sql_injection"
+    XSS = "xss"
+    COMMAND_INJECTION = "command_injection"
+    PATH_TRAVERSAL = "path_traversal"
+    CODE_INJECTION = "code_injection"
+    DATA_EXPOSURE = "data_exposure"
+    INSECURE_DESERIALIZATION = "insecure_deserialization"
+    HARDCODED_SECRET = "hardcoded_secret"  # nosec B105
+
+
+class DFASeverity(str, Enum):
+    """Vulnerability severity levels."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+
+class DFAAnalyzeRequest(BaseModel):
+    """Request model for code analysis."""
+
+    source_code: str = Field(..., description="Python source code to analyze")
+    file_path: str = Field(default="<unknown>", description="File path for context")
+
+
+class DFAAnalyzeFileRequest(BaseModel):
+    """Request model for file analysis."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+class VariableDefResponse(BaseModel):
+    """Response model for variable definition."""
+
+    name: str
+    line: int
+    column: int
+    scope: str
+    taint_level: str
+    source_type: Optional[str]
+
+
+class VulnerabilityResponse(BaseModel):
+    """Response model for vulnerability."""
+
+    vulnerability_type: str
+    severity: str
+    line: int
+    column: int
+    description: str
+    tainted_variable: str
+    sink_function: str
+    recommendation: str
+
+
+class DataFlowResponse(BaseModel):
+    """Response model for data flow analysis."""
+
+    name: str
+    definitions_count: int
+    uses_count: int
+    edges_count: int
+    vulnerabilities_count: int
+    definitions: List[VariableDefResponse]
+    vulnerabilities: List[VulnerabilityResponse]
+
+
+class DFAAnalysisResponse(BaseModel):
+    """Response model for complete data-flow analysis."""
+
+    file_path: str
+    analyzed_at: str
+    graphs: List[DataFlowResponse]
+    total_definitions: int
+    total_uses: int
+    total_vulnerabilities: int
+    tainted_variables: List[str]
+
+
+class TaintSummary(BaseModel):
+    """Summary of taint analysis."""
+
+    tainted_sources: int
+    dangerous_sinks: int
+    vulnerabilities_by_type: Dict[str, int]
+    vulnerabilities_by_severity: Dict[str, int]
+    tainted_variables: List[str]
