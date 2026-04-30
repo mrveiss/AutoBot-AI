@@ -28,10 +28,11 @@ EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys')
 
 # Beat command — reads beat_schedule from celery_app.py and persists
 # next-run state to the schedule file (default file-based scheduler).
+# Type=simple: systemd tracks MAINPID directly; no separate pidfile.
+# Multi-Beat is prevented by the file lock on the schedule database.
 ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A celery_app beat \
     --loglevel=info \
-    --schedule={{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') }} \
-    --pidfile=/run/autobot/celerybeat.pid
+    --schedule={{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') }}
 
 ExecStop=/bin/kill -TERM $MAINPID
 TimeoutStopSec=30

@@ -545,14 +545,6 @@
     group: "{{ backend_group }}"
     mode: "0750"
 
-- name: "Beat | Ensure pidfile directory exists"
-  ansible.builtin.file:
-    path: /run/autobot
-    state: directory
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    mode: "0755"
-
 - name: "Beat | Deploy Celery Beat systemd service (#6555)"
   ansible.builtin.template:
     src: autobot-celery-beat.service.j2
