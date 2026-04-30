@@ -6,6 +6,7 @@ Code review, git, skills, database, template, log, voice, access-control, MCP, a
 """
 
 import re
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -2325,3 +2326,199 @@ class ManPageResult(BaseModel):
     examples: str
     see_also: str
     cached: bool
+
+
+# ---------------------------------------------------------------------------
+# ide_integration.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class DiagnosticSeverity(str, Enum):
+    """LSP-compatible diagnostic severity levels."""
+
+    ERROR = "error"
+    WARNING = "warning"
+    INFORMATION = "information"
+    HINT = "hint"
+
+
+class CodeActionKind(str, Enum):
+    """LSP-compatible code action kinds."""
+
+    QUICKFIX = "quickfix"
+    REFACTOR = "refactor"
+    REFACTOR_EXTRACT = "refactor.extract"
+    REFACTOR_INLINE = "refactor.inline"
+    REFACTOR_REWRITE = "refactor.rewrite"
+    SOURCE = "source"
+    SOURCE_ORGANIZE_IMPORTS = "source.organizeImports"
+    SOURCE_FIX_ALL = "source.fixAll"
+
+
+class IDEPatternCategory(str, Enum):
+    """Categories of detected patterns (IDE)."""
+
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    CODE_QUALITY = "code_quality"
+    BEST_PRACTICE = "best_practice"
+    ERROR_PRONE = "error_prone"
+    STYLE = "style"
+    DEPRECATED = "deprecated"
+
+
+class CompletionItemKind(str, Enum):
+    """LSP-compatible completion item kinds."""
+
+    TEXT = "Text"
+    METHOD = "Method"
+    FUNCTION = "Function"
+    CONSTRUCTOR = "Constructor"
+    FIELD = "Field"
+    VARIABLE = "Variable"
+    CLASS = "Class"
+    INTERFACE = "Interface"
+    MODULE = "Module"
+    PROPERTY = "Property"
+    UNIT = "Unit"
+    VALUE = "Value"
+    ENUM = "Enum"
+    CONSTANT = "Constant"
+    KEYWORD = "Keyword"
+    SNIPPET = "Snippet"
+
+
+class LSPPosition(BaseModel):
+    """LSP-compatible position (0-indexed)."""
+
+    line: int = Field(..., ge=0)
+    character: int = Field(..., ge=0)
+
+
+class LSPRange(BaseModel):
+    """LSP-compatible range."""
+
+    start: LSPPosition
+    end: LSPPosition
+
+
+class Diagnostic(BaseModel):
+    """LSP-compatible diagnostic."""
+
+    range: LSPRange
+    severity: DiagnosticSeverity
+    code: str
+    source: str = "autobot"
+    message: str
+    category: IDEPatternCategory
+    data: Optional[Dict[str, Any]] = None
+
+
+class TextEdit(BaseModel):
+    """LSP-compatible text edit."""
+
+    range: LSPRange
+    new_text: str
+
+
+class CodeAction(BaseModel):
+    """LSP-compatible code action."""
+
+    title: str
+    kind: CodeActionKind
+    diagnostics: List[Diagnostic] = []
+    is_preferred: bool = False
+    edit: Optional[Dict[str, Any]] = None
+
+
+class IDEAnalysisRequest(BaseModel):
+    """Request for code analysis."""
+
+    file_path: str = Field(..., description="Path to the file being analyzed")
+    content: str = Field(..., description="File content to analyze")
+    language: str = Field(default="python", description="Programming language")
+    include_hints: bool = Field(default=True, description="Include hint-level diagnostics")
+    categories: Optional[List[IDEPatternCategory]] = Field(None, description="Filter by categories")
+
+
+class IDEAnalysisResponse(BaseModel):
+    """Response from code analysis."""
+
+    file_path: str
+    diagnostics: List[Diagnostic]
+    analysis_time_ms: float
+    patterns_checked: int
+    issues_found: int
+
+
+class QuickFixRequest(BaseModel):
+    """Request for quick fix suggestions."""
+
+    file_path: str
+    content: str
+    diagnostic_code: str
+    range: LSPRange
+
+
+class QuickFixResponse(BaseModel):
+    """Response with quick fix suggestions."""
+
+    actions: List[CodeAction]
+    diagnostic_code: str
+
+
+class HoverRequest(BaseModel):
+    """Request for hover information."""
+
+    file_path: str
+    content: str
+    position: LSPPosition
+
+
+class HoverResponse(BaseModel):
+    """Response with hover information."""
+
+    contents: str
+    range: Optional[LSPRange] = None
+
+
+class IDEConfigurationUpdate(BaseModel):
+    """Configuration update for IDE plugin."""
+
+    enabled_rules: Optional[List[str]] = None
+    disabled_rules: Optional[List[str]] = None
+    severity_overrides: Optional[Dict[str, DiagnosticSeverity]] = None
+    categories: Optional[List[IDEPatternCategory]] = None
+
+
+class CompletionItem(BaseModel):
+    """LSP-compatible completion item."""
+
+    label: str = Field(..., description="Display text")
+    kind: CompletionItemKind = Field(default=CompletionItemKind.TEXT, description="Item kind")
+    detail: Optional[str] = Field(None, description="Additional details")
+    documentation: Optional[str] = Field(None, description="Documentation")
+    insert_text: Optional[str] = Field(None, description="Text to insert")
+    sort_text: Optional[str] = Field(None, description="Sort order")
+    filter_text: Optional[str] = Field(None, description="Filter text")
+    score: float = Field(default=0.0, description="Relevance score")
+
+
+class CompletionRequest(BaseModel):
+    """Request for code completion."""
+
+    file_path: str = Field(..., description="Path to the file")
+    content: str = Field(..., description="File content")
+    cursor_line: int = Field(..., ge=0, description="Cursor line (0-indexed)")
+    cursor_position: int = Field(..., ge=0, description="Cursor column position")
+    language: str = Field(default="python", description="Programming language")
+    max_completions: int = Field(default=20, ge=1, le=100, description="Max results")
+
+
+class CompletionResponse(BaseModel):
+    """Response with code completions."""
+
+    completions: List[CompletionItem]
+    completion_time_ms: float
+    source: str
+    cached: bool = False
