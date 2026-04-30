@@ -19,6 +19,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
+from type_defs.common import Metadata
 from api.schemas_system import (
     BrowserVncContextResponse,
     DesktopClickMcpResponse,

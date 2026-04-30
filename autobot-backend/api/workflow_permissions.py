@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_workflows import (
     GrantPermissionRequest,
-    WorkflowWorkflowAuditLogEntry,
-    WorkflowWorkflowPermissionResponse,
+    WorkflowAuditLogEntry,
+    WorkflowPermissionResponse,
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
@@ -48,9 +48,9 @@ def _current_user_id(current_user: dict) -> str:
     return current_user.get("username") or current_user.get("user_id", "unknown")
 
 
-def _permission_to_response(perm) -> WorkflowWorkflowPermissionResponse:
+def _permission_to_response(perm) -> WorkflowPermissionResponse:
     """Convert a WorkflowPermission ORM row to its response schema."""
-    return WorkflowWorkflowPermissionResponse(
+    return WorkflowPermissionResponse(
         workflow_id=perm.workflow_id,
         user_id=perm.user_id,
         role=perm.role,
@@ -60,9 +60,9 @@ def _permission_to_response(perm) -> WorkflowWorkflowPermissionResponse:
     )
 
 
-def _audit_to_response(entry) -> WorkflowWorkflowAuditLogEntry:
+def _audit_to_response(entry) -> WorkflowAuditLogEntry:
     """Convert a WorkflowAuditLog ORM row to its response schema."""
-    return WorkflowWorkflowAuditLogEntry(
+    return WorkflowAuditLogEntry(
         id=str(entry.id),
         timestamp=entry.timestamp.isoformat() if entry.timestamp else "",
         user_id=entry.user_id,
