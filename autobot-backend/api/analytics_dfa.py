@@ -20,20 +20,30 @@ import ast
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
 from api.schemas_analytics import (
-    DfaVulnerabilitiesResponse,
-    DfaSourcesResponse,
-    DfaSinksResponse,
-    DfaSanitizersResponse,
+    DFAAnalysisResponse,
+    DFAAnalyzeFileRequest,
+    DFAAnalyzeRequest,
+    DFASeverity,
+    DataFlowResponse,
     DfaHealthResponse,
+    DfaSanitizersResponse,
+    DfaSinksResponse,
+    DfaSourcesResponse,
+    DfaVulnerabilitiesResponse,
+    SinkType,
+    SourceType,
+    TaintLevel,
+    TaintSummary,
+    VariableDefResponse,
+    VulnerabilityResponse,
+    VulnerabilityType,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -47,70 +57,11 @@ router = APIRouter(prefix="/dfa", tags=["data-flow-analysis", "analytics"])
 # =============================================================================
 
 
-class TaintLevel(str, Enum):
-    """Taint levels for data flow tracking."""
-
-    UNTAINTED = "untainted"  # Clean, trusted data
-    PARTIALLY_TAINTED = "partially_tainted"  # May contain some tainted data
-    TAINTED = "tainted"  # User input, external data
-    SANITIZED = "sanitized"  # Was tainted, now sanitized
-
-
-# Issue #380: Module-level constant for taint level checking
-# This tuple is used repeatedly throughout the analysis engine
+# Module-level constant for taint level checking
 _TAINTED_LEVELS = (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED)
 
-# Issue #380: Module-level tuple for constant AST types
+# Module-level tuple for constant AST types
 _CONSTANT_TYPES = (ast.Constant, ast.Num, ast.Str)
-
-
-class SourceType(str, Enum):
-    """Types of data sources."""
-
-    USER_INPUT = "user_input"  # Direct user input
-    EXTERNAL_API = "external_api"  # External API responses
-    DATABASE = "database"  # Database queries
-    FILE = "file"  # File reads
-    ENVIRONMENT = "environment"  # Environment variables
-    NETWORK = "network"  # Network data
-    PARAMETER = "parameter"  # Function parameters
-    CONSTANT = "constant"  # Hardcoded values
-
-
-class SinkType(str, Enum):
-    """Types of data sinks."""
-
-    DATABASE_QUERY = "database_query"  # SQL queries
-    FILE_WRITE = "file_write"  # File writes
-    NETWORK_SEND = "network_send"  # Network transmission
-    SUBPROCESS = "subprocess"  # Shell command execution
-    EVAL = "eval"  # Dynamic code execution
-    HTML_OUTPUT = "html_output"  # HTML/template rendering
-    LOG_OUTPUT = "log_output"  # Logging (potential data leak)
-    RETURN_VALUE = "return_value"  # Function return
-
-
-class VulnerabilityType(str, Enum):
-    """Types of security vulnerabilities."""
-
-    SQL_INJECTION = "sql_injection"
-    XSS = "xss"
-    COMMAND_INJECTION = "command_injection"
-    PATH_TRAVERSAL = "path_traversal"
-    CODE_INJECTION = "code_injection"
-    DATA_EXPOSURE = "data_exposure"
-    INSECURE_DESERIALIZATION = "insecure_deserialization"
-    HARDCODED_SECRET = "hardcoded_secret"  # nosec B105 - vulnerability type enum
-
-
-class Severity(str, Enum):
-    """Vulnerability severity levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
 
 
 @dataclass
@@ -173,7 +124,7 @@ class SecurityVulnerability:
     """Detected security vulnerability."""
 
     vulnerability_type: VulnerabilityType
-    severity: Severity
+    severity: DFASeverity
     line: int
     column: int
     description: str
@@ -233,82 +184,82 @@ TAINT_SOURCES: Dict[str, Tuple[SourceType, TaintLevel]] = {
 }
 
 # Functions that are security-sensitive sinks
-TAINT_SINKS: Dict[str, Tuple[SinkType, VulnerabilityType, Severity]] = {
+TAINT_SINKS: Dict[str, Tuple[SinkType, VulnerabilityType, DFASeverity]] = {
     # SQL injection risks
     "execute": (
         SinkType.DATABASE_QUERY,
         VulnerabilityType.SQL_INJECTION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     "executemany": (
         SinkType.DATABASE_QUERY,
         VulnerabilityType.SQL_INJECTION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     "raw": (
         SinkType.DATABASE_QUERY,
         VulnerabilityType.SQL_INJECTION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     # Command injection risks
     "os.system": (
         SinkType.SUBPROCESS,
         VulnerabilityType.COMMAND_INJECTION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     "os.popen": (
         SinkType.SUBPROCESS,
         VulnerabilityType.COMMAND_INJECTION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     "subprocess.call": (
         SinkType.SUBPROCESS,
         VulnerabilityType.COMMAND_INJECTION,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
     "subprocess.run": (
         SinkType.SUBPROCESS,
         VulnerabilityType.COMMAND_INJECTION,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
     "subprocess.Popen": (
         SinkType.SUBPROCESS,
         VulnerabilityType.COMMAND_INJECTION,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
     # Code injection risks
-    "eval": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.CRITICAL),
-    "exec": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.CRITICAL),
-    "compile": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.HIGH),
+    "eval": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "exec": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "compile": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.HIGH),
     # Path traversal risks
-    "open": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, Severity.HIGH),
+    "open": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, DFASeverity.HIGH),
     "os.path.join": (
         SinkType.FILE_WRITE,
         VulnerabilityType.PATH_TRAVERSAL,
-        Severity.MEDIUM,
+        DFASeverity.MEDIUM,
     ),
     # XSS risks (web frameworks)
     "render_template_string": (
         SinkType.HTML_OUTPUT,
         VulnerabilityType.XSS,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
-    "Markup": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, Severity.MEDIUM),
+    "Markup": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, DFASeverity.MEDIUM),
     # Deserialization risks
     "pickle.loads": (
         SinkType.EVAL,
         VulnerabilityType.INSECURE_DESERIALIZATION,
-        Severity.CRITICAL,
+        DFASeverity.CRITICAL,
     ),
     "yaml.load": (
         SinkType.EVAL,
         VulnerabilityType.INSECURE_DESERIALIZATION,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
     "marshal.loads": (
         SinkType.EVAL,
         VulnerabilityType.INSECURE_DESERIALIZATION,
-        Severity.HIGH,
+        DFASeverity.HIGH,
     ),
 }
 
@@ -522,7 +473,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
     def _check_taint_sink(
         self, node: ast.Call
-    ) -> Optional[Tuple[SinkType, VulnerabilityType, Severity]]:
+    ) -> Optional[Tuple[SinkType, VulnerabilityType, DFASeverity]]:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -653,7 +604,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
     def _create_vulnerability(
         self,
         vuln_type: VulnerabilityType,
-        severity: Severity,
+        severity: DFASeverity,
         line: int,
         column: int,
         variable: str,
@@ -982,77 +933,6 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 # =============================================================================
 
 
-class AnalyzeRequest(BaseModel):
-    """Request model for code analysis."""
-
-    source_code: str = Field(..., description="Python source code to analyze")
-    file_path: str = Field(default="<unknown>", description="File path for context")
-
-
-class AnalyzeFileRequest(BaseModel):
-    """Request model for file analysis."""
-
-    file_path: str = Field(..., description="Path to Python file to analyze")
-
-
-class VariableDefResponse(BaseModel):
-    """Response model for variable definition."""
-
-    name: str
-    line: int
-    column: int
-    scope: str
-    taint_level: str
-    source_type: Optional[str]
-
-
-class VulnerabilityResponse(BaseModel):
-    """Response model for vulnerability."""
-
-    vulnerability_type: str
-    severity: str
-    line: int
-    column: int
-    description: str
-    tainted_variable: str
-    sink_function: str
-    recommendation: str
-
-
-class DataFlowResponse(BaseModel):
-    """Response model for data flow analysis."""
-
-    name: str
-    definitions_count: int
-    uses_count: int
-    edges_count: int
-    vulnerabilities_count: int
-    definitions: List[VariableDefResponse]
-    vulnerabilities: List[VulnerabilityResponse]
-
-
-class AnalysisResponse(BaseModel):
-    """Response model for complete analysis."""
-
-    file_path: str
-    analyzed_at: str
-    graphs: List[DataFlowResponse]
-    total_definitions: int
-    total_uses: int
-    total_vulnerabilities: int
-    tainted_variables: List[str]
-
-
-class TaintSummary(BaseModel):
-    """Summary of taint analysis."""
-
-    tainted_sources: int
-    dangerous_sinks: int
-    vulnerabilities_by_type: Dict[str, int]
-    vulnerabilities_by_severity: Dict[str, int]
-    tainted_variables: List[str]
-
-
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -1101,8 +981,8 @@ def _build_graph_response(graph) -> DataFlowResponse:
 
 def _build_analysis_response(
     graphs: List["DataFlowGraph"], file_path: str
-) -> AnalysisResponse:
-    """Build AnalysisResponse from analyzed graphs (Issue #665: extracted helper)."""
+) -> DFAAnalysisResponse:
+    """Build DFAAnalysisResponse from analyzed graphs (Issue #665: extracted helper)."""
     graph_responses = []
     total_defs = 0
     total_uses = 0
@@ -1118,7 +998,7 @@ def _build_analysis_response(
             if d.taint_level in _TAINTED_LEVELS:
                 all_tainted.add(d.name)
 
-    return AnalysisResponse(
+    return DFAAnalysisResponse(
         file_path=file_path,
         analyzed_at=datetime.now(tz=timezone.utc).isoformat(),
         graphs=graph_responses,
@@ -1134,9 +1014,9 @@ def _build_analysis_response(
     operation="analyze_code",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/analyze", response_model=AnalysisResponse)
+@router.post("/analyze", response_model=DFAAnalysisResponse)
 async def analyze_code(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+    request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Analyze Python source code for data flow and security vulnerabilities (Issue #665: uses helper).
@@ -1165,9 +1045,9 @@ async def analyze_code(
     operation="analyze_file",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/analyze-file", response_model=AnalysisResponse)
+@router.post("/analyze-file", response_model=DFAAnalysisResponse)
 async def analyze_file(
-    request: AnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
+    request: DFAAnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Analyze a Python file for data flow and security vulnerabilities (Issue #665: uses helper).
@@ -1205,7 +1085,7 @@ async def analyze_file(
 )
 @router.post("/vulnerabilities", response_model=DfaVulnerabilitiesResponse)
 async def get_vulnerabilities(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+    request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Get only security vulnerabilities from code analysis.
@@ -1277,7 +1157,7 @@ def _aggregate_graph_taint_stats(
 )
 @router.post("/taint-summary", response_model=TaintSummary)
 async def get_taint_summary(
-    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+    request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Get summary of taint analysis.
