@@ -226,12 +226,12 @@ class SequentialThinkingRequest(BaseModel):
     operation="get_sequential_thinking_mcp_tools",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@router.get("/mcp/tools", response_model=SequentialThinkingMCPToolsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sequential_thinking_mcp_tools",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-@router.get("/mcp/tools", response_model=SequentialThinkingMCPToolsResponse)
 async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     """
     Get available MCP tools for sequential thinking.
@@ -282,12 +282,12 @@ def _calculate_session_summary(session_thoughts: list, thought_number: int) -> d
     operation="sequential_thinking_mcp",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@router.post("/mcp/sequential_thinking", response_model=SequentialThinkingResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sequential_thinking_mcp",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-@router.post("/mcp/sequential_thinking", response_model=SequentialThinkingResponse)
 async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadata:
     """Execute sequential thinking tool (Issue #398: refactored)."""
     session_id = request.get_session_key()
@@ -349,12 +349,12 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
     operation="get_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@router.get("/sessions/{session_id}", response_model=SequentialThinkingSessionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-@router.get("/sessions/{session_id}", response_model=SequentialThinkingSessionResponse)
 async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
     async with _thinking_sessions_lock:
@@ -384,12 +384,12 @@ async def get_thinking_session(session_id: str) -> Metadata:
     operation="clear_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@router.delete("/sessions/{session_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_thinking_session",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-@router.delete("/sessions/{session_id}", response_model=DataResponse)
 async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
     async with _thinking_sessions_lock:
@@ -414,12 +414,12 @@ async def clear_thinking_session(session_id: str) -> Metadata:
     operation="list_thinking_sessions",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
+@router.get("/sessions", response_model=SequentialThinkingSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_thinking_sessions",
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
-@router.get("/sessions", response_model=SequentialThinkingSessionListResponse)
 async def list_thinking_sessions() -> Metadata:
     """List all active thinking sessions"""
     async with _thinking_sessions_lock:

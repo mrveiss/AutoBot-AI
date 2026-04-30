@@ -538,12 +538,12 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 # =============================================================================
 
 
+@router.post("/record", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_embedding_usage",
     error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
 )
-@router.post("/record", response_model=DataResponse)
 async def record_embedding_usage(
     request: EmbeddingUsageRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -564,12 +564,12 @@ async def record_embedding_usage(
     )
 
 
+@router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_stats",
     error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
 )
-@router.get("/stats", response_model=DataResponse)
 async def get_embedding_stats(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     model: Optional[str] = Query(None, description="Filter by model"),
@@ -591,12 +591,12 @@ async def get_embedding_stats(
     )
 
 
+@router.get("/model-comparison", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_comparison",
     error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
 )
-@router.get("/model-comparison", response_model=DataResponse)
 async def get_model_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -616,12 +616,12 @@ async def get_model_comparison(
     )
 
 
+@router.get("/optimization-recommendations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
     error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
 )
-@router.get("/optimization-recommendations", response_model=DataResponse)
 async def get_optimization_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -641,12 +641,12 @@ async def get_optimization_recommendations(
     )
 
 
+@router.get("/health", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="embedding_analytics_health",
     error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
 )
-@router.get("/health", response_model=DataResponse)
 async def embedding_analytics_health(
     admin_check: bool = Depends(check_admin_permission),
 ):

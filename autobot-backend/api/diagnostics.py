@@ -52,12 +52,12 @@ def get_engine() -> CausalInferenceEngine:
 # =============================================================================
 
 
+@router.post("/analyze-failure", response_model=FailureAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_failure",
     error_code_prefix="DIAGNOSTICS",
 )
-@router.post("/analyze-failure", response_model=FailureAnalysisResponse)
 async def analyze_failure(request: FailureAnalysisRequest):
     """
     Analyze a task failure and return root-cause report with recommendations.
@@ -103,12 +103,12 @@ async def analyze_failure(request: FailureAnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
 
 
+@router.get("/health", response_model=HealthCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="DIAGNOSTICS",
 )
-@router.get("/health", response_model=HealthCheckResponse)
 async def health_check():
     """
     Check diagnostics service health.
@@ -125,12 +125,12 @@ async def health_check():
         return HealthCheckResponse(status="error", engine_ready=False)
 
 
+@router.get("/analyze-failure", response_model=FailureAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_failure_get",
     error_code_prefix="DIAGNOSTICS",
 )
-@router.get("/analyze-failure", response_model=FailureAnalysisResponse)
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
     error_description: Optional[str] = Query(

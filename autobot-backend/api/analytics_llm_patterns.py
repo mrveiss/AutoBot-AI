@@ -939,12 +939,12 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
+@router.get("/health", response_model=LLMPatternsHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/health", response_model=LLMPatternsHealthResponse)
 async def get_health():
     """Get LLM pattern analyzer health status.
 
@@ -972,12 +972,12 @@ async def get_health():
     }
 
 
+@router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_prompt",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)
 async def analyze_prompt(request: PromptAnalysisRequest):
     """
     Analyze a prompt for optimization opportunities.
@@ -988,12 +988,12 @@ async def analyze_prompt(request: PromptAnalysisRequest):
     return await analyzer.analyze_prompt(request.prompt, request.model)
 
 
+@router.post("/record", response_model=LLMPatternsRecordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_usage",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.post("/record", response_model=LLMPatternsRecordResponse)
 async def record_usage(request: UsageRecordRequest):
     """
     Record an LLM usage event.
@@ -1004,12 +1004,12 @@ async def record_usage(request: UsageRecordRequest):
     return await analyzer.record_usage(request)
 
 
+@router.get("/stats", response_model=LLMPatternsStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_stats",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/stats", response_model=LLMPatternsStatsResponse)
 async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     """
     Get usage statistics for the specified period.
@@ -1020,12 +1020,12 @@ async def get_usage_stats(days: int = Query(default=7, ge=1, le=30)):
     return await analyzer.get_usage_stats(days)
 
 
+@router.get("/cache-opportunities", response_model=LLMPatternsCacheOpportunitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_opportunities",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/cache-opportunities", response_model=LLMPatternsCacheOpportunitiesResponse)
 async def get_cache_opportunities(
     min_occurrences: int = Query(default=3, ge=2, le=100)
 ):
@@ -1044,12 +1044,12 @@ async def get_cache_opportunities(
     }
 
 
+@router.get("/recommendations", response_model=LLMPatternsRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recommendations",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/recommendations", response_model=LLMPatternsRecommendationsResponse)
 async def get_recommendations():
     """
     Get optimization recommendations based on usage patterns.
@@ -1060,12 +1060,12 @@ async def get_recommendations():
     return {"recommendations": await analyzer.get_optimization_recommendations()}
 
 
+@router.get("/model-comparison", response_model=LLMPatternsModelComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_comparison",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/model-comparison", response_model=LLMPatternsModelComparisonResponse)
 async def get_model_comparison():
     """
     Compare costs and usage across different models.
@@ -1076,12 +1076,12 @@ async def get_model_comparison():
     return {"models": await analyzer.get_model_comparison(), "period_days": 7}
 
 
+@router.get("/category-distribution", response_model=LLMPatternsCategoryDistributionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_category_distribution",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/category-distribution", response_model=LLMPatternsCategoryDistributionResponse)
 async def get_category_distribution():
     """
     Get distribution of prompt categories.
@@ -1092,12 +1092,12 @@ async def get_category_distribution():
     return await analyzer.get_category_distribution()
 
 
+@router.get("/cost-breakdown", response_model=LLMPatternsCostBreakdownResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cost_breakdown",
     error_code_prefix="ANALYTICS_LLM_PATTERNS",
 )
-@router.get("/cost-breakdown", response_model=LLMPatternsCostBreakdownResponse)
 async def get_cost_breakdown(days: int = Query(default=7, ge=1, le=30)):
     """
     Get detailed cost breakdown.

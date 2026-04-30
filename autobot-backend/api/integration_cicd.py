@@ -40,12 +40,12 @@ router = APIRouter(
 
 
 
+@router.post("/test-connection", response_model=CICDConnectionTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_connection",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.post("/test-connection", response_model=CICDConnectionTestResponse)
 async def test_connection(request: CICDConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a CI/CD provider.
 
@@ -73,12 +73,12 @@ async def test_connection(request: CICDConnectionTestRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/providers", response_model=List[CICDProviderInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_providers",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.get("/providers", response_model=List[CICDProviderInfo])
 async def list_providers() -> List[CICDProviderInfo]:
     """List supported CI/CD providers.
 
@@ -107,12 +107,12 @@ async def list_providers() -> List[CICDProviderInfo]:
     ]
 
 
+@router.get("/{provider}/pipelines", response_model=CICDPipelinesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pipelines",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.get("/{provider}/pipelines", response_model=CICDPipelinesResponse)
 async def list_pipelines(
     provider: CICDProvider,
     base_url: str = Query(..., description="CI/CD service base URL"),
@@ -153,12 +153,12 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/{provider}/pipelines/{pipeline_id}/status", response_model=CICDPipelineStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pipeline_status",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.get("/{provider}/pipelines/{pipeline_id}/status", response_model=CICDPipelineStatusResponse)
 async def get_pipeline_status(
     provider: CICDProvider,
     pipeline_id: str,
@@ -198,12 +198,12 @@ async def get_pipeline_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/{provider}/pipelines/{pipeline_id}/trigger", response_model=CICDPipelineTriggerResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_pipeline",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.post("/{provider}/pipelines/{pipeline_id}/trigger", response_model=CICDPipelineTriggerResponse)
 async def trigger_pipeline(
     provider: CICDProvider,
     pipeline_id: str,
@@ -246,12 +246,12 @@ async def trigger_pipeline(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/{provider}/pipelines/{pipeline_id}/logs", response_model=CICDPipelineLogsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pipeline_logs",
     error_code_prefix="INTEGRATION_CICD",
 )
-@router.get("/{provider}/pipelines/{pipeline_id}/logs", response_model=CICDPipelineLogsResponse)
 async def get_pipeline_logs(
     provider: CICDProvider,
     pipeline_id: str,

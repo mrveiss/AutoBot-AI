@@ -58,12 +58,12 @@ class ValidationResult(BaseModel):
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.get("/health", response_model=SystemValidationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validation_health",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/health", response_model=SystemValidationHealthResponse)
 async def validation_health():
     """Health check for validation system"""
     try:
@@ -84,12 +84,12 @@ async def validation_health():
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.post("/validate/comprehensive", response_model=ValidationResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/comprehensive", response_model=ValidationResult)
 async def run_comprehensive_validation(
     request: ValidationRequest, background_tasks: BackgroundTasks
 ):
@@ -127,12 +127,12 @@ async def run_comprehensive_validation(
     operation="run_quick_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.get("/validate/quick", response_model=SystemValidationQuickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_quick_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/quick", response_model=SystemValidationQuickResponse)
 async def run_quick_validation():
     """Run quick system validation check"""
     try:
@@ -199,12 +199,12 @@ async def run_quick_validation():
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.get("/validate/component/{component_name}", response_model=SystemValidationComponentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_component",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/component/{component_name}", response_model=SystemValidationComponentResponse)
 async def validate_component(component_name: str):
     """Validate specific component"""
     try:
@@ -252,12 +252,12 @@ async def validate_component(component_name: str):
     operation="get_optimization_recommendations",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.get("/validate/recommendations", response_model=SystemValidationRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/recommendations", response_model=SystemValidationRecommendationsResponse)
 async def get_optimization_recommendations():
     """Get system optimization recommendations"""
     try:
@@ -322,12 +322,12 @@ async def get_optimization_recommendations():
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.get("/validate/status", response_model=SystemValidationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_status",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.get("/validate/status", response_model=SystemValidationStatusResponse)
 async def get_validation_status():
     """Get current validation system status"""
     try:
@@ -359,12 +359,12 @@ async def get_validation_status():
     operation="run_performance_benchmark",
     error_code_prefix="SYSTEM_VALIDATION",
 )
+@router.post("/validate/benchmark", response_model=SystemValidationBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_performance_benchmark",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/benchmark", response_model=SystemValidationBenchmarkResponse)
 async def run_performance_benchmark():
     """Run performance benchmarking tests"""
     try:

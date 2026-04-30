@@ -114,11 +114,6 @@ def _extract_user_id(request: Request) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="nl_query",
-    error_code_prefix="NL_DATABASE",
-)
 @router.post(
     "/query",
     response_model=NLQueryResponse,
@@ -129,6 +124,11 @@ def _extract_user_id(request: Request) -> Optional[str]:
         "Only read-only queries (SELECT) are permitted."
     ),
     tags=["nl-database"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="nl_query",
+    error_code_prefix="NL_DATABASE",
 )
 async def nl_query(
     body: NLQueryRequest,
@@ -157,17 +157,17 @@ async def nl_query(
     return NLQueryResponse(**result)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_schema",
-    error_code_prefix="NL_DATABASE",
-)
 @router.get(
     "/schema",
     summary="Get trained database schema information",
     description="Returns metadata about databases the NL service has been trained on.",
     tags=["nl-database"],
     response_model=NLDatabaseSchemaResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_schema",
+    error_code_prefix="NL_DATABASE",
 )
 async def get_schema(
     _auth=Depends(get_current_user),
@@ -177,11 +177,6 @@ async def get_schema(
     return await service.get_schema_info()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="train_on_db",
-    error_code_prefix="NL_DATABASE",
-)
 @router.post(
     "/train",
     response_model=TrainResponse,
@@ -191,6 +186,11 @@ async def get_schema(
         "and trains the NL service for improved SQL generation."
     ),
     tags=["nl-database"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="train_on_db",
+    error_code_prefix="NL_DATABASE",
 )
 async def train_on_db(
     body: TrainRequest,
@@ -215,17 +215,17 @@ async def train_on_db(
     return TrainResponse(**result)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_history",
-    error_code_prefix="NL_DATABASE",
-)
 @router.get(
     "/history",
     summary="Get query history",
     description="Retrieve the history of natural language queries executed by the current user.",
     tags=["nl-database"],
     response_model=List[Dict[str, Any]],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_history",
+    error_code_prefix="NL_DATABASE",
 )
 async def get_history(
     request: Request,

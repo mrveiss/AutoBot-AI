@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 
+@router.get("/health", response_model=ResilienceHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_resilience_health",
     error_code_prefix="ERROR_RESILIENCE",
 )
-@router.get("/health", response_model=ResilienceHealthResponse)
 async def get_resilience_health() -> Dict[str, Any]:
     """
     Get overall system resilience health.
@@ -61,12 +61,12 @@ async def get_resilience_health() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to get resilience health")
 
 
+@router.get("/circuit-breakers", response_model=CircuitBreakerStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_circuit_breaker_status",
     error_code_prefix="ERROR_RESILIENCE",
 )
-@router.get("/circuit-breakers", response_model=CircuitBreakerStatusResponse)
 async def get_circuit_breaker_status() -> Dict[str, Any]:
     """
     Get status of all circuit breakers.
@@ -84,12 +84,12 @@ async def get_circuit_breaker_status() -> Dict[str, Any]:
         )
 
 
+@router.get("/error-budgets", response_model=ErrorBudgetStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_budget_status",
     error_code_prefix="ERROR_RESILIENCE",
 )
-@router.get("/error-budgets", response_model=ErrorBudgetStatusResponse)
 async def get_error_budget_status() -> Dict[str, Any]:
     """
     Get status of all error budgets.
@@ -107,12 +107,12 @@ async def get_error_budget_status() -> Dict[str, Any]:
         )
 
 
+@router.post("/circuit-breakers/{service_name}/reset", response_model=CircuitBreakerResetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_circuit_breaker",
     error_code_prefix="ERROR_RESILIENCE",
 )
-@router.post("/circuit-breakers/{service_name}/reset", response_model=CircuitBreakerResetResponse)
 async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
     """
     Manually reset circuit breaker for service.
@@ -134,12 +134,12 @@ async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
         )
 
 
+@router.post("/error-budgets/{component}/reset", response_model=ErrorBudgetResetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_error_budget",
     error_code_prefix="ERROR_RESILIENCE",
 )
-@router.post("/error-budgets/{component}/reset", response_model=ErrorBudgetResetResponse)
 async def reset_error_budget(component: str) -> Dict[str, str]:
     """
     Manually reset error budget for component.

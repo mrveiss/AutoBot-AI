@@ -48,12 +48,12 @@ class ReloadResponse(BaseModel):
     operation="reload_chat_workflow",
     error_code_prefix="HOT_RELOAD",
 )
+@router.post("/chat-workflow", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_chat_workflow",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/chat-workflow", response_model=ReloadResponse)
 async def reload_chat_workflow():
     """
     Reload all chat workflow modules without restarting the backend
@@ -99,12 +99,12 @@ async def reload_chat_workflow():
     operation="reload_module",
     error_code_prefix="HOT_RELOAD",
 )
+@router.post("/module", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_module",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/module", response_model=ReloadResponse)
 async def reload_module(request: ReloadRequest):
     """
     Reload a specific module
@@ -149,12 +149,12 @@ async def reload_module(request: ReloadRequest):
     operation="get_reload_status",
     error_code_prefix="HOT_RELOAD",
 )
+@router.get("/status", response_model=Metadata)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_reload_status",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/status", response_model=Metadata)
 async def get_reload_status():
     """
     Get hot reload manager status
@@ -175,12 +175,12 @@ async def get_reload_status():
     operation="start_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
+@router.post("/start", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/start", response_model=DataResponse)
 async def start_hot_reload():
     """
     Start the hot reload manager
@@ -210,12 +210,12 @@ async def start_hot_reload():
     operation="stop_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
+@router.post("/stop", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_hot_reload",
     error_code_prefix="HOT_RELOAD",
 )
-@router.post("/stop", response_model=DataResponse)
 async def stop_hot_reload():
     """
     Stop the hot reload manager
@@ -237,12 +237,12 @@ async def stop_hot_reload():
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
+@router.get("/health", response_model=HotReloadHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hot_reload_health",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/health", response_model=HotReloadHealthResponse)
 async def hot_reload_health():
     """
     Health check for hot reload functionality

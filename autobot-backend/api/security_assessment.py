@@ -957,12 +957,12 @@ async def recover_from_error(
     )
 
 
+@router.get("/phases", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase_definitions",
     error_code_prefix="SECURITY_ASSESSMENT",
 )
-@router.get("/phases", response_model=DataResponse)
 async def get_phase_definitions(
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:

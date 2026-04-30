@@ -107,12 +107,12 @@ def _build_query_dict(
     operation="query_audit_logs",
     error_code_prefix="AUDIT",
 )
+@router.get("/logs", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_audit_logs",
     error_code_prefix="AUDIT",
 )
-@router.get("/logs", response_model=AuditQueryResponse)
 async def query_audit_logs(
     request: Request,
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
@@ -180,12 +180,12 @@ async def query_audit_logs(
     operation="get_audit_statistics",
     error_code_prefix="AUDIT",
 )
+@router.get("/statistics", response_model=AuditStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_statistics",
     error_code_prefix="AUDIT",
 )
-@router.get("/statistics", response_model=AuditStatisticsResponse)
 async def get_audit_statistics(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -217,12 +217,12 @@ async def get_audit_statistics(
     operation="get_session_audit_trail",
     error_code_prefix="AUDIT",
 )
+@router.get("/session/{session_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_audit_trail",
     error_code_prefix="AUDIT",
 )
-@router.get("/session/{session_id}", response_model=AuditQueryResponse)
 async def get_session_audit_trail(
     request: Request,
     session_id: str,
@@ -266,12 +266,12 @@ async def get_session_audit_trail(
     operation="get_user_audit_trail",
     error_code_prefix="AUDIT",
 )
+@router.get("/user/{user_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_audit_trail",
     error_code_prefix="AUDIT",
 )
-@router.get("/user/{user_id}", response_model=AuditQueryResponse)
 async def get_user_audit_trail(
     request: Request,
     user_id: str,
@@ -315,12 +315,12 @@ async def get_user_audit_trail(
     operation="get_failed_operations",
     error_code_prefix="AUDIT",
 )
+@router.get("/failures", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_failed_operations",
     error_code_prefix="AUDIT",
 )
-@router.get("/failures", response_model=AuditQueryResponse)
 async def get_failed_operations(
     request: Request,
     hours: int = Query(24, ge=1, le=168, description="Hours of history to check"),
@@ -369,12 +369,12 @@ async def get_failed_operations(
     operation="cleanup_old_logs",
     error_code_prefix="AUDIT",
 )
+@router.post("/cleanup", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_logs",
     error_code_prefix="AUDIT",
 )
-@router.post("/cleanup", response_model=DataResponse)
 async def cleanup_old_logs(
     request: Request,
     cleanup_request: AuditCleanupRequest,
@@ -419,12 +419,12 @@ async def cleanup_old_logs(
     operation="list_operation_types",
     error_code_prefix="AUDIT",
 )
+@router.get("/operations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operation_types",
     error_code_prefix="AUDIT",
 )
-@router.get("/operations", response_model=DataResponse)
 async def list_operation_types(
     request: Request, admin_check: bool = Depends(check_admin_permission)
 ):

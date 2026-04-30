@@ -41,12 +41,12 @@ def _require_admin(request: Request) -> bool:
     return True
 
 
+@router.get("/event-logs")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_event_logs",
     error_code_prefix="EVT",
 )
-@router.get("/event-logs")
 async def list_event_logs(
     request: Request,
     user_id: Optional[str] = Query(None, description="Filter by user ID"),

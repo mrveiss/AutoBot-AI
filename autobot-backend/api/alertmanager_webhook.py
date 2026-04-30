@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
 
 
+@router.post("/alertmanager", response_model=AlertManagerWebhookReceiveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_alertmanager_webhook",
     error_code_prefix="ALERTMANAGER_WEBHOOK",
 )
-@router.post("/alertmanager", response_model=AlertManagerWebhookReceiveResponse)
 async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
     """
     Receive alerts from Prometheus AlertManager
@@ -125,12 +125,12 @@ async def _process_alert(alert: AlertInstance, group_status: str):
         logger.error("Failed to process individual alert: %s", e, exc_info=True)
 
 
+@router.get("/alertmanager/health", response_model=AlertManagerWebhookHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="alertmanager_webhook_health",
     error_code_prefix="ALERTMANAGER_WEBHOOK",
 )
-@router.get("/alertmanager/health", response_model=AlertManagerWebhookHealthResponse)
 async def alertmanager_webhook_health():
     """Health check endpoint for AlertManager webhook"""
     return {

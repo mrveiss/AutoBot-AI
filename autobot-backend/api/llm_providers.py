@@ -29,12 +29,12 @@ def _get_llm_interface():
     return LLMInterface()
 
 
+@router.post("/switch", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="switch_llm_provider",
     error_code_prefix="LLM_PROVIDERS",
 )
-@router.post("/switch", response_model=DataResponse)
 async def switch_llm_provider(
     switch_data: dict,
     admin_check: bool = Depends(check_admin_permission),
@@ -77,12 +77,12 @@ async def list_llm_providers(
     )
 
 
+@router.post("/providers/{provider_name}/test", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_llm_provider",
     error_code_prefix="LLM_PROVIDERS",
 )
-@router.post("/providers/{provider_name}/test", response_model=DataResponse)
 async def test_llm_provider(
     provider_name: str,
     current_user: dict = Depends(get_current_user),

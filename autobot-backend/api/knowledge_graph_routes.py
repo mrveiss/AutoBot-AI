@@ -42,12 +42,12 @@ _SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 # --- Pipeline Endpoints ---
 
 
+@router.post("/pipeline/run", response_model=PipelineRunResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_pipeline",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.post("/pipeline/run", response_model=PipelineRunResponse)
 async def run_pipeline(
     request: PipelineRunRequest,
     current_user: dict = Depends(get_current_user),
@@ -91,12 +91,12 @@ async def run_pipeline(
 # --- Entity Endpoints ---
 
 
+@router.get("/entities", response_model=KnowledgeGraphEntitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_entities",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/entities", response_model=KnowledgeGraphEntitiesResponse)
 async def list_entities(
     entity_type: Optional[str] = Query(None),
     query: Optional[str] = Query(None),
@@ -118,12 +118,12 @@ async def list_entities(
         raise HTTPException(status_code=500, detail="Entity listing failed")
 
 
+@router.get("/entities/{entity_id}/relationships", response_model=KnowledgeGraphEntityRelationshipsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_relationships",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/entities/{entity_id}/relationships", response_model=KnowledgeGraphEntityRelationshipsResponse)
 async def get_entity_relationships(
     entity_id: str,
     relationship_type: Optional[str] = Query(None),
@@ -152,12 +152,12 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
+@router.get("/events", response_model=KnowledgeGraphEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_events",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/events", response_model=KnowledgeGraphEventsResponse)
 async def search_events(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -196,12 +196,12 @@ async def search_events(
         raise HTTPException(status_code=500, detail="Event search failed")
 
 
+@router.get("/events/{entity_name}/timeline", response_model=KnowledgeGraphEventTimelineResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_event_timeline",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/events/{entity_name}/timeline", response_model=KnowledgeGraphEventTimelineResponse)
 async def get_event_timeline(
     entity_name: str,
     limit: int = Query(50, ge=1, le=200),
@@ -234,12 +234,12 @@ async def get_event_timeline(
 # --- Summary Endpoints ---
 
 
+@router.get("/summaries/search", response_model=KnowledgeGraphSummariesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_summaries",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/summaries/search", response_model=KnowledgeGraphSummariesResponse)
 async def search_summaries(
     query: str = Query(..., description="Search query"),
     level: Optional[str] = Query(
@@ -267,12 +267,12 @@ async def search_summaries(
         raise HTTPException(status_code=500, detail="Summary search failed")
 
 
+@router.get("/documents/{document_id}/overview", response_model=KnowledgeGraphDocumentOverviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_document_overview",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/documents/{document_id}/overview", response_model=KnowledgeGraphDocumentOverviewResponse)
 async def get_document_overview(
     document_id: str,
     current_user: dict = Depends(get_current_user),
@@ -293,12 +293,12 @@ async def get_document_overview(
         raise HTTPException(status_code=500, detail="Document overview failed")
 
 
+@router.get("/summaries/{summary_id}/drill-down", response_model=KnowledgeGraphDrillDownResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="drill_down_summary",
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
-@router.get("/summaries/{summary_id}/drill-down", response_model=KnowledgeGraphDrillDownResponse)
 async def drill_down_summary(
     summary_id: str,
     current_user: dict = Depends(get_current_user),

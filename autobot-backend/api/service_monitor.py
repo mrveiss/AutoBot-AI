@@ -69,12 +69,12 @@ async def _check_redis_health() -> Tuple[str, str]:
         return "offline", "Unreachable"
 
 
+@router.get("/services", response_model=ServiceMonitorServicesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_service_statuses",
     error_code_prefix="SERVICE_MONITOR",
 )
-@router.get("/services", response_model=ServiceMonitorServicesResponse)
 async def get_service_statuses() -> Dict[str, Any]:
     """Return health status for each AutoBot supporting service.
 
@@ -118,12 +118,12 @@ async def get_service_statuses() -> Dict[str, Any]:
     }
 
 
+@router.get("/vms/status", response_model=ServiceMonitorVMsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vm_statuses",
     error_code_prefix="SERVICE_MONITOR",
 )
-@router.get("/vms/status", response_model=ServiceMonitorVMsResponse)
 async def get_vm_statuses() -> Dict[str, Any]:
     """Return status for AutoBot VMs as a list.
 

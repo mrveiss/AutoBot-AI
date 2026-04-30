@@ -122,12 +122,12 @@ async def _keepalive_loop(ws: WebSocket, stop_event: asyncio.Event) -> None:
             break
 
 
+@router.websocket("/ws/live")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="live_events_websocket",
     error_code_prefix="LIVE_EVENTS",
 )
-@router.websocket("/ws/live")
 async def live_events_endpoint(websocket: WebSocket):
     """WebSocket endpoint for scoped real-time event streaming (#1408)."""
     token = websocket.query_params.get("token", "")

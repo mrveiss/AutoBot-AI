@@ -100,12 +100,12 @@ def _deserialize_job(data: str) -> BatchJob:
     operation="create_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
+@router.post("", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("", response_model=BatchJob)
 async def create_batch_job(
     job_data: BatchJobCreate,
     current_user: dict = Depends(get_current_user),
@@ -152,12 +152,12 @@ async def create_batch_job(
     operation="list_batch_jobs",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("", response_model=BatchJobList)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_jobs",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("", response_model=BatchJobList)
 async def list_batch_jobs(
     status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
     job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
@@ -216,12 +216,12 @@ async def list_batch_jobs(
     operation="get_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/{job_id}", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/{job_id}", response_model=BatchJob)
 async def get_batch_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -255,12 +255,12 @@ async def get_batch_job(
     operation="delete_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
+@router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_job",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
 async def delete_batch_job(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -308,12 +308,12 @@ async def delete_batch_job(
     operation="get_job_logs",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_job_logs",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
 async def get_job_logs(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -358,12 +358,12 @@ async def get_job_logs(
     operation="list_batch_templates",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/templates/", response_model=List[BatchTemplate])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_templates",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/templates/", response_model=List[BatchTemplate])
 async def list_batch_templates(
     current_user: dict = Depends(get_current_user),
 ):
@@ -396,12 +396,12 @@ async def list_batch_templates(
     operation="create_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
+@router.post("/templates/", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/templates/", response_model=BatchTemplate)
 async def create_batch_template(
     name: str,
     job_type: BatchJobType,
@@ -439,12 +439,12 @@ async def create_batch_template(
     operation="get_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/templates/{template_id}", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/templates/{template_id}", response_model=BatchTemplate)
 async def get_batch_template(
     template_id: str,
     current_user: dict = Depends(get_current_user),
@@ -473,12 +473,12 @@ async def get_batch_template(
     operation="delete_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
+@router.delete("/templates/{template_id}", response_model=BatchTemplateDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_template",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/templates/{template_id}", response_model=BatchTemplateDeleteResponse)
 async def delete_batch_template(
     template_id: str,
     current_user: dict = Depends(get_current_user),
@@ -513,12 +513,12 @@ async def delete_batch_template(
     operation="list_batch_schedules",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/schedules/", response_model=List[BatchSchedule])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_batch_schedules",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/schedules/", response_model=List[BatchSchedule])
 async def list_batch_schedules(
     current_user: dict = Depends(get_current_user),
 ):
@@ -551,12 +551,12 @@ async def list_batch_schedules(
     operation="create_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
+@router.post("/schedules/", response_model=BatchSchedule)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/schedules/", response_model=BatchSchedule)
 async def create_batch_schedule(
     job_id: str,
     cron_expression: str,
@@ -598,12 +598,12 @@ async def create_batch_schedule(
     operation="delete_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
+@router.delete("/schedules/{schedule_id}", response_model=BatchScheduleDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_batch_schedule",
     error_code_prefix="BATCH_JOBS",
 )
-@router.delete("/schedules/{schedule_id}", response_model=BatchScheduleDeleteResponse)
 async def delete_batch_schedule(
     schedule_id: str,
     current_user: dict = Depends(get_current_user),
@@ -638,12 +638,12 @@ async def delete_batch_schedule(
     operation="get_batch_jobs_health",
     error_code_prefix="BATCH_JOBS",
 )
+@router.get("/health", response_model=BatchJobsHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_jobs_health",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/health", response_model=BatchJobsHealthResponse)
 async def get_batch_jobs_health(
     current_user: dict = Depends(get_current_user),
 ):
@@ -722,12 +722,12 @@ def _process_session_file(filename: str, chats_directory: str):
     operation="get_batch_status",
     error_code_prefix="BATCH",
 )
+@router.get("/status", response_model=BatchStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_status",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/status", response_model=BatchStatusResponse)
 async def get_batch_status():
     """Get batch processing service status"""
     return {
@@ -745,12 +745,12 @@ async def get_batch_status():
     operation="batch_load",
     error_code_prefix="BATCH",
 )
+@router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_load",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/load", response_model=BatchLoadResponse)
 async def batch_load(batch_request: APIBatchRequest):
     """Execute multiple API calls in parallel and return combined results."""
     import time
@@ -810,12 +810,12 @@ async def batch_load(batch_request: APIBatchRequest):
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/chat-init", response_model=BatchChatInitResponse)
+@router.post("/chat-init", response_model=BatchChatInitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_chat_initialization",
     error_code_prefix="BATCH_JOBS",
 )
-@router.post("/chat-init", response_model=BatchChatInitResponse)
 async def batch_chat_initialization():
     """
     Optimized endpoint for chat interface initialization.

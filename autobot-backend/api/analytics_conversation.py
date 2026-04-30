@@ -739,12 +739,12 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     operation="analyze_conversations",
     error_code_prefix="CONVFLOW",
 )
+@router.get("/analyze", response_model=ConversationAnalysisResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_conversations",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/analyze", response_model=ConversationAnalysisResult)
 async def analyze_conversations(
     hours: int = Query(
         24, ge=1, le=168, description="Hours of conversations to analyze"
@@ -799,12 +799,12 @@ async def analyze_conversations(
     operation="get_intent_stats",
     error_code_prefix="CONVFLOW",
 )
+@router.get("/intents", response_model=ConversationIntentsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_intent_stats",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/intents", response_model=ConversationIntentsResponse)
 async def get_intent_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -867,12 +867,12 @@ async def get_intent_stats(
     operation="get_flow_paths",
     error_code_prefix="CONVFLOW",
 )
+@router.get("/flows", response_model=ConversationFlowsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_flow_paths",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/flows", response_model=ConversationFlowsResponse)
 async def get_flow_paths(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     min_frequency: int = Query(2, ge=1, description="Minimum flow frequency"),
@@ -940,12 +940,12 @@ async def get_flow_paths(
     operation="get_bottlenecks",
     error_code_prefix="CONVFLOW",
 )
+@router.get("/bottlenecks", response_model=ConversationBottlenecksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_bottlenecks",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/bottlenecks", response_model=ConversationBottlenecksResponse)
 async def get_bottlenecks(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -984,12 +984,12 @@ async def get_bottlenecks(
     operation="get_hourly_distribution",
     error_code_prefix="CONVFLOW",
 )
+@router.get("/distribution", response_model=ConversationDistributionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hourly_distribution",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.get("/distribution", response_model=ConversationDistributionResponse)
 async def get_hourly_distribution(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1033,12 +1033,12 @@ async def get_hourly_distribution(
     operation="detect_intent",
     error_code_prefix="CONVFLOW",
 )
+@router.post("/detect-intent", response_model=ConversationDetectIntentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_intent",
     error_code_prefix="ANALYTICS_CONVERSATION",
 )
-@router.post("/detect-intent", response_model=ConversationDetectIntentResponse)
 async def detect_intent(
     message: str = Query(..., description="Message to analyze"),
     admin_check: bool = Depends(check_admin_permission),

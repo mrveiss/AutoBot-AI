@@ -448,12 +448,12 @@ import threading
 _npu_events_lock = threading.Lock()
 
 
+@router.websocket("/ws-test")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_test_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
     # Issue #2818: Authenticate before accepting connection
@@ -554,12 +554,12 @@ def _unregister_event_manager_broadcast() -> None:
         logger.error("Error during event manager cleanup: %s", e)
 
 
+@router.websocket("/ws")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time event stream between backend and frontend.
@@ -609,12 +609,12 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection cleanup completed")
 
 
+@router.websocket("/ws/npu-workers")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="npu_workers_websocket_endpoint",
     error_code_prefix="WEBSOCKETS",
 )
-@router.websocket("/ws/npu-workers")
 async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time NPU worker status updates.

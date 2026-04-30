@@ -84,12 +84,12 @@ class RedisToolCallRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+@router.get("/mcp/tools")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_mcp_tools",
     error_code_prefix="REDIS_MCP",
 )
-@router.get("/mcp/tools")
 async def get_redis_mcp_tools(
     current_user: dict = Depends(get_current_user),
 ) -> List[dict]:
@@ -110,12 +110,12 @@ async def get_redis_mcp_tools(
 # ---------------------------------------------------------------------------
 
 
+@router.post("/mcp/call")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="call_redis_mcp_tool",
     error_code_prefix="REDIS_MCP",
 )
-@router.post("/mcp/call")
 async def call_redis_mcp_tool(
     request: RedisToolCallRequest,
     current_user: dict = Depends(get_current_user),
@@ -175,12 +175,12 @@ async def call_redis_mcp_tool(
 # ---------------------------------------------------------------------------
 
 
+@router.post("/mcp/{tool_name}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="redis_mcp_tool_endpoint",
     error_code_prefix="REDIS_MCP",
 )
-@router.post("/mcp/{tool_name}")
 async def redis_mcp_tool_endpoint(
     tool_name: str,
     request: RedisToolCallRequest,

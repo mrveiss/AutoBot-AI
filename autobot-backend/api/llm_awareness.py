@@ -42,12 +42,12 @@ DETAILED_CONTEXT_LEVELS = {"detailed", "full"}
     operation="get_awareness_status",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/status", response_model=LLMAwarenessStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_awareness_status",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/status", response_model=LLMAwarenessStatusResponse)
 async def get_awareness_status():
     """Get LLM self-awareness system status"""
     try:
@@ -72,12 +72,12 @@ async def get_awareness_status():
     operation="get_system_context",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/context", response_model=LLMSystemContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_context",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/context", response_model=LLMSystemContextResponse)
 async def get_system_context(
     level: str = Query(
         "basic", description="Context detail level: basic, detailed, full"
@@ -147,12 +147,12 @@ async def get_system_context(
     operation="get_capabilities_summary",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/capabilities", response_model=LLMCapabilitiesSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_capabilities_summary",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/capabilities", response_model=LLMCapabilitiesSummaryResponse)
 async def get_capabilities_summary():
     """Get detailed capabilities summary"""
     try:
@@ -192,12 +192,12 @@ async def get_capabilities_summary():
     operation="inject_awareness_context",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.post("/inject-context", response_model=LLMInjectContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="inject_awareness_context",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.post("/inject-context", response_model=LLMInjectContextResponse)
 async def inject_awareness_context(request: PromptInjectionRequest):
     """Inject system awareness context into a prompt"""
     try:
@@ -236,12 +236,12 @@ async def inject_awareness_context(request: PromptInjectionRequest):
     operation="analyze_query_with_awareness",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.post("/analyze-query", response_model=LLMAnalyzeQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_query_with_awareness",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.post("/analyze-query", response_model=LLMAnalyzeQueryResponse)
 async def analyze_query_with_awareness(request: QueryAnalysisRequest):
     """Analyze a query with phase and capability awareness"""
     try:
@@ -265,12 +265,12 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
     operation="get_capability_summary_text",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/summary/text", response_model=LLMCapabilitySummaryTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_capability_summary_text",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/summary/text", response_model=LLMCapabilitySummaryTextResponse)
 async def get_capability_summary_text():
     """Get human-readable capability summary"""
     try:
@@ -293,12 +293,12 @@ async def get_capability_summary_text():
     operation="get_phase_information",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/phase-info", response_model=LLMPhaseInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase_information",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/phase-info", response_model=LLMPhaseInfoResponse)
 async def get_phase_information():
     """Get current phase information and progression status"""
     try:
@@ -329,12 +329,12 @@ async def get_phase_information():
     operation="get_awareness_metrics",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/metrics", response_model=LLMAwarenessMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_awareness_metrics",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/metrics", response_model=LLMAwarenessMetricsResponse)
 async def get_awareness_metrics():
     """Get self-awareness system metrics"""
     try:
@@ -374,12 +374,12 @@ async def get_awareness_metrics():
     operation="export_awareness_data",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.post("/export", response_model=LLMExportAwarenessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_awareness_data",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.post("/export", response_model=LLMExportAwarenessResponse)
 async def export_awareness_data(
     include_history: bool = Query(False),
     format: str = Query("json", description="Export format: json"),
@@ -408,12 +408,12 @@ async def export_awareness_data(
     operation="llm_awareness_health",
     error_code_prefix="LLM_AWARENESS",
 )
+@router.get("/health", response_model=LLMAwarenessHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="llm_awareness_health",
     error_code_prefix="LLM_AWARENESS",
 )
-@router.get("/health", response_model=LLMAwarenessHealthResponse)
 async def llm_awareness_health():
     """Health check for LLM awareness system"""
     try:

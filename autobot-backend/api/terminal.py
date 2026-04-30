@@ -324,12 +324,12 @@ router.include_router(tools_router, prefix="/terminal")
     operation="create_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions", response_model=TerminalSessionCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions", response_model=TerminalSessionCreateResponse)
 async def create_terminal_session(
     request: TerminalSessionRequest,
     current_user: dict = Depends(get_current_user),
@@ -400,12 +400,12 @@ async def create_terminal_session(
     operation="list_terminal_sessions",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions", response_model=TerminalSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_terminal_sessions",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions", response_model=TerminalSessionListResponse)
 async def list_terminal_sessions(
     current_user: dict = Depends(get_current_user),
 ):
@@ -437,12 +437,12 @@ async def list_terminal_sessions(
     operation="get_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
 async def get_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -474,12 +474,12 @@ async def get_terminal_session(
     operation="delete_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_terminal_session",
     error_code_prefix="TERMINAL",
 )
-@router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
 async def delete_terminal_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -520,12 +520,12 @@ async def delete_terminal_session(
     operation="setup_ssh_keys",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="setup_ssh_keys",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 async def setup_ssh_keys(
     session_id: str,
     request: SSHKeySetupRequest,
@@ -568,12 +568,12 @@ async def setup_ssh_keys(
     operation="list_session_ssh_keys",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_session_ssh_keys",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 async def list_session_ssh_keys(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -603,12 +603,12 @@ async def list_session_ssh_keys(
     operation="add_key_to_agent",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_key_to_ssh_agent",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
 async def add_key_to_ssh_agent(
     session_id: str,
     key_name: str,
@@ -650,12 +650,12 @@ async def add_key_to_ssh_agent(
     operation="get_key_path",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ssh_key_path",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
 async def get_ssh_key_path(
     session_id: str,
     key_name: str,
@@ -690,12 +690,12 @@ async def get_ssh_key_path(
     operation="execute_single_command",
     error_code_prefix="TERMINAL",
 )
+@router.post("/command", response_model=CommandAssessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_single_command",
     error_code_prefix="TERMINAL",
 )
-@router.post("/command", response_model=CommandAssessResponse)
 async def execute_single_command(
     request: CommandRequest,
     current_user: dict = Depends(get_current_user),
@@ -739,12 +739,12 @@ async def execute_single_command(
     operation="send_terminal_input",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_input",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
 async def send_terminal_input(
     session_id: str,
     request: TerminalInputRequest,
@@ -775,12 +775,12 @@ async def send_terminal_input(
     operation="send_terminal_signal",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_signal",
     error_code_prefix="TERMINAL",
 )
-@router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
 async def send_terminal_signal(
     session_id: str,
     signal_name: str,
@@ -817,12 +817,12 @@ async def send_terminal_signal(
     operation="get_terminal_command_history",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_command_history",
     error_code_prefix="TERMINAL",
 )
-@router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
 async def get_terminal_command_history(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -861,12 +861,12 @@ async def get_terminal_command_history(
     operation="get_session_audit_log",
     error_code_prefix="TERMINAL",
 )
+@router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_audit_log",
     error_code_prefix="TERMINAL",
 )
-@router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
 async def get_session_audit_log(
     session_id: str,
     current_user: dict = Depends(get_current_user),
@@ -1164,12 +1164,12 @@ async def ssh_terminal_websocket(
     operation="terminal_info",
     error_code_prefix="TERMINAL",
 )
+@router.get("/", response_model=TerminalInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminal_info",
     error_code_prefix="TERMINAL",
 )
-@router.get("/", response_model=TerminalInfoResponse)
 async def terminal_info(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1208,12 +1208,12 @@ async def terminal_info(
     operation="terminal_health_check",
     error_code_prefix="TERMINAL",
 )
+@router.get("/health", response_model=TerminalHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminal_health_check",
     error_code_prefix="TERMINAL",
 )
-@router.get("/health", response_model=TerminalHealthResponse)
 async def terminal_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1259,12 +1259,12 @@ async def terminal_health_check(
     operation="get_terminal_system_status",
     error_code_prefix="TERMINAL",
 )
+@router.get("/status", response_model=TerminalSystemStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_system_status",
     error_code_prefix="TERMINAL",
 )
-@router.get("/status", response_model=TerminalSystemStatusResponse)
 async def get_terminal_system_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1308,12 +1308,12 @@ async def get_terminal_system_status(
     operation="get_terminal_capabilities",
     error_code_prefix="TERMINAL",
 )
+@router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_capabilities",
     error_code_prefix="TERMINAL",
 )
-@router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
 async def get_terminal_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1369,12 +1369,12 @@ async def get_terminal_capabilities(
     operation="get_security_policies",
     error_code_prefix="TERMINAL",
 )
+@router.get("/security", response_model=TerminalSecurityPoliciesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_policies",
     error_code_prefix="TERMINAL",
 )
-@router.get("/security", response_model=TerminalSecurityPoliciesResponse)
 async def get_security_policies(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1416,12 +1416,12 @@ async def get_security_policies(
     operation="get_terminal_features",
     error_code_prefix="TERMINAL",
 )
+@router.get("/features", response_model=TerminalFeaturesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_features",
     error_code_prefix="TERMINAL",
 )
-@router.get("/features", response_model=TerminalFeaturesResponse)
 async def get_terminal_features(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1480,12 +1480,12 @@ async def get_terminal_features(
     operation="get_terminal_statistics",
     error_code_prefix="TERMINAL",
 )
+@router.get("/stats", response_model=TerminalStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_statistics",
     error_code_prefix="TERMINAL",
 )
-@router.get("/stats", response_model=TerminalStatsResponse)
 async def get_terminal_statistics(
     session_id: str = None,
     current_user: dict = Depends(get_current_user),
@@ -1514,12 +1514,12 @@ async def get_terminal_statistics(
 # SLM Admin Terminal (Issue #983) ================================================
 
 
+@router.post("/execute", summary="Execute command (SLM admin terminal)", response_model=AdminExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_execute_command",
     error_code_prefix="TERMINAL",
 )
-@router.post("/execute", summary="Execute command (SLM admin terminal)", response_model=AdminExecuteResponse)
 async def admin_execute_command(body: AdminExecuteRequest) -> AdminExecuteResponse:
     """Execute a single shell command and return stdout/stderr/exit_code.
 

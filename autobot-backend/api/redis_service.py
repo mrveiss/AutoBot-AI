@@ -126,12 +126,12 @@ def check_operator_permission(request: Request) -> str:
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
+@router.post("/start", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/start", response_model=ServiceOperationResponse)
 async def start_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -174,12 +174,12 @@ async def start_redis_service(
     operation="stop_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
+@router.post("/stop", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/stop", response_model=ServiceOperationResponse)
 async def stop_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -224,12 +224,12 @@ async def stop_redis_service(
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
+@router.post("/restart", response_model=ServiceOperationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.post("/restart", response_model=ServiceOperationResponse)
 async def restart_redis_service(
     request: Request, manager: RedisServiceManager = Depends(get_service_manager)
 ):
@@ -272,12 +272,12 @@ async def restart_redis_service(
     operation="get_redis_status",
     error_code_prefix="REDIS_SERVICE",
 )
+@router.get("/status", response_model=ServiceStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_status",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.get("/status", response_model=ServiceStatusResponse)
 async def get_redis_status(manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Get current Redis service status
@@ -305,12 +305,12 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
     operation="get_redis_health",
     error_code_prefix="REDIS_SERVICE",
 )
+@router.get("/health", response_model=HealthStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_health",
     error_code_prefix="REDIS_SERVICE",
 )
-@router.get("/health", response_model=HealthStatusResponse)
 async def get_redis_health(manager: RedisServiceManager = Depends(get_service_manager)):
     """
     Get detailed Redis service health status

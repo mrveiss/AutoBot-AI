@@ -28,12 +28,12 @@ router = APIRouter()
     operation="get_available_models",
     error_code_prefix="MODELS",
 )
+@router.get("/available", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_models",
     error_code_prefix="MODELS",
 )
-@router.get("/available", response_model=DataResponse)
 async def get_available_models(
     current_user: dict = Depends(get_current_user),
 ):

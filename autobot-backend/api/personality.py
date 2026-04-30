@@ -67,23 +67,23 @@ def _not_found(pid: str) -> HTTPException:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/profiles", response_model=List[PersonalityProfileSummary])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_profiles",
     error_code_prefix="PERSONALITY",
 )
-@router.get("/profiles", response_model=List[PersonalityProfileSummary])
 async def list_profiles() -> List[Dict[str, Any]]:
     """List all personality profiles."""
     return get_personality_manager().list_profiles()
 
 
+@router.get("/active", response_model=Optional[PersonalityProfileDetail])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active",
     error_code_prefix="PERSONALITY",
 )
-@router.get("/active", response_model=Optional[PersonalityProfileDetail])
 async def get_active() -> Optional[PersonalityProfileDetail]:
     """Return the active profile, or null if personality is disabled."""
     mgr = get_personality_manager()
@@ -93,12 +93,12 @@ async def get_active() -> Optional[PersonalityProfileDetail]:
     return _profile_to_detail(profile)
 
 
+@router.get("/status", response_model=PersonalityStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_status",
     error_code_prefix="PERSONALITY",
 )
-@router.get("/status", response_model=PersonalityStatusResponse)
 async def get_status() -> PersonalityStatusResponse:
     """Return enabled flag and active profile id."""
     mgr = get_personality_manager()
@@ -109,23 +109,23 @@ async def get_status() -> PersonalityStatusResponse:
     )
 
 
+@router.get("/languages", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_languages",
     error_code_prefix="PERSONALITY",
 )
-@router.get("/languages", response_model=None)
 async def list_languages() -> Dict[str, str]:
     """Return the supported language codes and their display names."""
     return SUPPORTED_LANGUAGES
 
 
+@router.get("/profiles/{pid}", response_model=PersonalityProfileDetail)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_profile",
     error_code_prefix="PERSONALITY",
 )
-@router.get("/profiles/{pid}", response_model=PersonalityProfileDetail)
 async def get_profile(pid: str) -> PersonalityProfileDetail:
     """Fetch a single profile by id."""
     profile = get_personality_manager().get_profile(pid)
@@ -139,16 +139,16 @@ async def get_profile(pid: str) -> PersonalityProfileDetail:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_profile",
-    error_code_prefix="PERSONALITY",
-)
 @router.post(
     "/profiles",
     response_model=PersonalityProfileDetail,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(check_admin_permission)],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def create_profile(body: PersonalityProfileCreate) -> PersonalityProfileDetail:
     """Create a new user personality profile."""
@@ -156,15 +156,15 @@ async def create_profile(body: PersonalityProfileCreate) -> PersonalityProfileDe
     return _profile_to_detail(profile)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_profile",
-    error_code_prefix="PERSONALITY",
-)
 @router.put(
     "/profiles/{pid}",
     response_model=PersonalityProfileDetail,
     dependencies=[Depends(check_admin_permission)],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def update_profile(pid: str, body: PersonalityProfileUpdate) -> PersonalityProfileDetail:
     """Update fields on an existing profile."""
@@ -176,16 +176,16 @@ async def update_profile(pid: str, body: PersonalityProfileUpdate) -> Personalit
     return _profile_to_detail(profile)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_profile",
-    error_code_prefix="PERSONALITY",
-)
 @router.delete(
     "/profiles/{pid}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def delete_profile(pid: str) -> None:
     """Delete a user-created profile. System profiles cannot be deleted."""
@@ -200,16 +200,16 @@ async def delete_profile(pid: str) -> None:
         raise _not_found(pid) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="activate_profile",
-    error_code_prefix="PERSONALITY",
-)
 @router.post(
     "/profiles/{pid}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(check_admin_permission)],
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="activate_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def activate_profile(pid: str) -> None:
     """Set a profile as the active personality."""
@@ -219,15 +219,15 @@ async def activate_profile(pid: str) -> None:
         raise _not_found(pid) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reset_profile",
-    error_code_prefix="PERSONALITY",
-)
 @router.post(
     "/profiles/{pid}/reset",
     response_model=PersonalityProfileDetail,
     dependencies=[Depends(check_admin_permission)],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_profile",
+    error_code_prefix="PERSONALITY",
 )
 async def reset_profile(pid: str) -> PersonalityProfileDetail:
     """Reset a profile's content to match the default profile."""
@@ -238,15 +238,15 @@ async def reset_profile(pid: str) -> PersonalityProfileDetail:
     return _profile_to_detail(profile)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="toggle_personality",
-    error_code_prefix="PERSONALITY",
-)
 @router.post(
     "/toggle",
     response_model=PersonalityStatusResponse,
     dependencies=[Depends(check_admin_permission)],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="toggle_personality",
+    error_code_prefix="PERSONALITY",
 )
 async def toggle_personality(body: PersonalityToggleRequest) -> PersonalityStatusResponse:
     """Enable or disable the personality system globally."""

@@ -49,15 +49,15 @@ def _get_learner():
     return _pattern_learner
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_outcomes",
-    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
-)
 @router.get(
     "/{agent_id}/outcomes",
     response_model=List[TaskOutcomeResponse],
     summary="Get task outcome history for an agent",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_outcomes",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
 )
 async def get_agent_outcomes(
     agent_id: str,
@@ -71,15 +71,15 @@ async def get_agent_outcomes(
     return [TaskOutcomeResponse(**o.__dict__) for o in outcomes]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_learned_strategies",
-    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
-)
 @router.get(
     "/{agent_id}/learned-strategies",
     response_model=Optional[LearnedStrategyResponse],
     summary="Get learned strategy for an agent's task type",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_learned_strategies",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
 )
 async def get_learned_strategies(
     agent_id: str,
@@ -94,15 +94,15 @@ async def get_learned_strategies(
     return LearnedStrategyResponse(**strategy.__dict__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reset_agent_learning",
-    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
-)
 @router.post(
     "/{agent_id}/reset-learning",
     response_model=ResetLearningResponse,
     summary="Clear learned state for an agent",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_agent_learning",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
 )
 async def reset_agent_learning(
     agent_id: str,

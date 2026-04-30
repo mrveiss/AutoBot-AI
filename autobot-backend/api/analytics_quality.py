@@ -899,12 +899,12 @@ manager = ConnectionManager()
 # ============================================================================
 
 
+@router.get("/health-score", response_model=QualityHealthScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_score",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/health-score", response_model=QualityHealthScoreResponse)
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -942,12 +942,12 @@ async def get_health_score(
     }
 
 
+@router.get("/metrics", response_model=QualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_metrics",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/metrics", response_model=QualityMetricsResponse)
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1006,12 +1006,12 @@ async def get_quality_metrics(
     }
 
 
+@router.get("/patterns", response_model=QualityPatternsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_distribution",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/patterns", response_model=QualityPatternsResponse)
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
@@ -1064,12 +1064,12 @@ async def get_pattern_distribution(
     return {"status": "success", "patterns": result}
 
 
+@router.get("/complexity", response_model=QualityComplexityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_complexity_metrics",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/complexity", response_model=QualityComplexityResponse)
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1186,12 +1186,12 @@ def _calculate_trend_statistics(scores: list) -> dict:
     }
 
 
+@router.get("/trends", response_model=QualityTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/trends", response_model=QualityTrendsResponse)
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
@@ -1226,12 +1226,12 @@ async def get_quality_trends(
     }
 
 
+@router.get("/snapshot", response_model=QualitySnapshotResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_snapshot",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/snapshot", response_model=QualitySnapshotResponse)
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1299,12 +1299,12 @@ async def get_quality_snapshot(
     }
 
 
+@router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="drill_down_category",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
 async def drill_down_category(
     category: str,
     file_filter: Optional[str] = Query(None, description="Filter by file path"),
@@ -1353,12 +1353,12 @@ async def drill_down_category(
     }
 
 
+@router.get("/export", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_quality_report",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.get("/export", response_model=DataResponse)
 async def export_quality_report(
     format: str = Query("json", pattern="^(json|csv|pdf)$"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1430,12 +1430,12 @@ _WS_MESSAGE_HANDLERS = {
 }
 
 
+@router.websocket("/ws")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_quality_updates",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-@router.websocket("/ws")
 async def websocket_quality_updates(websocket: WebSocket):
     """
     WebSocket endpoint for real-time quality updates.

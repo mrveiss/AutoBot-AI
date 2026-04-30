@@ -28,12 +28,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["knowledge-sync-queue"])
 
 
+@router.get("/sync-queue", response_model=KnowledgeSyncQueueResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_sync_queue",
     error_code_prefix="KNOWLEDGE_SYNC_QUEUE",
 )
-@router.get("/sync-queue", response_model=KnowledgeSyncQueueResponse)
 async def get_sync_queue(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -58,12 +58,12 @@ async def get_sync_queue(
     }
 
 
+@router.post("/sync-queue/prune", response_model=KnowledgeSyncQueuePruneResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="prune_done_entries",
     error_code_prefix="KNOWLEDGE_SYNC_QUEUE",
 )
-@router.post("/sync-queue/prune", response_model=KnowledgeSyncQueuePruneResponse)
 async def prune_done_entries(
     older_than_seconds: int = Query(7 * 24 * 3600, ge=60),
     admin_check: bool = Depends(check_admin_permission),

@@ -125,12 +125,12 @@ def _build_search_metrics(metrics) -> dict:
     operation="advanced_rag_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/advanced_search", response_model=AdvancedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_search",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.post("/advanced_search", response_model=AdvancedSearchResponse)
 async def advanced_search(
     request: AdvancedSearchRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -193,12 +193,12 @@ async def advanced_search(
     operation="rerank_results",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/rerank_results", response_model=RerankResultsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rerank_results",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.post("/rerank_results", response_model=RerankResultsResponse)
 async def rerank_results(
     request: RerankRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -243,12 +243,12 @@ async def rerank_results(
     operation="get_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/config/rag", response_model=RagConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_configuration",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.get("/config/rag", response_model=RagConfigResponse)
 async def get_rag_configuration(
     current_user: dict = Depends(get_current_user),
 ):
@@ -275,12 +275,12 @@ async def get_rag_configuration(
     operation="update_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
+@router.put("/config/rag", response_model=UpdateRagConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_rag_configuration",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.put("/config/rag", response_model=UpdateRagConfigResponse)
 async def update_rag_configuration(
     request: RAGConfigUpdate,
     current_user: dict = Depends(get_current_user),
@@ -326,12 +326,12 @@ async def update_rag_configuration(
     operation="get_loop_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/loop/status", response_model=LoopStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_loop_status",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.get("/loop/status", response_model=LoopStatusResponse)
 async def get_loop_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -373,12 +373,12 @@ async def get_loop_status(
     operation="approve_loop_variant",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/loop/approve", response_model=LoopApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_loop_variant",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.post("/loop/approve", response_model=LoopApproveResponse)
 async def approve_loop_variant(
     current_user: dict = Depends(get_current_user),
 ):
@@ -412,12 +412,12 @@ async def approve_loop_variant(
     operation="reject_loop_variant",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/loop/reject", response_model=LoopRejectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reject_loop_variant",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.post("/loop/reject", response_model=LoopRejectResponse)
 async def reject_loop_variant(
     current_user: dict = Depends(get_current_user),
 ):
@@ -448,12 +448,12 @@ async def reject_loop_variant(
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats/rag", response_model=RagStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.get("/stats/rag", response_model=RagStatsResponse)
 async def get_rag_stats(
     rag_service: RAGService = Depends(get_rag_service_dependency),
     current_user: dict = Depends(get_current_user),
@@ -482,12 +482,12 @@ async def get_rag_stats(
     operation="run_rag_benchmark",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/benchmark/run", response_model=BenchmarkRunResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_rag_benchmark",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.post("/benchmark/run", response_model=BenchmarkRunResponse)
 async def run_rag_benchmark(
     request: RunBenchmarkRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -620,12 +620,12 @@ async def run_rag_benchmark(
     operation="get_entity_history",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/entity/{entity_id}/history", response_model=EntityHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_history",
     error_code_prefix="KNOWLEDGE_RAG",
 )
-@router.get("/entity/{entity_id}/history", response_model=EntityHistoryResponse)
 async def get_entity_history(
     entity_id: str,
     current_user: dict = Depends(get_current_user),

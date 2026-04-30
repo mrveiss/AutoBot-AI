@@ -146,12 +146,12 @@ def _resolve_share_recipients(
 # ====================================================================
 
 
+@router.post("/{session_id}/invite", response_model=CollabInviteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="invite_user",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/invite", response_model=CollabInviteResponse)
 async def invite_user(
     session_id: str,
     invite: CollabInviteRequest,
@@ -204,12 +204,12 @@ async def invite_user(
         )
 
 
+@router.post("/{session_id}/remove", response_model=CollabRemoveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_collaborator",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/remove", response_model=CollabRemoveResponse)
 async def remove_collaborator(
     session_id: str,
     remove: CollabRemoveRequest,
@@ -273,12 +273,12 @@ async def remove_collaborator(
         )
 
 
+@router.get("/{session_id}/participants", response_model=SessionParticipantsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_participants",
     error_code_prefix="COLLABORATION",
 )
-@router.get("/{session_id}/participants", response_model=SessionParticipantsResponse)
 async def get_participants(
     session_id: str,
     db: AsyncSession = Depends(get_async_session),
@@ -341,12 +341,12 @@ async def get_participants(
         )
 
 
+@router.post("/{session_id}/secrets/share", response_model=SessionShareSecretResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_secret_with_session",
     error_code_prefix="COLLABORATION",
 )
-@router.post("/{session_id}/secrets/share", response_model=SessionShareSecretResponse)
 async def share_secret_with_session(
     session_id: str,
     share: CollabShareSecretRequest,
@@ -402,12 +402,12 @@ async def share_secret_with_session(
         )
 
 
+@router.get("/{session_id}/presence", response_model=SessionPresenceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_presence",
     error_code_prefix="COLLABORATION",
 )
-@router.get("/{session_id}/presence", response_model=SessionPresenceResponse)
 async def get_presence(
     session_id: str,
     current_user: dict = Depends(get_current_user),

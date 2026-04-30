@@ -426,12 +426,12 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 # ============================================================================
 
 
+@router.get("/analyze", response_model=CodeReviewAnalyzeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_diff",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/analyze", response_model=CodeReviewAnalyzeResponse)
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
     commit_range: Optional[str] = Query(
@@ -550,12 +550,12 @@ async def analyze_diff(
     }
 
 
+@router.get("/review/{review_id}", response_model=CodeReviewReviewByIdResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_by_id",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/review/{review_id}", response_model=CodeReviewReviewByIdResponse)
 async def get_review_by_id(
     review_id: str,
     _user: dict = Depends(get_current_user),
@@ -596,12 +596,12 @@ async def get_review_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
+@router.post("/review-file", response_model=CodeReviewFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="review_file",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.post("/review-file", response_model=CodeReviewFileResponse)
 async def review_file(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,
@@ -643,12 +643,12 @@ async def review_file(
     }
 
 
+@router.get("/patterns", response_model=List[CodeReviewPatternItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_patterns",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/patterns", response_model=List[CodeReviewPatternItem])
 async def get_review_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -673,12 +673,12 @@ async def get_review_patterns(
     ]
 
 
+@router.get("/history", response_model=CodeReviewHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_history",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/history", response_model=CodeReviewHistoryResponse)
 async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
@@ -738,12 +738,12 @@ async def get_review_history(
         )
 
 
+@router.get("/metrics", response_model=CodeReviewMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_metrics",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/metrics", response_model=CodeReviewMetricsResponse)
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
@@ -764,12 +764,12 @@ async def get_review_metrics(
     )
 
 
+@router.post("/feedback", response_model=CodeReviewFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_feedback",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.post("/feedback", response_model=CodeReviewFeedbackResponse)
 async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     comment_id: str = None,
@@ -815,12 +815,12 @@ async def submit_feedback(
     }
 
 
+@router.get("/summary", response_model=CodeReviewSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_summary",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/summary", response_model=CodeReviewSummaryResponse)
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -840,12 +840,12 @@ async def get_review_summary(
     )
 
 
+@router.get("/categories", response_model=List[CodeReviewCategoryItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_review_categories",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/categories", response_model=List[CodeReviewCategoryItem])
 async def get_review_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict[str, Any]]:
@@ -865,12 +865,12 @@ async def get_review_categories(
     ]
 
 
+@router.post("/patterns/toggle", response_model=CodeReviewPatternToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="toggle_pattern_preference",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.post("/patterns/toggle", response_model=CodeReviewPatternToggleResponse)
 async def toggle_pattern_preference(
     request: PatternToggleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -919,12 +919,12 @@ async def toggle_pattern_preference(
         raise HTTPException(status_code=500, detail="Failed to save preference")
 
 
+@router.get("/patterns/preferences", response_model=CodeReviewPatternPreferencesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_preferences",
     error_code_prefix="ANALYTICS_CODE_REVIEW",
 )
-@router.get("/patterns/preferences", response_model=CodeReviewPatternPreferencesResponse)
 async def get_pattern_preferences(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:

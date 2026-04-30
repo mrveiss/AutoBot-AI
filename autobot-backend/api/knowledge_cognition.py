@@ -36,12 +36,12 @@ class SeedRequest(BaseModel):
     manifest_path: str = _DEFAULT_MANIFEST
 
 
+@router.get("/cognition-store/status", response_model=KnowledgeCognitionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cognition_store_status",
     error_code_prefix="KNOWLEDGE_COGNITION",
 )
-@router.get("/cognition-store/status", response_model=KnowledgeCognitionStatusResponse)
 async def get_cognition_store_status():
     """Return seed status for all ChromaDB collections that contain seeded docs.
 
@@ -74,12 +74,12 @@ async def _run_seed(manifest_path: str) -> None:
         logger.error("Background seed failed: manifest=%s error=%s", manifest_path, exc)
 
 
+@router.post("/cognition-store/seed", response_model=KnowledgeCognitionSeedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_cognition_seed",
     error_code_prefix="KNOWLEDGE_COGNITION",
 )
-@router.post("/cognition-store/seed", response_model=KnowledgeCognitionSeedResponse)
 async def trigger_cognition_seed(
     request: SeedRequest,
     background_tasks: BackgroundTasks,

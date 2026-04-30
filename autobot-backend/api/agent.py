@@ -704,12 +704,12 @@ async def _execute_goal_with_error_handling(
     operation="receive_goal",
     error_code_prefix="AGENT",
 )
+@router.post("/goal", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal",
     error_code_prefix="AGENT",
 )
-@router.post("/goal", response_model=AgentMessageResponse)
 async def receive_goal(
     request: Request,
     payload: GoalPayload,
@@ -776,12 +776,12 @@ async def receive_goal(
     operation="pause_agent",
     error_code_prefix="AGENT",
 )
+@router.post("/pause", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pause_agent_api",
     error_code_prefix="AGENT",
 )
-@router.post("/pause", response_model=AgentMessageResponse)
 async def pause_agent_api(
     request: Request,
     user_role: str = Form("user"),
@@ -838,12 +838,12 @@ async def pause_agent_api(
     operation="resume_agent",
     error_code_prefix="AGENT",
 )
+@router.post("/resume", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_agent_api",
     error_code_prefix="AGENT",
 )
-@router.post("/resume", response_model=AgentMessageResponse)
 async def resume_agent_api(
     request: Request,
     user_role: str = Form("user"),
@@ -900,12 +900,12 @@ async def resume_agent_api(
     operation="command_approval",
     error_code_prefix="AGENT",
 )
+@router.post("/command_approval", response_model=AgentCommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="command_approval",
     error_code_prefix="AGENT",
 )
-@router.post("/command_approval", response_model=AgentCommandApprovalResponse)
 async def command_approval(
     request: Request,
     payload: CommandApprovalPayload,
@@ -947,12 +947,12 @@ async def command_approval(
     operation="execute_command",
     error_code_prefix="AGENT",
 )
+@router.post("/execute_command", response_model=AgentCommandExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_command",
     error_code_prefix="AGENT",
 )
-@router.post("/execute_command", response_model=AgentCommandExecuteResponse)
 async def execute_command(
     request: Request,
     command_data: dict,
@@ -1137,12 +1137,12 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT",
 )
+@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT",
 )
-@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
 async def execute_enhanced_goal(
     payload: EnhancedGoalPayload,
     request: Request,
@@ -1206,12 +1206,12 @@ async def execute_enhanced_goal(
     operation="coordinate_multi_agent_task",
     error_code_prefix="AGENT",
 )
+@router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="coordinate_multi_agent_task",
     error_code_prefix="AGENT",
 )
-@router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
 async def coordinate_multi_agent_task(
     payload: MultiAgentTaskPayload,
     request: Request,
@@ -1277,12 +1277,12 @@ async def coordinate_multi_agent_task(
     operation="comprehensive_research_task",
     error_code_prefix="AGENT",
 )
+@router.post("/research/comprehensive", response_model=DataResponse[AgentResearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research_task",
     error_code_prefix="AGENT",
 )
-@router.post("/research/comprehensive", response_model=DataResponse[AgentResearchData])
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest,
     knowledge_base=Depends(get_knowledge_base),
@@ -1347,12 +1347,12 @@ async def comprehensive_research_task(
     operation="analyze_development_task",
     error_code_prefix="AGENT",
 )
+@router.post("/development/analyze", response_model=DataResponse[DevelopmentAnalysisData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_task",
     error_code_prefix="AGENT",
 )
-@router.post("/development/analyze", response_model=DataResponse[DevelopmentAnalysisData])
 async def analyze_development_task(
     request_data: AgentAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -1391,12 +1391,12 @@ async def analyze_development_task(
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
+@router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 async def list_available_agents():
     """
     List all available AI Stack agents with their capabilities.
@@ -1444,12 +1444,12 @@ async def list_available_agents():
     operation="get_agents_status",
     error_code_prefix="AGENT",
 )
+@router.get("/agents/status", response_model=DataResponse[AgentStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_status",
     error_code_prefix="AGENT",
 )
-@router.get("/agents/status", response_model=DataResponse[AgentStatusData])
 async def get_agents_status():
     """Get comprehensive status of all AI Stack agents.
 
@@ -1490,12 +1490,12 @@ async def get_agents_status():
     operation="enhanced_agent_health",
     error_code_prefix="AGENT",
 )
+@router.get("/health/enhanced", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_agent_health",
     error_code_prefix="AGENT",
 )
-@router.get("/health/enhanced", response_model=AgentHealthResponse)
 async def enhanced_agent_health():
     """Enhanced health check for agent services."""
     try:

@@ -39,12 +39,12 @@ router = APIRouter(
 )
 
 
+@router.post("/test-connection", response_model=MonitoringConnectionTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_connection",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/test-connection", response_model=MonitoringConnectionTestResponse)
 async def test_connection(request: MonitoringConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
 
@@ -73,12 +73,12 @@ async def test_connection(request: MonitoringConnectionTestRequest) -> Dict[str,
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
+@router.get("/providers", response_model=MonitoringProvidersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_providers",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/providers", response_model=MonitoringProvidersResponse)
 async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     """List supported monitoring providers.
 
@@ -101,12 +101,12 @@ async def list_providers() -> Dict[str, List[Dict[str, str]]]:
     }
 
 
+@router.get("/{provider}/hosts", response_model=MonitoringHostsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_hosts",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/{provider}/hosts", response_model=MonitoringHostsResponse)
 async def list_hosts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -143,12 +143,12 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail="Failed to list hosts")
 
 
+@router.post("/{provider}/metrics", response_model=MonitoringMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_metrics",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/{provider}/metrics", response_model=MonitoringMetricsResponse)
 async def query_metrics(
     provider: str,
     request: MetricsQueryRequest,
@@ -187,12 +187,12 @@ async def query_metrics(
         raise HTTPException(status_code=500, detail="Failed to query metrics")
 
 
+@router.get("/{provider}/alerts", response_model=MonitoringAlertsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_alerts",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.get("/{provider}/alerts", response_model=MonitoringAlertsResponse)
 async def list_alerts(
     provider: str,
     api_key: str = Query(..., description="API key"),
@@ -229,12 +229,12 @@ async def list_alerts(
         raise HTTPException(status_code=500, detail="Failed to list alerts")
 
 
+@router.post("/{provider}/events", response_model=MonitoringEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_events",
     error_code_prefix="INTEGRATION_MONITORING",
 )
-@router.post("/{provider}/events", response_model=MonitoringEventsResponse)
 async def get_events(
     provider: str,
     request: EventsQueryRequest,

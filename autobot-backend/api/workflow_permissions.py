@@ -77,15 +77,15 @@ def _audit_to_response(entry) -> WorkflowAuditLogEntry:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_workflow_permissions",
-    error_code_prefix="WORKFLOW_PERMISSIONS",
-)
 @router.get(
     "/workflows/{workflow_id}/permissions",
     response_model=List[WorkflowPermissionResponse],
     summary="List workflow permissions",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_permissions",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def list_workflow_permissions(
     workflow_id: str,
@@ -105,15 +105,15 @@ async def list_workflow_permissions(
     return [_permission_to_response(r) for r in rows]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="grant_workflow_permission",
-    error_code_prefix="WORKFLOW_PERMISSIONS",
-)
 @router.put(
     "/workflows/{workflow_id}/permissions",
     response_model=WorkflowPermissionResponse,
     summary="Grant or update a workflow permission",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="grant_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def grant_workflow_permission(
     workflow_id: str,
@@ -150,16 +150,16 @@ async def grant_workflow_permission(
     return _permission_to_response(perm)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="revoke_workflow_permission",
-    error_code_prefix="WORKFLOW_PERMISSIONS",
-)
 @router.delete(
     "/workflows/{workflow_id}/permissions/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke a workflow permission",
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_workflow_permission",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def revoke_workflow_permission(
     workflow_id: str,
@@ -193,15 +193,15 @@ async def revoke_workflow_permission(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_workflow_audit_log",
-    error_code_prefix="WORKFLOW_PERMISSIONS",
-)
 @router.get(
     "/workflows/{workflow_id}/audit",
     response_model=List[WorkflowAuditLogEntry],
     summary="Get workflow audit log",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_audit_log",
+    error_code_prefix="WORKFLOW_PERMISSIONS",
 )
 async def get_workflow_audit_log(
     workflow_id: str,

@@ -123,12 +123,12 @@ def _validate_provider(provider: str) -> None:
 # =============================================================================
 
 
+@router.post("/test-connection", response_model=IntegrationHealth)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_connection",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.post("/test-connection", response_model=IntegrationHealth)
 async def test_connection(
     request: ConnectionTestRequest,
 ) -> IntegrationHealth:
@@ -155,12 +155,12 @@ async def test_connection(
     return health
 
 
+@router.get("/providers", response_model=List[ProviderInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_providers",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/providers", response_model=List[ProviderInfo])
 async def list_providers() -> List[ProviderInfo]:
     """List all supported project management providers.
 
@@ -169,12 +169,12 @@ async def list_providers() -> List[ProviderInfo]:
     return list(SUPPORTED_PROVIDERS.values())
 
 
+@router.get("/{provider}/projects", response_model=PMProjectsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_projects",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/projects", response_model=PMProjectsResponse)
 async def list_projects(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -214,12 +214,12 @@ async def list_projects(
         return await integration.execute_action("list_workspaces", {})
 
 
+@router.get("/{provider}/issues", response_model=PMIssuesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_issues",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/issues", response_model=PMIssuesResponse)
 async def list_issues(
     provider: str,
     base_url: Optional[str] = Query(None),
@@ -318,12 +318,12 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
         return "create_task", params
 
 
+@router.post("/{provider}/issues", response_model=PMIssueCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_issue",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.post("/{provider}/issues", response_model=PMIssueCreateResponse)
 async def create_issue(
     provider: str,
     request: IssueCreateRequest,
@@ -385,12 +385,12 @@ def _build_update_params(
         return "update_task", params
 
 
+@router.patch("/{provider}/issues/{issue_id}", response_model=PMIssueUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_issue",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.patch("/{provider}/issues/{issue_id}", response_model=PMIssueUpdateResponse)
 async def update_issue(
     provider: str,
     issue_id: str,
@@ -417,12 +417,12 @@ async def update_issue(
     return await integration.execute_action(action, params)
 
 
+@router.get("/{provider}/search", response_model=PMIssueSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_issues",
     error_code_prefix="INTEGRATION_PROJECT_MANAGEMENT",
 )
-@router.get("/{provider}/search", response_model=PMIssueSearchResponse)
 async def search_issues(
     provider: str,
     query: str = Query(..., description="Search query or JQL"),

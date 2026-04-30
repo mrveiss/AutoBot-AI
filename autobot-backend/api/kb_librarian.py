@@ -73,12 +73,12 @@ class KBQueryResponse(BaseModel):
     operation="query_knowledge_base",
     error_code_prefix="KB_LIBRARIAN",
 )
+@router.post("/query", response_model=KBQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_knowledge_base",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.post("/query", response_model=KBQueryResponse)
 async def query_knowledge_base(
     kb_query: KBQuery,
     current_user: dict = Depends(get_current_user),
@@ -135,12 +135,12 @@ async def query_knowledge_base(
     operation="get_kb_librarian_status",
     error_code_prefix="KB_LIBRARIAN",
 )
+@router.get("/status", response_model=KbLibrarianStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_kb_librarian_status",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.get("/status", response_model=KbLibrarianStatusResponse)
 async def get_kb_librarian_status(
     current_user: dict = Depends(get_current_user),
 ):
@@ -171,12 +171,12 @@ async def get_kb_librarian_status(
     operation="configure_kb_librarian",
     error_code_prefix="KB_LIBRARIAN",
 )
+@router.put("/configure", response_model=KbLibrarianConfigureResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_kb_librarian",
     error_code_prefix="KB_LIBRARIAN",
 )
-@router.put("/configure", response_model=KbLibrarianConfigureResponse)
 async def configure_kb_librarian(
     enabled: Optional[bool] = None,
     similarity_threshold: Optional[float] = None,

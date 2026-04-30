@@ -101,12 +101,12 @@ def _convert_metrics_to_api_format(metrics) -> dict:
     operation="enhanced_semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.post("/semantic", response_model=NPUSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/semantic", response_model=NPUSearchResponse)
 async def enhanced_semantic_search(request: NPUSearchRequest):
     """
     Perform NPU-enhanced semantic search.
@@ -166,12 +166,12 @@ async def enhanced_semantic_search(request: NPUSearchRequest):
     operation="get_hardware_status",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.get("/hardware/status", response_model=EnhancedSearchHardwareStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardware_status",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/hardware/status", response_model=EnhancedSearchHardwareStatusResponse)
 async def get_hardware_status():
     """
     Get current hardware status and utilization metrics.
@@ -200,12 +200,12 @@ async def get_hardware_status():
     operation="benchmark_search_performance",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.post("/benchmark", response_model=EnhancedSearchBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_search_performance",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/benchmark", response_model=EnhancedSearchBenchmarkResponse)
 async def benchmark_search_performance(request: BenchmarkRequest):
     """
     Benchmark search performance across different hardware configurations.
@@ -236,12 +236,12 @@ async def benchmark_search_performance(request: BenchmarkRequest):
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_search_engine",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
 async def optimize_search_engine(request: NPUOptimizationRequest):
     """
     Optimize search engine for specific workload types.
@@ -273,12 +273,12 @@ async def optimize_search_engine(request: NPUOptimizationRequest):
     operation="get_performance_analytics",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.get("/performance/analytics", response_model=EnhancedSearchPerformanceAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_analytics",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/performance/analytics", response_model=EnhancedSearchPerformanceAnalyticsResponse)
 async def get_performance_analytics():
     """
     Get comprehensive performance analytics and recommendations.
@@ -326,12 +326,12 @@ async def get_performance_analytics():
     operation="test_npu_connectivity",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_npu_connectivity",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
 async def test_npu_connectivity():
     """
     Test NPU Worker connectivity and capabilities.
@@ -526,12 +526,12 @@ def _generate_system_recommendations(
     operation="health_check",
     error_code_prefix="ENHANCED_SEARCH",
 )
+@router.get("/health", response_model=EnhancedSearchHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="ENHANCED_SEARCH",
 )
-@router.get("/health", response_model=EnhancedSearchHealthResponse)
 async def health_check():
     """Health check for enhanced search service."""
     try:

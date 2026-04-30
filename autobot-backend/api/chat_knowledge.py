@@ -532,12 +532,12 @@ chat_knowledge_manager = None
     operation="create_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/context/create", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/context/create", response_model=DataResponse)
 async def create_chat_context(request_data: CreateContextRequest, request: Request):
     """Create or update knowledge context for a chat (Issue #688: added user_id)."""
     try:
@@ -571,12 +571,12 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
     operation="associate_file_with_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/files/associate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="associate_file_with_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/associate", response_model=DataResponse)
 async def associate_file_with_chat(
     request_data: AssociateFileRequest, request: Request
 ):
@@ -610,12 +610,12 @@ async def associate_file_with_chat(
     operation="upload_file_to_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/files/upload/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_chat",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/files/upload/{chat_id}", response_model=DataResponse)
 async def upload_file_to_chat(
     chat_id: str,
     file: UploadFile = File(...),
@@ -662,12 +662,12 @@ async def upload_file_to_chat(
     operation="add_temporary_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/knowledge/add_temporary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_temporary_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/add_temporary", response_model=DataResponse)
 async def add_temporary_knowledge(request: AddKnowledgeRequest):
     """Add temporary knowledge to chat context"""
     try:
@@ -687,12 +687,12 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
     operation="get_pending_knowledge_decisions",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_knowledge_decisions",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
 async def get_pending_knowledge_decisions(chat_id: str):
     """Get knowledge items pending user decision"""
     try:
@@ -714,12 +714,12 @@ async def get_pending_knowledge_decisions(chat_id: str):
     operation="apply_knowledge_decision",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/knowledge/decide", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_knowledge_decision",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/knowledge/decide", response_model=DataResponse)
 async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
     """Apply user decision for temporary knowledge"""
     try:
@@ -744,12 +744,12 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
     operation="compile_chat_to_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/compile", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compile_chat_to_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/compile", response_model=DataResponse)
 async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: Request):
     """Compile entire chat conversation to knowledge base"""
     try:
@@ -772,12 +772,12 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.post("/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.post("/search", response_model=DataResponse)
 async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
     """Search knowledge across chats or within specific chat"""
     try:
@@ -799,12 +799,12 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
     operation="get_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.get("/context/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/context/{chat_id}", response_model=DataResponse)
 async def get_chat_context(chat_id: str):
     """Get complete knowledge context for a chat"""
     try:
@@ -848,12 +848,12 @@ async def get_chat_context(chat_id: str):
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
+@router.get("/health", response_model=ChatKnowledgeHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-@router.get("/health", response_model=ChatKnowledgeHealthResponse)
 async def health_check():
     """Health check endpoint for chat knowledge system"""
     try:

@@ -58,12 +58,12 @@ def set_analytics_dependencies(controller, state):
     operation="index_codebase",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
 async def index_codebase(
     request: CodeAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -98,12 +98,12 @@ async def index_codebase(
     operation="get_code_analysis_status",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/status", response_model=AnalyticsCodeStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_analysis_status",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/status", response_model=AnalyticsCodeStatusResponse)
 async def get_code_analysis_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -159,12 +159,12 @@ async def get_code_analysis_status(
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
 async def get_code_quality_assessment(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -233,12 +233,12 @@ async def get_code_quality_assessment(
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
 async def get_code_quality_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -348,12 +348,12 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 async def get_communication_chains(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -481,12 +481,12 @@ def _generate_communication_chain_insights(
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 async def analyze_communication_chains_detailed(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -630,12 +630,12 @@ def _score_to_grade(score: float) -> str:
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS_CODE",
 )
-@router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 async def get_code_quality_score(
     admin_check: bool = Depends(check_admin_permission),
 ):

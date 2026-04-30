@@ -861,12 +861,12 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 
 
+@router.get("/health", response_model=CodeGenerationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/health", response_model=CodeGenerationHealthResponse)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Get code generation service health status.
 
@@ -895,12 +895,12 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@router.post("/generate", response_model=CodeGenerationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.post("/generate", response_model=CodeGenerationResponse)
 async def generate_code(
     admin_check: bool = Depends(check_admin_permission),
     request: CodeGenerationRequest = None,
@@ -917,12 +917,12 @@ async def generate_code(
     return await engine.generate_code(request)
 
 
+@router.post("/refactor", response_model=RefactoringResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refactor_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.post("/refactor", response_model=RefactoringResponse)
 async def refactor_code(
     admin_check: bool = Depends(check_admin_permission),
     request: RefactoringRequest = None,
@@ -939,12 +939,12 @@ async def refactor_code(
     return await engine.refactor_code(request)
 
 
+@router.post("/validate", response_model=CodeGenerationValidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.post("/validate", response_model=CodeGenerationValidateResponse)
 async def validate_code(
     admin_check: bool = Depends(check_admin_permission),
     request: CodeGenValidationRequest = None,
@@ -967,12 +967,12 @@ async def validate_code(
     }
 
 
+@router.get("/versions/{file_path:path}", response_model=CodeGenerationVersionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_versions",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/versions/{file_path:path}", response_model=CodeGenerationVersionsResponse)
 async def get_versions(
     admin_check: bool = Depends(check_admin_permission), file_path: str = None
 ):
@@ -993,12 +993,12 @@ async def get_versions(
     }
 
 
+@router.post("/rollback", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rollback_code",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.post("/rollback", response_model=DataResponse)
 async def rollback_code(
     admin_check: bool = Depends(check_admin_permission), request: CodeGenRollbackRequest = None
 ):
@@ -1025,12 +1025,12 @@ async def rollback_code(
     }
 
 
+@router.get("/stats", response_model=CodeGenerationStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_stats",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/stats", response_model=CodeGenerationStatsResponse)
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1051,12 +1051,12 @@ async def get_stats(
     return await engine.get_stats(source_id=source_id)
 
 
+@router.get("/refactoring-types", response_model=CodeGenerationRefactoringTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_refactoring_types",
     error_code_prefix="ANALYTICS_CODE_GENERATION",
 )
-@router.get("/refactoring-types", response_model=CodeGenerationRefactoringTypesResponse)
 async def get_refactoring_types(admin_check: bool = Depends(check_admin_permission)):
     """
     Get available refactoring types with descriptions.

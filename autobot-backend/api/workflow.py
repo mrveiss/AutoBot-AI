@@ -411,12 +411,12 @@ def _legacy_workflow_to_summary(workflow_id: str, workflow_data: Dict) -> Dict:
     operation="list_active_workflows",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflows", response_model=WorkflowListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_active_workflows",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflows", response_model=WorkflowListResponse)
 async def list_active_workflows(admin_check: bool = Depends(check_admin_permission)):
     """List all active workflows with their current status.
 
@@ -456,12 +456,12 @@ async def list_active_workflows(admin_check: bool = Depends(check_admin_permissi
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow_details(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -483,12 +483,12 @@ async def get_workflow_details(
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
-@router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 async def get_workflow_status(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -575,12 +575,12 @@ async def _update_step_status_and_metrics(
     operation="approve_workflow_step",
     error_code_prefix="WORKFLOW",
 )
+@router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_workflow_step",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 async def approve_workflow_step(
     workflow_id: str,
     approval: WorkflowApprovalResponse,
@@ -626,12 +626,12 @@ async def approve_workflow_step(
     operation="execute_workflow",
     error_code_prefix="WORKFLOW",
 )
+@router.post("/execute", response_model=WorkflowExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.post("/execute", response_model=WorkflowExecutionResponse)
 async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
@@ -1045,12 +1045,12 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
+@router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
-@router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 async def cancel_workflow(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1087,14 +1087,14 @@ async def cancel_workflow(
     operation="get_pending_approvals",
     error_code_prefix="WORKFLOW",
 )
+@router.get(
+    "/workflow/{workflow_id}/pending_approvals",
+    response_model=WorkflowPendingApprovalsResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
     error_code_prefix="WORKFLOW",
-)
-@router.get(
-    "/workflow/{workflow_id}/pending_approvals",
-    response_model=WorkflowPendingApprovalsResponse,
 )
 async def get_pending_approvals(
     workflow_id: str, admin_check: bool = Depends(check_admin_permission)

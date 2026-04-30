@@ -55,12 +55,12 @@ router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
     operation="get_all_agents_performance",
     error_code_prefix="AGENT",
 )
+@router.get("/performance", response_model=AgentAllPerformanceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_agents_performance",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/performance", response_model=AgentAllPerformanceResponse)
 async def get_all_agents_performance(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -95,12 +95,12 @@ async def get_all_agents_performance(
     operation="get_agent_performance",
     error_code_prefix="AGENT",
 )
+@router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_performance",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 async def get_agent_performance(
     agent_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -143,12 +143,12 @@ async def get_agent_performance(
     operation="get_agent_history",
     error_code_prefix="AGENT",
 )
+@router.get("/{agent_id}/history", response_model=AgentHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_history",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/{agent_id}/history", response_model=AgentHistoryResponse)
 async def get_agent_history(
     agent_id: str,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
@@ -176,12 +176,12 @@ async def get_agent_history(
     operation="get_recent_tasks",
     error_code_prefix="AGENT",
 )
+@router.get("/tasks/recent", response_model=AgentRecentTasksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_tasks",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/tasks/recent", response_model=AgentRecentTasksResponse)
 async def get_recent_tasks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     admin_check: bool = Depends(check_admin_permission),
@@ -212,12 +212,12 @@ async def get_recent_tasks(
     operation="compare_agents",
     error_code_prefix="AGENT",
 )
+@router.get("/comparison", response_model=AgentComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compare_agents",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/comparison", response_model=AgentComparisonResponse)
 async def compare_agents(
     agent_ids: Optional[str] = Query(
         None, description="Comma-separated agent IDs to compare (all if not specified)"
@@ -308,12 +308,12 @@ def _check_agent_metrics(metrics) -> list:
     operation="get_agent_recommendations",
     error_code_prefix="AGENT",
 )
+@router.get("/recommendations", response_model=AgentRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_recommendations",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/recommendations", response_model=AgentRecommendationsResponse)
 async def get_agent_recommendations(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -366,12 +366,12 @@ async def get_agent_recommendations(
     operation="get_performance_trends",
     error_code_prefix="AGENT",
 )
+@router.get("/trends", response_model=AgentPerformanceTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_trends",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/trends", response_model=AgentPerformanceTrendsResponse)
 async def get_performance_trends(
     agent_id: Optional[str] = Query(
         None, description="Specific agent ID (all if not specified)"
@@ -397,12 +397,12 @@ async def get_performance_trends(
     operation="get_agent_types",
     error_code_prefix="AGENT",
 )
+@router.get("/types", response_model=AgentTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_types",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.get("/types", response_model=AgentTypesResponse)
 async def get_agent_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -429,12 +429,12 @@ async def get_agent_types(
     operation="track_task_start",
     error_code_prefix="AGENT",
 )
+@router.post("/tasks/start", response_model=AgentTaskStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_start",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.post("/tasks/start", response_model=AgentTaskStartResponse)
 async def track_task_start(
     request: TrackTaskRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -467,12 +467,12 @@ async def track_task_start(
     operation="track_task_complete",
     error_code_prefix="AGENT",
 )
+@router.post("/tasks/complete", response_model=AgentTaskCompleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_task_complete",
     error_code_prefix="ANALYTICS_AGENTS",
 )
-@router.post("/tasks/complete", response_model=AgentTaskCompleteResponse)
 async def track_task_complete(
     request: CompleteTaskRequest,
     admin_check: bool = Depends(check_admin_permission),

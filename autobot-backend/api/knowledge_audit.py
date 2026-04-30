@@ -72,12 +72,12 @@ async def _get_audit_log(kb) -> KnowledgeAuditLog:
 # =============================================================================
 
 
+@router.get("/user-activity", response_model=KnowledgeAuditEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_activity_log",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.get("/user-activity", response_model=KnowledgeAuditEventsResponse)
 async def get_user_activity_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -119,12 +119,12 @@ async def get_user_activity_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/fact/{fact_id}/access-log", response_model=KnowledgeAuditEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_access_log",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.get("/fact/{fact_id}/access-log", response_model=KnowledgeAuditEventsResponse)
 async def get_fact_access_log(
     fact_id: str,
     request: Request,
@@ -187,12 +187,12 @@ async def get_fact_access_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/organization/audit-log", response_model=KnowledgeAuditEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_organization_audit_log",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.get("/organization/audit-log", response_model=KnowledgeAuditEventsResponse)
 async def get_organization_audit_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -258,12 +258,12 @@ async def get_organization_audit_log(
 # =============================================================================
 
 
+@router.get("/permission-changes", response_model=KnowledgePermissionChangesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_permission_changes",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.get("/permission-changes", response_model=KnowledgePermissionChangesResponse)
 async def get_permission_changes(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -312,12 +312,12 @@ async def get_permission_changes(
 # =============================================================================
 
 
+@router.post("/compliance-report", response_model=KnowledgeComplianceReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_compliance_report",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.post("/compliance-report", response_model=KnowledgeComplianceReportResponse)
 async def generate_compliance_report(
     report_request: ComplianceReportRequest,
     request: Request,
@@ -386,12 +386,12 @@ async def generate_compliance_report(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/compliance-summary", response_model=KnowledgeComplianceReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_compliance_summary",
     error_code_prefix="KNOWLEDGE_AUDIT",
 )
-@router.get("/compliance-summary", response_model=KnowledgeComplianceReportResponse)
 async def get_compliance_summary(
     request: Request,
     current_user: Dict = Depends(get_current_user),
