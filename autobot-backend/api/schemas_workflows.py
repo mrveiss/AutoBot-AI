@@ -9,7 +9,7 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
@@ -2141,3 +2141,48 @@ class MonitorCreateRequest(BaseModel):
     query: str = Field(..., description="Monitor query")
     name: str = Field(..., description="Monitor name")
     message: str = Field(..., description="Notification message")
+
+
+# ---------------------------------------------------------------------------
+# marketplace_sources.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MarketplaceSource(BaseModel):
+    id: str = Field(..., description="Unique source ID; 'builtin' for the default")
+    name: str = Field(..., description="Display name shown in the UI")
+    url: Optional[str] = Field(default=None, description="Catalog URL; null for the built-in source")
+    description: Optional[str] = Field(default=None)
+    is_builtin: bool = Field(default=False)
+    created_at: Optional[str] = Field(default=None)
+
+
+class MarketplaceSourceCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    url: HttpUrl
+    description: Optional[str] = Field(default=None, max_length=200)
+
+
+class MarketplaceSourcesResponse(BaseModel):
+    sources: List[MarketplaceSource]
+
+
+class CatalogPlugin(BaseModel):
+    """A single plugin entry as listed in an external marketplace catalog."""
+
+    name: str
+    version: str
+    description: str = ""
+    author: str = ""
+    git_url: str
+    ref: Optional[str] = None
+    category: str = "other"
+    tags: List[str] = Field(default_factory=list)
+
+
+class CatalogDocument(BaseModel):
+    """The schema an external marketplace URL must return."""
+
+    name: str
+    version: str = "1"
+    plugins: List[CatalogPlugin]

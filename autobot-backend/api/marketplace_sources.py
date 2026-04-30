@@ -22,8 +22,13 @@ from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, HttpUrl
 
+from api.schemas_workflows import (
+    CatalogDocument,
+    MarketplaceSource,
+    MarketplaceSourceCreate,
+    MarketplaceSourcesResponse,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
@@ -42,48 +47,6 @@ _BUILTIN_DESCRIPTION = "Default AutoBot plugin marketplace"
 _NAME_PATTERN = re.compile(r"^[\w\s.\-()]{1,64}$")
 _FETCH_TIMEOUT_SECONDS = 15
 _MAX_CATALOG_BYTES = 4 * 1024 * 1024  # 4 MB cap on catalog JSON
-
-
-class MarketplaceSource(BaseModel):
-    id: str = Field(..., description="Unique source ID; 'builtin' for the default")
-    name: str = Field(..., description="Display name shown in the UI")
-    url: Optional[str] = Field(
-        default=None, description="Catalog URL; null for the built-in source"
-    )
-    description: Optional[str] = Field(default=None)
-    is_builtin: bool = Field(default=False)
-    created_at: Optional[str] = Field(default=None)
-
-
-class MarketplaceSourceCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=64)
-    url: HttpUrl
-    description: Optional[str] = Field(default=None, max_length=200)
-
-
-class MarketplaceSourcesResponse(BaseModel):
-    sources: list[MarketplaceSource]
-
-
-class CatalogPlugin(BaseModel):
-    """A single plugin entry as listed in an external marketplace catalog."""
-
-    name: str
-    version: str
-    description: str = ""
-    author: str = ""
-    git_url: str
-    ref: Optional[str] = None
-    category: str = "other"
-    tags: list[str] = Field(default_factory=list)
-
-
-class CatalogDocument(BaseModel):
-    """The schema an external marketplace URL must return."""
-
-    name: str
-    version: str = "1"
-    plugins: list[CatalogPlugin]
 
 
 def _builtin_source() -> MarketplaceSource:
