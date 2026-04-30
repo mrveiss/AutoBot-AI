@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def _extract_response_text(result: Dict[str, Any]) -> str:
     """Pull the human-readable response from an orchestrator result dict.
 
-    Issue #4501: include "response_text" key used by ChatAgent._build_success_response.
+    Issue #4501: include "response_text" key used by ChatAgent._build_chat_payload.
     """
     for key in ("response", "response_text", "message", "text", "output"):
         value = result.get(key)
