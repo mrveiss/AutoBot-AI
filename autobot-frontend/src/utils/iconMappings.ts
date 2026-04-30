@@ -138,6 +138,12 @@ export const platformIcons = {
  */
 export function getFileIcon(filename: string, isFolder: boolean = false): string {
   if (isFolder) return fileTypeIcons.folder
+  // #6645: defensive type check — TS types don't survive the JSON network
+  // boundary, and TreeNode.name occasionally arrives as null/number/undefined,
+  // which crashed KnowledgeBrowser with "t.split is not a function".
+  if (typeof filename !== 'string' || filename.length === 0) {
+    return fileTypeIcons.file
+  }
 
   const ext = filename.split('.').pop()?.toLowerCase()
   if (!ext) return fileTypeIcons.file
@@ -174,6 +180,11 @@ export function getDocumentTypeIcon(type: string): string {
  * Useful for uploaded files where MIME type is available
  */
 export function getFileIconByMimeType(mimeType: string): string {
+  // #6645: same defensive check as getFileIcon — non-string inputs from the
+  // network boundary should not crash the page.
+  if (typeof mimeType !== 'string' || mimeType.length === 0) {
+    return 'fas fa-file'
+  }
   const type = mimeType.toLowerCase()
 
   // Images
