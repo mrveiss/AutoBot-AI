@@ -8,51 +8,28 @@ Issue #679: Audit logging and compliance reporting for knowledge access and modi
 """
 
 import logging
-from datetime import datetime, timedelta
-from autobot_shared.time_utils import now_utc
+from datetime import timedelta
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from autobot_shared.time_utils import now_utc
 
-from api.schemas_knowledge import KnowledgeAuditEventsResponse, KnowledgeComplianceReportResponse, KnowledgePermissionChangesResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from api.schemas_knowledge import (
+    ComplianceReportRequest,
+    KnowledgeAuditEventsResponse,
+    KnowledgeComplianceReportResponse,
+    KnowledgePermissionChangesResponse,
+)
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
-from knowledge.audit_log import AuditEventType, KnowledgeAuditLog
+from knowledge.audit_log import KnowledgeAuditLog
 from knowledge_factory import get_or_create_knowledge_base
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/knowledge/audit", tags=["knowledge-audit"])
-
-
-# =============================================================================
-# Pydantic Models
-# =============================================================================
-
-
-class AuditEvent(BaseModel):
-    """Audit event model."""
-
-    id: str
-    type: AuditEventType
-    user_id: str
-    fact_id: Optional[str] = None
-    organization_id: Optional[str] = None
-    details: dict = Field(default_factory=dict)
-    ip_address: Optional[str] = None
-    timestamp: str
-
-
-class ComplianceReportRequest(BaseModel):
-    """Request for compliance report."""
-
-    start_date: datetime = Field(description="Report start date")
-    end_date: datetime = Field(description="Report end date")
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID (defaults to user's org)"
-    )
 
 
 # =============================================================================

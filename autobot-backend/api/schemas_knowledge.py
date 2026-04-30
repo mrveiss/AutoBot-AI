@@ -4851,3 +4851,59 @@ class ScopedSearchRequest(BaseModel):
     )
     enable_rag: bool = Field(default=False, description="Enable RAG enhancement")
     enable_reranking: bool = Field(default=False, description="Enable reranking")
+
+
+# ---------------------------------------------------------------------------
+# kb_librarian.py schemas
+# ---------------------------------------------------------------------------
+
+
+class KBQuery(BaseModel):
+    """Knowledge base query request model."""
+
+    query: str
+    max_results: Optional[int] = None
+    similarity_threshold: Optional[float] = None
+    auto_summarize: Optional[bool] = None
+
+
+class KBQueryResponse(BaseModel):
+    """Knowledge base query response model."""
+
+    enabled: bool
+    is_question: bool
+    query: str
+    documents_found: int
+    documents: List[Metadata]
+    summary: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# knowledge_audit.py schemas
+# ---------------------------------------------------------------------------
+
+from datetime import datetime as _datetime
+from knowledge.audit_log import AuditEventType as _AuditEventType
+
+
+class AuditEvent(BaseModel):
+    """Audit event model."""
+
+    id: str
+    type: _AuditEventType
+    user_id: str
+    fact_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    details: dict = Field(default_factory=dict)
+    ip_address: Optional[str] = None
+    timestamp: str
+
+
+class ComplianceReportRequest(BaseModel):
+    """Request for compliance report."""
+
+    start_date: _datetime = Field(description="Report start date")
+    end_date: _datetime = Field(description="Report end date")
+    organization_id: Optional[str] = Field(
+        default=None, description="Organization ID (defaults to user's org)"
+    )

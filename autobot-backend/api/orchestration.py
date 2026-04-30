@@ -8,12 +8,11 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
+from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
 from auth_middleware import check_admin_permission, get_current_user
 
 try:
@@ -37,18 +36,6 @@ from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-class WorkflowRequest(BaseModel):
-    goal: str
-    strategy: Optional[str] = None  # Let system decide if not specified
-    context: Optional[dict] = None
-    max_parallel_tasks: Optional[int] = 5
-
-
-class AgentRecommendationRequest(BaseModel):
-    task_type: str
-    capabilities_needed: list[str]
 
 
 @with_error_handling(

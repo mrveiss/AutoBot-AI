@@ -32,40 +32,22 @@ Overlap note (issue #3336):
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from agents.kb_librarian_agent import get_kb_librarian
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from type_defs.common import Metadata
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import KbLibrarianConfigureResponse, KbLibrarianStatusResponse
+from api.schemas_knowledge import (
+    KBQuery,
+    KBQueryResponse,
+    KbLibrarianConfigureResponse,
+    KbLibrarianStatusResponse,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-class KBQuery(BaseModel):
-    """Knowledge base query request model."""
-
-    query: str
-    max_results: Optional[int] = None
-    similarity_threshold: Optional[float] = None
-    auto_summarize: Optional[bool] = None
-
-
-class KBQueryResponse(BaseModel):
-    """Knowledge base query response model."""
-
-    enabled: bool
-    is_question: bool
-    query: str
-    documents_found: int
-    documents: List[Metadata]
-    summary: Optional[str] = None
 
 
 @with_error_handling(
