@@ -17,23 +17,31 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_redis_client
 from api.schemas_workflows import (
+    APIBatchRequest,
+    APIBatchResponse,
     BatchChatInitResponse,
+    BatchJob,
+    BatchJobCreate,
     BatchJobDeleteResponse,
+    BatchJobList,
+    BatchJobStatus,
+    BatchJobType,
     BatchJobsHealthResponse,
     BatchLoadResponse,
+    BatchLogEntry,
+    BatchSchedule,
     BatchScheduleDeleteResponse,
     BatchStatusResponse,
+    BatchTemplate,
     BatchTemplateDeleteResponse,
 )
 
@@ -44,92 +52,6 @@ router = APIRouter(tags=["batch-jobs", "management"])
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-class BatchJobStatus(str, Enum):
-    """Status of a batch job"""
-
-    pending = "pending"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    cancelled = "cancelled"
-
-
-class BatchJobType(str, Enum):
-    """Type of batch job"""
-
-    data_processing = "data_processing"
-    file_conversion = "file_conversion"
-    report_generation = "report_generation"
-    backup = "backup"
-    custom = "custom"
-
-
-class BatchJobCreate(BaseModel):
-    """Request model for creating a batch job"""
-
-    name: str = Field(..., description="Human-readable name for the job")
-    job_type: BatchJobType = Field(..., description="Type of batch job")
-    parameters: Dict = Field(
-        default_factory=dict, description="Job-specific parameters"
-    )
-    schedule: Optional[str] = Field(
-        None, description="Optional cron expression for scheduling"
-    )
-    template_id: Optional[str] = Field(None, description="Optional template ID to use")
-
-
-class BatchJob(BaseModel):
-    """Batch job model"""
-
-    job_id: str
-    name: str
-    job_type: BatchJobType
-    status: BatchJobStatus
-    progress: int = Field(0, ge=0, le=100, description="Progress percentage")
-    parameters: Dict
-    created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    result: Optional[Dict] = None
-
-
-class BatchTemplate(BaseModel):
-    """Batch job template model"""
-
-    template_id: str
-    name: str
-    job_type: BatchJobType
-    parameters: Dict
-    created_at: datetime
-
-
-class BatchSchedule(BaseModel):
-    """Batch job schedule model"""
-
-    schedule_id: str
-    job_id: str
-    cron_expression: str
-    enabled: bool
-    next_run: datetime
-
-
-class BatchJobList(BaseModel):
-    """Response model for job list"""
-
-    jobs: List[BatchJob]
-    total_count: int
-    status_counts: Dict[str, int]
-
-
-class LogEntry(BaseModel):
-    """Log entry model"""
-
-    timestamp: datetime
-    level: str
-    message: str
 
 
 # =============================================================================
@@ -391,7 +313,7 @@ async def delete_batch_job(
     operation="get_job_logs",
     error_code_prefix="BATCH_JOBS",
 )
-@router.get("/{job_id}/logs", response_model=List[LogEntry])
+@router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
 async def get_job_logs(
     job_id: str,
     current_user: dict = Depends(get_current_user),
@@ -405,7 +327,7 @@ async def get_job_logs(
         job_id: Job ID
 
     Returns:
-        List[LogEntry]: Job execution logs
+        List[BatchLogEntry]: Job execution logs
     """
     redis_client = get_redis_client(database="main")
     if not redis_client:
@@ -421,7 +343,7 @@ async def get_job_logs(
     logs = []
     for entry_bytes in log_entries:
         entry = json.loads(entry_bytes.decode("utf-8"))
-        logs.append(LogEntry(**entry))
+        logs.append(BatchLogEntry(**entry))
 
     return logs
 
@@ -795,20 +717,6 @@ def _process_session_file(filename: str, chats_directory: str):
         return None
 
 
-class BatchRequest(BaseModel):
-    """Request multiple endpoints in one call"""
-
-    requests: List[Dict]
-
-
-class BatchResponse(BaseModel):
-    """Combined response from multiple endpoints"""
-
-    responses: Dict
-    errors: Dict[str, str]
-    timing: Dict[str, float]
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_batch_status",
@@ -843,7 +751,7 @@ async def get_batch_status():
     error_code_prefix="BATCH_JOBS",
 )
 @router.post("/load", response_model=BatchLoadResponse)
-async def batch_load(batch_request: BatchRequest):
+async def batch_load(batch_request: APIBatchRequest):
     """Execute multiple API calls in parallel and return combined results."""
     import time
 
@@ -888,7 +796,7 @@ async def batch_load(batch_request: BatchRequest):
     tasks = [execute_request(req) for req in batch_request.requests]
     await asyncio.gather(*tasks, return_exceptions=True)
 
-    return BatchResponse(responses=responses, errors=errors, timing=timing)
+    return APIBatchResponse(responses=responses, errors=errors, timing=timing)
 
 
 @with_error_handling(
