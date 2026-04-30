@@ -3162,3 +3162,68 @@ class TaintSummary(BaseModel):
     vulnerabilities_by_type: Dict[str, int]
     vulnerabilities_by_severity: Dict[str, int]
     tainted_variables: List[str]
+
+
+# ---------------------------------------------------------------------------
+# analytics_embedding_patterns.py schemas
+# ---------------------------------------------------------------------------
+
+
+class EmbeddingUsageRequest(BaseModel):
+    """Request to record embedding usage."""
+
+    operation_type: str = Field(default="document_vectorization", description="Type of embedding operation")
+    model: str = Field(..., description="Embedding model used")
+    provider: str = Field(default="ollama", description="Embedding provider")
+    token_count: int = Field(..., description="Total tokens processed")
+    document_count: int = Field(default=1, description="Number of documents processed")
+    batch_size: int = Field(default=1, description="Batch size used")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    success: bool = Field(default=True, description="Whether operation succeeded")
+    source: Optional[str] = Field(None, description="Source of the operation")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+
+    def to_usage_record(self, operation_id: str, cost: float) -> Dict[str, Any]:
+        """Convert to usage record dict for storage."""
+        from datetime import datetime, timezone
+        return {
+            "operation_id": operation_id,
+            "operation_type": self.operation_type,
+            "model": self.model,
+            "provider": self.provider,
+            "token_count": self.token_count,
+            "document_count": self.document_count,
+            "batch_size": self.batch_size,
+            "processing_time": self.processing_time,
+            "success": self.success,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "cost": cost,
+            "source": self.source or "unknown",
+            "metadata": self.metadata or {},
+        }
+
+    def get_tokens_per_second(self) -> float:
+        if self.processing_time > 0:
+            return self.token_count / self.processing_time
+        return 0
+
+    def get_log_summary(self) -> str:
+        return (
+            f"{self.document_count} docs, {self.token_count} tokens, "
+            f"{self.processing_time:.3f}s"
+        )
+
+
+class EmbeddingStatsResponse(BaseModel):
+    """Response model for embedding statistics."""
+
+    total_operations: int
+    total_tokens: int
+    total_documents: int
+    total_cost: float
+    avg_processing_time: float
+    success_rate: float
+    avg_batch_size: float
+    tokens_per_second: float
+    period: str
+    timestamp: str

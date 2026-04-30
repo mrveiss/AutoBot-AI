@@ -18,7 +18,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
@@ -26,6 +25,7 @@ from api.schemas_agent import (
     AgentConfigHealthResponse,
     AgentConfigOverviewResponse,
     AgentConfigUpdateModelResponse,
+    AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
 
@@ -130,25 +130,6 @@ async def _get_available_providers() -> list:
     except Exception as e:
         logger.warning("Could not check provider availability: %s", e)
         return []
-
-
-class AgentConfig(BaseModel):
-    """Agent configuration model"""
-
-    agent_id: str
-    name: str
-    model: str
-    provider: str
-    enabled: bool
-    priority: Optional[int] = 1
-
-
-class AgentModelUpdate(BaseModel):
-    """Agent model update request"""
-
-    agent_id: str
-    model: str
-    provider: Optional[str] = "ollama"
 
 
 # Define agent types and their default configurations

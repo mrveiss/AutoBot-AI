@@ -2288,3 +2288,46 @@ class APIBatchResponse(BaseModel):
     responses: Dict
     errors: Dict[str, str]
     timing: Dict[str, float]
+
+
+# ---------------------------------------------------------------------------
+# captcha.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CaptchaResolutionRequest(BaseModel):
+    """Request model for CAPTCHA resolution."""
+
+    notes: Optional[str] = None
+
+
+class CaptchaResolutionResponse(BaseModel):
+    """Response model for CAPTCHA resolution."""
+
+    success: bool
+    captcha_id: str
+    status: str
+    message: str
+    timestamp: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# elevation.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ElevationRequest(BaseModel):
+    """Request to escalate privileges for a system operation."""
+
+    operation: str
+    command: str
+    reason: str
+    risk_level: str = "MEDIUM"
+
+
+class ElevationAuthorization(BaseModel):
+    """Authorization payload for an existing elevation request."""
+
+    request_id: str
+    password: str
+    remember_session: bool = False
