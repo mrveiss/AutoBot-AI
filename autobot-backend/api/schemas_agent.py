@@ -1849,3 +1849,27 @@ class ResetLearningResponse(BaseModel):
 
     success: bool
     message: str
+
+
+# ---------------------------------------------------------------------------
+# agent_config.py schemas
+# ---------------------------------------------------------------------------
+
+
+class AgentConfig(BaseModel):
+    """Agent configuration model."""
+
+    agent_id: str
+    name: str
+    model: str
+    provider: str
+    enabled: bool
+    priority: Optional[int] = 1
+
+
+class AgentModelUpdate(BaseModel):
+    """Agent model update request."""
+
+    agent_id: str
+    model: str
+    provider: Optional[str] = "ollama"

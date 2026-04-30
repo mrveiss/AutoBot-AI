@@ -14,14 +14,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from api.schemas_common import SuccessResponse
 from api.schemas_workflows import (
+    ElevationAuthorization,
     ElevationAuthorizeResponse,
     ElevationExecuteResponse,
     ElevationHealthResponse,
     ElevationPendingResponse,
+    ElevationRequest,
     ElevationRequestResponse,
     ElevationStatusResponse,
 )
@@ -47,19 +48,6 @@ pending_requests: Dict[str, dict] = {}
 # Locks for thread-safe access
 _elevation_sessions_lock = asyncio.Lock()
 _pending_requests_lock = asyncio.Lock()
-
-
-class ElevationRequest(BaseModel):
-    operation: str
-    command: str
-    reason: str
-    risk_level: str = "MEDIUM"
-
-
-class ElevationAuthorization(BaseModel):
-    request_id: str
-    password: str
-    remember_session: bool = False
 
 
 @with_error_handling(

@@ -3500,3 +3500,51 @@ class SessionActionLog(BaseModel):
     params: Dict = Field(default_factory=dict)
     timestamp: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     result: str = Field(default="success", description="Action result: success/error")
+
+
+# ---------------------------------------------------------------------------
+# branch_health.py schemas
+# ---------------------------------------------------------------------------
+
+
+class BranchDivergenceResponse(BaseModel):
+    """Branch divergence metrics response."""
+
+    branch: str
+    ahead: int
+    behind: int
+    total_commits_diverged: int
+    conflicting_files: List[str] = Field(default_factory=list)
+
+
+class BranchHealthResponse(BaseModel):
+    """Branch health metrics response."""
+
+    branch: str
+    divergence: BranchDivergenceResponse
+    days_since_activity: float
+    is_stale: bool
+    health_score: float
+    last_activity: str = Field(None, description="ISO format datetime or null")
+
+
+# ---------------------------------------------------------------------------
+# hot_reload.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ReloadRequest(BaseModel):
+    """Request model for module reload."""
+
+    module_name: str = None
+    force: bool = False
+
+
+class ReloadResponse(BaseModel):
+    """Response model for reload operations."""
+
+    success: bool
+    message: str
+    results: Metadata = {}
+    reloaded_modules: list = []
+    errors: list = []

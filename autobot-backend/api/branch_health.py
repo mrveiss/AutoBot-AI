@@ -12,8 +12,8 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
 
+from api.schemas_system import BranchDivergenceResponse, BranchHealthResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
@@ -24,27 +24,6 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 logger = logging.getLogger(__name__)
-
-
-class BranchDivergenceResponse(BaseModel):
-    """Branch divergence metrics response."""
-
-    branch: str
-    ahead: int
-    behind: int
-    total_commits_diverged: int
-    conflicting_files: List[str] = Field(default_factory=list)
-
-
-class BranchHealthResponse(BaseModel):
-    """Branch health metrics response."""
-
-    branch: str
-    divergence: BranchDivergenceResponse
-    days_since_activity: float
-    is_stale: bool
-    health_score: float
-    last_activity: str = Field(None, description="ISO format datetime or null")
 
 
 @router.get("/branch-health/all", response_model=List[BranchHealthResponse])
