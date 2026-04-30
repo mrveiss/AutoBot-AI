@@ -2590,3 +2590,90 @@ class ResearchPreferences(BaseModel):
     store_results_in_kb: bool = True
     filter_adult_content: bool = True
     anonymize_requests: bool = True
+
+
+# ---------------------------------------------------------------------------
+# http_client_mcp.py schemas
+# ---------------------------------------------------------------------------
+
+from pydantic import field_validator as _http_client_field_validator
+from type_defs.common import JSONObject as _HTTPClientJSONObject
+
+_HTTP_CLIENT_VALID_URL_SCHEMES = ("http://", "https://")
+_HTTP_CLIENT_DEFAULT_TIMEOUT = 30  # seconds
+_HTTP_CLIENT_MAX_TIMEOUT = 120  # seconds
+
+
+class HTTPClientMCPTool(BaseModel):
+    """Standard MCP tool definition for HTTP client (renamed to avoid collision
+    with SequentialThinkingMCPTool)."""
+
+    name: str
+    description: str
+    input_schema: _HTTPClientJSONObject
+
+
+class HTTPRequestBase(BaseModel):
+    """Base model for HTTP requests."""
+
+    url: str = Field(..., description="Target URL for the request")
+    headers: Optional[Dict[str, str]] = Field(
+        default=None, description="Optional HTTP headers"
+    )
+    timeout: Optional[int] = Field(
+        default=_HTTP_CLIENT_DEFAULT_TIMEOUT,
+        ge=1,
+        le=_HTTP_CLIENT_MAX_TIMEOUT,
+        description=f"Request timeout in seconds (1-{_HTTP_CLIENT_MAX_TIMEOUT})",
+    )
+
+    @_http_client_field_validator("url")
+    @classmethod
+    def validate_url_format(cls, v):
+        """Ensure URL is properly formatted."""
+        if not v.startswith(_HTTP_CLIENT_VALID_URL_SCHEMES):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+
+class HTTPGetRequest(HTTPRequestBase):
+    """GET request model."""
+
+    params: Optional[Dict[str, str]] = Field(
+        default=None, description="Query parameters"
+    )
+
+
+class HTTPPostRequest(HTTPRequestBase):
+    """POST request model."""
+
+    json_body: Optional[_HTTPClientJSONObject] = Field(
+        default=None, description="JSON request body"
+    )
+    form_data: Optional[Dict[str, str]] = Field(
+        default=None, description="Form data (mutually exclusive with json_body)"
+    )
+
+
+class HTTPPutRequest(HTTPRequestBase):
+    """PUT request model."""
+
+    json_body: Optional[_HTTPClientJSONObject] = Field(
+        default=None, description="JSON request body"
+    )
+
+
+class HTTPPatchRequest(HTTPRequestBase):
+    """PATCH request model."""
+
+    json_body: Optional[_HTTPClientJSONObject] = Field(
+        default=None, description="JSON request body for partial update"
+    )
+
+
+class HTTPDeleteRequest(HTTPRequestBase):
+    """DELETE request model."""
+
+
+class HTTPHeadRequest(HTTPRequestBase):
+    """HEAD request model."""
