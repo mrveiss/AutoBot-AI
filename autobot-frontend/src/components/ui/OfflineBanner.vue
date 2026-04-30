@@ -31,8 +31,7 @@
           />
         </svg>
         <span>
-          Offline mode — local Ollama inference and knowledge base are available.
-          Web research and cloud LLMs are disabled.
+          Backend connection lost — retrying. Cached data still available.
           <span v-if="pendingCount > 0">
             {{ pendingCount }} action{{ pendingCount === 1 ? '' : 's' }} queued for retry.
           </span>
