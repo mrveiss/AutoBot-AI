@@ -17,7 +17,7 @@ Design:
   - TriggerConfig  — plain dataclass; validated at registration time
   - TriggerDefinition — runtime record stored in Redis (workflows:triggers:*)
   - TriggerService — async lifecycle: register / unregister / list / fire
-  - CronScheduler  — asyncio-based cron loop; pure-Python next-run calculation
+  - Inline cron parser — pure-Python next-run calculation (validate_cron_expression, next_cron_run)
   - WebhookHandler — generates stable per-trigger URLs; validates incoming POSTs
 
 Redis layout (database "workflows"):
