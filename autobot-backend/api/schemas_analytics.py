@@ -2536,3 +2536,135 @@ class EngagementMetricsResponse(BaseModel):
     metrics: dict
     feature_popularity: list
     most_popular_feature: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# analytics_performance.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class ImpactLevel(str, Enum):
+    """Impact level of performance issues."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class PerformancePatternCategory(str, Enum):
+    """Categories of performance patterns."""
+
+    QUERY = "query"
+    LOOP = "loop"
+    ASYNC = "async"
+    CACHE = "cache"
+    MEMORY = "memory"
+    IO = "io"
+
+
+class PerformanceIssue(BaseModel):
+    """A detected performance issue."""
+
+    id: str
+    pattern_id: str
+    name: str
+    category: PerformancePatternCategory
+    impact: ImpactLevel
+    file: str
+    line: int
+    column: int = 0
+    description: str
+    suggestion: str
+    code_snippet: Optional[str] = None
+    estimated_impact: Optional[str] = None
+
+
+class PerformanceAnalysisResult(BaseModel):
+    """Result of performance analysis."""
+
+    status: str = "success"
+    total_issues: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    issues: List[PerformanceIssue]
+    files_analyzed: int
+    duration_ms: float
+    timestamp: str
+    score: int = Field(ge=0, le=100)
+
+
+class PerformancePatternDefinition(BaseModel):
+    """Definition of a performance pattern to detect."""
+
+    id: str
+    name: str
+    category: PerformancePatternCategory
+    impact: ImpactLevel
+    description: str
+    suggestion: str
+    regex_pattern: Optional[str] = None
+    ast_check: bool = False
+    enabled: bool = True
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_review.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class ReviewSeverity(str, Enum):
+    """Review comment severity levels."""
+
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
+    SUGGESTION = "suggestion"
+
+
+class ReviewCategory(str, Enum):
+    """Categories of review findings."""
+
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    STYLE = "style"
+    BUG_RISK = "bug_risk"
+    MAINTAINABILITY = "maintainability"
+    DOCUMENTATION = "documentation"
+    TESTING = "testing"
+    BEST_PRACTICE = "best_practice"
+
+
+class ReviewComment(BaseModel):
+    """A single review comment."""
+
+    id: str
+    file_path: str
+    line_number: int
+    severity: ReviewSeverity
+    category: ReviewCategory
+    message: str
+    suggestion: Optional[str] = None
+    code_snippet: Optional[str] = None
+    pattern_id: Optional[str] = None
+
+
+class ReviewResult(BaseModel):
+    """Complete review result for a diff or PR."""
+
+    id: str
+    timestamp: datetime
+    files_reviewed: int
+    total_comments: int
+    comments: List[ReviewComment] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    score: float = Field(..., ge=0, le=100)
+
+
+class PatternToggleRequest(BaseModel):
+    """Request model for toggling pattern preference."""
+
+    pattern_id: str
+    enabled: bool
