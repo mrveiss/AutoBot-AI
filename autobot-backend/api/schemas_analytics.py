@@ -3274,3 +3274,59 @@ class DebtSummary(BaseModel):
     top_files: List[Dict[str, Any]]
     roi_ranking: List[Dict[str, Any]]
     timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# analytics_bug_prediction.py schemas
+# ---------------------------------------------------------------------------
+
+from datetime import datetime as _dt_datetime
+from enum import Enum as _BugPredEnum
+
+
+class RiskLevel(str, _BugPredEnum):
+    """Bug risk levels."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    MINIMAL = "minimal"
+
+
+class RiskFactor(str, _BugPredEnum):
+    """Factors contributing to bug risk."""
+
+    COMPLEXITY = "complexity"
+    CHANGE_FREQUENCY = "change_frequency"
+    CODE_AGE = "code_age"
+    TEST_COVERAGE = "test_coverage"
+    BUG_HISTORY = "bug_history"
+    AUTHOR_EXPERIENCE = "author_experience"
+    FILE_SIZE = "file_size"
+    DEPENDENCY_COUNT = "dependency_count"
+
+
+class FileRisk(BaseModel):
+    """Bug risk assessment for a file."""
+
+    file_path: str
+    risk_score: float = Field(..., ge=0, le=100)
+    risk_level: RiskLevel
+    factors: Dict[str, float] = Field(default_factory=dict)
+    bug_count_history: int = 0
+    last_bug_date: Optional[str] = None
+    prevention_tips: List[str] = Field(default_factory=list)
+    suggested_tests: List[str] = Field(default_factory=list)
+
+
+class PredictionResult(BaseModel):
+    """Bug prediction result for the codebase."""
+
+    timestamp: _dt_datetime
+    total_files: int
+    high_risk_count: int
+    predicted_bugs: int
+    accuracy_score: float
+    risk_distribution: Dict[str, int] = Field(default_factory=dict)
+    top_risk_files: List[FileRisk] = Field(default_factory=list)

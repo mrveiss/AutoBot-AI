@@ -14,12 +14,10 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
@@ -27,18 +25,20 @@ from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 from api.schemas_analytics import (
-    BugPredictionAnalyzeResponse,
-    BugPredictionStatusResponse,
-    BugPredictionClearStuckResponse,
-    BugPredictionRiskFactorsResponse,
-    BugPredictionRecordBugResponse,
     BugPredictionAnalysisResponse,
+    BugPredictionAnalyzeResponse,
     BugPredictionCachedResponse,
-    BugPredictionHighRiskResponse,
+    BugPredictionClearStuckResponse,
     BugPredictionFileResponse,
     BugPredictionHeatmapResponse,
-    BugPredictionTrendsResponse,
+    BugPredictionHighRiskResponse,
+    BugPredictionRecordBugResponse,
+    BugPredictionRiskFactorsResponse,
+    BugPredictionStatusResponse,
     BugPredictionSummaryResponse,
+    BugPredictionTrendsResponse,
+    RiskFactor,
+    RiskLevel,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -200,54 +200,6 @@ def _build_file_risk_dict(
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class RiskLevel(str, Enum):
-    """Bug risk levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    MINIMAL = "minimal"
-
-
-class RiskFactor(str, Enum):
-    """Factors contributing to bug risk."""
-
-    COMPLEXITY = "complexity"
-    CHANGE_FREQUENCY = "change_frequency"
-    CODE_AGE = "code_age"
-    TEST_COVERAGE = "test_coverage"
-    BUG_HISTORY = "bug_history"
-    AUTHOR_EXPERIENCE = "author_experience"
-    FILE_SIZE = "file_size"
-    DEPENDENCY_COUNT = "dependency_count"
-
-
-class FileRisk(BaseModel):
-    """Bug risk assessment for a file."""
-
-    file_path: str
-    risk_score: float = Field(..., ge=0, le=100)
-    risk_level: RiskLevel
-    factors: dict[str, float] = Field(default_factory=dict)
-    bug_count_history: int = 0
-    last_bug_date: Optional[str] = None
-    prevention_tips: list[str] = Field(default_factory=list)
-    suggested_tests: list[str] = Field(default_factory=list)
-
-
-class PredictionResult(BaseModel):
-    """Bug prediction result for the codebase."""
-
-    timestamp: datetime
-    total_files: int
-    high_risk_count: int
-    predicted_bugs: int
-    accuracy_score: float
-    risk_distribution: dict[str, int] = Field(default_factory=dict)
-    top_risk_files: list[FileRisk] = Field(default_factory=list)
 
 
 # ============================================================================
