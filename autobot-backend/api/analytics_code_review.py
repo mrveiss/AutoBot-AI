@@ -15,17 +15,21 @@ import re
 import uuid
 from datetime import datetime, timezone
 from autobot_shared.time_utils import parse_utc_iso
-from enum import Enum
 from pathlib import Path
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from api.analytics_shared import (  # noqa: F401 – used by history/metrics/summary
     resolve_source_or_404 as _resolve_source_or_404,
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
+from api.schemas_analytics import (
+    PatternToggleRequest,
+    ReviewCategory,
+    ReviewComment,
+    ReviewSeverity,
+)
 from api.schemas_code import (
     CodeReviewAnalyzeResponse,
     CodeReviewFeedbackResponse,
@@ -65,54 +69,6 @@ _NEXT_TOPLEVEL_RE = re.compile(r"\n(?=\S)")
 # ============================================================================
 # Models
 # ============================================================================
-
-
-class ReviewSeverity(str, Enum):
-    """Review comment severity levels."""
-
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
-    SUGGESTION = "suggestion"
-
-
-class ReviewCategory(str, Enum):
-    """Categories of review findings."""
-
-    SECURITY = "security"
-    PERFORMANCE = "performance"
-    STYLE = "style"
-    BUG_RISK = "bug_risk"
-    MAINTAINABILITY = "maintainability"
-    DOCUMENTATION = "documentation"
-    TESTING = "testing"
-    BEST_PRACTICE = "best_practice"
-
-
-class ReviewComment(BaseModel):
-    """A single review comment."""
-
-    id: str
-    file_path: str
-    line_number: int
-    severity: ReviewSeverity
-    category: ReviewCategory
-    message: str
-    suggestion: Optional[str] = None
-    code_snippet: Optional[str] = None
-    pattern_id: Optional[str] = None
-
-
-class ReviewResult(BaseModel):
-    """Complete review result for a diff or PR."""
-
-    id: str
-    timestamp: datetime
-    files_reviewed: int
-    total_comments: int
-    comments: list[ReviewComment] = Field(default_factory=list)
-    summary: dict[str, Any] = Field(default_factory=dict)
-    score: float = Field(..., ge=0, le=100)
 
 
 # ============================================================================
@@ -907,13 +863,6 @@ async def get_review_categories(
         }
         for cat in ReviewCategory
     ]
-
-
-class PatternToggleRequest(BaseModel):
-    """Request model for toggling pattern preference."""
-
-    pattern_id: str
-    enabled: bool
 
 
 @with_error_handling(
