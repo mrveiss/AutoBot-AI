@@ -13,8 +13,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, validator
 
+from api.schemas_workflows import (
+    EventsQueryRequest,
+    MetricsQueryRequest,
+    MonitoringConnectionTestRequest,
+)
 from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
@@ -35,85 +39,13 @@ router = APIRouter(
 )
 
 
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing monitoring connection."""
-
-    provider: str = Field(..., description="Monitoring provider")
-    api_key: str = Field(..., description="API key")
-    app_key: Optional[str] = Field(None, description="Application key (Datadog only)")
-    account_id: Optional[str] = Field(None, description="Account ID (New Relic only)")
-
-    @validator("provider")
-    def validate_provider(cls, v: str) -> str:
-        """Validate provider is supported."""
-        if v not in ["datadog", "new_relic"]:
-            raise ValueError("Provider must be 'datadog' or 'new_relic'")
-        return v
-
-
-class MetricsQueryRequest(BaseModel):
-    """Request model for querying metrics."""
-
-    query: str = Field(..., description="Metric query")
-    from_time: Optional[int] = Field(None, description="Start time (unix timestamp)")
-    to_time: Optional[int] = Field(None, description="End time (unix timestamp)")
-    since: Optional[str] = Field(None, description="Relative time (e.g., '1 hour ago')")
-
-    @validator("from_time")
-    def validate_from_time(cls, v: Optional[int]) -> Optional[int]:
-        """Ensure from_time is not in future."""
-        if v and v > int(datetime.now(tz=timezone.utc).timestamp()):
-            raise ValueError("from_time cannot be in the future")
-        return v
-
-    @validator("to_time")
-    def validate_to_time(
-        cls, v: Optional[int], values: Dict[str, Any]
-    ) -> Optional[int]:
-        """Ensure to_time is after from_time."""
-        if v and "from_time" in values and values["from_time"]:
-            if v < values["from_time"]:
-                raise ValueError("to_time must be after from_time")
-            time_range = v - values["from_time"]
-            if time_range > 86400:  # 24 hours
-                raise ValueError("Time range cannot exceed 24 hours")
-        return v
-
-
-class EventsQueryRequest(BaseModel):
-    """Request model for querying events."""
-
-    start: Optional[int] = Field(None, description="Start time (unix timestamp)")
-    end: Optional[int] = Field(None, description="End time (unix timestamp)")
-
-    @validator("end")
-    def validate_time_range(
-        cls, v: Optional[int], values: Dict[str, Any]
-    ) -> Optional[int]:
-        """Validate time range does not exceed 24 hours."""
-        if v and "start" in values and values["start"]:
-            time_range = v - values["start"]
-            if time_range > 86400:
-                raise ValueError("Time range cannot exceed 24 hours")
-        return v
-
-
-class MonitorCreateRequest(BaseModel):
-    """Request model for creating a monitor."""
-
-    type: str = Field(..., description="Monitor type")
-    query: str = Field(..., description="Monitor query")
-    name: str = Field(..., description="Monitor name")
-    message: str = Field(..., description="Notification message")
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_connection",
     error_code_prefix="INTEGRATION_MONITORING",
 )
 @router.post("/test-connection", response_model=MonitoringConnectionTestResponse)
-async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
+async def test_connection(request: MonitoringConnectionTestRequest) -> Dict[str, Any]:
     """Test connection to a monitoring provider.
 
     Args:
@@ -359,7 +291,7 @@ def _validate_provider(provider: str) -> None:
         raise ValueError(f"Unsupported provider: {provider}")
 
 
-def _build_config(provider: str, request: ConnectionTestRequest) -> IntegrationConfig:
+def _build_config(provider: str, request: MonitoringConnectionTestRequest) -> IntegrationConfig:
     """Build IntegrationConfig from request.
 
     Args:

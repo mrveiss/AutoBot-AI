@@ -2033,3 +2033,111 @@ class BulkFeatureRequest(BaseModel):
 class PerformanceOptimizationRequest(BaseModel):
     target_metrics: dict
     optimization_level: Optional[str] = "balanced"
+
+
+# ---------------------------------------------------------------------------
+# integration_cloud.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CloudProviderInfo(BaseModel):
+    """Information about a supported cloud provider."""
+
+    provider: str
+    name: str
+    description: str
+    required_fields: List[str]
+
+
+class CloudConnectionTestRequest(BaseModel):
+    """Request model for testing cloud provider connection."""
+
+    provider: str = Field(..., description="Cloud provider (aws, azure, gcp)")
+    api_key: Optional[str] = Field(None, description="API key or access key")
+    api_secret: Optional[str] = Field(None, description="API secret key")
+    token: Optional[str] = Field(None, description="Access token")
+    extra: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific config")
+
+
+class ResourceListRequest(BaseModel):
+    """Request model for listing cloud resources."""
+
+    provider: str
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
+    token: Optional[str] = None
+    extra: Dict[str, Any] = Field(default_factory=dict)
+    resource_type: str = Field(..., description="Type of resource (instances, vms, storage)")
+
+
+# ---------------------------------------------------------------------------
+# integration_monitoring.py schemas
+# ---------------------------------------------------------------------------
+
+
+class MonitoringConnectionTestRequest(BaseModel):
+    """Request model for testing monitoring connection."""
+
+    provider: str = Field(..., description="Monitoring provider")
+    api_key: str = Field(..., description="API key")
+    app_key: Optional[str] = Field(None, description="Application key (Datadog only)")
+    account_id: Optional[str] = Field(None, description="Account ID (New Relic only)")
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        if v not in ["datadog", "new_relic"]:
+            raise ValueError("Provider must be 'datadog' or 'new_relic'")
+        return v
+
+
+class MetricsQueryRequest(BaseModel):
+    """Request model for querying metrics."""
+
+    query: str = Field(..., description="Metric query")
+    from_time: Optional[int] = Field(None, description="Start time (unix timestamp)")
+    to_time: Optional[int] = Field(None, description="End time (unix timestamp)")
+    since: Optional[str] = Field(None, description="Relative time (e.g., '1 hour ago')")
+
+    @field_validator("from_time")
+    @classmethod
+    def validate_from_time(cls, v: Optional[int]) -> Optional[int]:
+        from datetime import datetime, timezone
+        if v and v > int(datetime.now(tz=timezone.utc).timestamp()):
+            raise ValueError("from_time cannot be in the future")
+        return v
+
+    @field_validator("to_time")
+    @classmethod
+    def validate_to_time(cls, v: Optional[int], info) -> Optional[int]:
+        from_time = info.data.get("from_time")
+        if v and from_time:
+            if v < from_time:
+                raise ValueError("to_time must be after from_time")
+            if v - from_time > 86400:
+                raise ValueError("Time range cannot exceed 24 hours")
+        return v
+
+
+class EventsQueryRequest(BaseModel):
+    """Request model for querying events."""
+
+    start: Optional[int] = Field(None, description="Start time (unix timestamp)")
+    end: Optional[int] = Field(None, description="End time (unix timestamp)")
+
+    @field_validator("end")
+    @classmethod
+    def validate_time_range(cls, v: Optional[int], info) -> Optional[int]:
+        start = info.data.get("start")
+        if v and start and v - start > 86400:
+            raise ValueError("Time range cannot exceed 24 hours")
+        return v
+
+
+class MonitorCreateRequest(BaseModel):
+    """Request model for creating a monitor."""
+
+    type: str = Field(..., description="Monitor type")
+    query: str = Field(..., description="Monitor query")
+    name: str = Field(..., description="Monitor name")
+    message: str = Field(..., description="Notification message")
