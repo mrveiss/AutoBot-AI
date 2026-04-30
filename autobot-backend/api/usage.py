@@ -26,7 +26,7 @@ from api.schemas_common import UsageRecordResponse
 from api.schemas_analytics import (
     UsageByUserAllResponse,
     UsageMyUsageResponse,
-    UsageRecordRequest,
+    UsageRecordEndpointRequest,
     UsageByUserSingleResponse,
     UsageSummaryResponse,
 )
@@ -206,7 +206,7 @@ async def get_my_usage(
     error_code_prefix="USAGE",
 )
 async def record_usage_event(
-    body: UsageRecordRequest,
+    body: UsageRecordEndpointRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
