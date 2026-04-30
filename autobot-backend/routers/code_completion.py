@@ -180,7 +180,7 @@ async def list_patterns(
     category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("frequency", regex="^(frequency|acceptance_rate|created_at)$"),
+    sort_by: str = Query("frequency", pattern="^(frequency|acceptance_rate|created_at)$"),
 ):
     """
     List extracted patterns with filtering and pagination.
