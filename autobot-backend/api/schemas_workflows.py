@@ -6,6 +6,7 @@ Workflow, registry, RUM, elevation, advanced-control, state-tracking, and valida
 """
 
 import re
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -2186,3 +2187,104 @@ class CatalogDocument(BaseModel):
     name: str
     version: str = "1"
     plugins: List[CatalogPlugin]
+
+
+# ---------------------------------------------------------------------------
+# batch_jobs.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class BatchJobStatus(str, Enum):
+    """Status of a batch job."""
+
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class BatchJobType(str, Enum):
+    """Type of batch job."""
+
+    data_processing = "data_processing"
+    file_conversion = "file_conversion"
+    report_generation = "report_generation"
+    backup = "backup"
+    custom = "custom"
+
+
+class BatchJobCreate(BaseModel):
+    """Request model for creating a batch job."""
+
+    name: str = Field(..., description="Human-readable name for the job")
+    job_type: BatchJobType = Field(..., description="Type of batch job")
+    parameters: Dict = Field(default_factory=dict, description="Job-specific parameters")
+    schedule: Optional[str] = Field(None, description="Optional cron expression for scheduling")
+    template_id: Optional[str] = Field(None, description="Optional template ID to use")
+
+
+class BatchJob(BaseModel):
+    """Batch job model."""
+
+    job_id: str
+    name: str
+    job_type: BatchJobType
+    status: BatchJobStatus
+    progress: int = Field(0, ge=0, le=100, description="Progress percentage")
+    parameters: Dict
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    result: Optional[Dict] = None
+
+
+class BatchTemplate(BaseModel):
+    """Batch job template model."""
+
+    template_id: str
+    name: str
+    job_type: BatchJobType
+    parameters: Dict
+    created_at: datetime
+
+
+class BatchSchedule(BaseModel):
+    """Batch job schedule model."""
+
+    schedule_id: str
+    job_id: str
+    cron_expression: str
+    enabled: bool
+    next_run: datetime
+
+
+class BatchJobList(BaseModel):
+    """Response model for job list."""
+
+    jobs: List[BatchJob]
+    total_count: int
+    status_counts: Dict[str, int]
+
+
+class BatchLogEntry(BaseModel):
+    """Log entry model."""
+
+    timestamp: datetime
+    level: str
+    message: str
+
+
+class APIBatchRequest(BaseModel):
+    """Request multiple endpoints in one call."""
+
+    requests: List[Dict]
+
+
+class APIBatchResponse(BaseModel):
+    """Combined response from multiple endpoints."""
+
+    responses: Dict
+    errors: Dict[str, str]
+    timing: Dict[str, float]
