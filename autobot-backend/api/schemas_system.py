@@ -6,6 +6,7 @@ System health, cache, NPU worker, wake-word, and feature-flag schemas.
 """
 
 import re
+import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -3313,3 +3314,132 @@ class ViolationStatistics(BaseModel):
     by_user: Dict[str, int]
     by_day: Dict[str, int]
     current_mode: str
+
+
+# ---------------------------------------------------------------------------
+# secrets.py enums + schemas
+# ---------------------------------------------------------------------------
+
+_SECRET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def _validate_secret_name(name: str) -> str:
+    """Validate and sanitize secret name."""
+    if not _SECRET_NAME_PATTERN.match(name):
+        raise ValueError(
+            "Secret name must contain only alphanumeric characters, "
+            "underscores, hyphens, and dots"
+        )
+    return name
+
+
+class SecretScope(str, Enum):
+    """Secret scope enumeration."""
+
+    CHAT = "chat"
+    GENERAL = "general"
+    USER = "user"
+    SESSION = "session"
+    SHARED = "shared"
+    GROUP = "group"
+    ORGANIZATION = "organization"
+
+
+class SecretType(str, Enum):
+    """Secret type enumeration."""
+
+    SSH_KEY = "ssh_key"
+    PASSWORD = "password"  # nosec B105 - enum value
+    API_KEY = "api_key"
+    TOKEN = "token"  # nosec B105 - enum value
+    CERTIFICATE = "certificate"
+    DATABASE_URL = "database_url"
+    INFRASTRUCTURE_HOST = "infrastructure_host"
+    OTHER = "other"
+
+
+class SecretModel(BaseModel):
+    """Secret data model."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    type: SecretType
+    scope: SecretScope
+    chat_id: Optional[str] = None
+    description: Optional[str] = ""
+    tags: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    expires_at: Optional[datetime] = None
+    metadata: Metadata = Field(default_factory=dict)
+
+
+class SecretCreateRequest(BaseModel):
+    """Request model for creating secrets."""
+
+    name: str = Field(..., min_length=1, max_length=256)
+    type: SecretType
+    scope: SecretScope
+    value: str = Field(..., min_length=1, max_length=65536)
+    chat_id: Optional[str] = Field(None, max_length=128)
+    description: Optional[str] = Field("", max_length=1024)
+    tags: List[str] = Field(default_factory=list)
+    expires_at: Optional[datetime] = None
+    metadata: Metadata = Field(default_factory=dict)
+    owner_id: Optional[str] = Field(None, max_length=128, description="Owner user ID")
+    org_id: Optional[str] = Field(None, max_length=128, description="Organization ID for org-level secrets")
+    team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
+    shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_secret_name(v)
+
+    def to_secret_model(self, secret_id: Optional[str] = None) -> "SecretModel":
+        """Convert request to SecretModel."""
+        return SecretModel(
+            id=secret_id or str(uuid.uuid4()),
+            name=self.name,
+            type=self.type,
+            scope=self.scope,
+            chat_id=self.chat_id if self.scope == SecretScope.CHAT else None,
+            description=self.description,
+            tags=self.tags,
+            expires_at=self.expires_at,
+            metadata=self.metadata,
+        )
+
+    def is_chat_scoped(self) -> bool:
+        return self.scope == SecretScope.CHAT
+
+    def requires_chat_id(self) -> bool:
+        return self.is_chat_scoped() and not self.chat_id
+
+    def get_log_summary(self) -> str:
+        return f"{self.scope.value} secret '{self.name}'"
+
+
+class SecretUpdateRequest(BaseModel):
+    """Request model for updating secrets."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=256)
+    description: Optional[str] = Field(None, max_length=1024)
+    tags: Optional[List[str]] = None
+    expires_at: Optional[datetime] = None
+    metadata: Optional[Metadata] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return _validate_secret_name(v)
+        return v
+
+
+class SecretTransferRequest(BaseModel):
+    """Request model for transferring secrets between scopes."""
+
+    secret_ids: List[str]
+    target_scope: SecretScope
+    target_chat_id: Optional[str] = None
