@@ -9,12 +9,12 @@ Endpoints for listing, inspecting, and rolling back configuration revisions.
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.schemas_system import ConfigRevisionResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.models.pagination import PaginationParams
@@ -23,24 +23,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-# -- Response schemas --------------------------------------------------
-
-
-class ConfigRevisionResponse(BaseModel):
-    """Response for a single config revision."""
-
-    id: str
-    entity_type: str
-    entity_id: str
-    before_config: Optional[Dict[str, Any]] = None
-    after_config: Dict[str, Any]
-    changed_keys: List[str] = Field(default_factory=list)
-    source: str
-    created_by: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
 
 
 # -- Helpers -----------------------------------------------------------

@@ -14,9 +14,12 @@ import logging
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
-from api.schemas_knowledge import KnowledgeCognitionSeedResponse, KnowledgeCognitionStatusResponse
+from api.schemas_knowledge import (
+    KnowledgeCognitionSeedResponse,
+    KnowledgeCognitionStatusResponse,
+    SeedRequest,
+)
 from auth_middleware import check_admin_permission
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder
@@ -28,12 +31,6 @@ router = APIRouter(tags=["knowledge-cognition"])
 
 # Default manifest path relative to project root
 _DEFAULT_MANIFEST = "cognition_seed.yaml"
-
-
-class SeedRequest(BaseModel):
-    """Optional body for the seed endpoint."""
-
-    manifest_path: str = _DEFAULT_MANIFEST
 
 
 @router.get("/cognition-store/status", response_model=KnowledgeCognitionStatusResponse)

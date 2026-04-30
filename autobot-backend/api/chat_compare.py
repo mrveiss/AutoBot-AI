@@ -23,8 +23,8 @@ from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
+from api.schemas_chat import CompareRequest
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -51,22 +51,6 @@ async def _get_compare_interface() -> object:
 
             _compare_interface = LLMInterface()
     return _compare_interface
-
-
-# ---------------------------------------------------------------------------
-# Request model
-# ---------------------------------------------------------------------------
-
-
-class CompareRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=50000)
-    models: List[str] = Field(
-        ...,
-        min_length=1,
-        max_length=10,
-        description="List of 'provider/model' strings, e.g. ['ollama/llama3', 'openai/gpt-4o']",
-    )
-    context: Optional[str] = Field(None, max_length=50000)
 
 
 # ---------------------------------------------------------------------------

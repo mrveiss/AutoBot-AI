@@ -16,11 +16,9 @@ Endpoints:
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -33,7 +31,7 @@ from services.conversation_export import (
 from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
 from api.schemas_common import DataResponse
-from api.schemas_agent import ConversationImportResponse
+from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
 
 logger = logging.getLogger(__name__)
 
@@ -56,30 +54,6 @@ _FILE_EXTENSIONS = {
 
 # Valid on_conflict values
 _VALID_ON_CONFLICT = frozenset({"skip", "replace", "rename"})
-
-
-# ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
-
-
-class ConversationImportRequest(BaseModel):
-    """Request body for importing a conversation (#1808)."""
-
-    document: dict = Field(
-        ...,
-        description=(
-            "AutoBot conversation export document produced by the export endpoint "
-            "(format: autobot-conversation-v1)."
-        ),
-    )
-    on_conflict: str = Field(
-        default="skip",
-        description=(
-            "Conflict resolution strategy when session_id already exists. "
-            "One of: skip, replace, rename."
-        ),
-    )
 
 
 # ---------------------------------------------------------------------------

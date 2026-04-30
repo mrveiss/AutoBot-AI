@@ -13,24 +13,17 @@ Issue #2315: Fix decorator order, router prefix, GPU guard, and tag case.
 
 import logging
 from dataclasses import asdict
-from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
+from api.schemas_common import DataResponse
+from api.schemas_system import GPUConfigUpdateRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gpu-monitoring"])
-
-
-class GPUConfigUpdateRequest(BaseModel):
-    """Request body for GPU optimization configuration updates."""
-
-    updates: Dict[str, Any]
 
 
 def _gpu_unavailable_error() -> HTTPException:

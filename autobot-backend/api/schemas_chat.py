@@ -464,3 +464,21 @@ class DetectLanguageRequest(BaseModel):
     """Request model for language detection."""
 
     text: str = Field(..., min_length=1, max_length=50000, description="Text to detect language of")
+
+
+# ---------------------------------------------------------------------------
+# chat_compare.py schemas
+# ---------------------------------------------------------------------------
+
+
+class CompareRequest(BaseModel):
+    """Request body for /api/chat/compare multi-model comparison."""
+
+    prompt: str = Field(..., min_length=1, max_length=50000)
+    models: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="List of 'provider/model' strings, e.g. ['ollama/llama3', 'openai/gpt-4o']",
+    )
+    context: Optional[str] = Field(None, max_length=50000)

@@ -3548,3 +3548,33 @@ class ReloadResponse(BaseModel):
     results: Metadata = {}
     reloaded_modules: list = []
     errors: list = []
+
+# ---------------------------------------------------------------------------
+# config_revisions.py schemas
+# ---------------------------------------------------------------------------
+
+
+class ConfigRevisionResponse(BaseModel):
+    """Response for a single config revision."""
+
+    id: str
+    entity_type: str
+    entity_id: str
+    before_config: Optional[Dict[str, Any]] = None
+    after_config: Dict[str, Any]
+    changed_keys: List[str] = Field(default_factory=list)
+    source: str
+    created_by: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# gpu_monitoring.py schemas
+# ---------------------------------------------------------------------------
+
+
+class GPUConfigUpdateRequest(BaseModel):
+    """Request body for GPU optimization configuration updates."""
+
+    updates: Dict[str, Any]

@@ -17,25 +17,16 @@ Remaining endpoints:
   POST   /bi/reports/saved/{report_id}/run — execute a saved report
 """
 
-from typing import List
-
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.saved_reports_service import get_saved_reports_service
 from api.schemas_common import DataResponse
-from api.schemas_agent import SavedReportResponse, SavedReportsListResponse
+from api.schemas_agent import SavedReportRequest, SavedReportResponse, SavedReportsListResponse
 
 router = APIRouter(tags=["bi-reports"])
-
-
-class SavedReportRequest(BaseModel):
-    name: str
-    report_type: str = "executive"
-    sections: List[str] = ["cost", "agents"]
 
 
 # =========================================================================
