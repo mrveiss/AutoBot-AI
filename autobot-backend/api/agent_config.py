@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
+    AgentConfigDetailResponse,
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
     AgentConfigOverviewResponse,
@@ -937,7 +938,7 @@ async def get_agents_usage(
     operation="get_agent_config",
     error_code_prefix="AGENT_CONFIG",
 )
-@router.get("/agents/{agent_id}", response_model=DataResponse)
+@router.get("/agents/{agent_id}", response_model=AgentConfigDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_config",
