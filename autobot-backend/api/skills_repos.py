@@ -7,7 +7,6 @@ import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +15,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
 from api.schemas_code import (
+    AddRepoRequest,
     SkillRepoAddResponse,
     SkillRepoBrowseResponse,
     SkillRepoItem,
@@ -24,16 +24,6 @@ from api.schemas_code import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-class AddRepoRequest(BaseModel):
-    """Request body for registering a new skill repository."""
-
-    name: str = Field(..., description="Human-readable repo name")
-    url: str = Field(..., description="git URL, local path, HTTP URL, or MCP URL")
-    repo_type: RepoType = Field(...)
-    auto_sync: bool = Field(False)
-    sync_interval: int = Field(60, description="Sync interval in minutes")
 
 
 async def _sync_packages(repo: SkillRepo) -> List[Dict[str, Any]]:

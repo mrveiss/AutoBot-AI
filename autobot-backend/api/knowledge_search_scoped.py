@@ -8,12 +8,14 @@ Issue #679: Permission-filtered knowledge search that respects hierarchical acce
 """
 
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
-from api.schemas_knowledge import KnowledgeAccessibleScopesResponse, KnowledgeScopedSearchResponse
+from api.schemas_knowledge import (
+    KnowledgeAccessibleScopesResponse,
+    KnowledgeScopedSearchResponse,
+    ScopedSearchRequest,
+)
 from auth_middleware import get_current_user
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
@@ -27,30 +29,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/knowledge/search", tags=["knowledge-search-scoped"])
-
-
-# =============================================================================
-# Pydantic Models
-# =============================================================================
-
-
-class ScopedSearchRequest(BaseModel):
-    """Scoped search request with automatic permission filtering."""
-
-    query: str = Field(..., min_length=1, description="Search query")
-    top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
-    mode: str = Field(
-        default="hybrid",
-        pattern="^(semantic|keyword|hybrid|auto)$",
-        description="Search mode",
-    )
-    category: Optional[str] = Field(default=None, description="Filter by category")
-    tags: Optional[List[str]] = Field(default=None, description="Filter by tags")
-    min_score: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Minimum score threshold"
-    )
-    enable_rag: bool = Field(default=False, description="Enable RAG enhancement")
-    enable_reranking: bool = Field(default=False, description="Enable reranking")
 
 
 # =============================================================================

@@ -11,11 +11,8 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -25,32 +22,12 @@ router = APIRouter(tags=["startup", "status"])
 # Thread lock for synchronous access to startup_state
 import threading
 from api.schemas_common import DataResponse
-from api.schemas_system import StartupStatusResponse
+from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
 
 _startup_lock = threading.Lock()
 
 # Async lock for WebSocket client access
 _ws_lock = asyncio.Lock()
-
-
-class StartupPhase(Enum):
-    INITIALIZING = "initializing"
-    STARTING_SERVICES = "starting_services"
-    CONNECTING_BACKEND = "connecting_backend"
-    LOADING_KNOWLEDGE = "loading_knowledge"
-    READY = "ready"
-    ERROR = "error"
-
-
-class StartupMessage(BaseModel):
-    """Startup status message"""
-
-    phase: StartupPhase
-    message: str
-    progress: int  # 0-100
-    timestamp: str
-    icon: str
-    details: Optional[str] = None
 
 
 # Global startup state

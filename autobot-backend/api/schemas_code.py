@@ -2534,3 +2534,20 @@ class DevelopmentSpeedupAnalysisRequest(BaseModel):
 
     root_path: str
     analysis_type: str = "comprehensive"
+
+
+# ---------------------------------------------------------------------------
+# skills_repos.py schemas
+# ---------------------------------------------------------------------------
+
+from skills.models import RepoType as _SkillsRepoType
+
+
+class AddRepoRequest(BaseModel):
+    """Request body for registering a new skill repository."""
+
+    name: str = Field(..., description="Human-readable repo name")
+    url: str = Field(..., description="git URL, local path, HTTP URL, or MCP URL")
+    repo_type: _SkillsRepoType = Field(...)
+    auto_sync: bool = Field(False)
+    sync_interval: int = Field(60, description="Sync interval in minutes")

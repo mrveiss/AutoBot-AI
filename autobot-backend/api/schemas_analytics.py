@@ -3227,3 +3227,22 @@ class EmbeddingStatsResponse(BaseModel):
     tokens_per_second: float
     period: str
     timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# usage.py schemas
+# ---------------------------------------------------------------------------
+
+
+class UsageRecordRequest(BaseModel):
+    """Request body for POST /api/usage/record."""
+
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    latency_ms: Optional[float] = None
+    success: bool = True
