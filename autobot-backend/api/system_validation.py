@@ -7,13 +7,10 @@ System Validation API endpoints for AutoBot optimization suite
 """
 
 import logging
-from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from type_defs.common import Metadata
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
 from api.schemas_workflows import (
@@ -22,6 +19,8 @@ from api.schemas_workflows import (
     SystemValidationHealthResponse,
     SystemValidationQuickResponse,
     SystemValidationRecommendationsResponse,
+    SystemValidationRequestModel,
+    SystemValidationResultModel,
     SystemValidationStatusResponse,
 )
 
@@ -29,28 +28,6 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter()
-
-
-class ValidationRequest(BaseModel):
-    """Request model for system validation"""
-
-    validation_type: str = "comprehensive"
-    include_performance_tests: bool = True
-    include_stress_tests: bool = False
-    timeout_seconds: int = 300
-
-
-class ValidationResult(BaseModel):
-    """Response model for validation results"""
-
-    validation_id: str
-    status: str
-    overall_score: float
-    component_scores: Dict[str, float]
-    recommendations: List[str]
-    test_results: Metadata
-    execution_time: float
-    timestamp: str
 
 
 @with_error_handling(
@@ -84,14 +61,14 @@ async def validation_health():
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
-@router.post("/validate/comprehensive", response_model=ValidationResult)
+@router.post("/validate/comprehensive", response_model=SystemValidationResultModel)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_comprehensive_validation",
     error_code_prefix="SYSTEM_VALIDATION",
 )
 async def run_comprehensive_validation(
-    request: ValidationRequest, background_tasks: BackgroundTasks
+    request: SystemValidationRequestModel, background_tasks: BackgroundTasks
 ):
     """Run comprehensive system validation"""
     try:
@@ -104,7 +81,7 @@ async def run_comprehensive_validation(
             raise_server_error("API_0003", "Validation failed")
 
         # Format response
-        validation_result = ValidationResult(
+        validation_result = SystemValidationResultModel(
             validation_id=result["validation_id"],
             status="completed",
             overall_score=result["overall_score"],

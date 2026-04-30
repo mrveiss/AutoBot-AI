@@ -12,38 +12,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
+from api.schemas_workflows import WebResearchSettings
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.schemas_common import DataResponse, SuccessResponse
+from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/web-research", tags=["web-research"])
-
-
-class WebResearchSettings(BaseModel):
-    """Web research settings model"""
-
-    enabled: bool
-    require_user_confirmation: bool = True
-    preferred_method: str = "basic"  # basic, advanced, api_based
-    max_results: int = 5
-    timeout_seconds: int = 30
-    auto_research_threshold: float = 0.3
-    rate_limit_requests: int = 5
-    rate_limit_window: int = 60
-
-
-class ResearchPreferences(BaseModel):
-    """User research preferences"""
-
-    auto_research_enabled: bool = False
-    daily_limit: int = 50
-    quality_threshold: float = 0.5
-    store_results_in_kb: bool = True
-    filter_adult_content: bool = True
-    anonymize_requests: bool = True
 
 
 @with_error_handling(

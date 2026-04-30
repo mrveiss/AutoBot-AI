@@ -2551,3 +2551,23 @@ class AddRepoRequest(BaseModel):
     repo_type: _SkillsRepoType = Field(...)
     auto_sync: bool = Field(False)
     sync_interval: int = Field(60, description="Sync interval in minutes")
+
+
+# ---------------------------------------------------------------------------
+# templates.py schemas
+# ---------------------------------------------------------------------------
+
+
+class TemplateExecutionRequest(BaseModel):
+    """Request body for executing a workflow template."""
+
+    template_id: str
+    variables: Optional[Dict[str, str]] = None
+    auto_approve: bool = False
+
+
+class TemplateValidationRequest(BaseModel):
+    """Request body for validating template variables."""
+
+    template_id: str
+    variables: Dict[str, str]

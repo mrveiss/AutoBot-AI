@@ -2404,3 +2404,189 @@ class AgentRecommendationRequest(BaseModel):
 
     task_type: str
     capabilities_needed: List[str]
+
+
+# ---------------------------------------------------------------------------
+# sequential_thinking_mcp.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SequentialThinkingMCPTool(BaseModel):
+    """Standard MCP tool definition for sequential thinking."""
+
+    name: str
+    description: str
+    input_schema: Metadata
+
+
+class SequentialThinkingRequest(BaseModel):
+    """Request model for sequential thinking tool."""
+
+    thought: str = Field(..., description="Current thinking step and analysis")
+    thought_number: int = Field(
+        ..., ge=1, description="Current thought number in sequence"
+    )
+    total_thoughts: int = Field(
+        ..., ge=1, description="Estimated total thoughts needed"
+    )
+    next_thought_needed: bool = Field(
+        ..., description="Whether another thought step is needed"
+    )
+
+    is_revision: Optional[bool] = Field(
+        False, description="Whether this revises previous thinking"
+    )
+    revises_thought: Optional[int] = Field(
+        None, ge=1, description="Which thought is being reconsidered"
+    )
+    branch_from_thought: Optional[int] = Field(
+        None, ge=1, description="Branching point thought number"
+    )
+    branch_id: Optional[str] = Field(None, description="Branch identifier")
+    needs_more_thoughts: Optional[bool] = Field(
+        False, description="If more thoughts are needed beyond initial estimate"
+    )
+
+    session_id: Optional[str] = Field(
+        "default", description="Thinking session identifier"
+    )
+
+    def to_thought_record(self) -> Metadata:
+        """Convert to thought record for storage."""
+        from datetime import datetime, timezone
+
+        return {
+            "thought_number": self.thought_number,
+            "thought": self.thought,
+            "total_thoughts": self.total_thoughts,
+            "next_thought_needed": self.next_thought_needed,
+            "is_revision": self.is_revision,
+            "revises_thought": self.revises_thought,
+            "branch_from_thought": self.branch_from_thought,
+            "branch_id": self.branch_id,
+            "needs_more_thoughts": self.needs_more_thoughts,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
+    def get_progress_percentage(self) -> float:
+        """Calculate progress percentage."""
+        return (self.thought_number / self.total_thoughts) * 100
+
+    def get_session_key(self) -> str:
+        """Get session key with fallback."""
+        return self.session_id or "default"
+
+    def is_valid_thought_number(self) -> bool:
+        """Check if thought number is valid."""
+        return self.thought_number <= self.total_thoughts or self.needs_more_thoughts
+
+    def has_revision(self) -> bool:
+        """Check if this is a revision."""
+        return bool(self.is_revision)
+
+    def get_revision_info(self) -> Optional[Metadata]:
+        """Get revision info dict if this is a revision."""
+        if not self.is_revision:
+            return None
+        return {
+            "is_revision": True,
+            "revises_thought": self.revises_thought,
+        }
+
+    def has_branch(self) -> bool:
+        """Check if this is a branch."""
+        return bool(self.branch_from_thought)
+
+    def get_branch_info(self) -> Optional[Metadata]:
+        """Get branch info dict if this is a branch."""
+        if not self.branch_from_thought:
+            return None
+        return {
+            "branched": True,
+            "branch_from_thought": self.branch_from_thought,
+            "branch_id": self.branch_id,
+        }
+
+    def get_progress_message(self) -> str:
+        """Get progress message string."""
+        return f"Recorded thought {self.thought_number}/{self.total_thoughts}"
+
+
+# ---------------------------------------------------------------------------
+# state_tracking.py schemas
+# ---------------------------------------------------------------------------
+
+
+class StateChangeRequest(BaseModel):
+    """Request body for tracking a state change."""
+
+    change_type: str
+    description: str
+    after_state: Metadata
+    before_state: Optional[Metadata] = None
+    user_id: Optional[str] = "system"
+    metadata: Optional[Metadata] = None
+
+
+class StateTrackingExportRequest(BaseModel):
+    """Request body for state-tracking export."""
+
+    format: str = "json"  # json or markdown
+    include_history: bool = True
+    time_range_days: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# system_validation.py schemas
+# ---------------------------------------------------------------------------
+
+
+class SystemValidationRequestModel(BaseModel):
+    """Request model for system validation."""
+
+    validation_type: str = "comprehensive"
+    include_performance_tests: bool = True
+    include_stress_tests: bool = False
+    timeout_seconds: int = 300
+
+
+class SystemValidationResultModel(BaseModel):
+    """Response model for system validation results."""
+
+    validation_id: str
+    status: str
+    overall_score: float
+    component_scores: Dict[str, float]
+    recommendations: List[str]
+    test_results: Metadata
+    execution_time: float
+    timestamp: str
+
+
+# ---------------------------------------------------------------------------
+# web_research_settings.py schemas
+# ---------------------------------------------------------------------------
+
+
+class WebResearchSettings(BaseModel):
+    """Web research settings model."""
+
+    enabled: bool
+    require_user_confirmation: bool = True
+    preferred_method: str = "basic"
+    max_results: int = 5
+    timeout_seconds: int = 30
+    auto_research_threshold: float = 0.3
+    rate_limit_requests: int = 5
+    rate_limit_window: int = 60
+
+
+class ResearchPreferences(BaseModel):
+    """User research preferences."""
+
+    auto_research_enabled: bool = False
+    daily_limit: int = 50
+    quality_threshold: float = 0.5
+    store_results_in_kb: bool = True
+    filter_adult_content: bool = True
+    anonymize_requests: bool = True

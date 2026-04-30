@@ -13,11 +13,12 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from api.schemas_workflows import (
+    StateChangeRequest,
     StateTrackingChangeResponse,
     StateTrackingChangesResponse,
+    StateTrackingExportRequest,
     StateTrackingExportResponse,
     StateTrackingMetricsAllResponse,
     StateTrackingMilestonesResponse,
@@ -34,25 +35,9 @@ from enhanced_project_state_tracker import (
     TrackingMetric,
     get_state_tracker,
 )
-from type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-class StateChangeRequest(BaseModel):
-    change_type: str
-    description: str
-    after_state: Metadata
-    before_state: Optional[Metadata] = None
-    user_id: Optional[str] = "system"
-    metadata: Optional[Metadata] = None
-
-
-class ExportRequest(BaseModel):
-    format: str = "json"  # json or markdown
-    include_history: bool = True
-    time_range_days: Optional[int] = None
 
 
 @with_error_handling(
@@ -427,7 +412,7 @@ async def generate_state_report():
     operation="export_state_data",
     error_code_prefix="STATE_TRACKING",
 )
-async def export_state_data(request: ExportRequest):
+async def export_state_data(request: StateTrackingExportRequest):
     """Export state tracking data"""
     try:
         tracker = get_state_tracker()
