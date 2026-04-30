@@ -2668,3 +2668,178 @@ class PatternToggleRequest(BaseModel):
 
     pattern_id: str
     enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# analytics_cfg.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class NodeType(str, Enum):
+    """Types of CFG nodes."""
+
+    ENTRY = "entry"
+    EXIT = "exit"
+    STATEMENT = "statement"
+    CONDITION = "condition"
+    LOOP_HEADER = "loop_header"
+    LOOP_BODY = "loop_body"
+    TRY_BLOCK = "try_block"
+    EXCEPT_HANDLER = "except_handler"
+    FINALLY_BLOCK = "finally_block"
+    FUNCTION_DEF = "function_def"
+    CLASS_DEF = "class_def"
+    RETURN = "return"
+    RAISE = "raise"
+    BREAK = "break"
+    CONTINUE = "continue"
+    PASS = "pass"
+
+
+class EdgeType(str, Enum):
+    """Types of CFG edges."""
+
+    SEQUENTIAL = "sequential"
+    TRUE_BRANCH = "true_branch"
+    FALSE_BRANCH = "false_branch"
+    LOOP_BACK = "loop_back"
+    BREAK_OUT = "break_out"
+    CONTINUE_BACK = "continue_back"
+    EXCEPTION = "exception"
+    FINALLY = "finally"
+    RETURN_EDGE = "return_edge"
+
+
+class IssueSeverity(str, Enum):
+    """Severity levels for detected issues."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+
+class IssueType(str, Enum):
+    """Types of control flow issues."""
+
+    UNREACHABLE_CODE = "unreachable_code"
+    INFINITE_LOOP = "infinite_loop"
+    POTENTIAL_INFINITE_LOOP = "potential_infinite_loop"
+    DEAD_BRANCH = "dead_branch"
+    COMPLEX_CONDITION = "complex_condition"
+    HIGH_CYCLOMATIC_COMPLEXITY = "high_cyclomatic_complexity"
+    DEEP_NESTING = "deep_nesting"
+    MISSING_RETURN = "missing_return"
+    EMPTY_EXCEPT = "empty_except"
+    BARE_EXCEPT = "bare_except"
+
+
+class CFGAnalyzeRequest(BaseModel):
+    """Request to analyze source code."""
+
+    source_code: str = Field(..., description="Python source code to analyze")
+    file_path: str = Field(default="", description="Optional file path for context")
+
+
+class CFGAnalyzeFileRequest(BaseModel):
+    """Request to analyze a file."""
+
+    file_path: str = Field(..., description="Path to Python file")
+
+
+class CFGResponse(BaseModel):
+    """Response containing CFG analysis."""
+
+    success: bool
+    graphs: List[Dict[str, Any]]
+    summary: Dict[str, Any]
+    issues: List[Dict[str, Any]]
+    analysis_time_ms: float
+
+
+# ---------------------------------------------------------------------------
+# analytics_llm_patterns.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class PromptCategory(str, Enum):
+    """Categories of LLM prompts."""
+
+    CODE_GENERATION = "code_generation"
+    CODE_REVIEW = "code_review"
+    DOCUMENTATION = "documentation"
+    ANALYSIS = "analysis"
+    CHAT = "chat"
+    TASK_PLANNING = "task_planning"
+    TRANSLATION = "translation"
+    SUMMARIZATION = "summarization"
+    UNKNOWN = "unknown"
+
+
+class OptimizationType(str, Enum):
+    """Types of optimization opportunities."""
+
+    CACHE_PROMPT = "cache_prompt"
+    USE_SMALLER_MODEL = "use_smaller_model"
+    REDUCE_CONTEXT = "reduce_context"
+    BATCH_REQUESTS = "batch_requests"
+    TEMPLATE_REUSE = "template_reuse"
+
+
+class CostLevel(str, Enum):
+    """Cost level classification."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class PromptAnalysisRequest(BaseModel):
+    """Request for prompt analysis."""
+
+    prompt: str = Field(..., description="The prompt to analyze")
+    model: Optional[str] = Field(None, description="Model used or planned")
+
+
+class UsageRecordRequest(BaseModel):
+    """Request to record LLM usage."""
+
+    prompt: str = Field(..., description="The prompt sent")
+    model: str = Field(..., description="Model used")
+    input_tokens: int = Field(..., description="Input token count")
+    output_tokens: int = Field(..., description="Output token count")
+    response_time: float = Field(..., description="Response time in seconds")
+    success: bool = Field(default=True)
+    session_id: Optional[str] = Field(None)
+
+    def to_record_dict(
+        self,
+        prompt_hash: str,
+        prompt_preview: str,
+        category_value: str,
+        cost: float,
+    ) -> Dict[str, Any]:
+        """Convert to record dictionary for storage."""
+        from datetime import datetime, timezone
+        return {
+            "prompt_hash": prompt_hash,
+            "prompt_preview": prompt_preview,
+            "category": category_value,
+            "model": self.model,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cost": cost,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "response_time": self.response_time,
+            "success": self.success,
+            "session_id": self.session_id,
+        }
+
+
+class DateRangeParams(BaseModel):
+    """Date range parameters."""
+
+    start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
