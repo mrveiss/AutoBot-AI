@@ -13,8 +13,11 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
+from api.schemas_workflows import (
+    CloudConnectionTestRequest,
+    CloudProviderInfo,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig
@@ -35,40 +38,6 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 logger = logging.getLogger(__name__)
-
-
-class CloudProviderInfo(BaseModel):
-    """Information about a supported cloud provider."""
-
-    provider: str
-    name: str
-    description: str
-    required_fields: List[str]
-
-
-class ConnectionTestRequest(BaseModel):
-    """Request model for testing cloud provider connection."""
-
-    provider: str = Field(..., description="Cloud provider (aws, azure, gcp)")
-    api_key: Optional[str] = Field(None, description="API key or access key")
-    api_secret: Optional[str] = Field(None, description="API secret key")
-    token: Optional[str] = Field(None, description="Access token")
-    extra: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific config"
-    )
-
-
-class ResourceListRequest(BaseModel):
-    """Request model for listing cloud resources."""
-
-    provider: str
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    token: Optional[str] = None
-    extra: Dict[str, Any] = Field(default_factory=dict)
-    resource_type: str = Field(
-        ..., description="Type of resource (instances, vms, storage)"
-    )
 
 
 @with_error_handling(
@@ -121,7 +90,7 @@ async def list_providers():
     error_code_prefix="INTEGRATION_CLOUD",
 )
 @router.post("/test-connection", response_model=CloudConnectionTestResponse)
-async def test_connection(request: ConnectionTestRequest):
+async def test_connection(request: CloudConnectionTestRequest):
     """Test connection to a cloud provider."""
     try:
         integration = _create_integration(
