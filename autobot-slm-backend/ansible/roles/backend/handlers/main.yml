@@ -16,6 +16,11 @@
     name: autobot-celery
     state: restarted
 
+- name: restart celery beat
+  ansible.builtin.systemd:
+    name: autobot-celery-beat
+    state: restarted
+
 - name: reload nginx backend
   ansible.builtin.systemd:
     name: nginx

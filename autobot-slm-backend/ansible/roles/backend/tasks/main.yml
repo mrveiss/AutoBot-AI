@@ -534,6 +534,41 @@
     enabled: true
     daemon_reload: true
 
+# Issue #6555: Deploy Celery Beat — fires the periodic schedules
+# declared in celery_app.conf.beat_schedule (knowledge cleanup,
+# sync queue prune). Without Beat the schedules are dead config.
+- name: "Beat | Ensure schedule directory exists"
+  ansible.builtin.file:
+    path: "{{ celery_beat_schedule_file | default('/var/lib/autobot/celerybeat-schedule') | dirname }}"
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    mode: "0750"
+
+- name: "Beat | Ensure pidfile directory exists"
+  ansible.builtin.file:
+    path: /run/autobot
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    mode: "0755"
+
+- name: "Beat | Deploy Celery Beat systemd service (#6555)"
+  ansible.builtin.template:
+    src: autobot-celery-beat.service.j2
+    dest: /etc/systemd/system/autobot-celery-beat.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart celery beat
+
+- name: "Beat | Enable and start Celery Beat service"
+  ansible.builtin.systemd:
+    name: autobot-celery-beat
+    state: started
+    enabled: true
+    daemon_reload: true
+
 # ==========================================================
 # nginx reverse proxy (Issue #957)
 # Holds port backend_nginx_port (8443) permanently so WDF
