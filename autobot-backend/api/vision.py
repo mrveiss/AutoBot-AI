@@ -60,12 +60,12 @@ def get_screen_analyzer() -> ScreenAnalyzer:
     operation="vision_health_check",
     error_code_prefix="VISION",
 )
+@router.get("/health", response_model=VisionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vision_health_check",
     error_code_prefix="VISION",
 )
-@router.get("/health", response_model=VisionHealthResponse)
 async def vision_health_check(
     current_user: dict = Depends(get_current_user),
 ):
@@ -108,12 +108,12 @@ async def vision_health_check(
     operation="analyze_screen",
     error_code_prefix="VISION",
 )
+@router.post("/analyze", response_model=ScreenAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_screen",
     error_code_prefix="VISION",
 )
-@router.post("/analyze", response_model=ScreenAnalysisResponse)
 async def analyze_screen(
     request: ScreenAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -173,12 +173,12 @@ async def analyze_screen(
     operation="detect_elements",
     error_code_prefix="VISION",
 )
+@router.post("/elements", response_model=VisionDetectElementsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_elements",
     error_code_prefix="VISION",
 )
-@router.post("/elements", response_model=VisionDetectElementsResponse)
 async def detect_elements(
     request: ElementDetectionRequest,
     current_user: dict = Depends(get_current_user),
@@ -240,12 +240,12 @@ async def detect_elements(
     operation="extract_text_ocr",
     error_code_prefix="VISION",
 )
+@router.post("/ocr", response_model=VisionOCRResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_text_ocr",
     error_code_prefix="VISION",
 )
-@router.post("/ocr", response_model=VisionOCRResponse)
 async def extract_text_ocr(
     request: OCRRequest,
     current_user: dict = Depends(get_current_user),
@@ -301,12 +301,12 @@ async def extract_text_ocr(
     operation="get_automation_opportunities",
     error_code_prefix="VISION",
 )
+@router.get("/automation-opportunities", response_model=VisionAutomationOpportunitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_automation_opportunities",
     error_code_prefix="VISION",
 )
-@router.get("/automation-opportunities", response_model=VisionAutomationOpportunitiesResponse)
 async def get_automation_opportunities(
     session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -338,12 +338,12 @@ async def get_automation_opportunities(
     operation="get_element_types",
     error_code_prefix="VISION",
 )
+@router.get("/element-types", response_model=VisionElementTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_element_types",
     error_code_prefix="VISION",
 )
-@router.get("/element-types", response_model=VisionElementTypesResponse)
 async def get_element_types(
     current_user: dict = Depends(get_current_user),
 ):
@@ -370,12 +370,12 @@ async def get_element_types(
     operation="get_interaction_types",
     error_code_prefix="VISION",
 )
+@router.get("/interaction-types", response_model=VisionInteractionTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_interaction_types",
     error_code_prefix="VISION",
 )
-@router.get("/interaction-types", response_model=VisionInteractionTypesResponse)
 async def get_interaction_types(
     current_user: dict = Depends(get_current_user),
 ):
@@ -402,12 +402,12 @@ async def get_interaction_types(
     operation="get_layout_analysis",
     error_code_prefix="VISION",
 )
+@router.get("/layout", response_model=VisionLayoutResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_layout_analysis",
     error_code_prefix="VISION",
 )
-@router.get("/layout", response_model=VisionLayoutResponse)
 async def get_layout_analysis(
     session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -438,12 +438,12 @@ async def get_layout_analysis(
     operation="vision_service_status",
     error_code_prefix="VISION",
 )
+@router.get("/status", response_model=VisionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vision_status",
     error_code_prefix="VISION",
 )
-@router.get("/status", response_model=VisionStatusResponse)
 async def get_vision_status(
     current_user: dict = Depends(get_current_user),
 ):

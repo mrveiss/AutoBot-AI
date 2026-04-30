@@ -65,14 +65,14 @@ def _to_response(revision) -> ConfigRevisionResponse:
 # -- Endpoints ---------------------------------------------------------
 
 
+@router.get(
+    "/config-revisions/{entity_type}/{entity_id}",
+    response_model=List[ConfigRevisionResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_revisions",
     error_code_prefix="CONFIG_REVISIONS",
-)
-@router.get(
-    "/config-revisions/{entity_type}/{entity_id}",
-    response_model=List[ConfigRevisionResponse],
 )
 async def list_revisions(
     entity_type: str,
@@ -92,14 +92,14 @@ async def list_revisions(
     return [_to_response(r) for r in revisions]
 
 
+@router.get(
+    "/config-revisions/{entity_type}/{entity_id}/{revision_id}",
+    response_model=ConfigRevisionResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_revision",
     error_code_prefix="CONFIG_REVISIONS",
-)
-@router.get(
-    "/config-revisions/{entity_type}/{entity_id}/{revision_id}",
-    response_model=ConfigRevisionResponse,
 )
 async def get_revision(
     entity_type: str,
@@ -124,15 +124,15 @@ async def get_revision(
     return _to_response(revision)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rollback_to_revision",
-    error_code_prefix="CONFIG_REVISIONS",
-)
 @router.post(
     "/config-revisions/{entity_type}/{entity_id}/{revision_id}/rollback",
     response_model=ConfigRevisionResponse,
     status_code=status.HTTP_201_CREATED,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rollback_to_revision",
+    error_code_prefix="CONFIG_REVISIONS",
 )
 async def rollback_to_revision(
     entity_type: str,

@@ -331,12 +331,12 @@ def _build_timeline_response(
     operation="get_evolution_timeline",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/timeline", response_model=DataResponse)
 async def get_evolution_timeline(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
@@ -406,12 +406,12 @@ async def get_evolution_timeline(
     operation="get_pattern_evolution",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/patterns", response_model=DataResponse)
 async def get_pattern_evolution(
     pattern_type: Optional[str] = Query(
         None, description="Filter by pattern type (e.g., god_class, long_method)"
@@ -585,12 +585,12 @@ def _build_trends_success_response(
     operation="get_quality_trends",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/trends", response_model=DataResponse)
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
@@ -662,12 +662,12 @@ async def get_quality_trends(
     operation="record_snapshot",
     error_code_prefix="EVOLUTION",
 )
+@router.post("/snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_quality_snapshot",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/snapshot", response_model=DataResponse)
 async def record_quality_snapshot(
     snapshot: EvolutionQualitySnapshot,
     admin_check: bool = Depends(check_admin_permission),
@@ -704,12 +704,12 @@ async def record_quality_snapshot(
     operation="record_pattern_snapshot",
     error_code_prefix="EVOLUTION",
 )
+@router.post("/pattern-snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_pattern_snapshot",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/pattern-snapshot", response_model=DataResponse)
 async def record_pattern_snapshot(
     snapshot: PatternSnapshot,
     admin_check: bool = Depends(check_admin_permission),
@@ -828,12 +828,12 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     operation="export_evolution_data",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/export", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_evolution_data",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/export", response_model=DataResponse)
 async def export_evolution_data(
     format: str = Query("json", description="Export format: json, csv"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -894,12 +894,12 @@ async def export_evolution_data(
     operation="get_evolution_summary",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_summary",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.get("/summary", response_model=DataResponse)
 async def get_evolution_summary(
     admin_check: bool = Depends(check_admin_permission),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
@@ -1234,12 +1234,12 @@ def _validate_evolution_repo_path(repo_path_str: str):
     operation="trigger_evolution_analysis",
     error_code_prefix="EVOLUTION",
 )
+@router.post("/analyze", response_model=EvolutionAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_evolution_analysis",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
-@router.post("/analyze", response_model=EvolutionAnalysisResponse)
 async def trigger_evolution_analysis(
     request: EvolutionAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),

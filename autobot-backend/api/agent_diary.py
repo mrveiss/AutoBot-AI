@@ -37,12 +37,12 @@ _KNOWN_AGENTS: List[str] = [
 ]
 
 
+@router.get("/{agent_name}/entries")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_diary_entries",
     error_code_prefix="DIARY",
 )
-@router.get("/{agent_name}/entries")
 async def get_agent_diary_entries(
     agent_name: str,
     last_n: int = Query(10, ge=1, le=100, description="Number of recent entries"),
@@ -60,12 +60,12 @@ async def get_agent_diary_entries(
     )
 
 
+@router.get("/{agent_name}/search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_agent_diary",
     error_code_prefix="DIARY",
 )
-@router.get("/{agent_name}/search")
 async def search_agent_diary(
     agent_name: str,
     q: str = Query(..., min_length=1, description="Search query"),
@@ -85,12 +85,12 @@ async def search_agent_diary(
     )
 
 
+@router.get("/summary")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_diary_summary",
     error_code_prefix="DIARY",
 )
-@router.get("/summary")
 async def get_agent_diary_summary(
     last_n: int = Query(3, ge=1, le=20, description="Entries per agent"),
     current_user: dict = Depends(get_current_user),

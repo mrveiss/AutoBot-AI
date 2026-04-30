@@ -144,12 +144,12 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
     operation="graph_rag_search",
     error_code_prefix="GRAPH_RAG",
 )
+@router.post("/search", response_model=GraphRAGSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_search",
     error_code_prefix="GRAPH_RAG",
 )
-@router.post("/search", response_model=GraphRAGSearchResponse)
 async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
@@ -211,12 +211,12 @@ async def graph_rag_search(
     operation="graph_rag_health",
     error_code_prefix="GRAPH_RAG",
 )
+@router.get("/health", response_model=GraphRAGHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_health",
     error_code_prefix="GRAPH_RAG",
 )
-@router.get("/health", response_model=GraphRAGHealthResponse)
 async def graph_rag_health(
     service: GraphRAGService = Depends(get_graph_rag_service),
     current_user: dict = Depends(get_current_user),
@@ -281,12 +281,12 @@ async def graph_rag_health(
     operation="graph_rag_metrics",
     error_code_prefix="GRAPH_RAG",
 )
+@router.get("/metrics", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_metrics",
     error_code_prefix="GRAPH_RAG",
 )
-@router.get("/metrics", response_model=DataResponse)
 async def graph_rag_metrics(
     service: GraphRAGService = Depends(get_graph_rag_service),
     current_user: dict = Depends(get_current_user),

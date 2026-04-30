@@ -91,12 +91,12 @@ def _board_entry(board_id: str, name: str, description: str) -> dict:
     operation="list_boards",
     error_code_prefix="KB_BOARDS",
 )
+@router.get("/boards", response_model=KnowledgeBoardsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_boards",
     error_code_prefix="KNOWLEDGE_BOARDS",
 )
-@router.get("/boards", response_model=KnowledgeBoardsListResponse)
 async def list_boards(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -138,12 +138,12 @@ async def list_boards(
     operation="create_board",
     error_code_prefix="KB_BOARDS",
 )
+@router.post("/boards", status_code=201, response_model=KnowledgeBoardCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_board",
     error_code_prefix="KNOWLEDGE_BOARDS",
 )
-@router.post("/boards", status_code=201, response_model=KnowledgeBoardCreateResponse)
 async def create_board(
     request: CreateBoardRequest = None,
     admin_check: bool = Depends(check_admin_permission),
@@ -180,12 +180,12 @@ async def create_board(
     operation="delete_board",
     error_code_prefix="KB_BOARDS",
 )
+@router.delete("/boards/{board_id}", response_model=KnowledgeBoardDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_board",
     error_code_prefix="KNOWLEDGE_BOARDS",
 )
-@router.delete("/boards/{board_id}", response_model=KnowledgeBoardDeleteResponse)
 async def delete_board(
     board_id: str,
     admin_check: bool = Depends(check_admin_permission),

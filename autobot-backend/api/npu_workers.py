@@ -80,12 +80,12 @@ router = APIRouter()
     operation="list_workers",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/workers", response_model=List[NPUWorkerDetails])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_workers",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/workers", response_model=List[NPUWorkerDetails])
 async def list_workers(admin_check: bool = Depends(check_admin_permission)):
     """
     List all registered NPU workers with their current status.
@@ -110,13 +110,13 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
     operation="add_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post(
+    "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_worker",
     error_code_prefix="NPU_WORKERS",
-)
-@router.post(
-    "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
 )
 async def add_worker(
     admin_check: bool = Depends(check_admin_permission),
@@ -159,12 +159,12 @@ async def add_worker(
     operation="get_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 async def get_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -205,12 +205,12 @@ async def get_worker(
     operation="update_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.put("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.put("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 async def update_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -261,12 +261,12 @@ async def update_worker(
     operation="remove_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def remove_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -303,12 +303,12 @@ async def remove_worker(
     operation="test_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/workers/{worker_id}/test", response_model=WorkerTestResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/{worker_id}/test", response_model=WorkerTestResult)
 async def test_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -355,13 +355,13 @@ async def test_worker(
     operation="get_worker_metrics",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get(
+    "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
     error_code_prefix="NPU_WORKERS",
-)
-@router.get(
-    "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
 )
 async def get_worker_metrics(
     admin_check: bool = Depends(check_admin_permission),
@@ -409,12 +409,12 @@ async def get_worker_metrics(
     operation="get_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 async def get_worker_log_level(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -479,12 +479,12 @@ async def _send_log_level_to_worker(
     operation="set_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
+@router.put("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_worker_log_level",
     error_code_prefix="NPU_WORKERS",
 )
-@router.put("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 async def set_worker_log_level(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -540,12 +540,12 @@ async def set_worker_log_level(
     operation="get_load_balancing_config",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/load-balancing", response_model=LoadBalancingConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_load_balancing_config",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/load-balancing", response_model=LoadBalancingConfig)
 async def get_load_balancing_config(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -572,12 +572,12 @@ async def get_load_balancing_config(
     operation="update_load_balancing_config",
     error_code_prefix="NPU_WORKERS",
 )
+@router.put("/npu/load-balancing", response_model=LoadBalancingConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_load_balancing_config",
     error_code_prefix="NPU_WORKERS",
 )
-@router.put("/npu/load-balancing", response_model=LoadBalancingConfig)
 async def update_load_balancing_config(
     admin_check: bool = Depends(check_admin_permission),
     config: LoadBalancingConfig = None,
@@ -622,12 +622,12 @@ async def update_load_balancing_config(
     operation="get_npu_status",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/status", response_model=NPUStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_npu_status",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/status", response_model=NPUStatusResponse)
 async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get overall NPU worker pool status.
@@ -677,12 +677,12 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
     operation="proxy_npu_health",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/health", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="proxy_npu_health",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/health", response_model=None)
 async def proxy_npu_health():
     """
     Proxy NPU worker health check to avoid CORS/mixed content.
@@ -725,12 +725,12 @@ async def proxy_npu_health():
     operation="unpair_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/workers/{worker_id}/unpair", response_model=NPUWorkerUnpairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unpair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/{worker_id}/unpair", response_model=NPUWorkerUnpairResponse)
 async def unpair_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -868,12 +868,12 @@ async def _resolve_repair_worker_info(
     operation="repair_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/workers/{worker_id}/repair", response_model=NPUWorkerRepairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="repair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/{worker_id}/repair", response_model=NPUWorkerRepairResponse)
 async def repair_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
@@ -1149,12 +1149,12 @@ async def _execute_worker_pairing(
     operation="pair_worker",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/workers/pair", response_model=NPUWorkerPairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pair_worker",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/pair", response_model=NPUWorkerPairResponse)
 async def pair_worker(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -1252,12 +1252,12 @@ def _reject_unpaired_heartbeat(heartbeat: WorkerHeartbeat) -> None:
     )
 
 
+@router.post("/npu/workers/heartbeat", response_model=NPUWorkerHeartbeatResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="worker_heartbeat",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/heartbeat", response_model=NPUWorkerHeartbeatResponse)
 async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     """
     Receive heartbeat/telemetry from NPU worker.
@@ -1432,12 +1432,12 @@ def _build_bootstrap_response(
     operation="worker_bootstrap",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/workers/bootstrap", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="worker_bootstrap",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/workers/bootstrap", response_model=Dict[str, Any])
 async def worker_bootstrap(request: dict):
     """
     Bootstrap configuration endpoint for NPU workers.
@@ -1486,12 +1486,12 @@ async def worker_bootstrap(request: dict):
     operation="get_pool_stats",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/pool/stats", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pool_stats",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/pool/stats", response_model=Dict[str, Any])
 async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get NPU worker pool statistics (Issue #168).
@@ -1524,12 +1524,12 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
     operation="get_pool_workers",
     error_code_prefix="NPU_WORKERS",
 )
+@router.get("/npu/pool/workers", response_model=NPUPoolWorkersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pool_workers",
     error_code_prefix="NPU_WORKERS",
 )
-@router.get("/npu/pool/workers", response_model=NPUPoolWorkersResponse)
 async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
     """
     Get per-worker health states from the pool (Issue #168).
@@ -1581,12 +1581,12 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
     operation="reload_pool_config",
     error_code_prefix="NPU_WORKERS",
 )
+@router.post("/npu/pool/reload", response_model=NPUPoolReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_pool_config",
     error_code_prefix="NPU_WORKERS",
 )
-@router.post("/npu/pool/reload", response_model=NPUPoolReloadResponse)
 async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)):
     """
     Hot-reload worker pool configuration (Issue #168).

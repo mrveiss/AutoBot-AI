@@ -246,12 +246,12 @@ from api.knowledge_population import (
     operation="get_knowledge_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats", response_model=KnowledgeStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats", response_model=KnowledgeStatsResponse)
 async def get_knowledge_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -307,12 +307,12 @@ async def get_knowledge_stats(
     operation="test_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/test_categories_main", response_model=TestCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/test_categories_main", response_model=TestCategoriesResponse)
 async def test_main_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> TestCategoriesResponse:
@@ -332,12 +332,12 @@ async def test_main_categories(
     operation="get_knowledge_stats_basic",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats/basic", response_model=KnowledgeStatsBasic)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_stats_basic",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/stats/basic", response_model=KnowledgeStatsBasic)
 async def get_knowledge_stats_basic(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -433,12 +433,12 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     operation="get_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/categories/main", response_model=KnowledgeMainCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories/main", response_model=KnowledgeMainCategoriesResponse)
 async def get_main_categories(
     current_user: dict = Depends(get_current_user),
     req: Request = None,
@@ -510,12 +510,12 @@ async def get_main_categories(
     operation="get_knowledge_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/categories", response_model=KnowledgeCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/categories", response_model=KnowledgeCategoriesResponse)
 async def get_knowledge_categories(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -690,12 +690,12 @@ def _build_ownership_metadata(
     operation="add_text_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/add_text", response_model=AddTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_text_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/add_text", response_model=AddTextResponse)
 async def add_text_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -963,12 +963,12 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     operation="add_facts_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/facts", response_model=AddFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_facts_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/facts", response_model=AddFactResponse)
 async def add_facts_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: AddFactsRequest = None,
@@ -1072,12 +1072,12 @@ async def _fetch_and_extract_url(
     operation="add_url_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/url", response_model=AddUrlResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_url_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/url", response_model=AddUrlResponse)
 async def add_url_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: AddUrlRequest = None,
@@ -1275,12 +1275,12 @@ def _parse_upload_tags(tags_str) -> list:
     operation="upload_file_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/upload", response_model=UploadFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/upload", response_model=UploadFileResponse)
 async def upload_file_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1453,12 +1453,12 @@ async def _ingest_audio_source(
     operation="ingest_audio_url",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/audio", response_model=AudioIngestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="ingest_audio_url",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/audio", response_model=AudioIngestResponse)
 async def ingest_audio_url(
     request: AudioIngestRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1505,12 +1505,12 @@ async def ingest_audio_url(
     operation="upload_audio_file",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/audio/upload", response_model=AudioIngestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_audio_file",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/audio/upload", response_model=AudioIngestResponse)
 async def upload_audio_file(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1610,12 +1610,12 @@ async def upload_audio_file(
     operation="get_knowledge_health",
     error_code_prefix="KB",
 )
+@router.get("/health", response_model=KnowledgeHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_health",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/health", response_model=KnowledgeHealthResponse)
 async def get_knowledge_health(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1703,12 +1703,12 @@ def _parse_and_filter_facts(items: dict, category: Optional[str], limit: int) ->
     return entries
 
 
+@router.get("/entries", response_model=KnowledgeEntriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_entries",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/entries", response_model=KnowledgeEntriesResponse)
 async def get_knowledge_entries(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1818,12 +1818,12 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     operation="get_detailed_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/detailed_stats", response_model=DetailedKnowledgeStats)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/detailed_stats", response_model=DetailedKnowledgeStats)
 async def get_detailed_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1871,12 +1871,12 @@ async def get_detailed_stats(
     operation="get_machine_profile",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/machine_profile", response_model=MachineProfileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_machine_profile",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/machine_profile", response_model=MachineProfileResponse)
 async def get_machine_profile(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1928,12 +1928,12 @@ async def get_machine_profile(
     operation="get_man_pages_summary",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/man_pages/summary", response_model=ManPagesSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_man_pages_summary",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/man_pages/summary", response_model=ManPagesSummaryResponse)
 async def get_man_pages_summary(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2013,12 +2013,12 @@ async def get_man_pages_summary(
     operation="initialize_machine_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/machine_knowledge/initialize", response_model=MachineKnowledgeInitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="initialize_machine_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/machine_knowledge/initialize", response_model=MachineKnowledgeInitResponse)
 async def initialize_machine_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2070,12 +2070,12 @@ async def initialize_machine_knowledge(
     operation="integrate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/man_pages/integrate", response_model=ManPagesIntegrateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="integrate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/man_pages/integrate", response_model=ManPagesIntegrateResponse)
 async def integrate_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2119,12 +2119,12 @@ async def integrate_man_pages(
     operation="search_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/man_pages/search", response_model=ManPageSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/man_pages/search", response_model=ManPageSearchResponse)
 async def search_man_pages(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2194,12 +2194,12 @@ async def _clear_kb_via_redis(kb) -> int:
     operation="clear_all_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/clear_all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_all_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/clear_all", response_model=ClearAllResponse)
 async def clear_all_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2269,12 +2269,12 @@ async def clear_all_knowledge(
     operation="add_document_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/add_document", response_model=AddTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_document_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/add_document", response_model=AddTextResponse)
 async def add_document_to_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2292,12 +2292,12 @@ async def add_document_to_knowledge(
     operation="query_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/query", response_model=QueryKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/query", response_model=QueryKnowledgeResponse)
 async def query_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -2469,12 +2469,12 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
     operation="get_facts_by_category",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/facts/by_category", response_model=FactsByCategoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_category",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/facts/by_category", response_model=FactsByCategoryResponse)
 async def get_facts_by_category(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2700,12 +2700,12 @@ def _extract_fact_created_at(fact_data: dict) -> str:
     operation="get_fact_by_key",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/fact/{fact_key}", response_model=FactByKeyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_by_key",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/fact/{fact_key}", response_model=FactByKeyResponse)
 async def get_fact_by_key(
     admin_check: bool = Depends(check_admin_permission),
     fact_key: str = Path(..., pattern=r"^[a-zA-Z0-9_:-]+$", max_length=255),
@@ -2748,12 +2748,12 @@ async def get_fact_by_key(
     operation="get_import_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/import/status", response_model=ImportStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/import/status", response_model=ImportStatusResponse)
 async def get_import_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2777,12 +2777,12 @@ async def get_import_status(
     operation="get_import_statistics",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/import/statistics", response_model=ImportStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_statistics",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/import/statistics", response_model=ImportStatisticsResponse)
 async def get_import_statistics(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2898,12 +2898,12 @@ def _paginate_docs(docs: list, page: int, page_size: int) -> tuple:
     operation="browse_documentation",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/docs/browse", response_model=DocsBrowseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="browse_documentation",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/docs/browse", response_model=DocsBrowseResponse)
 async def browse_documentation(
     admin_check: bool = Depends(check_admin_permission),
     request: DocsBrowseRequest = None,
@@ -2964,12 +2964,12 @@ async def browse_documentation(
     operation="get_doc_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/docs/categories", response_model=DocsCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_documentation_categories",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/categories", response_model=DocsCategoriesResponse)
 async def get_documentation_categories(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -3040,12 +3040,12 @@ async def get_documentation_categories(
     operation="get_doc_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/docs/stats", response_model=DocsStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_documentation_stats",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/stats", response_model=DocsStatsResponse)
 async def get_documentation_stats(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -3101,12 +3101,12 @@ async def get_documentation_stats(
     operation="get_doc_watcher_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_documentation_watcher_status",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
 async def get_documentation_watcher_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -3142,12 +3142,12 @@ async def get_documentation_watcher_status(
     operation="control_doc_watcher",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/docs/watcher/control", response_model=DocsWatcherControlResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="control_documentation_watcher",
     error_code_prefix="KNOWLEDGE",
 )
-@router.post("/docs/watcher/control", response_model=DocsWatcherControlResponse)
 async def control_documentation_watcher(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
@@ -3227,12 +3227,12 @@ def _resolve_target_org_id(
     return (current_user or {}).get("org_id")
 
 
+@router.get("/org-config", response_model=OrgKnowledgeConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_org_model_config",
     error_code_prefix="KNOWLEDGE",
 )
-@router.get("/org-config", response_model=OrgKnowledgeConfigResponse)
 async def get_org_model_config(
     org_id: Optional[str] = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
@@ -3259,12 +3259,12 @@ async def get_org_model_config(
     }
 
 
+@router.put("/org-config", response_model=OrgKnowledgeConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_org_model_config",
     error_code_prefix="KNOWLEDGE",
 )
-@router.put("/org-config", response_model=OrgKnowledgeConfigResponse)
 async def set_org_model_config(
     payload: OrgKnowledgeConfigPayload,
     org_id: Optional[str] = Query(default=None, max_length=128),

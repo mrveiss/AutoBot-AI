@@ -126,16 +126,16 @@ def _remote_addr(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_card",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/agent-card",
     summary="A2A Agent Card",
     tags=["a2a"],
     response_model=A2AAgentCardResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_card",
+    error_code_prefix="A2A",
 )
 async def get_agent_card(request: Request) -> Dict[str, Any]:
     """
@@ -147,16 +147,16 @@ async def get_agent_card(request: Request) -> Dict[str, Any]:
     return card.to_dict()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_signed_agent_card",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/agent-card/signed",
     summary="Signed A2A Agent Card",
     tags=["a2a"],
     response_model=A2ASignedAgentCardResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_signed_agent_card",
+    error_code_prefix="A2A",
 )
 async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     """
@@ -191,17 +191,17 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="submit_task",
-    error_code_prefix="A2A",
-)
 @router.post(
     "/tasks",
     summary="Submit A2A task",
     tags=["a2a"],
     status_code=202,
     response_model=A2ASubmitTaskResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="submit_task",
+    error_code_prefix="A2A",
 )
 async def submit_task(
     body: TaskSendRequest,
@@ -257,16 +257,16 @@ async def submit_task(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_tasks",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/tasks",
     summary="List A2A tasks",
     tags=["a2a"],
     response_model=List[A2ATaskResponse],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_tasks",
+    error_code_prefix="A2A",
 )
 async def list_tasks() -> list:
     """Return all A2A tasks with their current state and artifacts."""
@@ -274,16 +274,16 @@ async def list_tasks() -> list:
     return [_task_response(t) for t in manager.list_tasks()]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_task",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/tasks/{task_id}",
     summary="Get A2A task",
     tags=["a2a"],
     response_model=A2ATaskResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task",
+    error_code_prefix="A2A",
 )
 async def get_task(task_id: str) -> Dict[str, Any]:
     """Return a specific task by ID, including state and any artifacts."""
@@ -294,16 +294,16 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     return _task_response(task)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stream_task_events",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/tasks/{task_id}/stream",
     summary="Stream A2A task events (SSE)",
     tags=["a2a"],
     response_model=None,  # StreamingResponse — cannot be described by a Pydantic schema
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_task_events",
+    error_code_prefix="A2A",
 )
 async def stream_task_events(task_id: str) -> StreamingResponse:
     """
@@ -413,16 +413,16 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_task_trace",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/tasks/{task_id}/trace",
     summary="Get A2A task audit trace",
     tags=["a2a"],
     response_model=A2ATaskTraceResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task_trace",
+    error_code_prefix="A2A",
 )
 async def get_task_trace(task_id: str) -> Dict[str, Any]:
     """
@@ -444,16 +444,16 @@ async def get_task_trace(task_id: str) -> Dict[str, Any]:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cancel_task",
-    error_code_prefix="A2A",
-)
 @router.delete(
     "/tasks/{task_id}",
     summary="Cancel A2A task",
     tags=["a2a"],
     response_model=A2ACancelTaskResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_task",
+    error_code_prefix="A2A",
 )
 async def cancel_task(task_id: str) -> Dict[str, str]:
     """Cancel a pending or in-progress task."""
@@ -469,16 +469,16 @@ async def cancel_task(task_id: str) -> Dict[str, str]:
     return {"id": task_id, "state": "cancelled"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="task_stats",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/stats",
     summary="A2A task statistics",
     tags=["a2a"],
     response_model=A2AStatsResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="task_stats",
+    error_code_prefix="A2A",
 )
 async def task_stats() -> Dict[str, Any]:
     """Return task counts broken down by state."""
@@ -496,16 +496,16 @@ async def task_stats() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="local_capabilities",
-    error_code_prefix="A2A",
-)
 @router.get(
     "/capabilities",
     summary="Verify local capability claims",
     tags=["a2a"],
     response_model=A2ACapabilitiesResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="local_capabilities",
+    error_code_prefix="A2A",
 )
 async def local_capabilities() -> Dict[str, Any]:
     """
@@ -519,16 +519,16 @@ async def local_capabilities() -> Dict[str, Any]:
     return report.to_dict()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="verify_remote_capabilities",
-    error_code_prefix="A2A",
-)
 @router.post(
     "/capabilities/verify",
     summary="Verify a remote agent's capabilities",
     tags=["a2a"],
     response_model=A2ACapabilitiesResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="verify_remote_capabilities",
+    error_code_prefix="A2A",
 )
 async def verify_remote_capabilities(body: RemoteVerifyRequest) -> Dict[str, Any]:
     """

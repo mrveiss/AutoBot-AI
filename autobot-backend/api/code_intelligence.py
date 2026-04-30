@@ -685,12 +685,12 @@ async def _generate_report_response(
     operation="analyze_codebase",
     error_code_prefix="CODE_INTEL",
 )
+@router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/analyze", response_model=DataResponse)
 async def analyze_codebase(
     request: CodeIntelAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -802,12 +802,12 @@ def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
     operation="get_suggestions",
     error_code_prefix="CODE_INTEL",
 )
+@router.post("/suggestions", response_model=SuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_suggestions",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/suggestions", response_model=SuggestionsResponse)
 async def get_code_suggestions(
     request: CodeIntelSuggestionsRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -836,12 +836,12 @@ async def get_code_suggestions(
     operation="quick_scan",
     error_code_prefix="CODE_INTEL",
 )
+@router.post("/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="quick_scan_file",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/scan-file", response_model=DataResponse)
 async def quick_scan_file(
     request: CodeIntelQuickScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -890,12 +890,12 @@ async def quick_scan_file(
     operation="get_health_score",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_health_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/health-score", response_model=DataResponse)
 async def get_codebase_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -946,12 +946,12 @@ async def get_codebase_health_score(
     operation="get_pattern_types",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/pattern-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_supported_pattern_types",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/pattern-types", response_model=DataResponse)
 async def get_supported_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -986,12 +986,12 @@ async def get_supported_pattern_types(
     operation="analyze_redis_usage",
     error_code_prefix="CODE_INTEL",
 )
+@router.post("/redis/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_redis_usage_endpoint",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/redis/analyze", response_model=DataResponse)
 async def analyze_redis_usage_endpoint(
     request: RedisAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1037,12 +1037,12 @@ async def analyze_redis_usage_endpoint(
     operation="scan_redis_file",
     error_code_prefix="CODE_INTEL",
 )
+@router.post("/redis/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_redis_file",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/redis/scan-file", response_model=DataResponse)
 async def scan_redis_file(
     request: RedisFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1091,12 +1091,12 @@ async def scan_redis_file(
     operation="get_redis_optimization_types",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/redis/optimization-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_optimization_types",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/optimization-types", response_model=DataResponse)
 async def get_redis_optimization_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1132,12 +1132,12 @@ _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
     operation="get_redis_health",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/redis/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_usage_health_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/health-score", response_model=DataResponse)
 async def get_redis_usage_health_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1224,12 +1224,12 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
     operation="security_analyze",
     error_code_prefix="SECURITY",
 )
+@router.post("/security/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_analyze",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/analyze", response_model=DataResponse)
 async def security_analyze(
     request: SecurityAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1282,12 +1282,12 @@ async def security_analyze(
     operation="security_scan_file",
     error_code_prefix="SECURITY",
 )
+@router.post("/security/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_scan_file",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/scan-file", response_model=DataResponse)
 async def security_scan_file(
     request: SecurityFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1344,12 +1344,12 @@ async def security_scan_file(
     operation="get_vulnerability_types",
     error_code_prefix="SECURITY",
 )
+@router.get("/security/vulnerability-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_vulnerability_types",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/vulnerability-types", response_model=DataResponse)
 async def list_vulnerability_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1388,12 +1388,12 @@ async def list_vulnerability_types(
     operation="security_score",
     error_code_prefix="SECURITY",
 )
+@router.get("/security/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/score", response_model=DataResponse)
 async def get_security_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1450,12 +1450,12 @@ async def get_security_score(
     operation="security_report",
     error_code_prefix="SECURITY",
 )
+@router.get("/security/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_report",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/report", response_model=None)
 async def get_security_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1493,12 +1493,12 @@ async def get_security_report(
     operation="performance_analyze",
     error_code_prefix="PERFORMANCE",
 )
+@router.post("/performance/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_analyze",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/performance/analyze", response_model=DataResponse)
 async def performance_analyze(
     request: PerformanceAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1550,12 +1550,12 @@ async def performance_analyze(
     operation="performance_scan_file",
     error_code_prefix="PERFORMANCE",
 )
+@router.post("/performance/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_scan_file",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/performance/scan-file", response_model=DataResponse)
 async def performance_scan_file(
     request: PerformanceFileScanRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -1612,12 +1612,12 @@ async def performance_scan_file(
     operation="get_performance_issue_types",
     error_code_prefix="PERFORMANCE",
 )
+@router.get("/performance/issue-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_performance_issue_types",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/issue-types", response_model=DataResponse)
 async def list_performance_issue_types(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1656,12 +1656,12 @@ async def list_performance_issue_types(
     operation="performance_score",
     error_code_prefix="PERFORMANCE",
 )
+@router.get("/performance/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/score", response_model=DataResponse)
 async def get_performance_score(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1727,12 +1727,12 @@ async def get_performance_score(
     operation="performance_report",
     error_code_prefix="PERFORMANCE",
 )
+@router.get("/performance/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_report",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/report", response_model=None)
 async def get_performance_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
@@ -1770,12 +1770,12 @@ from code_intelligence.code_evolution_miner import CodeEvolutionMiner
     operation="analyze_evolution",
     error_code_prefix="EVOLUTION",
 )
+@router.post("/evolution/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_code_evolution",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/evolution/analyze", response_model=DataResponse)
 async def analyze_code_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -1831,12 +1831,12 @@ async def analyze_code_evolution(
     operation="get_pattern_evolution",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/evolution/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/patterns", response_model=DataResponse)
 async def get_pattern_evolution(
     path: str = Query(..., description="Repository path to analyze"),
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
@@ -1892,12 +1892,12 @@ async def get_pattern_evolution(
     operation="detect_refactorings",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/evolution/refactorings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_refactorings",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/refactorings", response_model=DataResponse)
 async def detect_refactorings(
     path: str = Query(..., description="Repository path to analyze"),
     limit: int = Query(
@@ -1953,12 +1953,12 @@ async def detect_refactorings(
     operation="get_timeline",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/evolution/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/timeline", response_model=DataResponse)
 async def get_evolution_timeline(
     path: str = Query(..., description="Repository path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -2026,12 +2026,12 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     operation="get_evolution_report",
     error_code_prefix="EVOLUTION",
 )
+@router.get("/evolution/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_full_evolution_report",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/evolution/report", response_model=DataResponse)
 async def get_full_evolution_report(
     path: str = Query(..., description="Repository path to analyze"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -2132,12 +2132,12 @@ async def _run_security_analysis(task_id: str, path: str) -> None:
         await _sec_manager.fail_task(task_id, str(e))
 
 
+@router.get("/security/score/cached", response_model=CachedSecurityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_security_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/score/cached", response_model=CachedSecurityScoreResponse)
 async def get_cached_security_score():
     """Return the latest completed security score result (#1540)."""
     cached = await _sec_manager.get_latest_result()
@@ -2151,12 +2151,12 @@ async def get_cached_security_score():
     return {"status": "no_data"}
 
 
+@router.post("/security/score/analyze", response_model=StartTaskResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_security_analysis",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/score/analyze", response_model=StartTaskResponse)
 async def start_security_analysis(
     background_tasks: BackgroundTasks,
     path: str = Query(..., description="Directory path to analyze"),
@@ -2186,12 +2186,12 @@ async def start_security_analysis(
     return {"task_id": task_id, "status": "pending"}
 
 
+@router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_score_status",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
 async def get_security_score_status(task_id: str):
     """Get security score analysis task status (#1304)."""
     task = await _sec_manager.get_status(task_id)
@@ -2200,12 +2200,12 @@ async def get_security_score_status(task_id: str):
     return task
 
 
+@router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_stuck_sec_tasks",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
 async def clear_stuck_sec_tasks(
     force: bool = Query(
         default=False,
@@ -2230,12 +2230,12 @@ async def clear_stuck_sec_tasks(
     operation="get_security_findings",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/security/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_findings",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/security/findings", response_model=FindingsPlaceholderResponse)
 async def get_security_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -2258,12 +2258,12 @@ async def get_security_findings(
     operation="get_performance_findings",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/performance/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_findings",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/performance/findings", response_model=FindingsPlaceholderResponse)
 async def get_performance_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -2286,12 +2286,12 @@ async def get_performance_findings(
     operation="get_redis_findings",
     error_code_prefix="CODE_INTEL",
 )
+@router.get("/redis/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_findings",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-@router.get("/redis/findings", response_model=FindingsPlaceholderResponse)
 async def get_redis_findings(
     admin_check: bool = Depends(check_admin_permission),
 ):

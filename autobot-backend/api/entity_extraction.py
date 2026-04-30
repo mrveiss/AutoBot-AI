@@ -162,12 +162,12 @@ def _build_extraction_response(
     operation="entity_extraction",
     error_code_prefix="ENTITY_EXTRACT",
 )
+@router.post("/extract", response_model=EntityExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_entities",
     error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.post("/extract", response_model=EntityExtractionResponse)
 async def extract_entities(
     extraction_request: EntityExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
@@ -303,12 +303,12 @@ def _process_extraction_results(
     operation="batch_entity_extraction",
     error_code_prefix="ENTITY_EXTRACT",
 )
+@router.post("/extract-batch", response_model=BatchExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_entities_batch",
     error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.post("/extract-batch", response_model=BatchExtractionResponse)
 async def extract_entities_batch(
     batch_request: BatchExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
@@ -378,12 +378,12 @@ async def extract_entities_batch(
     operation="entity_extraction_health",
     error_code_prefix="ENTITY_EXTRACT",
 )
+@router.get("/extract/health", response_model=EntityExtractionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="entity_extraction_health",
     error_code_prefix="ENTITY_EXTRACTION",
 )
-@router.get("/extract/health", response_model=EntityExtractionHealthResponse)
 async def entity_extraction_health(
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
     current_user: dict = Depends(get_current_user),

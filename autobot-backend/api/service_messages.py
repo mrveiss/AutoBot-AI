@@ -87,12 +87,12 @@ def _msg_to_response(msg) -> ServiceMessageResponse:
 # ------------------------------------------------------------------
 
 
+@router.get("/latest", response_model=LatestMessagesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_latest_messages",
     error_code_prefix="SERVICE_MESSAGES",
 )
-@router.get("/latest", response_model=LatestMessagesResponse)
 async def get_latest_messages(
     request: Request,
     count: int = Query(50, ge=1, le=500, description="Number of messages"),
@@ -125,12 +125,12 @@ async def get_latest_messages(
         raise_server_error("API_0003", f"Service message query error: {e}")
 
 
+@router.get("/chain/{correlation_id}", response_model=CorrelationChainResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_correlation_chain",
     error_code_prefix="SERVICE_MESSAGES",
 )
-@router.get("/chain/{correlation_id}", response_model=CorrelationChainResponse)
 async def get_correlation_chain(
     request: Request,
     correlation_id: str,
@@ -160,12 +160,12 @@ async def get_correlation_chain(
         raise_server_error("API_0003", f"Correlation chain query error: {e}")
 
 
+@router.get("/{msg_id}", response_model=SingleMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_message",
     error_code_prefix="SERVICE_MESSAGES",
 )
-@router.get("/{msg_id}", response_model=SingleMessageResponse)
 async def get_message(
     request: Request,
     msg_id: str,

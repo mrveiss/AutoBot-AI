@@ -72,12 +72,12 @@ def _generate_templates_cache_key(category, tags, complexity):
     operation="get_templates_root",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/", response_model=TemplatesRootResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_templates_root",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/", response_model=TemplatesRootResponse)
 async def get_templates_root():
     """Root endpoint for templates API - redirects to /templates"""
     return {
@@ -172,12 +172,12 @@ async def list_workflow_templates(
     operation="get_secrets_usage",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/templates/secrets-usage", response_model=TemplateSecretsUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secrets_usage",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/templates/secrets-usage", response_model=TemplateSecretsUsageResponse)
 async def get_secrets_usage():
     """Map secret keys to the templates that require them (#1415)."""
     try:
@@ -208,12 +208,12 @@ async def get_secrets_usage():
     operation="search_templates",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/templates/search", response_model=TemplateSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_templates",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/templates/search", response_model=TemplateSearchResponse)
 async def search_templates(
     q: str = Query(
         ..., description="Search query for template name, description, or tags"
@@ -242,12 +242,12 @@ async def search_templates(
     operation="list_template_categories",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/templates/categories", response_model=TemplateCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_template_categories",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/templates/categories", response_model=TemplateCategoriesResponse)
 async def list_template_categories():
     """List all available template categories"""
     try:
@@ -276,12 +276,12 @@ async def list_template_categories():
     operation="get_template_statistics",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/templates/stats", response_model=TemplateStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_template_statistics",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/templates/stats", response_model=TemplateStatsResponse)
 async def get_template_statistics():
     """Get statistics about available templates"""
     try:
@@ -371,12 +371,12 @@ async def get_template_details(template_id: str):
     operation="preview_template_workflow",
     error_code_prefix="TEMPLATES",
 )
+@router.get("/templates/{template_id}/preview", response_model=TemplatePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_template_workflow",
     error_code_prefix="TEMPLATES",
 )
-@router.get("/templates/{template_id}/preview", response_model=TemplatePreviewResponse)
 async def preview_template_workflow(
     template_id: str,
     variables: Optional[str] = Query(None, description="Variables as JSON string"),
@@ -440,12 +440,12 @@ async def preview_template_workflow(
     operation="validate_template_variables",
     error_code_prefix="TEMPLATES",
 )
+@router.post("/templates/{template_id}/validate", response_model=TemplateValidationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_template_variables",
     error_code_prefix="TEMPLATES",
 )
-@router.post("/templates/{template_id}/validate", response_model=TemplateValidationResponse)
 async def validate_template_variables(
     template_id: str, request: TemplateValidationRequest
 ):
@@ -473,12 +473,12 @@ async def validate_template_variables(
     operation="create_workflow_from_template",
     error_code_prefix="TEMPLATES",
 )
+@router.post("/templates/{template_id}/create-workflow", response_model=TemplateCreateWorkflowResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_from_template",
     error_code_prefix="TEMPLATES",
 )
-@router.post("/templates/{template_id}/create-workflow", response_model=TemplateCreateWorkflowResponse)
 async def create_workflow_from_template(
     template_id: str, request: TemplateExecutionRequest
 ):
@@ -532,12 +532,12 @@ async def create_workflow_from_template(
     operation="execute_template_workflow",
     error_code_prefix="TEMPLATES",
 )
+@router.post("/templates/{template_id}/execute", response_model=TemplateExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_template_workflow",
     error_code_prefix="TEMPLATES",
 )
-@router.post("/templates/{template_id}/execute", response_model=TemplateExecuteResponse)
 async def execute_template_workflow(
     template_id: str, request: TemplateExecutionRequest
 ):

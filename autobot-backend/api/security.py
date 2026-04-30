@@ -43,12 +43,12 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
     operation="get_security_status",
     error_code_prefix="SECURITY",
 )
+@router.get("/status", response_model=SecurityStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_status",
     error_code_prefix="SECURITY",
 )
-@router.get("/status", response_model=SecurityStatusResponse)
 async def get_security_status(request: Request):
     """Get current security configuration and status"""
     try:
@@ -94,12 +94,12 @@ async def get_security_status(request: Request):
     operation="approve_command",
     error_code_prefix="SECURITY",
 )
+@router.post("/approve-command", response_model=CommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_command",
     error_code_prefix="SECURITY",
 )
-@router.post("/approve-command", response_model=CommandApprovalResponse)
 async def approve_command(request: Request, approval: CommandApprovalRequest):
     """Approve or deny a pending command execution"""
     try:
@@ -128,12 +128,12 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
     operation="get_pending_approvals",
     error_code_prefix="SECURITY",
 )
+@router.get("/pending-approvals", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
     error_code_prefix="SECURITY",
 )
-@router.get("/pending-approvals", response_model=DataResponse)
 async def get_pending_approvals(request: Request):
     """Get list of commands waiting for approval"""
     try:
@@ -155,12 +155,12 @@ async def get_pending_approvals(request: Request):
     operation="get_command_history",
     error_code_prefix="SECURITY",
 )
+@router.get("/command-history", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_history",
     error_code_prefix="SECURITY",
 )
-@router.get("/command-history", response_model=DataResponse)
 async def get_command_history(request: Request, user: str = None, limit: int = 50):
     """Get command execution history from audit log"""
     try:
@@ -209,12 +209,12 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
     operation="get_audit_log",
     error_code_prefix="SECURITY",
 )
+@router.get("/audit-log", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_log",
     error_code_prefix="SECURITY",
 )
-@router.get("/audit-log", response_model=DataResponse)
 async def get_audit_log(request: Request, limit: int = 100):
     """Get recent audit log entries"""
     try:
@@ -247,12 +247,12 @@ async def get_audit_log(request: Request, limit: int = 100):
     operation="get_threat_intel_status",
     error_code_prefix="SECURITY",
 )
+@router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_threat_intel_status",
     error_code_prefix="SECURITY",
 )
-@router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
 async def get_threat_intel_status(request: Request):
     """
     Get threat intelligence service configuration and status.
@@ -280,12 +280,12 @@ async def get_threat_intel_status(request: Request):
     operation="check_url_reputation",
     error_code_prefix="SECURITY",
 )
+@router.post("/threat-intel/check-url", response_model=URLCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_url_reputation",
     error_code_prefix="SECURITY",
 )
-@router.post("/threat-intel/check-url", response_model=URLCheckResponse)
 async def check_url_reputation(request: Request, url_request: URLCheckRequest):
     """
     Check URL reputation against threat intelligence services.
@@ -331,12 +331,12 @@ async def check_url_reputation(request: Request, url_request: URLCheckRequest):
     operation="get_domain_security_stats",
     error_code_prefix="SECURITY",
 )
+@router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_domain_security_stats",
     error_code_prefix="SECURITY",
 )
-@router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
 async def get_domain_security_stats(request: Request):
     """
     Get domain security statistics including whitelist/blacklist counts,

@@ -127,12 +127,12 @@ async def broadcast_startup_message(message: StartupMessage):
     operation="get_startup_status",
     error_code_prefix="STARTUP",
 )
+@router.get("/status", response_model=StartupStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_startup_status",
     error_code_prefix="STARTUP",
 )
-@router.get("/status", response_model=StartupStatusResponse)
 async def get_startup_status():
     """Get current startup status"""
     with _startup_lock:
@@ -150,12 +150,12 @@ async def get_startup_status():
     }
 
 
+@router.websocket("/ws")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="startup_websocket",
     error_code_prefix="STARTUP",
 )
-@router.websocket("/ws")
 async def startup_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time startup messages"""
     await websocket.accept()
@@ -196,12 +196,12 @@ async def startup_websocket(websocket: WebSocket):
     operation="update_startup_phase",
     error_code_prefix="STARTUP",
 )
+@router.post("/phase", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_startup_phase",
     error_code_prefix="STARTUP",
 )
-@router.post("/phase", response_model=DataResponse)
 async def update_startup_phase(
     phase: str, message: str, progress: int, icon: str = "🚀", details: str = None
 ):

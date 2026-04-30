@@ -264,12 +264,12 @@ async def _run_all_search_sources(
     operation="enhanced_search",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.post("/search/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/search/enhanced", response_model=DataResponse)
 async def enhanced_search(
     request_data: AIStackEnhancedSearchRequest,
     req: Request,
@@ -320,12 +320,12 @@ async def enhanced_search(
     operation="rag_search",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.post("/search/rag", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_search",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/search/rag", response_model=DataResponse)
 async def rag_search(
     request_data: AIStackRAGQueryRequest,
     knowledge_base=Depends(get_knowledge_base),
@@ -458,12 +458,12 @@ async def _store_extracted_facts(
     operation="extract_knowledge",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.post("/extract", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/extract", response_model=DataResponse)
 async def extract_knowledge(
     request_data: AIStackKnowledgeExtractionRequest,
     req: Request,
@@ -515,12 +515,12 @@ async def extract_knowledge(
     operation="analyze_documents",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.post("/analyze/documents", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/analyze/documents", response_model=DataResponse)
 async def analyze_documents(
     request_data: DocumentAnalysisRequest,
     current_user: dict = Depends(get_current_user),
@@ -565,12 +565,12 @@ async def analyze_documents(
     operation="reformulate_query",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.post("/query/reformulate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.post("/query/reformulate", response_model=DataResponse)
 async def reformulate_query(
     query: str,
     context: Optional[str] = None,
@@ -613,12 +613,12 @@ async def reformulate_query(
     operation="get_system_knowledge_insights",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.get("/system/insights", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge_insights",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/system/insights", response_model=DataResponse)
 async def get_system_knowledge_insights(
     knowledge_category: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -656,12 +656,12 @@ async def get_system_knowledge_insights(
     operation="get_enhanced_stats",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.get("/stats/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_stats",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/stats/enhanced", response_model=DataResponse)
 async def get_enhanced_stats(
     req: Request,
     current_user: dict = Depends(get_current_user),
@@ -715,12 +715,12 @@ async def get_enhanced_stats(
     operation="enhanced_knowledge_health",
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
+@router.get("/health/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_health",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-@router.get("/health/enhanced", response_model=DataResponse)
 async def enhanced_knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):

@@ -233,12 +233,12 @@ async def _unshare_fact_by_entity(
 # =============================================================================
 
 
+@router.get("/facts", response_model=KnowledgeScopedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_by_scope",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.get("/facts", response_model=KnowledgeScopedFactsResponse)
 async def get_knowledge_by_scope(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -295,12 +295,12 @@ async def get_knowledge_by_scope(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/facts/organization/{organization_id}", response_model=KnowledgeScopedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_organization_knowledge",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.get("/facts/organization/{organization_id}", response_model=KnowledgeScopedFactsResponse)
 async def get_organization_knowledge(
     organization_id: str,
     request: Request,
@@ -349,12 +349,12 @@ async def get_organization_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/facts/group/{group_id}", response_model=KnowledgeScopedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_group_knowledge",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.get("/facts/group/{group_id}", response_model=KnowledgeScopedFactsResponse)
 async def get_group_knowledge(
     group_id: str,
     request: Request,
@@ -405,12 +405,12 @@ async def get_group_knowledge(
 # =============================================================================
 
 
+@router.post("/facts/{fact_id}/share", response_model=KnowledgeShareResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_knowledge",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.post("/facts/{fact_id}/share", response_model=KnowledgeShareResponse)
 async def share_knowledge(
     fact_id: str,
     share_request: ShareKnowledgeRequest,
@@ -475,12 +475,12 @@ async def share_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/facts/{fact_id}/share/{entity_id}", response_model=KnowledgeUnshareResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unshare_knowledge",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.delete("/facts/{fact_id}/share/{entity_id}", response_model=KnowledgeUnshareResponse)
 async def unshare_knowledge(
     fact_id: str,
     entity_id: str,
@@ -539,12 +539,12 @@ async def unshare_knowledge(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.put("/facts/{fact_id}/permissions", response_model=KnowledgePermissionsUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_knowledge_permissions",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.put("/facts/{fact_id}/permissions", response_model=KnowledgePermissionsUpdateResponse)
 async def update_knowledge_permissions(
     fact_id: str,
     permissions_request: UpdatePermissionsRequest,
@@ -607,12 +607,12 @@ async def update_knowledge_permissions(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/facts/{fact_id}/access", response_model=KnowledgeAccessInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_access_info",
     error_code_prefix="KNOWLEDGE_COLLABORATION",
 )
-@router.get("/facts/{fact_id}/access", response_model=KnowledgeAccessInfoResponse)
 async def get_knowledge_access_info(
     fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)
 ):

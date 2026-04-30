@@ -271,12 +271,12 @@ async def reject_fact(
     }
 
 
+@router.get("/verification/config", response_model=KnowledgeVerificationConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_verification_config",
     error_code_prefix="KNOWLEDGE_VERIFICATION",
 )
-@router.get("/verification/config", response_model=KnowledgeVerificationConfigResponse)
 async def get_verification_config(req: Request = None):
     """Return current verification mode configuration.
 
@@ -292,12 +292,12 @@ async def get_verification_config(req: Request = None):
     }
 
 
+@router.put("/verification/config", response_model=KnowledgeVerificationConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_verification_config",
     error_code_prefix="KNOWLEDGE_VERIFICATION",
 )
-@router.put("/verification/config", response_model=KnowledgeVerificationConfigResponse)
 async def update_verification_config(
     body: VerificationConfig,
     req: Request = None,

@@ -469,12 +469,12 @@ def _get_browser_extraction_tools() -> List[MCPTool]:
     operation="get_browser_mcp_tools",
     error_code_prefix="BROWSER_MCP",
 )
+@router.get("/mcp/tools", response_model=List[MCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_mcp_tools",
     error_code_prefix="BROWSER_MCP",
 )
-@router.get("/mcp/tools", response_model=List[MCPTool])
 async def get_browser_mcp_tools() -> List[MCPTool]:
     """Get available MCP tools for browser automation operations"""
     # Issue #281: Use extracted helpers for tool definitions by category
@@ -536,12 +536,12 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
     operation="navigate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
 async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
     if not await check_rate_limit():
@@ -578,12 +578,12 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     operation="click_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/click", response_model=BrowserClickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="click_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/click", response_model=BrowserClickResponse)
 async def click_mcp(request: BrowserClickRequest) -> Metadata:
     """Click on element by selector"""
     if not await check_rate_limit():
@@ -610,12 +610,12 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
     operation="fill_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/fill", response_model=BrowserFillResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="fill_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/fill", response_model=BrowserFillResponse)
 async def fill_mcp(request: BrowserFillRequest) -> Metadata:
     """Fill form field with value"""
     if not await check_rate_limit():
@@ -647,12 +647,12 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
     operation="screenshot_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="screenshot_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
 async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
     if not await check_rate_limit():
@@ -683,12 +683,12 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     operation="evaluate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="evaluate_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
 async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
     if not await check_rate_limit():
@@ -718,12 +718,12 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
     operation="wait_for_selector_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/wait_for_selector", response_model=BrowserWaitForSelectorResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="wait_for_selector_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/wait_for_selector", response_model=BrowserWaitForSelectorResponse)
 async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metadata:
     """Wait for element to reach specified state"""
     if not await check_rate_limit():
@@ -755,12 +755,12 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
     operation="get_text_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_text_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
 async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
     """Extract text content from element"""
     if not await check_rate_limit():
@@ -784,12 +784,12 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
     operation="get_attribute_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/get_attribute", response_model=BrowserGetAttributeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_attribute_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/get_attribute", response_model=BrowserGetAttributeResponse)
 async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     """Get attribute value from element"""
     if not await check_rate_limit():
@@ -817,12 +817,12 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     operation="select_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/select", response_model=BrowserSelectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="select_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/select", response_model=BrowserSelectResponse)
 async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     """Select option from dropdown"""
     if not await check_rate_limit():
@@ -850,12 +850,12 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     operation="hover_mcp",
     error_code_prefix="BROWSER_MCP",
 )
+@router.post("/mcp/hover", response_model=BrowserHoverResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hover_mcp",
     error_code_prefix="BROWSER_MCP",
 )
-@router.post("/mcp/hover", response_model=BrowserHoverResponse)
 async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     """Hover mouse over element"""
     if not await check_rate_limit():
@@ -879,12 +879,12 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     operation="get_browser_mcp_status",
     error_code_prefix="BROWSER_MCP",
 )
+@router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_mcp_status",
     error_code_prefix="BROWSER_MCP",
 )
-@router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
 async def get_browser_mcp_status() -> Metadata:
     """Get Browser MCP bridge status and statistics"""
     # Check Browser VM connectivity

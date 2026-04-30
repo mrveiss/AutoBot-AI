@@ -1009,12 +1009,12 @@ def _build_analysis_response(
     )
 
 
+@router.post("/analyze", response_model=DFAAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_code",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/analyze", response_model=DFAAnalysisResponse)
 async def analyze_code(
     request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1040,12 +1040,12 @@ async def analyze_code(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/analyze-file", response_model=DFAAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_file",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/analyze-file", response_model=DFAAnalysisResponse)
 async def analyze_file(
     request: DFAAnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1078,12 +1078,12 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/vulnerabilities", response_model=DfaVulnerabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vulnerabilities",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/vulnerabilities", response_model=DfaVulnerabilitiesResponse)
 async def get_vulnerabilities(
     request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1150,12 +1150,12 @@ def _aggregate_graph_taint_stats(
         vulns_by_severity[vsev] = vulns_by_severity.get(vsev, 0) + 1
 
 
+@router.post("/taint-summary", response_model=TaintSummary)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_taint_summary",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.post("/taint-summary", response_model=TaintSummary)
 async def get_taint_summary(
     request: DFAAnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -1192,12 +1192,12 @@ async def get_taint_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/sources", response_model=DfaSourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_taint_sources",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sources", response_model=DfaSourcesResponse)
 async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized taint sources.
@@ -1216,12 +1216,12 @@ async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)
     }
 
 
+@router.get("/sinks", response_model=DfaSinksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_taint_sinks",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sinks", response_model=DfaSinksResponse)
 async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized security-sensitive sinks.
@@ -1241,12 +1241,12 @@ async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
+@router.get("/sanitizers", response_model=DfaSanitizersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sanitizers",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/sanitizers", response_model=DfaSanitizersResponse)
 async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     """
     List all recognized sanitizer functions.
@@ -1256,12 +1256,12 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     return {"sanitizers": sorted(SANITIZERS)}
 
 
+@router.get("/health", response_model=DfaHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="ANALYTICS_DFA",
 )
-@router.get("/health", response_model=DfaHealthResponse)
 async def health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Health check endpoint.

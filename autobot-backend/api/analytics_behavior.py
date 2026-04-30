@@ -58,12 +58,12 @@ router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
     operation="track_user_event",
     error_code_prefix="BEHAVIOR",
 )
+@router.post("/track", response_model=BehaviorTrackEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_user_event",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.post("/track", response_model=BehaviorTrackEventResponse)
 async def track_user_event(
     request: TrackEventRequest,
     current_user: dict = Depends(get_current_user),
@@ -102,12 +102,12 @@ async def track_user_event(
     operation="get_recent_events",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/events/recent", response_model=BehaviorRecentEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recent_events",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/events/recent", response_model=BehaviorRecentEventsResponse)
 async def get_recent_events(
     limit: int = Query(
         default=100, ge=1, le=1000, description="Number of events to return"
@@ -140,12 +140,12 @@ async def get_recent_events(
     operation="get_feature_metrics",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/features", response_model=BehaviorFeatureMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_feature_metrics",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/features", response_model=BehaviorFeatureMetricsResponse)
 async def get_feature_metrics(
     feature: Optional[str] = Query(
         None, description="Specific feature to get metrics for"
@@ -170,12 +170,12 @@ async def get_feature_metrics(
     operation="get_feature_comparison",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/features/comparison", response_model=BehaviorFeatureComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_feature_comparison",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/features/comparison", response_model=BehaviorFeatureComparisonResponse)
 async def get_feature_comparison(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -227,12 +227,12 @@ async def get_feature_comparison(
     operation="get_user_journey",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/journey/{session_id}", response_model=UserJourneyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_user_journey",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/journey/{session_id}", response_model=UserJourneyResponse)
 async def get_user_journey(
     session_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -265,12 +265,12 @@ async def get_user_journey(
     operation="get_engagement_metrics",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/engagement", response_model=BehaviorEngagementResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_engagement_metrics",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/engagement", response_model=BehaviorEngagementResponse)
 async def get_engagement_metrics(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -298,12 +298,12 @@ async def get_engagement_metrics(
     operation="get_daily_stats",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/stats/daily", response_model=BehaviorDailyStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_daily_stats",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/daily", response_model=BehaviorDailyStatsResponse)
 async def get_daily_stats(
     days: int = Query(
         default=30, ge=1, le=90, description="Number of days to retrieve"
@@ -328,12 +328,12 @@ async def get_daily_stats(
     operation="get_usage_heatmap",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/stats/heatmap", response_model=BehaviorHeatmapResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_heatmap",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/heatmap", response_model=BehaviorHeatmapResponse)
 async def get_usage_heatmap(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -356,12 +356,12 @@ async def get_usage_heatmap(
     operation="get_peak_usage",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/stats/peak", response_model=BehaviorPeakUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_peak_usage",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/stats/peak", response_model=BehaviorPeakUsageResponse)
 async def get_peak_usage(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
@@ -416,12 +416,12 @@ async def get_peak_usage(
     operation="get_behavior_summary",
     error_code_prefix="BEHAVIOR",
 )
+@router.get("/summary", response_model=BehaviorSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_behavior_summary",
     error_code_prefix="ANALYTICS_BEHAVIOR",
 )
-@router.get("/summary", response_model=BehaviorSummaryResponse)
 async def get_behavior_summary(
     admin_check: bool = Depends(check_admin_permission),
 ):

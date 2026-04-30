@@ -378,12 +378,12 @@ def _calculate_check_statistics(
 # ============================================================================
 
 
+@router.get("/check", response_model=CommitCheckResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_staged_files",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/check", response_model=CommitCheckResult)
 async def check_staged_files(
     admin_check: bool = Depends(check_admin_permission),
     fast_mode: bool = Query(True, description="Skip expensive checks"),
@@ -441,12 +441,12 @@ async def check_staged_files(
     return result
 
 
+@router.post("/check-content", response_model=list[CheckResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_content",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.post("/check-content", response_model=list[CheckResult])
 async def check_content(
     content: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -469,12 +469,12 @@ async def check_content(
     return results
 
 
+@router.get("/checks", response_model=list[CheckDefinition])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_checks",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/checks", response_model=list[CheckDefinition])
 async def list_checks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[CheckDefinition]:
@@ -486,12 +486,12 @@ async def list_checks(
     return list(BUILTIN_CHECKS.values())
 
 
+@router.get("/checks/{check_id}", response_model=CheckDefinition)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_check",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/checks/{check_id}", response_model=CheckDefinition)
 async def get_check(
     check_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -506,12 +506,12 @@ async def get_check(
     return BUILTIN_CHECKS[check_id]
 
 
+@router.post("/checks/{check_id}/toggle", response_model=CheckToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="toggle_check",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.post("/checks/{check_id}/toggle", response_model=CheckToggleResponse)
 async def toggle_check(
     check_id: str,
     enabled: bool,
@@ -534,12 +534,12 @@ async def toggle_check(
     }
 
 
+@router.get("/config", response_model=HookConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_config",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/config", response_model=HookConfig)
 async def get_config(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookConfig:
@@ -552,12 +552,12 @@ async def get_config(
         return _hook_config
 
 
+@router.post("/config", response_model=HookConfigUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_config",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.post("/config", response_model=HookConfigUpdateResponse)
 async def update_config(
     config: HookConfig,
     admin_check: bool = Depends(check_admin_permission),
@@ -574,12 +574,12 @@ async def update_config(
     return {"message": "Configuration updated", "config": config}
 
 
+@router.get("/status", response_model=HookStatus)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_status",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/status", response_model=HookStatus)
 async def get_status(
     admin_check: bool = Depends(check_admin_permission),
 ) -> HookStatus:
@@ -706,12 +706,12 @@ async def _write_hook_file(hook_path: Path, content: str) -> dict:
         raise HTTPException(status_code=500, detail="Failed to install hooks")
 
 
+@router.post("/install", response_model=HookInstallResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_hooks",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.post("/install", response_model=HookInstallResponse)
 async def install_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -735,12 +735,12 @@ async def install_hooks(
     return await _write_hook_file(hook_path, hook_content)
 
 
+@router.post("/uninstall", response_model=HookInstallResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="uninstall_hooks",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.post("/uninstall", response_model=HookInstallResponse)
 async def uninstall_hooks(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -774,12 +774,12 @@ async def uninstall_hooks(
         raise HTTPException(status_code=500, detail="Failed to uninstall hooks")
 
 
+@router.get("/history", response_model=list[CommitCheckResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_history",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/history", response_model=list[CommitCheckResult])
 async def get_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
@@ -793,12 +793,12 @@ async def get_history(
         return _check_history[:limit]
 
 
+@router.get("/summary", response_model=PrecommitSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_summary",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/summary", response_model=PrecommitSummaryResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -861,12 +861,12 @@ async def get_summary(
     }
 
 
+@router.get("/categories", response_model=list[PrecommitCategoryItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_categories",
     error_code_prefix="ANALYTICS_PRECOMMIT",
 )
-@router.get("/categories", response_model=list[PrecommitCategoryItem])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:

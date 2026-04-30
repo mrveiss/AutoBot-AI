@@ -161,12 +161,12 @@ def _build_export_response(
     operation="export_conversation",
     error_code_prefix="CONVEXPORT",
 )
+@router.get("/conversations/{session_id}/export", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_conversation",
     error_code_prefix="CONVERSATION_EXPORT",
 )
-@router.get("/conversations/{session_id}/export", response_model=None)
 async def export_conversation(
     session_id: str,
     request: Request,
@@ -199,12 +199,12 @@ async def export_conversation(
     operation="export_all_conversations",
     error_code_prefix="CONVEXPORT",
 )
+@router.get("/conversations/export-all", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_all_conversations",
     error_code_prefix="CONVERSATION_EXPORT",
 )
-@router.get("/conversations/export-all", response_model=DataResponse)
 async def export_all_conversations(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -239,12 +239,12 @@ async def export_all_conversations(
     operation="import_conversation",
     error_code_prefix="CONVEXPORT",
 )
+@router.post("/conversations/import", response_model=ConversationImportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="import_conversation_endpoint",
     error_code_prefix="CONVERSATION_EXPORT",
 )
-@router.post("/conversations/import", response_model=ConversationImportResponse)
 async def import_conversation_endpoint(
     body: ConversationImportRequest,
     request: Request,

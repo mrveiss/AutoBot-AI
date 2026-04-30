@@ -32,12 +32,12 @@ router = APIRouter(tags=["embeddings"])
     operation="get_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
+@router.get("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/settings", response_model=DataResponse)
 async def get_embedding_settings(
     current_user: dict = Depends(get_current_user),
 ):
@@ -85,12 +85,12 @@ async def get_embedding_settings(
     operation="update_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
+@router.put("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_settings",
     error_code_prefix="EMBEDDINGS",
 )
-@router.put("/settings", response_model=DataResponse)
 async def update_embedding_settings(
     update: EmbeddingUpdate,
     admin_check: bool = Depends(check_admin_permission),
@@ -149,12 +149,12 @@ async def update_embedding_settings(
     operation="get_available_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
+@router.get("/models", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/models", response_model=DataResponse)
 async def get_available_embedding_models(
     current_user: dict = Depends(get_current_user),
 ):
@@ -202,12 +202,12 @@ async def get_available_embedding_models(
     operation="refresh_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
+@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_embedding_models",
     error_code_prefix="EMBEDDINGS",
 )
-@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse)
 async def refresh_embedding_models(
     provider_name: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -268,12 +268,12 @@ async def refresh_embedding_models(
     operation="get_embedding_status",
     error_code_prefix="EMBEDDINGS",
 )
+@router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_status",
     error_code_prefix="EMBEDDINGS",
 )
-@router.get("/status", response_model=DataResponse)
 async def get_embedding_status(
     current_user: dict = Depends(get_current_user),
 ):

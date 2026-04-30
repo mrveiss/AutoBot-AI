@@ -18,12 +18,12 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 
 
+@router.get("", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="metrics_endpoint",
     error_code_prefix="PROMETHEUS_ENDPOINT",
 )
-@router.get("", response_model=None)
 async def metrics_endpoint():
     """
     Expose Prometheus metrics in text/plain format for scraping

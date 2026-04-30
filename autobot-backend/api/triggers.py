@@ -62,16 +62,16 @@ def get_trigger_service() -> TriggerService:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_trigger",
-    error_code_prefix="TRIGGERS",
-)
 @router.post(
     "/triggers",
     response_model=TriggerCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new event-driven trigger",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_trigger",
+    error_code_prefix="TRIGGERS",
 )
 async def create_trigger(
     request: TriggerCreateRequest,
@@ -112,15 +112,15 @@ async def create_trigger(
     return TriggerCreateResponse(trigger_id=trigger_id, webhook_url=webhook_url)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_triggers",
-    error_code_prefix="TRIGGERS",
-)
 @router.get(
     "/triggers",
     response_model=TriggerListResponse,
     summary="List all registered triggers",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_triggers",
+    error_code_prefix="TRIGGERS",
 )
 async def list_triggers(
     workflow_id: Optional[str] = None,
@@ -139,16 +139,16 @@ async def list_triggers(
     return TriggerListResponse(triggers=serialised, total=len(serialised))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_trigger",
-    error_code_prefix="TRIGGERS",
-)
 @router.delete(
     "/triggers/{trigger_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Unregister a trigger",
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_trigger",
+    error_code_prefix="TRIGGERS",
 )
 async def delete_trigger(
     trigger_id: str,
@@ -176,16 +176,16 @@ async def delete_trigger(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="receive_webhook",
-    error_code_prefix="TRIGGERS",
-)
 @router.post(
     "/triggers/webhook/{trigger_id}",
     status_code=status.HTTP_200_OK,
     summary="Receive an external webhook event",
     response_model=WebhookAcceptedResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_webhook",
+    error_code_prefix="TRIGGERS",
 )
 async def receive_webhook(
     trigger_id: str,

@@ -156,12 +156,12 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
     operation="get_vnc_client",
     error_code_prefix="VNC_PROXY",
 )
+@router.get("/{vnc_type}/vnc.html", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vnc_client",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/vnc.html", response_model=None)
 async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Serve noVNC client HTML for specified VNC type
@@ -205,12 +205,12 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     operation="proxy_vnc_assets",
     error_code_prefix="VNC_PROXY",
 )
+@router.get("/{vnc_type}/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="proxy_vnc_assets",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/{path:path}", response_model=None)
 async def proxy_vnc_assets(
     vnc_type: str, path: str, current_user: dict = Depends(get_current_user)
 ):
@@ -256,12 +256,12 @@ async def proxy_vnc_assets(
         raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
+@router.websocket("/{vnc_type}/websockify")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="websocket_proxy",
     error_code_prefix="VNC_PROXY",
 )
-@router.websocket("/{vnc_type}/websockify")
 async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     """
     WebSocket proxy for VNC connections
@@ -315,12 +315,12 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     operation="get_vnc_status",
     error_code_prefix="VNC_PROXY",
 )
+@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vnc_status",
     error_code_prefix="VNC_PROXY",
 )
-@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
 async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Check if VNC server is accessible

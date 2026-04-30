@@ -143,12 +143,12 @@ async def _authenticate_and_build_user_data(
     operation="login",
     error_code_prefix="AUTH",
 )
+@router.post("/login", response_model=LoginResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="login",
     error_code_prefix="AUTH",
 )
-@router.post("/login", response_model=LoginResponse)
 async def login(request: Request, login_data: LoginRequest):
     """
     Authenticate user and create session/token
@@ -229,12 +229,12 @@ async def login(request: Request, login_data: LoginRequest):
     operation="logout",
     error_code_prefix="AUTH",
 )
+@router.post("/logout", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="logout",
     error_code_prefix="AUTH",
 )
-@router.post("/logout", response_model=DataResponse)
 async def logout(request: Request, logout_data: LogoutRequest):
     """
     Logout user and invalidate session
@@ -265,12 +265,12 @@ async def logout(request: Request, logout_data: LogoutRequest):
     operation="get_current_user_info",
     error_code_prefix="AUTH",
 )
+@router.get("/me", response_model=AuthUserInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_user_info",
     error_code_prefix="AUTH",
 )
-@router.get("/me", response_model=AuthUserInfoResponse)
 async def get_current_user_info(request: Request):
     """
     Get current authenticated user information.
@@ -319,12 +319,12 @@ async def get_current_user_info(request: Request):
     operation="check_authentication",
     error_code_prefix="AUTH",
 )
+@router.get("/check", response_model=AuthCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_authentication",
     error_code_prefix="AUTH",
 )
-@router.get("/check", response_model=AuthCheckResponse)
 async def check_authentication(request: Request):
     """
     Quick authentication check endpoint.
@@ -368,12 +368,12 @@ async def check_authentication(request: Request):
     operation="check_permission",
     error_code_prefix="AUTH",
 )
+@router.get("/permissions/{operation}", response_model=AuthPermissionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_permission",
     error_code_prefix="AUTH",
 )
-@router.get("/permissions/{operation}", response_model=AuthPermissionResponse)
 async def check_permission(request: Request, operation: str):
     """
     Check if current user has permission for specific operation
@@ -461,12 +461,12 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
     operation="change_password",
     error_code_prefix="AUTH",
 )
+@router.post("/change-password", response_model=ChangePasswordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="change_password",
     error_code_prefix="AUTH",
 )
-@router.post("/change-password", response_model=ChangePasswordResponse)
 async def change_password(request: Request, password_data: ChangePasswordRequest):
     """
     Change the current user's password.
@@ -527,12 +527,12 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
     operation="signup",
     error_code_prefix="AUTH",
 )
+@router.post("/signup", response_model=SignupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="signup",
     error_code_prefix="AUTH",
 )
-@router.post("/signup", response_model=SignupResponse)
 async def signup(request: Request, signup_data: SignupRequest):
     """
     Self-registration endpoint for new users (#1801).
@@ -608,12 +608,12 @@ def _decode_refresh_token(token: str) -> Dict:
     operation="refresh_token",
     error_code_prefix="AUTH",
 )
+@router.post("/refresh", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",
     error_code_prefix="AUTH",
 )
-@router.post("/refresh", response_model=DataResponse)
 async def refresh_token(request: Request):
     """Refresh an existing JWT token before or shortly after expiry.
 

@@ -61,12 +61,12 @@ router = APIRouter(prefix="/permissions", tags=["permissions"])
 # =============================================================================
 
 
+@router.get("/status", response_model=PermissionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_permission_status",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/status", response_model=PermissionStatusResponse)
 async def get_permission_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get permission system status.
@@ -97,12 +97,12 @@ async def get_permission_status(admin_check: bool = Depends(check_admin_permissi
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/mode", response_model=PermissionModeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_permission_mode",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/mode", response_model=PermissionModeResponse)
 async def get_permission_mode(
     admin_check: bool = Depends(check_admin_permission),
     is_admin: bool = Query(default=False),
@@ -130,12 +130,12 @@ async def get_permission_mode(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.put("/mode", response_model=PermissionModeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_permission_mode",
     error_code_prefix="PERMISSIONS",
 )
-@router.put("/mode", response_model=PermissionModeResponse)
 async def set_permission_mode(
     request: PermissionModeRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -190,12 +190,12 @@ async def set_permission_mode(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/rules", response_model=PermissionRulesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_permission_rules",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/rules", response_model=PermissionRulesResponse)
 async def get_permission_rules(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all permission rules.
@@ -240,12 +240,12 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/rules", response_model=PermissionRuleMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_permission_rule",
     error_code_prefix="PERMISSIONS",
 )
-@router.post("/rules", response_model=PermissionRuleMutateResponse)
 async def add_permission_rule(
     request: PermissionAddRuleRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -293,12 +293,12 @@ async def add_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/rules", response_model=PermissionRuleMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_permission_rule",
     error_code_prefix="PERMISSIONS",
 )
-@router.delete("/rules", response_model=PermissionRuleMutateResponse)
 async def remove_permission_rule(
     request: PermissionRemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -327,12 +327,12 @@ async def remove_permission_rule(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/check", response_model=CheckCommandResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_command",
     error_code_prefix="PERMISSIONS",
 )
-@router.post("/check", response_model=CheckCommandResponse)
 async def check_command(
     request: CheckCommandRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -359,12 +359,12 @@ async def check_command(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_project_approvals",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
 async def get_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -399,12 +399,12 @@ async def get_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/memory/{project_path:path}", response_model=PermissionClearApprovalsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_project_approvals",
     error_code_prefix="PERMISSIONS",
 )
-@router.delete("/memory/{project_path:path}", response_model=PermissionClearApprovalsResponse)
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -440,12 +440,12 @@ async def clear_project_approvals(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/memory", response_model=PermissionStoreApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="store_approval",
     error_code_prefix="PERMISSIONS",
 )
-@router.post("/memory", response_model=PermissionStoreApprovalResponse)
 async def store_approval(
     admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
@@ -488,12 +488,12 @@ async def store_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_memory_stats",
     error_code_prefix="PERMISSIONS",
 )
-@router.get("/memory/stats", response_model=PermissionMemoryStatsResponse)
 async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.

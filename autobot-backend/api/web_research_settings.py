@@ -51,12 +51,12 @@ class ResearchPreferences(BaseModel):
     operation="get_research_status",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_research_status",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.get("/status", response_model=DataResponse)
 async def get_research_status():
     """Get current web research status and configuration"""
     try:
@@ -105,12 +105,12 @@ async def get_research_status():
     operation="enable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.post("/enable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.post("/enable", response_model=DataResponse)
 async def enable_web_research():
     """Enable web research functionality"""
     try:
@@ -162,12 +162,12 @@ async def enable_web_research():
     operation="disable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.post("/disable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.post("/disable", response_model=DataResponse)
 async def disable_web_research():
     """Disable web research functionality"""
     try:
@@ -219,12 +219,12 @@ async def disable_web_research():
     operation="get_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.get("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.get("/settings", response_model=DataResponse)
 async def get_research_settings():
     """Get current web research settings"""
     try:
@@ -276,12 +276,12 @@ async def get_research_settings():
     operation="update_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.put("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.put("/settings", response_model=DataResponse)
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
@@ -343,12 +343,12 @@ async def update_research_settings(settings: WebResearchSettings):
     operation="test_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.post("/test", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.post("/test", response_model=DataResponse)
 async def test_web_research(query: str = "test query"):
     """Test web research functionality"""
     try:
@@ -391,12 +391,12 @@ async def test_web_research(query: str = "test query"):
     operation="clear_research_cache",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.post("/clear-cache", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_research_cache",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.post("/clear-cache", response_model=DataResponse)
 async def clear_research_cache():
     """Clear web research cache"""
     try:
@@ -428,12 +428,12 @@ async def clear_research_cache():
     operation="reset_circuit_breakers",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.post("/reset-circuit-breakers", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_circuit_breakers",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.post("/reset-circuit-breakers", response_model=DataResponse)
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
     try:
@@ -465,12 +465,12 @@ async def reset_circuit_breakers():
     operation="get_usage_stats",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
+@router.get("/usage-stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_stats",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-@router.get("/usage-stats", response_model=DataResponse)
 async def get_usage_stats():
     """Get web research usage statistics"""
     try:

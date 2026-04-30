@@ -130,12 +130,12 @@ def _get_integration_class(provider: str):
     operation="test_database_connection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.post("/test-connection", response_model=IntegrationDatabaseConnectionTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_database_connection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/test-connection", response_model=IntegrationDatabaseConnectionTestResponse)
 async def test_database_connection(request: DatabaseConnectionRequest):
     """
     Test connection to a database.
@@ -175,12 +175,12 @@ async def test_database_connection(request: DatabaseConnectionRequest):
     operation="list_database_providers",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.get("/providers", response_model=IntegrationDatabaseProvidersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_database_providers",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.get("/providers", response_model=IntegrationDatabaseProvidersResponse)
 async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     """
     List all supported database providers.
@@ -217,12 +217,12 @@ async def list_database_providers() -> Dict[str, List[Dict[str, Any]]]:
     operation="execute_database_query",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.post("/{provider}/query", response_model=IntegrationDatabaseQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_database_query",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/query", response_model=IntegrationDatabaseQueryResponse)
 async def execute_database_query(provider: str, request: DBIntegrationQueryRequest):
     """
     Execute a read-only query on a database.
@@ -275,12 +275,12 @@ async def execute_database_query(provider: str, request: DBIntegrationQueryReque
     operation="query_mongodb_collection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.post("/mongodb/query-collection", response_model=IntegrationMongoQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_mongodb_collection",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/mongodb/query-collection", response_model=IntegrationMongoQueryResponse)
 async def query_mongodb_collection(request: MongoQueryRequest):
     """
     Query a MongoDB collection.
@@ -328,12 +328,12 @@ async def query_mongodb_collection(request: MongoQueryRequest):
     operation="list_databases",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.post("/{provider}/databases", response_model=IntegrationDatabaseListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_databases",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/databases", response_model=IntegrationDatabaseListResponse)
 async def list_databases(provider: str, request: DatabaseListRequest):
     """
     List all databases for a provider.
@@ -374,12 +374,12 @@ async def list_databases(provider: str, request: DatabaseListRequest):
     operation="list_tables",
     error_code_prefix="INTEGRATION_DATABASE",
 )
+@router.post("/{provider}/tables", response_model=IntegrationTablesListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_tables",
     error_code_prefix="INTEGRATION_DATABASE",
 )
-@router.post("/{provider}/tables", response_model=IntegrationTablesListResponse)
 async def list_tables(provider: str, request: DatabaseListRequest):
     """
     List all tables/collections in a database.

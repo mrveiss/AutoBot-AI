@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["collaboration", "websocket"])
 
 
+@router.websocket("/ws/sessions/{session_id}/presence")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="session_presence",
     error_code_prefix="PRESENCE_WS",
 )
-@router.websocket("/ws/sessions/{session_id}/presence")
 async def session_presence(
     websocket: WebSocket,
     session_id: str,

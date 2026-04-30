@@ -568,12 +568,12 @@ async def _execute_basic_search_with_reranking(
     operation="consolidated_search",
     error_code_prefix="KB",
 )
+@router.post("/search", response_model=KnowledgeSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="consolidated_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/search", response_model=KnowledgeSearchResponse)
 async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     """
     Consolidated knowledge base search endpoint (Issue #555).
@@ -777,12 +777,12 @@ def _enhanced_search_not_initialized_response() -> dict:
     operation="enhanced_search",
     error_code_prefix="KB",
 )
+@router.post("/enhanced_search", deprecated=True, response_model=EnhancedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/enhanced_search", deprecated=True, response_model=EnhancedSearchResponse)
 async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     """
     **[DEPRECATED]** Use POST /search with appropriate parameters instead.
@@ -852,12 +852,12 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     operation="rag_enhanced_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/rag_search", deprecated=True, response_model=RagSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_enhanced_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/rag_search", deprecated=True, response_model=RagSearchResponse)
 async def rag_enhanced_search(request: dict, req: Request):
     """
     **[DEPRECATED]** Use POST /search with `enable_rag=true` instead.
@@ -920,12 +920,12 @@ async def rag_enhanced_search(request: dict, req: Request):
     operation="similarity_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/similarity_search", deprecated=True, response_model=SimilaritySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="similarity_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/similarity_search", deprecated=True, response_model=SimilaritySearchResponse)
 async def similarity_search(request: dict, req: Request):
     """
     **[DEPRECATED]** Use POST /search with `mode=semantic` instead (Issue #665: refactored).
@@ -1078,12 +1078,12 @@ async def _fallback_to_enhanced_search(kb_to_use, params: dict):
     operation="enhanced_search_v2",
     error_code_prefix="KB",
 )
+@router.post("/enhanced_search_v2", deprecated=True, response_model=EnhancedSearchV2Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search_v2",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/enhanced_search_v2", deprecated=True, response_model=EnhancedSearchV2Response)
 async def enhanced_search_v2(request: dict, req: Request):
     """
     **[DEPRECATED]** Use POST /search with appropriate parameters instead.
@@ -1141,12 +1141,12 @@ async def enhanced_search_v2(request: dict, req: Request):
     operation="get_search_analytics",
     error_code_prefix="KB",
 )
+@router.get("/search_analytics", response_model=SearchAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_search_analytics",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.get("/search_analytics", response_model=SearchAnalyticsResponse)
 async def get_search_analytics():
     """
     Get search analytics and performance metrics.
@@ -1184,12 +1184,12 @@ async def get_search_analytics():
     operation="record_search_click",
     error_code_prefix="KB",
 )
+@router.post("/record_click", response_model=RecordClickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_search_click",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/record_click", response_model=RecordClickResponse)
 async def record_search_click(request: dict):
     """
     Record a search result click for analytics.
@@ -1228,12 +1228,12 @@ async def record_search_click(request: dict):
     operation="expand_query",
     error_code_prefix="KB",
 )
+@router.post("/expand_query", response_model=ExpandQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="expand_query",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-@router.post("/expand_query", response_model=ExpandQueryResponse)
 async def expand_query(request: dict):
     """
     Expand a query with synonyms and related terms.

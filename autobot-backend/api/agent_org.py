@@ -36,15 +36,15 @@ router = APIRouter()
 # -- Endpoints -------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_org_tree",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/org",
     response_model=List[OrgNodeResponse],
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_org_tree",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_org_tree(
     session: AsyncSession = Depends(get_db_session),
@@ -58,15 +58,15 @@ async def get_org_tree(
     return await svc.get_org_tree()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_chain_of_command",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/{agent_id}/chain",
     response_model=ChainOfCommandResponse,
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chain_of_command",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_chain_of_command(
     agent_id: str,
@@ -87,15 +87,15 @@ async def get_chain_of_command(
     return ChainOfCommandResponse(chain=[AgentSummary(**item) for item in chain])
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_direct_reports",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/{agent_id}/reports",
     response_model=List[AgentSummary],
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_direct_reports",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_direct_reports(
     agent_id: str,
@@ -106,15 +106,15 @@ async def get_direct_reports(
     return await svc.get_direct_reports(agent_id)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_agent_org",
-    error_code_prefix="AGENT_ORG",
-)
 @router.patch(
     "/{agent_id}/org",
     response_model=AgentSummary,
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_agent_org",
+    error_code_prefix="AGENT_ORG",
 )
 async def update_agent_org(
     agent_id: str,
@@ -152,16 +152,16 @@ async def update_agent_org(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upsert_agent_org",
-    error_code_prefix="AGENT_ORG",
-)
 @router.put(
     "/{agent_id}/org",
     response_model=AgentSummary,
     tags=["agent-org"],
     status_code=status.HTTP_200_OK,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upsert_agent_org",
+    error_code_prefix="AGENT_ORG",
 )
 async def upsert_agent_org(
     agent_id: str,
@@ -190,15 +190,15 @@ async def upsert_agent_org(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_role_defaults",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/{agent_id}/org/role-defaults",
     response_model=Dict[str, Any],
     tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_role_defaults",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_role_defaults(
     agent_id: str,
@@ -226,16 +226,16 @@ def _delegation_to_response(d) -> DelegationResponse:
 # -- Delegation endpoints (#1753) ----------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delegate_task",
-    error_code_prefix="AGENT_ORG",
-)
 @router.post(
     "/{manager_id}/delegate",
     response_model=DelegationResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delegate_task",
+    error_code_prefix="AGENT_ORG",
 )
 async def delegate_task(
     manager_id: str,
@@ -262,15 +262,15 @@ async def delegate_task(
     return _delegation_to_response(delegation)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="escalate_delegation",
-    error_code_prefix="AGENT_ORG",
-)
 @router.post(
     "/delegations/{delegation_id}/escalate",
     response_model=DelegationResponse,
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="escalate_delegation",
+    error_code_prefix="AGENT_ORG",
 )
 async def escalate_delegation(
     delegation_id: str,
@@ -289,15 +289,15 @@ async def escalate_delegation(
     return _delegation_to_response(delegation)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_delegation_status",
-    error_code_prefix="AGENT_ORG",
-)
 @router.patch(
     "/delegations/{delegation_id}/status",
     response_model=DelegationResponse,
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_delegation_status",
+    error_code_prefix="AGENT_ORG",
 )
 async def update_delegation_status(
     delegation_id: str,
@@ -315,15 +315,15 @@ async def update_delegation_status(
     return _delegation_to_response(delegation)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_delegation_activity",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/{agent_id}/activity",
     response_model=Dict[str, Any],
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_delegation_activity",
+    error_code_prefix="AGENT_ORG",
 )
 async def get_delegation_activity(
     agent_id: str,
@@ -334,15 +334,15 @@ async def get_delegation_activity(
     return await svc.get_activity_summary(agent_id)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_agent_delegations",
-    error_code_prefix="AGENT_ORG",
-)
 @router.get(
     "/{agent_id}/delegations",
     response_model=List[DelegationResponse],
     tags=["agent-delegation"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_delegations",
+    error_code_prefix="AGENT_ORG",
 )
 async def list_agent_delegations(
     agent_id: str,

@@ -184,12 +184,12 @@ rum_logger = setup_rum_logger()
     operation="configure_rum",
     error_code_prefix="RUM",
 )
+@router.post("/config", response_model=RUMConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_rum",
     error_code_prefix="RUM",
 )
-@router.post("/config", response_model=RUMConfigResponse)
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
     try:
@@ -226,12 +226,12 @@ async def configure_rum(config: RumConfig):
     operation="log_rum_event",
     error_code_prefix="RUM",
 )
+@router.post("/event", response_model=RUMEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="log_rum_event",
     error_code_prefix="RUM",
 )
-@router.post("/event", response_model=RUMEventResponse)
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
     try:
@@ -290,12 +290,12 @@ async def log_rum_event(event: RumEvent):
     operation="disable_rum",
     error_code_prefix="RUM",
 )
+@router.post("/disable", response_model=RUMDisableResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_rum",
     error_code_prefix="RUM",
 )
-@router.post("/disable", response_model=RUMDisableResponse)
 async def disable_rum():
     """Disable RUM monitoring"""
     try:
@@ -317,12 +317,12 @@ async def disable_rum():
     operation="clear_rum_data",
     error_code_prefix="RUM",
 )
+@router.post("/clear", response_model=RUMClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_rum_data",
     error_code_prefix="RUM",
 )
-@router.post("/clear", response_model=RUMClearResponse)
 async def clear_rum_data():
     """Clear all RUM data"""
     try:
@@ -355,12 +355,12 @@ async def clear_rum_data():
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
+@router.get("/export", response_model=RUMExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_rum_data",
     error_code_prefix="RUM",
 )
-@router.get("/export", response_model=RUMExportResponse)
 async def export_rum_data():
     """Export RUM data for analysis"""
 
@@ -405,12 +405,12 @@ async def export_rum_data():
     operation="get_rum_status",
     error_code_prefix="RUM",
 )
+@router.get("/status", response_model=RUMStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rum_status",
     error_code_prefix="RUM",
 )
-@router.get("/status", response_model=RUMStatusResponse)
 async def get_rum_status():
     """Get current RUM status and statistics"""
 
@@ -615,12 +615,12 @@ def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int
     operation="receive_rum_metrics",
     error_code_prefix="RUM",
 )
+@router.post("/metrics", response_model=RUMMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_rum_metrics",
     error_code_prefix="RUM",
 )
-@router.post("/metrics", response_model=RUMMetricsResponse)
 async def receive_rum_metrics(metrics: RumMetrics):
     """
     Receive RUM metrics from frontend and record them to Prometheus.

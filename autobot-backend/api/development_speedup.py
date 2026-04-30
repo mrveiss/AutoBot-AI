@@ -99,12 +99,12 @@ class AnalysisRequest(BaseModel):
     operation="analyze_codebase_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.post("/analyze", response_model=DataResponse)
 async def analyze_codebase_endpoint(request: AnalysisRequest):
     """
     Comprehensive codebase analysis for development speedup.
@@ -153,12 +153,12 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     operation="analyze_codebase_get",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase_get",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/analyze", response_model=DataResponse)
 async def analyze_codebase_get(
     path: str = Query(..., description="Root path to analyze"),
     type: str = Query("comprehensive", description="Analysis type"),
@@ -179,12 +179,12 @@ async def analyze_codebase_get(
     operation="find_duplicates_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/duplicates", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_duplicates_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/duplicates", response_model=DataResponse)
 async def find_duplicates_endpoint(
     path: str = Query(..., description="Root path to analyze"),
     min_lines: int = Query(
@@ -232,12 +232,12 @@ async def find_duplicates_endpoint(
     operation="analyze_patterns_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_patterns_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/patterns", response_model=DataResponse)
 async def analyze_patterns_endpoint(
     path: str = Query(..., description="Root path to analyze"),
     pattern_type: Optional[str] = Query(
@@ -285,12 +285,12 @@ async def analyze_patterns_endpoint(
     operation="analyze_imports_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/imports", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_imports_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/imports", response_model=DataResponse)
 async def analyze_imports_endpoint(
     path: str = Query(..., description="Root path to analyze"),
     show_unused: bool = Query(True, description="Include potentially unused imports"),
@@ -330,12 +330,12 @@ async def analyze_imports_endpoint(
     operation="detect_dead_code_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/dead-code", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_dead_code_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/dead-code", response_model=DataResponse)
 async def detect_dead_code_endpoint(
     path: str = Query(..., description="Root path to analyze")
 ):
@@ -369,12 +369,12 @@ async def detect_dead_code_endpoint(
     operation="find_refactoring_opportunities_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/refactoring", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_refactoring_opportunities_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/refactoring", response_model=DataResponse)
 async def find_refactoring_opportunities_endpoint(
     path: str = Query(..., description="Root path to analyze"),
     min_complexity: float = Query(
@@ -423,12 +423,12 @@ async def find_refactoring_opportunities_endpoint(
     operation="analyze_quality_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/quality", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_quality_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/quality", response_model=DataResponse)
 async def analyze_quality_endpoint(
     path: str = Query(..., description="Root path to analyze"),
     severity: Optional[str] = Query(
@@ -517,12 +517,12 @@ def _calculate_health_score(result: dict, metrics: dict) -> int:
     operation="get_recommendations_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/recommendations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recommendations_endpoint",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/recommendations", response_model=DataResponse)
 async def get_recommendations_endpoint(
     path: str = Query(..., description="Root path to analyze")
 ):
@@ -564,12 +564,12 @@ async def get_recommendations_endpoint(
     operation="get_development_speedup_status",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_development_speedup_status",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/status", response_model=DataResponse)
 async def get_development_speedup_status():
     """
     Get development speedup system status.
@@ -636,12 +636,12 @@ async def get_development_speedup_status():
     operation="get_analysis_examples",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
+@router.get("/examples", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analysis_examples",
     error_code_prefix="DEVELOPMENT_SPEEDUP",
 )
-@router.get("/examples", response_model=DataResponse)
 async def get_analysis_examples():
     """
     Get example analysis requests and usage patterns.

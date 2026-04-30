@@ -64,12 +64,12 @@ router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
     operation="get_usage_summary",
     error_code_prefix="USAGE",
 )
+@router.get("/summary", response_model=UsageSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_summary",
     error_code_prefix="USAGE",
 )
-@router.get("/summary", response_model=UsageSummaryResponse)
 async def get_usage_summary(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to include"),
     admin_check: bool = Depends(check_admin_permission),
@@ -117,12 +117,12 @@ async def get_usage_summary(
     operation="get_usage_by_user_all",
     error_code_prefix="USAGE",
 )
+@router.get("/by-user", response_model=UsageByUserAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_by_user_all",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user", response_model=UsageByUserAllResponse)
 async def get_usage_by_user_all(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -146,12 +146,12 @@ async def get_usage_by_user_all(
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
+@router.get("/by-user/{user_id}", response_model=UsageByUserSingleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_by_user_single",
     error_code_prefix="USAGE",
 )
-@router.get("/by-user/{user_id}", response_model=UsageByUserSingleResponse)
 async def get_usage_by_user_single(
     user_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -170,12 +170,12 @@ async def get_usage_by_user_single(
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
+@router.get("/me", response_model=UsageMyUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_my_usage",
     error_code_prefix="USAGE",
 )
-@router.get("/me", response_model=UsageMyUsageResponse)
 async def get_my_usage(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -213,12 +213,12 @@ async def get_my_usage(
     operation="record_usage_event",
     error_code_prefix="USAGE",
 )
+@router.post("/record", response_model=UsageRecordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_usage_event",
     error_code_prefix="USAGE",
 )
-@router.post("/record", response_model=UsageRecordResponse)
 async def record_usage_event(
     body: UsageRecordRequest,
     current_user: dict = Depends(get_current_user),
@@ -262,12 +262,12 @@ async def record_usage_event(
     operation="export_usage_csv",
     error_code_prefix="USAGE",
 )
+@router.get("/export/csv", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_usage_csv",
     error_code_prefix="USAGE",
 )
-@router.get("/export/csv", response_model=None)
 async def export_usage_csv(
     days: int = Query(default=30, ge=1, le=365, description="Days of data to export"),
     admin_check: bool = Depends(check_admin_permission),

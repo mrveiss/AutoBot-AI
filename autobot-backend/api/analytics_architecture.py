@@ -1150,12 +1150,12 @@ async def get_analyzer() -> ArchitectureAnalyzer:
 # =============================================================================
 
 
+@router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_architecture",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.post("/analyze", response_model=ArchitectureReport, summary="Analyze codebase architecture")
 async def analyze_architecture(
     admin_check: bool = Depends(check_admin_permission),
     request: ArchitectureAnalysisRequest = None,
@@ -1175,12 +1175,12 @@ async def analyze_architecture(
     )
 
 
+@router.get("/patterns", response_model=AnalyticsArchitecturePatternsResponse, summary="List available pattern types")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pattern_types",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/patterns", response_model=AnalyticsArchitecturePatternsResponse, summary="List available pattern types")
 async def list_pattern_types(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1203,12 +1203,12 @@ async def list_pattern_types(
     return {"patterns": patterns, "total": len(patterns)}
 
 
+@router.get("/quick-scan", response_model=AnalyticsArchitectureQuickScanResponse, summary="Quick architecture scan")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="quick_scan",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/quick-scan", response_model=AnalyticsArchitectureQuickScanResponse, summary="Quick architecture scan")
 async def quick_scan(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query("backend/api/", description="Path to scan"),
@@ -1241,12 +1241,12 @@ async def quick_scan(
     }
 
 
+@router.get("/layers", response_model=AnalyticsArchitectureLayersResponse, summary="Get architecture layers")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_layers",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/layers", response_model=AnalyticsArchitectureLayersResponse, summary="Get architecture layers")
 async def get_layers(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
@@ -1270,12 +1270,12 @@ async def get_layers(
     }
 
 
+@router.get("/diagram", response_model=AnalyticsArchitectureDiagramResponse, summary="Generate architecture diagram")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_diagram",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/diagram", response_model=AnalyticsArchitectureDiagramResponse, summary="Generate architecture diagram")
 async def get_diagram(
     admin_check: bool = Depends(check_admin_permission),
     format: str = Query("mermaid", description="Diagram format"),
@@ -1300,12 +1300,12 @@ async def get_diagram(
     }
 
 
+@router.get("/consistency", response_model=AnalyticsArchitectureConsistencyResponse, summary="Check pattern consistency")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_consistency",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/consistency", response_model=AnalyticsArchitectureConsistencyResponse, summary="Check pattern consistency")
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
     pattern: Optional[PatternType] = Query(None, description="Specific pattern"),
@@ -1334,12 +1334,12 @@ async def check_consistency(
     }
 
 
+@router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="ANALYTICS_ARCHITECTURE",
 )
-@router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
 async def health_check(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:

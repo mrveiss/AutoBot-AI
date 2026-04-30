@@ -151,12 +151,12 @@ def _build_default_services(redis_status_obj) -> list:
     operation="get_services",
     error_code_prefix="SERVICES",
 )
+@router.get("/services", response_model=ServicesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services",
     error_code_prefix="SERVICES",
 )
-@router.get("/services", response_model=ServicesResponse)
 async def get_services(admin_check: bool = Depends(check_admin_permission)):
     """Get list of all available services with their status.
 
@@ -198,12 +198,12 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
     operation="get_health",
     error_code_prefix="SERVICES",
 )
+@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
     """Simple health check endpoint.
 
@@ -229,12 +229,12 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     operation="get_services_health",
     error_code_prefix="SERVICES",
 )
+@router.get("/services/health", response_model=ServicesHealthAggregateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
     error_code_prefix="SERVICES",
 )
-@router.get("/services/health", response_model=ServicesHealthAggregateResponse)
 async def get_services_health(admin_check: bool = Depends(check_admin_permission)):
     """Get service health status - alias to monitoring endpoint
 
@@ -330,12 +330,12 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     operation="get_vms_status",
     error_code_prefix="SERVICES",
 )
+@router.get("/vms/status", response_model=ServicesVMsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vms_status",
     error_code_prefix="SERVICES",
 )
-@router.get("/vms/status", response_model=ServicesVMsStatusResponse)
 async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get VM status for distributed infrastructure.
@@ -369,12 +369,12 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     operation="get_version",
     error_code_prefix="SERVICES",
 )
+@router.get("/version", response_model=SystemInfo)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_version",
     error_code_prefix="SERVICES",
 )
-@router.get("/version", response_model=SystemInfo)
 async def get_version(admin_check: bool = Depends(check_admin_permission)):
     """Get application version and system information
 

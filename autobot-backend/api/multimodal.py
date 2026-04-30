@@ -93,12 +93,12 @@ def _build_image_modal_input(
     operation="process_image",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/process/image", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_image",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/image", response_model=MultiModalResponse)
 async def process_image(
     file: UploadFile = File(...),
     intent: str = Form(default="analysis"),
@@ -161,12 +161,12 @@ async def process_image(
     operation="process_audio",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/process/audio", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_audio",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/audio", response_model=MultiModalResponse)
 async def process_audio(
     file: UploadFile = File(...),
     intent: str = Form(default="voice_command"),
@@ -238,12 +238,12 @@ async def process_audio(
     operation="process_text",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/process/text", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_text",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/process/text", response_model=MultiModalResponse)
 async def process_text(
     request: TextProcessingRequest,
     current_user: dict = Depends(get_current_user),
@@ -302,12 +302,12 @@ async def process_text(
     operation="generate_embedding",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/embeddings/generate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_embedding",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/embeddings/generate", response_model=DataResponse)
 async def generate_embedding(
     request: EmbeddingRequest,
     current_user: dict = Depends(get_current_user),
@@ -363,12 +363,12 @@ async def generate_embedding(
     operation="cross_modal_search",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cross_modal_search",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 async def cross_modal_search(
     request: CrossModalSearchRequest,
     current_user: dict = Depends(get_current_user),
@@ -441,12 +441,12 @@ async def cross_modal_search(
     operation="get_multimodal_stats",
     error_code_prefix="MULTIMODAL",
 )
+@router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_multimodal_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/stats", response_model=DataResponse)
 async def get_multimodal_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -615,12 +615,12 @@ def _create_combined_input(
     operation="combine_multimodal_inputs",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/fusion/combine", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/fusion/combine", response_model=DataResponse)
 async def combine_multimodal_inputs(
     text: Optional[str] = Form(default=None),
     image_file: Optional[UploadFile] = File(default=None),
@@ -689,12 +689,12 @@ async def combine_multimodal_inputs(
     operation="get_performance_stats",
     error_code_prefix="MULTIMODAL",
 )
+@router.get("/performance/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_stats",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/stats", response_model=DataResponse)
 async def get_performance_stats(
     current_user: dict = Depends(get_current_user),
 ):
@@ -740,12 +740,12 @@ async def get_performance_stats(
     operation="optimize_performance",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/performance/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_performance",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/optimize", response_model=DataResponse)
 async def optimize_performance(
     current_user: dict = Depends(get_current_user),
 ):
@@ -780,12 +780,12 @@ async def optimize_performance(
     operation="get_performance_summary",
     error_code_prefix="MULTIMODAL",
 )
+@router.get("/performance/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/performance/summary", response_model=DataResponse)
 async def get_performance_summary(
     current_user: dict = Depends(get_current_user),
 ):
@@ -813,12 +813,12 @@ async def get_performance_summary(
     operation="update_batch_size",
     error_code_prefix="MULTIMODAL",
 )
+@router.post("/performance/batch-size", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_batch_size",
     error_code_prefix="MULTIMODAL",
 )
-@router.post("/performance/batch-size", response_model=DataResponse)
 async def update_batch_size(
     modality: str,
     batch_size: int,
@@ -869,12 +869,12 @@ async def update_batch_size(
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
+@router.get("/health", response_model=MultimodalHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="MULTIMODAL",
 )
-@router.get("/health", response_model=MultimodalHealthResponse)
 async def health_check(
     current_user: dict = Depends(get_current_user),
 ):

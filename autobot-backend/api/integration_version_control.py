@@ -116,12 +116,12 @@ def _create_integration(provider: str, config: IntegrationConfig) -> Any:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
 
+@router.post("/test-connection", response_model=IntegrationHealth)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_connection",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.post("/test-connection", response_model=IntegrationHealth)
 async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
     """Test VCS provider connection.
 
@@ -156,12 +156,12 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
         raise HTTPException(status_code=500, detail="Connection test failed")
 
 
+@router.get("/providers", response_model=List[ProviderInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_providers",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/providers", response_model=List[ProviderInfo])
 async def get_providers() -> List[ProviderInfo]:
     """Get list of supported VCS providers.
 
@@ -182,12 +182,12 @@ async def get_providers() -> List[ProviderInfo]:
     return providers
 
 
+@router.get("/{provider}/repositories", response_model=VCSRepositoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_repositories",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories", response_model=VCSRepositoriesResponse)
 async def list_repositories(
     provider: str,
     api_key: str = Query(..., description="API key or access token"),
@@ -228,12 +228,12 @@ async def list_repositories(
         raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
+@router.get("/{provider}/repositories/{repo_id}/branches", response_model=VCSBranchesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_branches",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/branches", response_model=VCSBranchesResponse)
 async def list_branches(
     provider: str,
     repo_id: str,
@@ -300,12 +300,12 @@ def _build_pr_params(
         return "list_pull_requests", params
 
 
+@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=VCSPullRequestsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_pull_requests",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/pull-requests", response_model=VCSPullRequestsResponse)
 async def list_pull_requests(
     provider: str,
     repo_id: str,
@@ -328,12 +328,12 @@ async def list_pull_requests(
         raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
+@router.get("/{provider}/repositories/{repo_id}/commits", response_model=VCSCommitInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_commit_info",
     error_code_prefix="INTEGRATION_VERSION_CONTROL",
 )
-@router.get("/{provider}/repositories/{repo_id}/commits", response_model=VCSCommitInfoResponse)
 async def get_commit_info(
     provider: str,
     repo_id: str,

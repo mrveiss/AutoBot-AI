@@ -237,12 +237,12 @@ async def _stream_generator(
 # ---------------------------------------------------------------------------
 
 
+@router.post("/chat/completions", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat_completions",
     error_code_prefix="OPENAI_COMPAT",
 )
-@router.post("/chat/completions", response_model=None)
 async def chat_completions(
     body: ChatCompletionRequest,
     request: Request,
@@ -322,12 +322,12 @@ async def chat_completions(
     )
 
 
+@router.get("/models", response_model=OAIModelListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_models",
     error_code_prefix="OPENAI_COMPAT",
 )
-@router.get("/models", response_model=OAIModelListResponse)
 async def list_models(request: Request) -> OAIModelListResponse:
     """OpenAI-compatible models list endpoint (#4447).
 

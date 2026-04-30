@@ -57,12 +57,12 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
         return []
 
 
+@router.get("/hosts", response_model=InfrastructureHostsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_infrastructure_hosts",
     error_code_prefix="INFRASTRUCTURE",
 )
-@router.get("/hosts", response_model=InfrastructureHostsResponse)
 async def get_infrastructure_hosts(
     capability: Optional[str] = Query(
         None, description="Filter by capability (ssh, vnc)"

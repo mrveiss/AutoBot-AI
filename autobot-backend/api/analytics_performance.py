@@ -479,12 +479,12 @@ def _calculate_analysis_score(
     return critical, high, medium, low, score
 
 
+@router.get("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_path",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/analyze", response_model=DataResponse)
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
@@ -547,12 +547,12 @@ async def analyze_path(
     return result
 
 
+@router.post("/analyze-content", response_model=List[PerformanceAnalyzeContentResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_content",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.post("/analyze-content", response_model=List[PerformanceAnalyzeContentResponse])
 async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
@@ -576,12 +576,12 @@ async def analyze_content(
     return issues
 
 
+@router.get("/patterns", response_model=List[PerformancePatternsListResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_patterns",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/patterns", response_model=List[PerformancePatternsListResponse])
 async def list_patterns(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[PerformancePatternDefinition]:
@@ -592,12 +592,12 @@ async def list_patterns(
     return list(PERFORMANCE_PATTERNS.values())
 
 
+@router.get("/patterns/{pattern_id}", response_model=PerformancePatternDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/patterns/{pattern_id}", response_model=PerformancePatternDetailResponse)
 async def get_pattern(
     pattern_id: str,
     admin_check: bool = Depends(check_admin_permission),
@@ -611,12 +611,12 @@ async def get_pattern(
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
+@router.post("/patterns/{pattern_id}/toggle", response_model=PerformancePatternToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="toggle_pattern",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.post("/patterns/{pattern_id}/toggle", response_model=PerformancePatternToggleResponse)
 async def toggle_pattern(
     pattern_id: str,
     enabled: bool,
@@ -637,12 +637,12 @@ async def toggle_pattern(
     }
 
 
+@router.get("/history", response_model=List[PerformanceHistoryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_history",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/history", response_model=List[PerformanceHistoryResponse])
 async def get_history(
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
@@ -655,12 +655,12 @@ async def get_history(
         return list(_analysis_history[:limit])
 
 
+@router.get("/summary", response_model=PerformanceSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_summary",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/summary", response_model=PerformanceSummaryResponse)
 async def get_summary(
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict:
@@ -720,12 +720,12 @@ async def get_summary(
         }
 
 
+@router.get("/categories", response_model=List[PerformanceCategoriesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_categories",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/categories", response_model=List[PerformanceCategoriesResponse])
 async def get_categories(
     admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
@@ -766,12 +766,12 @@ async def get_categories(
     ]
 
 
+@router.get("/hotspots", response_model=List[PerformanceHotspotsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hotspots",
     error_code_prefix="ANALYTICS_PERFORMANCE",
 )
-@router.get("/hotspots", response_model=List[PerformanceHotspotsResponse])
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=50),
     admin_check: bool = Depends(check_admin_permission),

@@ -94,15 +94,15 @@ def _to_response(approval) -> ApprovalGateResponse:
 # -- Endpoints ---------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_approval",
-    error_code_prefix="APPROVAL_GATES",
-)
 @router.post(
     "/approval-gates",
     response_model=ApprovalGateResponse,
     status_code=status.HTTP_201_CREATED,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_approval",
+    error_code_prefix="APPROVAL_GATES",
 )
 async def create_approval(
     body: CreateApprovalRequest,
@@ -124,14 +124,14 @@ async def create_approval(
     return _to_response(approval)
 
 
+@router.get(
+    "/approval-gates",
+    response_model=List[ApprovalGateResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_approvals",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.get(
-    "/approval-gates",
-    response_model=List[ApprovalGateResponse],
 )
 async def list_approvals(
     status_filter: Optional[ApprovalStatus] = None,
@@ -155,14 +155,14 @@ async def list_approvals(
     return [_to_response(a) for a in approvals]
 
 
+@router.get(
+    "/approval-gates/{approval_id}",
+    response_model=ApprovalGateResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_approval",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.get(
-    "/approval-gates/{approval_id}",
-    response_model=ApprovalGateResponse,
 )
 async def get_approval(
     approval_id: uuid.UUID,
@@ -180,14 +180,14 @@ async def get_approval(
     return _to_response(approval)
 
 
+@router.post(
+    "/approval-gates/{approval_id}/approve",
+    response_model=ApprovalGateResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.post(
-    "/approval-gates/{approval_id}/approve",
-    response_model=ApprovalGateResponse,
 )
 async def approve(
     approval_id: uuid.UUID,
@@ -212,14 +212,14 @@ async def approve(
     return _to_response(approval)
 
 
+@router.post(
+    "/approval-gates/{approval_id}/reject",
+    response_model=ApprovalGateResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reject",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.post(
-    "/approval-gates/{approval_id}/reject",
-    response_model=ApprovalGateResponse,
 )
 async def reject(
     approval_id: uuid.UUID,
@@ -244,14 +244,14 @@ async def reject(
     return _to_response(approval)
 
 
+@router.post(
+    "/approval-gates/{approval_id}/request-revision",
+    response_model=ApprovalGateResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_revision",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.post(
-    "/approval-gates/{approval_id}/request-revision",
-    response_model=ApprovalGateResponse,
 )
 async def request_revision(
     approval_id: uuid.UUID,
@@ -276,14 +276,14 @@ async def request_revision(
     return _to_response(approval)
 
 
+@router.post(
+    "/approval-gates/{approval_id}/resubmit",
+    response_model=ApprovalGateResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resubmit",
     error_code_prefix="APPROVAL_GATES",
-)
-@router.post(
-    "/approval-gates/{approval_id}/resubmit",
-    response_model=ApprovalGateResponse,
 )
 async def resubmit(
     approval_id: uuid.UUID,
@@ -307,15 +307,15 @@ async def resubmit(
     return _to_response(approval)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_comment",
-    error_code_prefix="APPROVAL_GATES",
-)
 @router.post(
     "/approval-gates/{approval_id}/comments",
     response_model=ApprovalCommentResponse,
     status_code=status.HTTP_201_CREATED,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_comment",
+    error_code_prefix="APPROVAL_GATES",
 )
 async def add_comment(
     approval_id: uuid.UUID,
@@ -348,15 +348,15 @@ async def add_comment(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="link_task",
-    error_code_prefix="APPROVAL_GATES",
-)
 @router.post(
     "/approval-gates/{approval_id}/tasks",
     response_model=TaskApprovalLinkResponse,
     status_code=status.HTTP_201_CREATED,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="link_task",
+    error_code_prefix="APPROVAL_GATES",
 )
 async def link_task(
     approval_id: uuid.UUID,
@@ -385,15 +385,15 @@ async def link_task(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unlink_task",
-    error_code_prefix="APPROVAL_GATES",
-)
 @router.delete(
     "/approval-gates/{approval_id}/tasks/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unlink_task",
+    error_code_prefix="APPROVAL_GATES",
 )
 async def unlink_task(
     approval_id: uuid.UUID,

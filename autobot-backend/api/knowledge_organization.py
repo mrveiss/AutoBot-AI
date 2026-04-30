@@ -40,12 +40,12 @@ router = APIRouter(prefix="/knowledge/organization", tags=["knowledge-organizati
 # =============================================================================
 
 
+@router.get("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_organization_policy",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-@router.get("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 async def get_organization_policy(
     request: Request, current_user: Dict = Depends(get_current_user)
 ):
@@ -89,12 +89,12 @@ async def get_organization_policy(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.put("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_organization_policy",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-@router.put("/policy", response_model=KnowledgeOrganizationPolicyResponse)
 async def update_organization_policy(
     policy_request: UpdateOrganizationPolicyRequest,
     request: Request,
@@ -219,12 +219,12 @@ def _get_organization_team_count(current_user: Dict) -> int:
     )
 
 
+@router.get("/stats", response_model=KnowledgeOrganizationStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_organization_knowledge_stats",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-@router.get("/stats", response_model=KnowledgeOrganizationStatsResponse)
 async def get_organization_knowledge_stats(
     request: Request, current_user: Dict = Depends(get_current_user)
 ):
@@ -323,12 +323,12 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
     return deleted_count
 
 
+@router.delete("/cleanup", response_model=KnowledgeOrganizationCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_organization_knowledge",
     error_code_prefix="KNOWLEDGE_ORGANIZATION",
 )
-@router.delete("/cleanup", response_model=KnowledgeOrganizationCleanupResponse)
 async def cleanup_organization_knowledge(
     request: Request,
     current_user: Dict = Depends(get_current_user),

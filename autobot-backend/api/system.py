@@ -315,12 +315,12 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
     operation="reload_system_config",
     error_code_prefix="SYSTEM",
 )
+@router.post("/reload_config", response_model=SystemReloadConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_system_config",
     error_code_prefix="SYSTEM",
 )
-@router.post("/reload_config", response_model=SystemReloadConfigResponse)
 async def reload_system_config(admin_check: bool = Depends(check_admin_permission)):
     """Reload system configuration and clear caches
 
@@ -354,12 +354,12 @@ async def reload_system_config(admin_check: bool = Depends(check_admin_permissio
     operation="reload_prompts",
     error_code_prefix="SYSTEM",
 )
+@router.get("/prompt_reload", response_model=SystemPromptReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_prompts",
     error_code_prefix="SYSTEM",
 )
-@router.get("/prompt_reload", response_model=SystemPromptReloadResponse)
 async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     """Reload prompt templates
 
@@ -391,12 +391,12 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     operation="admin_check",
     error_code_prefix="SYSTEM",
 )
+@router.get("/admin_check", response_model=SystemAdminCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_check",
     error_code_prefix="SYSTEM",
 )
-@router.get("/admin_check", response_model=SystemAdminCheckResponse)
 async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     """Check admin status and permissions
 
@@ -418,12 +418,12 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     operation="dynamic_import",
     error_code_prefix="SYSTEM",
 )
+@router.post("/dynamic_import", response_model=SystemDynamicImportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="dynamic_import",
     error_code_prefix="SYSTEM",
 )
-@router.post("/dynamic_import", response_model=SystemDynamicImportResponse)
 async def dynamic_import(
     request: Request,
     module_name: str = Form(...),
@@ -862,12 +862,12 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
     operation="get_cache_coordinator_stats",
     error_code_prefix="SYSTEM",
 )
+@router.get("/api/cache/stats", response_model=SystemCacheCoordinatorStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_coordinator_stats",
     error_code_prefix="SYSTEM",
 )
-@router.get("/api/cache/stats", response_model=SystemCacheCoordinatorStatsResponse)
 async def get_cache_coordinator_stats(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -899,12 +899,12 @@ async def get_cache_coordinator_stats(
     operation="trigger_cache_eviction",
     error_code_prefix="SYSTEM",
 )
+@router.post("/api/cache/evict", response_model=SystemCacheEvictResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_cache_eviction",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/evict", response_model=SystemCacheEvictResponse)
 async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permission)):
     """
     Manually trigger coordinated cache eviction.
@@ -934,12 +934,12 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     operation="clear_cache",
     error_code_prefix="SYSTEM",
 )
+@router.post("/api/cache/clear/{cache_name}", response_model=SystemCacheClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cache",
     error_code_prefix="SYSTEM",
 )
-@router.post("/api/cache/clear/{cache_name}", response_model=SystemCacheClearResponse)
 async def clear_cache(
     cache_name: str, admin_check: bool = Depends(check_admin_permission)
 ):
@@ -971,12 +971,12 @@ async def clear_cache(
         raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
+@router.get("/system/backup/status", response_model=SystemBackupStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_backup_status",
     error_code_prefix="SYSTEM",
 )
-@router.get("/system/backup/status", response_model=SystemBackupStatusResponse)
 async def get_backup_status(
     request: Request,
     _: None = Depends(check_admin_permission),

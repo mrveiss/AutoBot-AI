@@ -214,12 +214,12 @@ async def _delete_facts_in_batches(
     operation="deduplicate_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/deduplicate", response_model=DeduplicateFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="deduplicate_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/deduplicate", response_model=DeduplicateFactsResponse)
 async def deduplicate_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -276,12 +276,12 @@ async def deduplicate_facts(
     operation="find_duplicates",
     error_code_prefix="KB",
 )
+@router.post("/deduplicate/advanced", response_model=FindDuplicatesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_duplicates",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/deduplicate/advanced", response_model=FindDuplicatesResponse)
 async def find_duplicates(
     admin_check: bool = Depends(check_admin_permission),
     request: DeduplicationRequest = None,
@@ -339,12 +339,12 @@ async def find_duplicates(
     operation="get_data_quality_metrics",
     error_code_prefix="KB",
 )
+@router.get("/quality", response_model=DataQualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_data_quality_metrics",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/quality", response_model=DataQualityMetricsResponse)
 async def get_data_quality_metrics(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -455,12 +455,12 @@ def _build_quality_summary(quality: dict) -> dict:
     operation="get_health_dashboard",
     error_code_prefix="KB",
 )
+@router.get("/health/dashboard", response_model=HealthDashboardResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_health_dashboard",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/health/dashboard", response_model=HealthDashboardResponse)
 async def get_health_dashboard(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -691,12 +691,12 @@ def _perform_fast_scan(
     operation="scan_host_changes",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/scan_host_changes", response_model=ScanHostChangesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_host_changes",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/scan_host_changes", response_model=ScanHostChangesResponse)
 async def scan_host_changes(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -871,12 +871,12 @@ def _build_orphan_response(total_checked: int, orphaned_facts: list) -> dict:
     operation="find_orphaned_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/orphans", response_model=FindOrphanedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_orphaned_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/orphans", response_model=FindOrphanedFactsResponse)
 async def find_orphaned_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -914,12 +914,12 @@ async def find_orphaned_facts(
     operation="cleanup_orphaned_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/orphans", response_model=CleanupOrphanedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_orphaned_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.delete("/orphans", response_model=CleanupOrphanedFactsResponse)
 async def cleanup_orphaned_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1085,12 +1085,12 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
     operation="find_session_orphans",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/session-orphans", response_model=FindSessionOrphansResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_session_orphan_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/session-orphans", response_model=FindSessionOrphansResponse)
 async def find_session_orphan_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1196,12 +1196,12 @@ async def _delete_orphan_facts(
     operation="cleanup_session_orphans",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/session-orphans", response_model=CleanupSessionOrphansResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session_orphan_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.delete("/session-orphans", response_model=CleanupSessionOrphansResponse)
 async def cleanup_session_orphan_facts(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1271,12 +1271,12 @@ async def cleanup_session_orphan_facts(
     operation="scan_for_unimported_files",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/import/scan", response_model=ScanUnimportedFilesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_for_unimported_files",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/import/scan", response_model=ScanUnimportedFilesResponse)
 async def scan_for_unimported_files(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -1325,12 +1325,12 @@ async def scan_for_unimported_files(
     operation="export_knowledge",
     error_code_prefix="KB",
 )
+@router.post("/export", response_model=ExportKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_knowledge",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/export", response_model=ExportKnowledgeResponse)
 async def export_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: ExportRequest = None,
@@ -1395,12 +1395,12 @@ async def export_knowledge(
     operation="import_knowledge",
     error_code_prefix="KB",
 )
+@router.post("/import", response_model=ImportKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="import_knowledge",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/import", response_model=ImportKnowledgeResponse)
 async def import_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: ImportRequest = None,
@@ -1544,12 +1544,12 @@ def _handle_update_fact_result(result: dict, fact_id: str) -> dict:
     operation="update_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@router.put("/fact/{fact_id}", response_model=UpdateFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_fact",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.put("/fact/{fact_id}", response_model=UpdateFactResponse)
 async def update_fact(
     admin_check: bool = Depends(check_admin_permission),
     fact_id: str = Path(..., description="Fact ID to update"),
@@ -1595,12 +1595,12 @@ async def update_fact(
     operation="delete_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/fact/{fact_id}", response_model=DeleteFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_fact",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.delete("/fact/{fact_id}", response_model=DeleteFactResponse)
 async def delete_fact(
     admin_check: bool = Depends(check_admin_permission),
     fact_id: str = Path(..., description="Fact ID to delete"),
@@ -1668,12 +1668,12 @@ async def delete_fact(
     operation="bulk_delete",
     error_code_prefix="KB",
 )
+@router.delete("/bulk", response_model=BulkDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_delete_facts",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.delete("/bulk", response_model=BulkDeleteResponse)
 async def bulk_delete_facts(
     admin_check: bool = Depends(check_admin_permission),
     request: BulkDeleteRequest = None,
@@ -1721,12 +1721,12 @@ async def bulk_delete_facts(
     operation="bulk_update_category",
     error_code_prefix="KB",
 )
+@router.post("/bulk/category", response_model=BulkCategoryUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_update_category",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/bulk/category", response_model=BulkCategoryUpdateResponse)
 async def bulk_update_category(
     admin_check: bool = Depends(check_admin_permission),
     request: BulkCategoryUpdateRequest = None,
@@ -1772,12 +1772,12 @@ async def bulk_update_category(
     operation="cleanup_knowledge_base",
     error_code_prefix="KB",
 )
+@router.post("/cleanup", response_model=CleanupKnowledgeBaseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_knowledge_base",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/cleanup", response_model=CleanupKnowledgeBaseResponse)
 async def cleanup_knowledge_base(
     admin_check: bool = Depends(check_admin_permission),
     request: CleanupRequest = None,
@@ -1832,12 +1832,12 @@ async def cleanup_knowledge_base(
     operation="create_backup",
     error_code_prefix="KB",
 )
+@router.post("/backup", response_model=CreateBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_backup",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/backup", response_model=CreateBackupResponse)
 async def create_backup(
     admin_check: bool = Depends(check_admin_permission),
     request: BackupRequest = None,
@@ -1890,12 +1890,12 @@ async def create_backup(
     operation="restore_backup",
     error_code_prefix="KB",
 )
+@router.post("/restore", response_model=RestoreBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="restore_backup",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/restore", response_model=RestoreBackupResponse)
 async def restore_backup(
     admin_check: bool = Depends(check_admin_permission),
     request: RestoreRequest = None,
@@ -1953,12 +1953,12 @@ async def restore_backup(
     operation="list_backups",
     error_code_prefix="KB",
 )
+@router.get("/backups", response_model=ListBackupsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_backups",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/backups", response_model=ListBackupsResponse)
 async def list_backups(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
@@ -2003,12 +2003,12 @@ async def list_backups(
     operation="delete_backup",
     error_code_prefix="KB",
 )
+@router.delete("/backup", response_model=DeleteBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_backup",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.delete("/backup", response_model=DeleteBackupResponse)
 async def delete_backup(
     admin_check: bool = Depends(check_admin_permission),
     request: DeleteBackupRequest = None,
@@ -2074,12 +2074,12 @@ async def _fetch_all_chunks(kb) -> list[dict]:
     return await asyncio.to_thread(_load)
 
 
+@router.post("/lint", response_model=StartLintResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_lint",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.post("/lint", response_model=StartLintResponse)
 async def start_lint(
     background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
@@ -2100,12 +2100,12 @@ async def start_lint(
     return {"status": "started", "job_id": job_id}
 
 
+@router.get("/lint/report", response_model=GetLintReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_lint_report",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/lint/report", response_model=GetLintReportResponse)
 async def get_lint_report(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -2119,12 +2119,12 @@ async def get_lint_report(
     return report
 
 
+@router.get("/synthesis/log", response_model=SynthesisLogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_synthesis_log",
     error_code_prefix="KNOWLEDGE_MAINTENANCE",
 )
-@router.get("/synthesis/log", response_model=SynthesisLogResponse)
 async def get_synthesis_log(
     limit: int = Query(
         default=50,

@@ -385,12 +385,12 @@ async def _cleanup_ws_tasks(
         tts_task.cancel()
 
 
+@router.websocket("/stream")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_stream_ws",
     error_code_prefix="VOICE_STREAM",
 )
-@router.websocket("/stream")
 async def voice_stream_ws(websocket: WebSocket) -> None:
     """Full-duplex voice conversation WebSocket (#1031, #1319)."""
     await websocket.accept()

@@ -43,12 +43,12 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
+@router.get("/status", response_model=PhasesStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phases_status",
     error_code_prefix="PHASES",
 )
-@router.get("/status", response_model=PhasesStatusResponse)
 async def get_phases_status() -> PhasesStatusResponse:
     """Return phase completion status for all development phases."""
     try:
@@ -78,12 +78,12 @@ async def get_phases_status() -> PhasesStatusResponse:
         raise HTTPException(status_code=500, detail="Failed to retrieve phases status")
 
 
+@router.post("/validation/run", response_model=ValidationRunResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_phases_validation",
     error_code_prefix="PHASES",
 )
-@router.post("/validation/run", response_model=ValidationRunResponse)
 async def run_phases_validation() -> ValidationRunResponse:
     """Queue a phase validation run.
 

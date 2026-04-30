@@ -1054,12 +1054,12 @@ def _convert_suggestions_to_dicts(suggestions: list) -> list:
     ]
 
 
+@router.post("/search", response_model=NLSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="natural_language_search",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.post("/search", response_model=NLSearchResponse)
 async def natural_language_search(request: NLSearchRequest):
     """
     Search codebase using natural language queries.
@@ -1114,12 +1114,12 @@ async def natural_language_search(request: NLSearchRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/parse", response_model=ParsedQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="parse_query",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.post("/parse", response_model=ParsedQueryResponse)
 async def parse_query(query: str):
     """
     Parse a natural language query without searching.
@@ -1145,12 +1145,12 @@ async def parse_query(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/suggestions", response_model=NLQuerySuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_query_suggestions",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/suggestions", response_model=NLQuerySuggestionsResponse)
 async def get_query_suggestions(query: str):
     """
     Get query suggestions for a given query.
@@ -1179,12 +1179,12 @@ async def get_query_suggestions(query: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/explain", response_model=NLCodeExplanationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="explain_code_snippet",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.post("/explain", response_model=NLCodeExplanationResponse)
 async def explain_code_snippet(
     code: str, file_path: str = "<unknown>", line_number: int = 0
 ):
@@ -1211,12 +1211,12 @@ async def explain_code_snippet(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/intents", response_model=NLIntentsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_supported_intents",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/intents", response_model=NLIntentsResponse)
 async def list_supported_intents():
     """List all supported query intents with examples."""
     return {
@@ -1257,12 +1257,12 @@ async def list_supported_intents():
     }
 
 
+@router.get("/domains", response_model=NLDomainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_supported_domains",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/domains", response_model=NLDomainsResponse)
 async def list_supported_domains():
     """List all supported query domains with keywords."""
     return {
@@ -1273,12 +1273,12 @@ async def list_supported_domains():
     }
 
 
+@router.get("/health", response_model=NLSearchHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="NATURAL_LANGUAGE_SEARCH",
 )
-@router.get("/health", response_model=NLSearchHealthResponse)
 async def health_check():
     """Health check endpoint.
 

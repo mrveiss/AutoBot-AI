@@ -146,12 +146,12 @@ async def _build_scoped_search_response(
     }
 
 
+@router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scoped_search",
     error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
 )
-@router.post("/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_search(
     search_request: ScopedSearchRequest,
     request: Request,
@@ -241,12 +241,12 @@ async def _synthesize_rag_response(
         }
 
 
+@router.post("/rag/scoped", response_model=KnowledgeScopedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scoped_rag_search",
     error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
 )
-@router.post("/rag/scoped", response_model=KnowledgeScopedSearchResponse)
 async def scoped_rag_search(
     search_request: ScopedSearchRequest,
     request: Request,
@@ -298,12 +298,12 @@ async def scoped_rag_search(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/accessible-scopes", response_model=KnowledgeAccessibleScopesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_accessible_scopes",
     error_code_prefix="KNOWLEDGE_SEARCH_SCOPED",
 )
-@router.get("/accessible-scopes", response_model=KnowledgeAccessibleScopesResponse)
 async def get_accessible_scopes(
     request: Request, current_user: User = Depends(get_current_user)
 ):

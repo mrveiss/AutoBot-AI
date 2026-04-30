@@ -177,12 +177,12 @@ async def _fan_out_stream(
 # ---------------------------------------------------------------------------
 
 
+@router.post("/chat/compare", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compare_models",
     error_code_prefix="CHAT_COMPARE",
 )
-@router.post("/chat/compare", response_model=None)
 async def compare_models(
     body: CompareRequest,
     request: Request,

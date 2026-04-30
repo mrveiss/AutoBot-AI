@@ -37,15 +37,15 @@ router = APIRouter(
 )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_connection",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.post(
     "/test-connection",
     response_model=IntegrationHealth,
     summary="Test communication provider connection",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_connection",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
     """Test connection to a communication provider."""
@@ -63,15 +63,15 @@ async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
         ) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_providers",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.get(
     "/providers",
     response_model=List[CommProviderInfo],
     summary="List supported communication providers",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_providers",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def list_providers() -> List[CommProviderInfo]:
     """Return list of supported communication providers."""
@@ -97,15 +97,15 @@ async def list_providers() -> List[CommProviderInfo]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_channels",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.get(
     "/{provider}/channels",
     response_model=Dict[str, Any],
     summary="List channels for a provider",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_channels",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def list_channels(
     provider: str,
@@ -155,15 +155,15 @@ async def list_channels(
         ) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_message",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.post(
     "/{provider}/messages",
     response_model=Dict[str, Any],
     summary="Send message to a channel",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def send_message(
     provider: str,
@@ -191,15 +191,15 @@ async def send_message(
         ) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_channel_history",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.get(
     "/{provider}/channels/{channel_id}/history",
     response_model=Dict[str, Any],
     summary="Get channel message history",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_channel_history",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def get_channel_history(
     provider: str,
@@ -235,15 +235,15 @@ async def get_channel_history(
         ) from exc
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_webhook_message",
-    error_code_prefix="INTEGRATION_COMMUNICATION",
-)
 @router.post(
     "/{provider}/webhooks",
     response_model=Dict[str, Any],
     summary="Send webhook message (Teams)",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_webhook_message",
+    error_code_prefix="INTEGRATION_COMMUNICATION",
 )
 async def send_webhook_message(
     provider: str,

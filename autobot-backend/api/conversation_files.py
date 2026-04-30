@@ -358,12 +358,12 @@ async def _validate_and_read_upload_file(
     operation="upload_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 async def upload_conversation_file(
     request: Request,
     session_id: str,
@@ -448,13 +448,13 @@ def _build_file_list_response(
     operation="list_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get(
+    "/conversation/{session_id}/list", response_model=ConversationFileListResponse
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
-)
-@router.get(
-    "/conversation/{session_id}/list", response_model=ConversationFileListResponse
 )
 async def list_conversation_files(
     request: Request, session_id: str, page: int = 1, page_size: int = 50
@@ -545,12 +545,12 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     operation="download_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Download a specific file from a conversation.
@@ -639,13 +639,13 @@ async def _generate_file_preview(
     operation="preview_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get(
+    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
-)
-@router.get(
-    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
 )
 async def preview_conversation_file(request: Request, session_id: str, file_id: str):
     """
@@ -741,12 +741,12 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     operation="delete_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Delete a specific file from a conversation.
@@ -790,12 +790,12 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
     operation="transfer_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 async def transfer_conversation_files(
     request: Request, session_id: str, transfer_request: FileTransferRequest
 ):
@@ -854,12 +854,12 @@ async def transfer_conversation_files(
     operation="create_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/files/create", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/files/create", response_model=DataResponse)
 async def create_conversation_file(
     request: Request, session_id: str, body: ConvFileCreateRequest
 ):
@@ -902,12 +902,12 @@ async def create_conversation_file(
     operation="rename_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse)
 async def rename_conversation_file(
     request: Request, session_id: str, file_id: str, body: ConvFileRenameRequest
 ):
@@ -947,12 +947,12 @@ async def rename_conversation_file(
     operation="get_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 async def get_file_content(request: Request, session_id: str, file_id: str):
     """Get the text content of a file (Issue #70)."""
     try:
@@ -981,12 +981,12 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
     operation="update_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_file_content",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 async def update_file_content(
     request: Request, session_id: str, file_id: str, body: ConvFileUpdateContentRequest
 ):
@@ -1025,12 +1025,12 @@ async def update_file_content(
     operation="copy_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="copy_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse)
 async def copy_conversation_file(
     request: Request, session_id: str, file_id: str, body: ConvFileCopyRequest
 ):
@@ -1070,12 +1070,12 @@ async def copy_conversation_file(
     operation="search_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get("/conversation/{session_id}/files/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/files/search", response_model=DataResponse)
 async def search_conversation_files(request: Request, session_id: str, q: str = ""):
     """Search files by name within a conversation session (Issue #70)."""
     try:
@@ -1100,12 +1100,12 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
     operation="agent_generate_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/generate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="agent_generate_file",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/generate", response_model=DataResponse)
 async def agent_generate_file(
     request: Request, session_id: str, body: AgentGenerateFileRequest
 ):
@@ -1223,12 +1223,12 @@ SESSION_MCP_TOOLS = [
     operation="session_mcp_tools",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get("/conversation/{session_id}/mcp/tools", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_mcp_tools",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.get("/conversation/{session_id}/mcp/tools", response_model=DataResponse)
 async def get_session_mcp_tools(request: Request, session_id: str):
     """Return MCP tool definitions scoped to this session (Issue #70)."""
     await _authorize_file_operation(request, session_id, "view")
@@ -1292,12 +1292,12 @@ async def _dispatch_mcp_tool(
     operation="session_mcp_call_tool",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="session_mcp_call_tool",
     error_code_prefix="CONVERSATION_FILES",
 )
-@router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse)
 async def session_mcp_call_tool(
     request: Request, session_id: str, body: MCPToolCallRequest
 ):
