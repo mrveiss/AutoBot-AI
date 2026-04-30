@@ -1857,7 +1857,7 @@ class ResetLearningResponse(BaseModel):
 
 
 class AgentConfig(BaseModel):
-    """Agent configuration model."""
+    """Agent configuration summary model — minimal shape for list views."""
 
     agent_id: str
     name: str
@@ -1865,6 +1865,42 @@ class AgentConfig(BaseModel):
     provider: str
     enabled: bool
     priority: Optional[int] = 1
+
+
+class AgentConfigDetailHealthCheck(BaseModel):
+    """Inline health-check block returned by GET /agents/{agent_id}."""
+
+    last_check: str = Field(..., description="ISO timestamp of last health check")
+    response_time: float = Field(default=0.0)
+    status: str = Field(..., description="healthy | disabled")
+
+
+class AgentConfigDetailOptions(BaseModel):
+    """Inline configuration_options block returned by GET /agents/{agent_id}."""
+
+    available_models: List[str] = Field(default_factory=list)
+    available_providers: List[str] = Field(default_factory=list)
+    configurable_settings: List[str] = Field(default_factory=list)
+
+
+class AgentConfigDetailResponse(BaseModel):
+    """Detailed response for GET /api/agents/{agent_id} — matches the actual
+    dict shape produced by api/agent_config.py:946."""
+
+    id: str
+    name: str
+    description: str
+    current_model: str
+    provider: str
+    enabled: bool
+    priority: int
+    tasks: List[str] = Field(default_factory=list)
+    mcp_tools: List[str] = Field(default_factory=list)
+    default_model: str
+    status: str = Field(..., description="connected | disconnected")
+    config_source: str = Field(..., description="slm | local")
+    configuration_options: AgentConfigDetailOptions
+    health_check: AgentConfigDetailHealthCheck
 
 
 class AgentModelUpdate(BaseModel):
