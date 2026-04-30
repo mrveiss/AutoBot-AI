@@ -675,8 +675,11 @@ class DocIndexerService:
             from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
+            # get_default_client takes only **kwargs (#6613) — pass db_path
+            # explicitly. Positional call raised TypeError at init, falling
+            # the indexer back to slow SCAN paths.
             self._client = await asyncio.to_thread(
-                get_default_client, str(chromadb_path)
+                get_default_client, db_path=str(chromadb_path)
             )
 
             self._collection = self._client.get_or_create_collection(
