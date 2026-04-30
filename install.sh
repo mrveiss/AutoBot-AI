@@ -451,8 +451,12 @@ ansible_deployment() {
     local inventory="${ansible_dir}/inventory/localhost.yml"
 
     info "Generating localhost inventory..."
+    # Single-host install: SLM Manager host also runs autobot-backend so the
+    # /api/auth/login flow works out of the box (#6600). The plural node_roles
+    # is the variable consulted by provision-fleet-roles.yml's role gates;
+    # node_role (singular) is preserved for backward compat.
     cat > "${inventory}" << 'INVENTORY'
-# AutoBot localhost inventory for self-deploy (Issue #1294)
+# AutoBot localhost inventory for self-deploy (Issue #1294, #6600)
 all:
   hosts:
     00-SLM-Manager:
@@ -461,8 +465,17 @@ all:
       ansible_python_interpreter: /usr/bin/python3
       slm_node_id: "00-SLM-Manager"
       node_role: "slm-manager"
+      node_roles:
+        - autobot-backend
+        - vnc
   children:
     slm_server:
+      hosts:
+        00-SLM-Manager:
+    main:
+      hosts:
+        00-SLM-Manager:
+    backend:
       hosts:
         00-SLM-Manager:
 INVENTORY
@@ -543,7 +556,10 @@ EOF
     chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    log "  Playbook: deploy-slm-manager.yml --skip-tags seed,provision"
+    # #6600: keep `provision` so backend role applies to 00-SLM-Manager in
+    # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
+    # rows that don't exist yet on a fresh install.
+    log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
@@ -552,7 +568,7 @@ EOF
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
-        --skip-tags "seed,provision" \
+        --skip-tags "seed" \
         -e "slm_admin_password=${ADMIN_PASSWORD}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
