@@ -142,6 +142,9 @@ async function applyPreset() {
     })
     applyResult.value = (response as { data: Record<string, unknown> }).data
     logger.info('Preset applied', applyResult.value)
+    // #6452: clear router-guard cache so next navigation re-checks status
+    // and sees preset_applied=true (then caches that).
+    sessionStorage.removeItem('onboarding_preset_applied')
   } catch (err) {
     logger.error('Apply preset failed', err)
     error.value = 'Failed to apply preset. Please try again.'
