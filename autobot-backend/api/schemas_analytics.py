@@ -2843,3 +2843,188 @@ class DateRangeParams(BaseModel):
 
     start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
     end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
+
+
+# ---------------------------------------------------------------------------
+# analytics_quality.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class QualityGrade(str, Enum):
+    """Quality grades from A to F."""
+
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+    F = "F"
+
+
+class MetricCategory(str, Enum):
+    """Categories of quality metrics."""
+
+    MAINTAINABILITY = "maintainability"
+    RELIABILITY = "reliability"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    TESTABILITY = "testability"
+    DOCUMENTATION = "documentation"
+
+
+class QualityMetric(BaseModel):
+    """Individual quality metric."""
+
+    name: str
+    category: MetricCategory
+    value: float = Field(..., ge=0, le=100)
+    grade: QualityGrade
+    trend: float = Field(default=0, description="Percentage change from previous period")
+    details: Optional[Dict[str, Any]] = None
+
+
+class HealthScore(BaseModel):
+    """Overall codebase health score."""
+
+    overall: float = Field(..., ge=0, le=100)
+    grade: QualityGrade
+    trend: float = Field(default=0)
+    breakdown: Dict[str, float] = Field(default_factory=dict)
+    recommendations: List[str] = Field(default_factory=list)
+
+
+class PatternDistribution(BaseModel):
+    """Distribution of code patterns."""
+
+    pattern_type: str
+    count: int
+    percentage: float
+    severity: str
+    examples: List[str] = Field(default_factory=list)
+
+
+class ComplexityMetrics(BaseModel):
+    """Code complexity analysis."""
+
+    average_cyclomatic: float
+    max_cyclomatic: int
+    average_cognitive: float
+    max_cognitive: int
+    hotspots: List[Dict[str, Any]] = Field(default_factory=list)
+    distribution: Dict[str, int] = Field(default_factory=dict)
+
+
+class QualitySnapshot(BaseModel):
+    """Complete quality snapshot at a point in time."""
+
+    timestamp: datetime
+    health_score: HealthScore
+    metrics: List[QualityMetric]
+    patterns: List[PatternDistribution]
+    complexity: ComplexityMetrics
+    file_count: int
+    line_count: int
+    issues_count: int
+
+
+# ---------------------------------------------------------------------------
+# analytics_architecture.py enums + schemas
+# ---------------------------------------------------------------------------
+
+
+class PatternType(str, Enum):
+    """Types of architectural patterns."""
+
+    FACTORY = "factory"
+    ABSTRACT_FACTORY = "abstract_factory"
+    SINGLETON = "singleton"
+    BUILDER = "builder"
+    PROTOTYPE = "prototype"
+    ADAPTER = "adapter"
+    BRIDGE = "bridge"
+    COMPOSITE = "composite"
+    DECORATOR = "decorator"
+    FACADE = "facade"
+    PROXY = "proxy"
+    OBSERVER = "observer"
+    STRATEGY = "strategy"
+    COMMAND = "command"
+    STATE = "state"
+    TEMPLATE_METHOD = "template_method"
+    CHAIN_OF_RESPONSIBILITY = "chain_of_responsibility"
+    MVC = "mvc"
+    MVP = "mvp"
+    MVVM = "mvvm"
+    REPOSITORY = "repository"
+    SERVICE_LAYER = "service_layer"
+    DEPENDENCY_INJECTION = "dependency_injection"
+    AUTOBOT_ROUTER = "autobot_router"
+    AUTOBOT_SERVICE = "autobot_service"
+    AUTOBOT_MANAGER = "autobot_manager"
+    AUTOBOT_HANDLER = "autobot_handler"
+    REDIS_CACHING = "redis_caching"
+    MCP_TOOL = "mcp_tool"
+
+
+class ConsistencyLevel(str, Enum):
+    """Levels of pattern consistency."""
+
+    CONSISTENT = "consistent"
+    MOSTLY_CONSISTENT = "mostly_consistent"
+    INCONSISTENT = "inconsistent"
+    UNKNOWN = "unknown"
+
+
+class PatternMatch(BaseModel):
+    """A detected pattern match."""
+
+    pattern_type: PatternType
+    file_path: str
+    class_name: Optional[str] = None
+    function_name: Optional[str] = None
+    line_number: int
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    indicators_found: List[str]
+    code_snippet: Optional[str] = None
+
+
+class PatternConsistency(BaseModel):
+    """Pattern consistency analysis."""
+
+    pattern_type: PatternType
+    consistency_level: ConsistencyLevel
+    total_instances: int
+    consistent_instances: int
+    violations: List[Dict[str, Any]]
+    recommendations: List[str]
+
+
+class ArchitectureLayer(BaseModel):
+    """An architectural layer in the system."""
+
+    name: str
+    description: str
+    components: List[str]
+    dependencies: List[str]
+    patterns_used: List[PatternType]
+
+
+class ArchitectureReport(BaseModel):
+    """Complete architecture analysis report."""
+
+    timestamp: datetime
+    total_files_analyzed: int
+    patterns_detected: Dict[str, int]
+    pattern_matches: List[PatternMatch]
+    consistency_analysis: List[PatternConsistency]
+    layers: List[ArchitectureLayer]
+    recommendations: List[str]
+    mermaid_diagram: str
+
+
+class ArchitectureAnalysisRequest(BaseModel):
+    """Request for architecture analysis."""
+
+    paths: List[str] = Field(default_factory=lambda: ["backend/", "src/"], description="Paths to analyze")
+    patterns_to_detect: Optional[List[PatternType]] = Field(None, description="Specific patterns to look for")
+    include_autobot_patterns: bool = Field(True, description="Include AutoBot-specific patterns")
+    generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
