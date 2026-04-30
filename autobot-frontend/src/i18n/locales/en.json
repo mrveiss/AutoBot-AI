@@ -4032,6 +4032,12 @@
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
     "translate": "Translate",
+    "nav": {
+      "label": "Agents navigation",
+      "registry": "Registry",
+      "activity": "Activity",
+      "heartbeat": "Heartbeat"
+    },
     "registry": {
       "title": "Agent Registry",
       "subtitle": "Browse and monitor all registered agents",

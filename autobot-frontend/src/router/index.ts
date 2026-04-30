@@ -594,41 +594,55 @@ export const routes: RouteRecordRaw[] = [
   },
   // Issue #4270: Operations moved under /analytics/operations
   { path: '/operations', redirect: '/analytics/operations' },
-  // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
+  // Issue #6634: Tabbed /agents shell — Registry, Activity, Heartbeat as
+  // sibling tabs under a shared AgentsLayout. Each retains its own URL so
+  // existing nav-item links and bookmarks still work.
   {
-    path: '/agents/registry',
-    name: 'agent-registry',
-    component: () => import('@/views/AgentRegistryView.vue'),
+    path: '/agents',
+    component: () => import('@/views/AgentsLayout.vue'),
     meta: {
-      title: 'Agent Registry',
-      icon: 'fas fa-robot',
-      description: 'Browse backend and specialized agents, and manage agent settings',
-      requiresAuth: true
-    }
-  },
-  // Issue #1521: Agent Heartbeat Panel — real-time agent run status
-  {
-    path: '/agents/heartbeat',
-    name: 'agent-heartbeat',
-    component: () => import('@/components/agents/HeartbeatPanel.vue'),
-    meta: {
-      title: 'Agent Heartbeat',
-      icon: 'fas fa-heartbeat',
-      description: 'Monitor agent heartbeat and real-time run status',
-      requiresAuth: true
-    }
-  },
-  // Issue #5071: per-agent diary with background append and runtime discovery
-  {
-    path: '/agents/activity',
-    name: 'agent-activity',
-    component: () => import('@/views/AgentActivity.vue'),
-    meta: {
-      title: 'Agent Activity',
-      icon: 'fas fa-journal-whills',
-      description: 'Per-agent diary — recent entries and cross-session journal',
-      requiresAuth: true
-    }
+      title: 'Agents',
+      requiresAuth: true,
+    },
+    children: [
+      { path: '', redirect: '/agents/registry' },
+      // Issue #4703: Wire AgentRegistryView into router (#1794, #1822)
+      {
+        path: 'registry',
+        name: 'agent-registry',
+        component: () => import('@/views/AgentRegistryView.vue'),
+        meta: {
+          title: 'Agent Registry',
+          icon: 'fas fa-robot',
+          description: 'Browse backend and specialized agents, and manage agent settings',
+          requiresAuth: true,
+        },
+      },
+      // Issue #1521: Agent Heartbeat Panel — real-time agent run status
+      {
+        path: 'heartbeat',
+        name: 'agent-heartbeat',
+        component: () => import('@/components/agents/HeartbeatPanel.vue'),
+        meta: {
+          title: 'Agent Heartbeat',
+          icon: 'fas fa-heartbeat',
+          description: 'Monitor agent heartbeat and real-time run status',
+          requiresAuth: true,
+        },
+      },
+      // Issue #5071: per-agent diary with background append and runtime discovery
+      {
+        path: 'activity',
+        name: 'agent-activity',
+        component: () => import('@/views/AgentActivity.vue'),
+        meta: {
+          title: 'Agent Activity',
+          icon: 'fas fa-journal-whills',
+          description: 'Per-agent diary — recent entries and cross-session journal',
+          requiresAuth: true,
+        },
+      },
+    ],
   },
   // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
