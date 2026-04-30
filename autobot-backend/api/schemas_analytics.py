@@ -1173,15 +1173,43 @@ class RealTimeEvent(BaseModel):
 
 
 class BugPredictionAnalysisResponse(BaseModel):
-    """Response for GET /bug-prediction/analyze — dual shape (success vs no_data)."""
+    """Response for GET /bug-prediction/analyze — dual shape (success vs no_data).
+
+    Success shape mirrors PredictionResult fields plus envelope metadata
+    (status, from_cache). The no_data shape returns status="no_data" and
+    a message. extra="allow" preserves backward compat with any callers
+    still relying on additional pass-through fields.
+    """
 
     model_config = {"extra": "allow"}
+
+    status: Optional[str] = None  # "success" or "no_data"
+    timestamp: Optional[str] = None
+    total_files: Optional[int] = None
+    analyzed_files: Optional[int] = None
+    high_risk_count: Optional[int] = None
+    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
+    from_cache: Optional[bool] = None
+    # no_data shape
+    message: Optional[str] = None
 
 
 class BugPredictionCachedResponse(BaseModel):
-    """Response for GET /bug-prediction/cached — dual shape (success vs no_data)."""
+    """Response for GET /bug-prediction/cached — dual shape (success vs no_data).
+
+    Same shape as BugPredictionAnalysisResponse with from_cache=True on success.
+    """
 
     model_config = {"extra": "allow"}
+
+    status: Optional[str] = None
+    timestamp: Optional[str] = None
+    total_files: Optional[int] = None
+    analyzed_files: Optional[int] = None
+    high_risk_count: Optional[int] = None
+    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
+    from_cache: Optional[bool] = None
+    message: Optional[str] = None
 
 
 class BugPredictionHighRiskResponse(BaseModel):
@@ -1189,11 +1217,22 @@ class BugPredictionHighRiskResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
+    status: Optional[str] = None
+    timestamp: Optional[str] = None
+    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
+    high_risk_count: Optional[int] = None
+    message: Optional[str] = None
+
 
 class BugPredictionFileResponse(BaseModel):
     """Response for GET /bug-prediction/file/{file_path} — dual shape (success vs no_data)."""
 
     model_config = {"extra": "allow"}
+
+    status: Optional[str] = None
+    timestamp: Optional[str] = None
+    file: Optional["FileRisk"] = None  # type: ignore[name-defined]
+    message: Optional[str] = None
 
 
 class BugPredictionHeatmapResponse(BaseModel):
@@ -3280,7 +3319,6 @@ class DebtSummary(BaseModel):
 # analytics_bug_prediction.py schemas
 # ---------------------------------------------------------------------------
 
-from datetime import datetime as _dt_datetime
 from enum import Enum as _BugPredEnum
 
 
@@ -3308,25 +3346,32 @@ class RiskFactor(str, _BugPredEnum):
 
 
 class FileRisk(BaseModel):
-    """Bug risk assessment for a file."""
+    """Bug risk assessment for a file. Matches FileRiskAssessment.to_dict()
+    output from code_intelligence/bug_predictor.py."""
 
     file_path: str
     risk_score: float = Field(..., ge=0, le=100)
     risk_level: RiskLevel
     factors: Dict[str, float] = Field(default_factory=dict)
+    factor_details: Optional[List[Dict[str, Any]]] = None
     bug_count_history: int = 0
     last_bug_date: Optional[str] = None
     prevention_tips: List[str] = Field(default_factory=list)
     suggested_tests: List[str] = Field(default_factory=list)
+    recommendation: str = ""
 
 
 class PredictionResult(BaseModel):
-    """Bug prediction result for the codebase."""
+    """Bug prediction result for the codebase. Matches PredictionResult.to_dict()
+    output from code_intelligence/bug_predictor.py."""
 
-    timestamp: _dt_datetime
+    timestamp: str = Field(..., description="ISO format timestamp")
     total_files: int
+    analyzed_files: int = 0
     high_risk_count: int
-    predicted_bugs: int
-    accuracy_score: float
+    predicted_bugs: int = 0
+    accuracy_score: Optional[float] = None
+    accuracy_available: bool = False
     risk_distribution: Dict[str, int] = Field(default_factory=dict)
-    top_risk_files: List[FileRisk] = Field(default_factory=list)
+    files: List[FileRisk] = Field(default_factory=list)
+    top_risk_factors: List[Dict[str, Any]] = Field(default_factory=list)
