@@ -28,7 +28,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from api.schemas_analytics import EmbeddingUsageRequest
+from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
@@ -499,7 +499,7 @@ async def record_embedding_usage(
     )
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=EmbeddingStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_stats",
