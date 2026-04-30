@@ -454,8 +454,20 @@ function buildConfig(): AutoBotConfig {
     },
 
     get websocketUrl(): string {
-      if (httpProtocol === 'https') {
-        return `wss://${vm.main}/api/ws`;
+      // #6642: detect protocol from window.location at runtime, not from
+      // build-time VITE_HTTP_PROTOCOL. The env var defaults to 'http' and
+      // produced ws:// URLs that browsers blocked as mixed-content when the
+      // page itself was served over HTTPS. Mirror the runtime detection that
+      // getBackendWsUrl() already uses so behaviour stays correct regardless
+      // of the build-time env.
+      const isHttps =
+        typeof window !== 'undefined'
+          ? window.location.protocol === 'https:'
+          : httpProtocol === 'https';
+      if (isHttps) {
+        const host =
+          typeof window !== 'undefined' ? window.location.host : vm.main;
+        return `wss://${host}/api/ws`;
       }
       return `ws://${vm.main}:${port.backend}/api/ws`;
     },
