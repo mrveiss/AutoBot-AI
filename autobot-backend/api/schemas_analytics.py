@@ -3253,8 +3253,8 @@ class EmbeddingUsageRequest(BaseModel):
         )
 
 
-class EmbeddingStatsResponse(BaseModel):
-    """Response model for embedding statistics."""
+class EmbeddingStatsBody(BaseModel):
+    """Inner stats body returned by EmbeddingPatternAnalyzer.get_stats()."""
 
     total_operations: int
     total_tokens: int
@@ -3264,8 +3264,21 @@ class EmbeddingStatsResponse(BaseModel):
     success_rate: float
     avg_batch_size: float
     tokens_per_second: float
-    period: str
-    timestamp: str
+    period_days: int
+
+
+class EmbeddingStatsResponse(BaseModel):
+    """Envelope response for GET /api/analytics/embedding-patterns/stats —
+    matches the dict shape returned by EmbeddingPatternAnalyzer.get_stats().
+    Also covers the error shape via extra="allow"."""
+
+    model_config = {"extra": "allow"}
+
+    status: str = Field(..., description="success | error")
+    stats: Optional[EmbeddingStatsBody] = None
+    timestamp: Optional[str] = None
+    # error shape
+    error: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
