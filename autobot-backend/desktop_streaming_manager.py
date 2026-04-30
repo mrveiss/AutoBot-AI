@@ -30,7 +30,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
-from task_execution_tracker import TaskPriority, task_tracker
+from task_execution_tracker import TaskPriority, get_task_tracker
 
 # Type aliases for clarity
 SessionDict = dict[str, Any]
@@ -283,7 +283,7 @@ class VNCServerManager:
         Raises:
             RuntimeError: If VNC is not available or session creation fails.
         """
-        async with task_tracker.track_task(
+        async with get_task_tracker().track_task(
             "Create VNC Session",
             f"Creating desktop streaming session for user {user_id}",
             agent_type="desktop_streaming",
