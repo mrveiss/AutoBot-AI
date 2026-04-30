@@ -66,7 +66,11 @@ class DataResponse(BaseModel, Generic[T]):
     bare DataResponse (equivalent to DataResponse[Any]) remains valid for opaque payloads.
     """
 
-    success: bool
+    # success defaults to True because every callsite of create_success_response
+    # writes a success envelope by definition. Without the default, bare
+    # DataResponse(data=...) callers (api/onboarding.py, api/playwright.py)
+    # crashed at request time — see #6609.
+    success: bool = True
     data: Optional[T] = None
     message: Optional[str] = None
     timestamp: Optional[str] = None
