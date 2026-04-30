@@ -13,17 +13,22 @@ from fastapi import APIRouter, HTTPException
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.wake_word_service import WakeWordDetector, get_wake_word_detector
 from type_defs.common import Metadata
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     AddWakeWordRequest,
     WakeWordCheckRequest,
     WakeWordCheckResponse,
     WakeWordConfigRequest,
+    WakeWordConfigUpdateResponse,
+    WakeWordFeedbackResponse,
     WakeWordGetConfigResponse,
     WakeWordGetWordsResponse,
     WakeWordListeningStatusResponse,
+    WakeWordListeningToggleResponse,
+    WakeWordMutateResponse,
     WakeWordReportFeedbackRequest,
+    WakeWordStatsResetResponse,
     WakeWordStatsResponse,
+    WakeWordToggleResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +93,7 @@ async def get_wake_words() -> Metadata:
     operation="add_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/words", response_model=DataResponse)
+@router.post("/words", response_model=WakeWordMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_wake_word",
@@ -118,7 +123,7 @@ async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     operation="remove_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.delete("/words/{wake_word}", response_model=DataResponse)
+@router.delete("/words/{wake_word}", response_model=WakeWordMutateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="remove_wake_word",
@@ -169,7 +174,7 @@ async def get_wake_word_config() -> Metadata:
     operation="update_wake_word_config",
     error_code_prefix="WAKE_WORD",
 )
-@router.put("/config", response_model=DataResponse)
+@router.put("/config", response_model=WakeWordConfigUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_wake_word_config",
@@ -227,7 +232,7 @@ async def get_wake_word_stats() -> Metadata:
     operation="reset_wake_word_stats",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/stats/reset", response_model=DataResponse)
+@router.post("/stats/reset", response_model=WakeWordStatsResetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_wake_word_stats",
@@ -249,7 +254,7 @@ async def reset_wake_word_stats() -> Metadata:
     operation="report_detection_feedback",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/feedback", response_model=DataResponse)
+@router.post("/feedback", response_model=WakeWordFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="report_detection_feedback",
@@ -280,7 +285,7 @@ async def report_detection_feedback(request: WakeWordReportFeedbackRequest) -> M
     operation="enable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/enable", response_model=DataResponse)
+@router.post("/enable", response_model=WakeWordToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_wake_word",
@@ -302,7 +307,7 @@ async def enable_wake_word() -> Metadata:
     operation="disable_wake_word",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/disable", response_model=DataResponse)
+@router.post("/disable", response_model=WakeWordToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_wake_word",
@@ -329,7 +334,7 @@ async def disable_wake_word() -> Metadata:
     operation="start_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/start", response_model=DataResponse)
+@router.post("/listening/start", response_model=WakeWordListeningToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_listening",
@@ -356,7 +361,7 @@ async def start_listening() -> Metadata:
     operation="stop_listening",
     error_code_prefix="WAKE_WORD",
 )
-@router.post("/listening/stop", response_model=DataResponse)
+@router.post("/listening/stop", response_model=WakeWordListeningToggleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_listening",
