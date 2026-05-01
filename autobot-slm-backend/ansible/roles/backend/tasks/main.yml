@@ -82,6 +82,16 @@
     group: root
   tags: ['backend', 'config']
 
+# Issue #6677: Stat the SLM CA cert before rendering the env file. The
+# template only sets AUTOBOT_TLS_CA_PATH when the cert actually exists, so
+# installs without TLS (or where distribute-tls-certs.yml has not yet run)
+# don't ship a dangling env var that points at a missing file.
+- name: "Backend | Stat SLM CA cert (#6677)"
+  ansible.builtin.stat:
+    path: /etc/autobot/certs/ca-cert.pem
+  register: backend_tls_ca_cert
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
   ansible.builtin.template:
     src: backend.env.j2
