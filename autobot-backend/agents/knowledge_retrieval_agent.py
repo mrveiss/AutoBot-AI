@@ -160,7 +160,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             "agent_type": "knowledge_retrieval",
         }
 
-    def _build_success_response(
+    def _build_query_payload(
         self,
         query: str,
         processed_results: Dict[str, Any],
@@ -169,7 +169,13 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         similarity_threshold: float,
     ) -> Dict[str, Any]:
         """
-        Build successful query response.
+        Build the knowledge-retrieval-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6650). The
+        prior name shadowed the base method with an incompatible signature,
+        so any AI Stack ``/agents/knowledge_retrieval/process`` request would
+        crash with a TypeError.
 
         (Issue #398: extracted helper)
         """
@@ -249,7 +255,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                     query, processed_results["documents"][:3]
                 )
 
-            return self._build_success_response(
+            return self._build_query_payload(
                 query, processed_results, summary, processing_time, similarity_threshold
             )
 
