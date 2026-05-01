@@ -46,12 +46,14 @@ from api.schemas_knowledge import (
     InvalidateRelationRequest,
     MemoryDeleteEntityResponse,
     MemoryDeleteRelationResponse,
+    MemoryEntityDetailResponse,
     MemoryEntityInvalidateResponse,
     MemoryEntityListResponse,
     MemoryOrphanCleanupResponse,
     MemoryOrphanScanResponse,
     MemoryRelatedEntitiesResponse,
     MemoryRelationInvalidateResponse,
+    MemorySearchResponse,
     ObservationAddRequest,
     RelationCreateRequest,
 )
@@ -841,7 +843,7 @@ async def cleanup_orphaned_conversation_entities(
     operation="get_entity_by_id",
     error_code_prefix="MEMORY",
 )
-@router.get("/entities/{entity_id}", response_model=DataResponse)
+@router.get("/entities/{entity_id}", response_model=MemoryEntityDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_id",
@@ -1310,7 +1312,7 @@ async def delete_relation(
     operation="search_entities",
     error_code_prefix="MEMORY",
 )
-@router.get("/search", response_model=DataResponse)
+@router.get("/search", response_model=MemorySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_entities",
