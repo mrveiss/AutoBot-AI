@@ -362,6 +362,29 @@ def _update_task_stats(task_id: str, indexing_tasks: Dict, **kwargs) -> None:
             indexing_tasks[task_id]["stats"][key] = value
 
 
+async def _invalidate_quality_cache() -> None:
+    """Invalidate code_quality:latest* Redis keys after a scan changes ChromaDB.
+
+    Issue #6669: The Code Quality Dashboard caches calculated metrics in Redis
+    for 5 minutes (analytics_quality.py:130). Without invalidation, the
+    dashboard serves pre-scan results until that TTL elapses. We use a
+    pattern-delete so both the global ``code_quality:latest`` key and any
+    per-source ``code_quality:latest:{source_root}`` variants are cleared.
+    """
+    try:
+        redis = await get_async_redis_client(database="analytics")
+        if not redis:
+            return
+        keys = await redis.keys("code_quality:latest*")
+        if keys:
+            await redis.delete(*keys)
+            logger.info(
+                "Invalidated %d quality cache key(s) after scan", len(keys)
+            )
+    except Exception as exc:
+        logger.warning("Quality cache invalidation failed: %s", exc)
+
+
 def _mark_task_completed(
     task_id: str,
     analysis_results: Dict,
@@ -373,6 +396,8 @@ def _mark_task_completed(
     Mark indexing task as completed with results.
 
     Issue #398: Extracted from do_indexing_with_progress.
+    Issue #6669: Invalidate the Code Quality Dashboard's Redis cache so the
+    UI surfaces fresh scan output instead of serving 5-minute-stale results.
     """
     indexing_tasks[task_id]["status"] = "completed"
     total_files = analysis_results["stats"]["total_files"]
@@ -388,6 +413,13 @@ def _mark_task_completed(
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
     indexing_tasks[task_id]["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
+    # Fire-and-forget cache invalidation; safe in any running-loop context
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_invalidate_quality_cache())
+    except RuntimeError:
+        # No running loop (called from a sync context); run a one-shot
+        asyncio.run(_invalidate_quality_cache())
 
 
 def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> None:
