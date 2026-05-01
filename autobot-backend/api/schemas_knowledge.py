@@ -3873,6 +3873,23 @@ class SearchResponse(BaseModel):
     filters: Metadata
 
 
+class MemorySearchResponse(BaseModel):
+    """Envelope for GET /api/memory/search — wraps SearchResponse in the
+    standard {success, data, request_id} envelope used across memory.py."""
+
+    success: bool
+    data: SearchResponse
+    request_id: str
+
+
+class MemoryEntityDetailResponse(BaseModel):
+    """Envelope for GET /api/memory/entities/{entity_id} — wraps EntityResponse."""
+
+    success: bool
+    data: EntityResponse
+    request_id: str
+
+
 # ai_stack_integration.py schemas (#6042)
 
 
