@@ -21,7 +21,17 @@ from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from phase_progression_manager import get_progression_manager
 from project_state_manager import ProjectStateManager
-from scripts.phase_validation_system import PhaseValidator
+
+try:
+    # PhaseValidator lives in autobot-infrastructure/shared/scripts/ — only
+    # available when the infrastructure repo is on PYTHONPATH (#6666).
+    from scripts.phase_validation_system import PhaseValidator
+except ImportError as _phase_validator_import_error:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    PhaseValidator = _MissingDep(  # type: ignore[assignment, misc]
+        "PhaseValidator", _phase_validator_import_error
+    )
 
 from .database import (
     init_database,
