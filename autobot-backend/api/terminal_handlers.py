@@ -32,10 +32,12 @@ from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
 from api.schemas_terminal import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
     CommandRiskLevel,
     SecurityLevel,
+)
+from constants.terminal_constants import (
+    MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
 )
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
