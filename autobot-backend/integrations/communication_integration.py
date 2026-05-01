@@ -117,7 +117,7 @@ class SlackIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _send_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -357,7 +357,7 @@ class TeamsIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _send_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -501,7 +501,7 @@ class DiscordIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     async def _send_message(self, params: Dict[str, Any]) -> Dict[str, Any]:

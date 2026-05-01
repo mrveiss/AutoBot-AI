@@ -127,8 +127,7 @@ class GitLabIntegration(BaseIntegration):
         }
 
         if action not in action_map:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
         return await action_map[action](params)
 
     async def _list_projects(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -371,8 +370,7 @@ class BitbucketIntegration(BaseIntegration):
         }
 
         if action not in action_map:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
         return await action_map[action](params)
 
     async def _list_repositories(self, params: Dict[str, Any]) -> Dict[str, Any]:

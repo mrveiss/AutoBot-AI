@@ -150,8 +150,7 @@ class PostgreSQLIntegration(BaseIntegration):
             database = params.get("database", "postgres")
             return await self._execute_query(query, database)
         else:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in PostgreSQL."""
         import asyncpg
@@ -315,8 +314,7 @@ class MySQLIntegration(BaseIntegration):
             database = params.get("database", "mysql")
             return await self._execute_query(query, database)
         else:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in MySQL."""
         import aiomysql
@@ -493,8 +491,7 @@ class MongoDBIntegration(BaseIntegration):
                 database, collection, filter_dict, limit
             )
         else:
-            raise ValueError(f"Unknown action: {action}")
-
+            return {"error": f"Unknown action: {action}"}
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in MongoDB."""
         from motor.motor_asyncio import AsyncIOMotorClient
