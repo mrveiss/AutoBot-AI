@@ -1615,7 +1615,8 @@
       "file": "File",
       "score": "Score",
       "topIssue": "Top Issue",
-      "close": "Close"
+      "close": "Close",
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

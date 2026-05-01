@@ -29,6 +29,22 @@
       </div>
     </div>
 
+    <!-- Issue #6671: surface backend status:"no_data" instead of silently rendering zeros -->
+    <EmptyState
+      v-if="noDataState.noData"
+      icon="chart-line"
+      :message="noDataState.message ?? $t('analytics.codeQuality.noScanData')"
+      variant="info"
+    >
+      <template #actions>
+        <button @click="refreshData" class="btn-link" :disabled="loading">
+          {{ $t('analytics.codeQuality.refresh') }}
+        </button>
+      </template>
+    </EmptyState>
+
+    <!-- Issue #6671: hide all data-driven sections when backend reports no_data -->
+    <template v-if="!noDataState.noData">
     <!-- Health Score Hero Card -->
     <div class="health-hero">
       <div class="health-score-circle">
@@ -364,6 +380,8 @@
       </div>
     </div>
 
+    </template>
+
     <!-- Drill-Down Modal -->
     <div v-if="drillDownCategory" class="modal-overlay" @click.self="drillDownCategory = null">
       <div class="modal-content drill-down-modal">
@@ -426,6 +444,7 @@ import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
 import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 const logger = createLogger('CodeQualityDashboard');
 
@@ -450,6 +469,7 @@ const {
   fetchSnapshot,
   fetchDrillDown,
   fetchExport,
+  noDataState,
 } = useCodeQualityData(withSourceId);
 
 // Helper to get CSS variable value for JavaScript usage (SVG, charts, etc.)
