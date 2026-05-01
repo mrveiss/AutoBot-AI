@@ -11,7 +11,9 @@ Coverage:
 - process_chat_message() includes MCP tool section in the system prompt sent to the LLM
 
 Note: _get_mcp_tools_prompt is defined on StandardizedAgent (#2631) — ChatAgent
-inherits it.  Patches target agents.standardized_agent.get_mcp_dispatcher.
+inherits it. The base imports get_mcp_dispatcher lazily inside the method
+(`from services.mcp_dispatch import get_mcp_dispatcher`), so patches must
+target the source module (#6651).
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -49,7 +51,7 @@ async def test_get_mcp_tools_prompt_returns_formatted_section():
 
     with (
         patch(
-            "agents.standardized_agent.get_mcp_dispatcher",
+            "services.mcp_dispatch.get_mcp_dispatcher",
             return_value=_make_mock_dispatcher([_SAMPLE_TOOL_DEF]),
         ),
         patch.object(ChatAgent, "__init__", lambda self: None),
@@ -69,7 +71,7 @@ async def test_get_mcp_tools_prompt_returns_empty_when_no_tools():
 
     with (
         patch(
-            "agents.standardized_agent.get_mcp_dispatcher",
+            "services.mcp_dispatch.get_mcp_dispatcher",
             return_value=_make_mock_dispatcher([]),
         ),
         patch.object(ChatAgent, "__init__", lambda self: None),
@@ -101,7 +103,7 @@ async def test_mcp_tools_injected_into_system_prompt():
 
     with (
         patch(
-            "agents.standardized_agent.get_mcp_dispatcher",
+            "services.mcp_dispatch.get_mcp_dispatcher",
             return_value=_make_mock_dispatcher([_SAMPLE_TOOL_DEF]),
         ),
         patch("agents.chat_agent.resolve_language", return_value="en"),
@@ -143,7 +145,7 @@ async def test_get_mcp_tools_prompt_falls_back_to_stale_cache_on_refresh_error()
 
     with (
         patch(
-            "agents.standardized_agent.get_mcp_dispatcher",
+            "services.mcp_dispatch.get_mcp_dispatcher",
             return_value=_make_dispatcher_with_error_and_stale_tools(),
         ),
         patch.object(ChatAgent, "__init__", lambda self: None),
