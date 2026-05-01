@@ -1457,19 +1457,15 @@ async def export_session(session_id: str, request: Request, format: str = "json"
     )
 
     # Issue #6559: Audit session export
-    # TODO: AuditAction.SESSION_EXPORT does not exist in the enum yet — using
-    # ADMIN_ACTION with metadata.action="session.export" until the enum gains
-    # a dedicated value. See services/audit/audit_log.py.
     user_data = get_auth_middleware().get_user_from_request(request)
     audit_record(
         user_id=str((user_data or {}).get("user_id", "unknown")),
-        action=AuditAction.ADMIN_ACTION,
+        action=AuditAction.SESSION_EXPORT,
         resource_type="chat_session",
         resource_id=session_id,
         ip_address=request.client.host if request.client else "unknown",
         session_id=session_id,
         metadata={
-            "action": "session.export",
             "format": format,
             "request_id": request_id,
         },
