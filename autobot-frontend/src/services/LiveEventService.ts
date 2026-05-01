@@ -69,7 +69,7 @@ class LiveEventService {
   // explicitly (e.g., test override). Returns null when no token is available
   // so connect() can defer instead of producing a guaranteed-403 handshake.
   private getUrl(token?: string): string | null {
-    const base = `${config.websocketUrl}/live`
+    const base = `${config.websocketUrl}/ws/live`
     if (token) {
       const sep = base.includes('?') ? '&' : '?'
       return `${base}${sep}token=${encodeURIComponent(token)}`
