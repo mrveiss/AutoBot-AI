@@ -63,9 +63,19 @@ class LLMFailsafeAgent(StandardizedAgent):
     # Agent identifier for SSOT config lookup
     AGENT_ID = "llm_failsafe"
 
-    def __init__(self):
-        """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("llm_failsafe", DeploymentMode.LOCAL)
+    def __init__(
+        self,
+        agent_type: Optional[str] = None,
+        deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
+    ):
+        """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent).
+
+        Issue #6660: Accepts the parent's full constructor signature so factory
+        callers (`cls(agent_type, deployment_mode)`) keep working. Defaults
+        match the historical no-arg call site so existing instantiations are
+        unaffected.
+        """
+        super().__init__(agent_type or self.AGENT_ID, deployment_mode)
         # Override self.logger to preserve existing naming convention
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
