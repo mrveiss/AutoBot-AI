@@ -183,3 +183,98 @@ class TestSourceIdGuardLogic:
 
             # Should not raise
             await _resolve_source_or_404("valid-id")
+
+
+class TestPerSourceStatsLookup:
+    """Issue #6670: _get_problems_from_chromadb must look up codebase_stats_{source_id} first."""
+
+    def _fake_collection(self, problems_metadatas, stats_by_id):
+        """Build an AsyncMock ChromaDB collection that records the ids/where it was queried with."""
+        calls = []
+
+        async def get(**kwargs):
+            calls.append(kwargs)
+            if kwargs.get("where") == {"type": "problem"}:
+                return {"metadatas": problems_metadatas}
+            ids = kwargs.get("ids") or []
+            for stats_id in ids:
+                if stats_id in stats_by_id:
+                    return {"metadatas": [stats_by_id[stats_id]]}
+            return {"metadatas": []}
+
+        collection = MagicMock()
+        collection.get = AsyncMock(side_effect=get)
+        return collection, calls
+
+    @pytest.mark.asyncio
+    async def test_uses_per_source_stats_key_when_source_id_provided(self):
+        """When source_id is given, the per-source codebase_stats_{id} doc must be tried first."""
+        from api import analytics_quality as aq
+
+        collection, calls = self._fake_collection(
+            problems_metadatas=[],
+            stats_by_id={"codebase_stats_abc123": {"total_files": 42, "total_lines": 1234}},
+        )
+
+        async def fake_get_collection():
+            return collection
+
+        with patch(
+            "api.codebase_analytics.storage.get_code_collection_async",
+            new=fake_get_collection,
+        ):
+            problems, stats = await aq._get_problems_from_chromadb(source_id="abc123")
+
+        # Per-source key must be queried; global key must NOT be queried (returned data first)
+        id_queries = [c.get("ids") for c in calls if "ids" in c]
+        assert ["codebase_stats_abc123"] in id_queries
+        assert ["codebase_stats"] not in id_queries
+        assert stats["total_files"] == 42
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_global_stats_when_per_source_missing(self):
+        """If codebase_stats_{id} is absent, fall back to the global codebase_stats key."""
+        from api import analytics_quality as aq
+
+        collection, calls = self._fake_collection(
+            problems_metadatas=[],
+            stats_by_id={"codebase_stats": {"total_files": 7, "total_lines": 200}},
+        )
+
+        async def fake_get_collection():
+            return collection
+
+        with patch(
+            "api.codebase_analytics.storage.get_code_collection_async",
+            new=fake_get_collection,
+        ):
+            problems, stats = await aq._get_problems_from_chromadb(source_id="missing-id")
+
+        id_queries = [c.get("ids") for c in calls if "ids" in c]
+        assert ["codebase_stats_missing-id"] in id_queries
+        assert ["codebase_stats"] in id_queries
+        assert stats["total_files"] == 7
+
+    @pytest.mark.asyncio
+    async def test_global_path_when_no_source_id(self):
+        """When source_id is None, only the global codebase_stats doc is queried."""
+        from api import analytics_quality as aq
+
+        collection, calls = self._fake_collection(
+            problems_metadatas=[],
+            stats_by_id={"codebase_stats": {"total_files": 99}},
+        )
+
+        async def fake_get_collection():
+            return collection
+
+        with patch(
+            "api.codebase_analytics.storage.get_code_collection_async",
+            new=fake_get_collection,
+        ):
+            problems, stats = await aq._get_problems_from_chromadb()
+
+        id_queries = [c.get("ids") for c in calls if "ids" in c]
+        assert ["codebase_stats"] in id_queries
+        assert all(q != ["codebase_stats_None"] for q in id_queries)
+        assert stats["total_files"] == 99

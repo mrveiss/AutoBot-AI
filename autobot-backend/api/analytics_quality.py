@@ -105,6 +105,7 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
 
 async def get_quality_data_from_storage(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Retrieve quality data from Redis or ChromaDB.
 
@@ -115,10 +116,14 @@ async def get_quality_data_from_storage(
     they reside under source_root before contributing to metrics.  The Redis
     cache key is namespaced by the resolved path so per-project results are
     stored independently.
+    Issue #6670: Accepts optional source_id used to look up per-source
+    codebase_stats from ChromaDB; without it, per-source dashboards always
+    fell back to the global stats document and returned no_data.
 
     Args:
         source_root: Absolute path to the project clone directory, or None
                      for global (unscoped) results.
+        source_id:   Project source ID for per-source ChromaDB stats lookup.
     """
     # Derive a stable cache key suffix from the resolved path (if scoped)
     cache_suffix = f":{source_root}" if source_root else ""
@@ -140,8 +145,10 @@ async def get_quality_data_from_storage(
     except Exception as e:
         logger.warning("Failed to get quality data from Redis: %s", e)
 
-    # Calculate real metrics from ChromaDB (Issue #541, #543)
-    real_data = await calculate_real_quality_metrics(source_root=source_root)
+    # Calculate real metrics from ChromaDB (Issue #541, #543, #6670)
+    real_data = await calculate_real_quality_metrics(
+        source_root=source_root, source_id=source_id
+    )
     if real_data:
         # Cache the calculated data
         try:
@@ -171,6 +178,7 @@ async def get_quality_data_from_storage(
 
 async def _get_problems_from_chromadb(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Fetch problems and stats from ChromaDB.
 
@@ -178,9 +186,17 @@ async def _get_problems_from_chromadb(
     resolves to a path under source_root are included.  This scopes quality
     metrics to the selected project's files only.
 
+    Issue #6670: When source_id is provided, the codebase_stats document is
+    looked up under the per-source key ``codebase_stats_{source_id}`` first,
+    falling back to the global ``codebase_stats`` document. This matches the
+    write path in chromadb_storage.py:649 and the read pattern already used
+    by sources.py:447-456 and stats.py:222.
+
     Args:
         source_root: Absolute path used to filter problem file paths.  Pass
                      None to return all problems regardless of location.
+        source_id:   Optional project source ID used to look up per-source
+                     codebase_stats.  Pass None for the global stats key.
 
     Returns:
         Tuple of (problems list, codebase stats dict)
@@ -219,18 +235,26 @@ async def _get_problems_from_chromadb(
                     }
                 )
 
-        # Fetch codebase stats
-        stats_results = await collection.get(
-            ids=["codebase_stats"],
-            include=["metadatas"],
-        )
+        # Fetch codebase stats — per-source key first, fall back to global (#6670, #1716)
+        stats_results = None
+        if source_id:
+            stats_results = await collection.get(
+                ids=[f"codebase_stats_{source_id}"],
+                include=["metadatas"],
+            )
+        if not stats_results or not stats_results.get("metadatas"):
+            stats_results = await collection.get(
+                ids=["codebase_stats"],
+                include=["metadatas"],
+            )
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
 
         logger.debug(
-            "Fetched %d problems from ChromaDB (source_root=%s)",
+            "Fetched %d problems from ChromaDB (source_root=%s, source_id=%s)",
             len(problems),
             source_root,
+            source_id,
         )
     except Exception as e:
         logger.warning("Failed to fetch problems from ChromaDB: %s", e)
@@ -617,6 +641,7 @@ def _calculate_all_quality_scores(
 
 async def calculate_real_quality_metrics(
     source_root: Optional["Path"] = None,
+    source_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Calculate real quality metrics from ChromaDB analysis data.
 
@@ -625,15 +650,20 @@ async def calculate_real_quality_metrics(
     Issue #3441: Accepts optional source_root to scope metrics to a project
     directory.  When provided, only problems under source_root contribute to
     the returned scores.
+    Issue #6670: Accepts optional source_id forwarded to ChromaDB stats lookup
+    so per-source codebase_stats documents are read.
 
     Args:
         source_root: Absolute path used to filter problems.  None means global.
+        source_id:   Project source ID for per-source stats lookup.
 
     Returns:
         Dict with calculated quality metrics, or None if no data available
     """
     # Fetch data from ChromaDB (scoped to source_root when provided)
-    problems, stats = await _get_problems_from_chromadb(source_root=source_root)
+    problems, stats = await _get_problems_from_chromadb(
+        source_root=source_root, source_id=source_id
+    )
 
     # Issue #543: If no data, return None - endpoints will return no_data status
     if not problems and not stats:
@@ -919,7 +949,7 @@ async def get_health_score(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -963,7 +993,7 @@ async def get_quality_metrics(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1028,7 +1058,7 @@ async def get_pattern_distribution(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1085,7 +1115,7 @@ async def get_complexity_metrics(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1208,7 +1238,7 @@ async def get_quality_trends(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     if data is None:
         return _no_data_response()
@@ -1246,7 +1276,7 @@ async def get_quality_snapshot(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
-    data = await get_quality_data_from_storage(source_root=source_root)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     # Issue #543: Handle no data case
     if data is None:
