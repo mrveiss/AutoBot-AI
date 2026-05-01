@@ -40,6 +40,7 @@ class AuditAction(str, Enum):
 
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
+    SESSION_EXPORT = "session.export"
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
     API_KEY_CREATE = "api_key.create"
