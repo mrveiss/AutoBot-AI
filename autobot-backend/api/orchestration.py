@@ -445,21 +445,35 @@ async def get_agent_capabilities(
             },
         )
     try:
-        # Get capability coverage
-        coverage = orchestrator._calculate_capability_coverage()
+        # Post-#5058 refactor: capability_coverage and agent_performance live on
+        # the orchestrator's collaborators (WorkflowRunner / PerformanceTracker),
+        # not on the Orchestrator itself.
+        runner = getattr(orchestrator, "_runner", None)
+        perf_tracker = getattr(orchestrator, "_perf", None)
+
+        if runner is not None:
+            try:
+                coverage = runner.get_performance_report().get(
+                    "capabilities_coverage", {}
+                )
+            except Exception:
+                coverage = {}
+        else:
+            coverage = {}
+
+        agent_perf = (
+            getattr(perf_tracker, "agent_performance", {}) if perf_tracker else {}
+        )
 
         # Get detailed agent capabilities
         agent_details = {}
         for agent, caps in orchestrator.agent_capabilities.items():
+            perf = agent_perf.get(agent)
             agent_details[agent] = {
                 "capabilities": [cap.value for cap in caps],
                 "performance": {
-                    "reliability": (
-                        orchestrator.agent_performance[agent].reliability_score
-                    ),
-                    "total_tasks": (
-                        orchestrator.agent_performance[agent].total_tasks
-                    ),
+                    "reliability": getattr(perf, "reliability_score", 1.0),
+                    "total_tasks": getattr(perf, "total_tasks", 0),
                 },
             }
 
