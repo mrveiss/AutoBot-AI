@@ -40,7 +40,9 @@ import { navItems } from '@/config/navItems'
  */
 const INTENTIONALLY_HIDDEN: Record<string, string> = {
   '/about': 'Reachable via footer "About" link, not main nav',
-  '/agents/heartbeat': 'Diagnostic panel — accessed from agent registry, not main nav',
+  '/agents': 'Parent shell — redirects to /agents/registry; nav uses the deep-link entry (#6634)',
+  '/agents/activity': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
+  '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/documents': 'Opened from chat output ("Save as document"), not main nav',
   '/admin/users': 'Admin-only — surfaced via separate admin entrypoint',
   '/slm/tools/novnc': 'Accessed via Chat tab\'s noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks',
