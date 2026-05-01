@@ -77,7 +77,7 @@ _validation_judges_lock = threading.Lock()
 # Validation dashboard now returns proper error responses when generator unavailable.
 
 
-def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
+def _try_create_dashboard_generator() -> "Optional[ValidationDashboardGenerator]":  # #6666 follow-up: forward-ref for missing-dep stub
     """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
     try:
         generator = ValidationDashboardGenerator()
@@ -98,7 +98,7 @@ def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
     return None
 
 
-def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
+def get_dashboard_generator() -> "Optional[ValidationDashboardGenerator]":  # #6666 follow-up: forward-ref for missing-dep stub
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
