@@ -10,10 +10,11 @@
  * Author: mrveiss
  */
 
-import { ref, reactive, type Ref } from 'vue'
+import { ref, reactive, watch, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 
 // ---------------------------------------------------------------------------
@@ -213,14 +214,15 @@ class GlobalWebSocketService {
       // Health check failed but continue with WebSocket attempt
     })
 
-    // Issue #2818: Append JWT token as query param so backend can authenticate
-    // before accepting the WebSocket handshake.
-    let wsUrl = this.state.url
-    const userStore = useUserStore()
-    const token = userStore.authState.token
-    if (token) {
-      const separator = wsUrl.includes('?') ? '&' : '?'
-      wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(token)}`
+    // #2818/#6700: append JWT via shared helper. Defer when no token is
+    // available so we don't bombard the backend with guaranteed-403 handshakes.
+    const wsUrl = buildAuthenticatedWsUrl(this.state.url)
+    if (wsUrl === null) {
+      logger.debug(
+        'GlobalWebSocketService: no token, deferring connect until login',
+      )
+      this.connectionState.value = 'disconnected'
+      return
     }
 
     logger.debug(
@@ -739,7 +741,7 @@ if (typeof window !== 'undefined') {
   if (!win._autobotWebSocketInitialized) {
     win._autobotWebSocketInitialized = true
 
-    setTimeout(() => {
+    const tryConnect = () => {
       if (
         !globalWebSocketService.isConnected.value &&
         globalWebSocketService.connectionState.value !== 'connecting'
@@ -748,6 +750,24 @@ if (typeof window !== 'undefined') {
           logger.error('Initial WebSocket connection failed:', error)
         })
       }
+    }
+
+    setTimeout(() => {
+      const userStore = useUserStore()
+      tryConnect()
+      // #6692: react to login (token appears) and logout (token cleared) so a
+      // user who lands on the app pre-auth gets a connection the moment they
+      // sign in, without waiting for reconnect-backoff to fire.
+      watch(
+        () => userStore.authState.token,
+        (token, previous) => {
+          if (token && !previous) {
+            tryConnect()
+          } else if (!token && previous) {
+            globalWebSocketService.disconnect()
+          }
+        },
+      )
     }, 500)
   }
 }

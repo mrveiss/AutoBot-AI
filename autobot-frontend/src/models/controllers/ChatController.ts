@@ -88,7 +88,10 @@ export class ChatController {
   // Enhanced message operations with comprehensive error handling
   async sendMessage(content: string, options?: Record<string, unknown>): Promise<string> {
     try {
-      this.getAppStore()?.setLoading(true, 'Sending message...')
+      // #6693: don't toggle the global appStore.isLoading flag here. App.vue
+      // wraps the entire <router-view> in a UnifiedLoadingView bound to it,
+      // so flipping it on a per-message send blanks the chat history for the
+      // duration of the request. chatStore.setTyping is the per-message UX.
       this.chatStore.setTyping(true)
 
       // Validate message content
@@ -178,7 +181,6 @@ export class ChatController {
       throw error
     } finally {
       this.chatStore.setTyping(false)
-      this.getAppStore()?.setLoading(false)
     }
   }
 
