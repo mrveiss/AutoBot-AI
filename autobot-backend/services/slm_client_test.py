@@ -102,6 +102,40 @@ class TestCreatePermissiveSslContext:
             ctx = _create_permissive_ssl_context()
         assert ctx.verify_mode == ssl.CERT_NONE
 
+    def test_loopback_target_uses_cert_none_when_no_ca_configured(self):
+        """Loopback target with no CA → CERT_NONE (#6654).
+
+        Same-host connections cannot be MITM'd, so trusting a self-signed cert
+        is safe. This unblocks single-host installs that don't ship a project CA.
+        """
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
+            os.environ.pop("AUTOBOT_TLS_CA_PATH", None)
+            for url in (
+                "https://127.0.0.1:8000",
+                "https://localhost:8000",
+                "wss://127.0.0.1:8000/api/ws/events",
+            ):
+                ctx = _create_permissive_ssl_context(url)
+                assert ctx.verify_mode == ssl.CERT_NONE, f"loopback URL {url} should disable verify"
+                assert ctx.check_hostname is False
+
+    def test_non_loopback_target_remains_strict_when_no_ca_configured(self):
+        """Non-loopback target with no CA → strict (no regression for production, #6654)."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
+            os.environ.pop("AUTOBOT_TLS_CA_PATH", None)
+            ctx = _create_permissive_ssl_context("https://10.0.0.5:8000")
+        assert ctx.verify_mode != ssl.CERT_NONE
+
+    def test_no_target_url_remains_strict(self):
+        """No URL passed → strict (preserves the original strict-by-default contract)."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
+            os.environ.pop("AUTOBOT_TLS_CA_PATH", None)
+            ctx = _create_permissive_ssl_context()
+        assert ctx.verify_mode != ssl.CERT_NONE
+
 
 class TestSLMClientReconnectBackoff:
     """Tests for exponential backoff in the WebSocket reconnect loop (#4664)."""
