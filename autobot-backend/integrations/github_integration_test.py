@@ -261,15 +261,19 @@ async def test_execute_action_get_repository():
 
 
 # ---------------------------------------------------------------------------
-# execute_action: unknown action raises ValueError
+# execute_action: unknown action returns error dict (#6658)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_execute_action_unknown_raises():
+async def test_execute_action_unknown_returns_error_dict():
+    """#6658: BaseIntegration.execute_action contract returns Dict[str, Any];
+    unknown actions must surface as {"error": ...} — not raise ValueError."""
     gh = GitHubIntegration(_make_config())
-    with pytest.raises(ValueError, match="Unknown action"):
-        await gh.execute_action("invalid_action", {})
+    result = await gh.execute_action("invalid_action", {})
+    assert isinstance(result, dict)
+    assert "error" in result
+    assert "Unknown action" in result["error"]
 
 
 # ---------------------------------------------------------------------------

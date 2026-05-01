@@ -168,8 +168,7 @@ class DatadogIntegration(BaseIntegration):
 
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unsupported action: {action}")
-
+            return {"error": f"Unsupported action: {action}"}
         return await handler(params)
 
     async def _list_monitors(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -383,8 +382,7 @@ class NewRelicIntegration(BaseIntegration):
 
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unsupported action: {action}")
-
+            return {"error": f"Unsupported action: {action}"}
         return await handler(params)
 
     async def _list_applications(self, params: Dict[str, Any]) -> Dict[str, Any]:

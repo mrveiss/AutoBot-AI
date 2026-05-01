@@ -195,7 +195,7 @@ class GitHubIntegration(BaseIntegration):
         }
         handler = action_map.get(action)
         if not handler:
-            raise ValueError(f"Unknown action: {action}")
+            return {"error": f"Unknown action: {action}"}
         return await handler(params)
 
     # ------------------------------------------------------------------
