@@ -8,7 +8,7 @@ Tests the following functionality:
 - get_grade helper function
 - calculate_health_score helper function
 - _no_data_response helper function
-- _resolve_source_or_404 guard logic (mocked via sys.modules)
+- _resolve_source_root_or_404 guard logic (mocked via sys.modules)
 """
 
 import sys
@@ -151,38 +151,38 @@ class TestNoDataResponse:
 
 
 class TestSourceIdGuardLogic:
-    """Tests for _resolve_source_or_404 guard (mocked via sys.modules injection)."""
+    """Tests for _resolve_source_root_or_404 guard (mocked via sys.modules injection)."""
 
     @pytest.mark.asyncio
     async def test_none_source_id_does_not_raise(self):
-        """_resolve_source_or_404 with None should return without raising."""
-        from api.analytics_quality import _resolve_source_or_404
+        """_resolve_source_root_or_404 with None should return without raising."""
+        from api.analytics_quality import _resolve_source_root_or_404
 
         # Should not raise even without the codebase_analytics package loaded
-        await _resolve_source_or_404(None)
+        await _resolve_source_root_or_404(None)
 
     @pytest.mark.asyncio
     async def test_unknown_source_id_raises_404(self):
-        """_resolve_source_or_404 with unknown source_id should raise HTTP 404."""
+        """_resolve_source_root_or_404 with unknown source_id should raise HTTP 404."""
         from fastapi import HTTPException
 
         fake_mod = _make_shared_mock(return_path=None)
         with patch.dict(sys.modules, {"api.codebase_analytics.endpoints.shared": fake_mod}):
-            from api.analytics_quality import _resolve_source_or_404
+            from api.analytics_quality import _resolve_source_root_or_404
 
             with pytest.raises(HTTPException) as exc_info:
-                await _resolve_source_or_404("nonexistent-id")
+                await _resolve_source_root_or_404("nonexistent-id")
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_valid_source_id_does_not_raise(self):
-        """_resolve_source_or_404 with valid source_id should return without raising."""
+        """_resolve_source_root_or_404 with valid source_id should return without raising."""
         fake_mod = _make_shared_mock(return_path=Path("/repos/myproject"))
         with patch.dict(sys.modules, {"api.codebase_analytics.endpoints.shared": fake_mod}):
-            from api.analytics_quality import _resolve_source_or_404
+            from api.analytics_quality import _resolve_source_root_or_404
 
             # Should not raise
-            await _resolve_source_or_404("valid-id")
+            await _resolve_source_root_or_404("valid-id")
 
 
 class TestPerSourceStatsLookup:
