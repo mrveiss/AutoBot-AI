@@ -12,6 +12,11 @@
     name: nginx
     state: present
     update_cache: true
+    # #6719: cache_valid_time avoids aborting Phase 0 when a third-party PPA
+    # (Launchpad ansible/deadsnakes) has a transient timeout. apt-get update
+    # would log a warning and proceed; Ansible's apt module treats the same
+    # warning as a hard failure. Skip refresh entirely when cache is fresh.
+    cache_valid_time: 3600
   become: true
   tags: ['deps', 'nginx']
 
