@@ -489,7 +489,7 @@ async def _audit_execute_event(
 
 
 _SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
-_SSH_KNOWN_HOSTS_PATH = os.environ.get("SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts")
+_SSH_KNOWN_HOSTS_PATH = os.environ.get("SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts")  # noqa: ssot-path
 # System-wide known_hosts populated by Ansible — used as fallback when the
 # per-user file is absent.  Defined at module level so tests can patch it.
 _SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
@@ -633,9 +633,10 @@ async def execute_on_node(
     Admin privileges are required (require_admin dependency).
 
     Local nodes (manager host) execute via subprocess with shell=False;
-    remote nodes execute via SSH using the SLM key (SLM_SSH_KEY env var,
-    default /home/autobot/.ssh/autobot_key) and known_hosts verification
-    (SLM_SSH_KNOWN_HOSTS env var, default /home/autobot/.ssh/known_hosts).
+    remote nodes execute via SSH using the SLM key (SLM_SSH_KEY env var)
+    and known_hosts verification (SLM_SSH_KNOWN_HOSTS env var). Default
+    paths are documented at the module-level constants ``_SSH_KEY_PATH``
+    and ``_SSH_KNOWN_HOSTS_PATH``.
 
     All executions are audit-logged including the full command and acting user.
     """
