@@ -87,11 +87,16 @@ class ChatAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_success_response(
+    def _build_chat_payload(
         self, response_text: str, response: Any
     ) -> Dict[str, Any]:
         """
-        Build success response dictionary for chat message processing.
+        Build the chat-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6648). The
+        prior name shadowed the base method with an incompatible signature,
+        crashing every AI Stack chat request with a TypeError.
 
         Issue #620.
         Issue #4501: response is an LLMResponse object — use attribute access.
@@ -184,7 +189,7 @@ class ChatAgent(StandardizedAgent):
 
             # Extract response content and build response
             response_text = self._extract_response_content(response)
-            return self._build_success_response(response_text, response)
+            return self._build_chat_payload(response_text, response)
 
         except Exception as e:
             logger.error("Chat Agent error processing message: %s", e)
