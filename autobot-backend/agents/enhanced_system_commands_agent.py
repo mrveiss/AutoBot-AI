@@ -189,8 +189,15 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         messages.append({"role": "user", "content": request})
         return messages
 
-    def _build_success_response(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Build success response with metadata (Issue #398: extracted)."""
+    def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the system-commands-specific payload dict.
+
+        Returned as the ``result`` field of the AgentResponse the base class
+        ``StandardizedAgent._build_success_response`` constructs (#6650). The
+        prior name shadowed the base method with an incompatible signature,
+        so any AI Stack ``/agents/system_commands/process`` request would
+        crash with a TypeError. (Issue #398: extracted.)
+        """
         return {
             "status": "success" if command_info.get("is_safe", False) else "warning",
             **command_info,
@@ -234,7 +241,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 command_info.get("command", "")
             )
             command_info.update(security_check)
-            return self._build_success_response(command_info)
+            return self._build_command_payload(command_info)
         except Exception as e:
             logger.error("System Commands Agent error: %s", e)
             return self._build_error_response(e)
