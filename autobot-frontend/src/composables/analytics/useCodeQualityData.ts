@@ -22,13 +22,20 @@
  *   GET  /quality/export?format=<format>
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCodeQualityData')
 
+// Issue #6671: Backend returns _no_data_response with status:"no_data" when no
+// scan has happened yet (analytics_quality.py:_no_data_response). The frontend
+// must treat that as a distinct empty state — not silently fall back to zeros.
+export type QualityStatus = 'ok' | 'no_data'
+
 export interface QualityHealthScore {
+  status: QualityStatus
+  message?: string
   overall: number
   grade: string
   trend: number
@@ -55,6 +62,8 @@ export interface QualityPattern {
 }
 
 export interface QualityComplexity {
+  status: QualityStatus
+  message?: string
   averages: { cyclomatic: number; cognitive: number }
   maximums: { cyclomatic: number; cognitive: number }
   hotspots: Array<{ file: string; complexity: number; lines: number }>
@@ -73,9 +82,52 @@ export interface QualityExportResult {
   [key: string]: unknown
 }
 
+export interface QualitySnapshot {
+  status: QualityStatus
+  message?: string
+  files: number
+  lines: number
+  issues: number
+}
+
+function readStatus(raw: Record<string, unknown>): QualityStatus {
+  return (raw.status as QualityStatus | undefined) === 'no_data' ? 'no_data' : 'ok'
+}
+
+function readMessage(raw: Record<string, unknown>): string | undefined {
+  const msg = raw.message
+  return typeof msg === 'string' ? msg : undefined
+}
+
 export function useCodeQualityData(withSourceId: (url: string) => string) {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  // Issue #6671: track no-data state independently for each endpoint so the
+  // dashboard can render an empty-state banner instead of silent zeros.
+  const noDataMessage = ref<string | null>(null)
+  const noDataFlags = ref({
+    healthScore: false,
+    metrics: false,
+    patterns: false,
+    complexity: false,
+    trends: false,
+    snapshot: false,
+  })
+  const noDataState = computed(() => ({
+    noData: Object.values(noDataFlags.value).some(Boolean),
+    message: noDataMessage.value,
+  }))
+
+  function recordStatus(key: keyof typeof noDataFlags.value, raw: Record<string, unknown>) {
+    const status = readStatus(raw)
+    noDataFlags.value[key] = status === 'no_data'
+    if (status === 'no_data' && !noDataMessage.value) {
+      noDataMessage.value = readMessage(raw) ?? null
+    }
+    if (Object.values(noDataFlags.value).every((flag) => !flag)) {
+      noDataMessage.value = null
+    }
+  }
 
   // ---- Health Score --------------------------------------------------------
   // Issue #552: backend uses /api/quality/* not /api/analytics/quality/*
@@ -85,14 +137,19 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
     {
       path: '/api/quality/health-score',
       scopeToSource: true,
-      pickData: (raw) => ({
-        overall: (raw.overall as number) ?? 0,
-        grade: (raw.grade as string) || 'C',
-        trend: (raw.trend as number) ?? 0,
-        breakdown: (raw.breakdown as Record<string, number>) || {},
-        components: (raw.components as Record<string, number>) || { code_quality: 0, security: 0, performance: 0 },
-        recommendations: (raw.recommendations as string[]) || [],
-      }),
+      pickData: (raw) => {
+        recordStatus('healthScore', raw)
+        return {
+          status: readStatus(raw),
+          message: readMessage(raw),
+          overall: (raw.overall as number) ?? 0,
+          grade: (raw.grade as string) || 'C',
+          trend: (raw.trend as number) ?? 0,
+          breakdown: (raw.breakdown as Record<string, number>) || {},
+          components: (raw.components as Record<string, number>) || { code_quality: 0, security: 0, performance: 0 },
+          recommendations: (raw.recommendations as string[]) || [],
+        }
+      },
       onError: (message, err) => {
         logger.warn('Failed to load health score:', err)
         error.value = message
@@ -120,10 +177,15 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/metrics',
       scopeToSource: true,
-      pickData: (raw) =>
-        Array.isArray(raw)
-          ? (raw as QualityMetric[])
-          : ((raw as Record<string, unknown>).metrics as QualityMetric[]) || [],
+      pickData: (raw) => {
+        if (Array.isArray(raw)) {
+          noDataFlags.value.metrics = false
+          return raw as QualityMetric[]
+        }
+        const obj = (raw as Record<string, unknown>) ?? {}
+        recordStatus('metrics', obj)
+        return (obj.metrics as QualityMetric[]) || []
+      },
       onError: (message, err) => {
         logger.warn('Failed to load metrics:', err)
         error.value = message
@@ -152,10 +214,15 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/patterns',
       scopeToSource: true,
-      pickData: (raw) =>
-        Array.isArray(raw)
-          ? (raw as QualityPattern[])
-          : ((raw as Record<string, unknown>).patterns as QualityPattern[]) || [],
+      pickData: (raw) => {
+        if (Array.isArray(raw)) {
+          noDataFlags.value.patterns = false
+          return raw as QualityPattern[]
+        }
+        const obj = (raw as Record<string, unknown>) ?? {}
+        recordStatus('patterns', obj)
+        return (obj.patterns as QualityPattern[]) || []
+      },
       onError: (message, err) => {
         logger.warn('Failed to load patterns:', err)
         error.value = message
@@ -184,11 +251,16 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/complexity',
       scopeToSource: true,
-      pickData: (raw) => ({
-        averages: (raw.averages as { cyclomatic: number; cognitive: number }) || { cyclomatic: 0, cognitive: 0 },
-        maximums: (raw.maximums as { cyclomatic: number; cognitive: number }) || { cyclomatic: 0, cognitive: 0 },
-        hotspots: (raw.hotspots as Array<{ file: string; complexity: number; lines: number }>) || [],
-      }),
+      pickData: (raw) => {
+        recordStatus('complexity', raw)
+        return {
+          status: readStatus(raw),
+          message: readMessage(raw),
+          averages: (raw.averages as { cyclomatic: number; cognitive: number }) || { cyclomatic: 0, cognitive: 0 },
+          maximums: (raw.maximums as { cyclomatic: number; cognitive: number }) || { cyclomatic: 0, cognitive: 0 },
+          hotspots: (raw.hotspots as Array<{ file: string; complexity: number; lines: number }>) || [],
+        }
+      },
       onError: (message, err) => {
         logger.warn('Failed to load complexity:', err)
         error.value = message
@@ -216,8 +288,10 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/trends',
       scopeToSource: true,
-      pickData: (raw) =>
-        (raw.data_points as Array<{ date: string; score: number }>) || [],
+      pickData: (raw) => {
+        recordStatus('trends', raw)
+        return (raw.data_points as Array<{ date: string; score: number }>) || []
+      },
       onError: (message, err) => {
         logger.warn('Failed to load trends:', err)
         error.value = message
@@ -241,13 +315,25 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
 
   // ---- Snapshot -----------------------------------------------------------
 
-  const snapshotEndpoint = useFetchEndpoint<Record<string, unknown>, { files: number; lines: number; issues: number }>(
+  const snapshotEndpoint = useFetchEndpoint<Record<string, unknown>, QualitySnapshot>(
     {
       // Issue #552 / #3436
       path: '/api/quality/snapshot',
       scopeToSource: true,
-      pickData: (raw) =>
-        (raw.codebase_stats as { files: number; lines: number; issues: number }) || { files: 0, lines: 0, issues: 0 },
+      pickData: (raw) => {
+        recordStatus('snapshot', raw)
+        const stats =
+          (raw.codebase_stats as { files: number; lines: number; issues: number }) || {
+            files: 0,
+            lines: 0,
+            issues: 0,
+          }
+        return {
+          status: readStatus(raw),
+          message: readMessage(raw),
+          ...stats,
+        }
+      },
       onError: (message, err) => {
         logger.warn('Failed to load snapshot:', err)
         error.value = message
@@ -257,7 +343,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
     { withSourceId },
   )
 
-  async function fetchSnapshot(): Promise<{ files: number; lines: number; issues: number } | null> {
+  async function fetchSnapshot(): Promise<QualitySnapshot | null> {
     error.value = null
     isLoading.value = true
     try {
@@ -326,6 +412,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
   return {
     isLoading,
     error,
+    noDataState,
     fetchHealthScore,
     fetchMetrics,
     fetchPatterns,
