@@ -69,9 +69,6 @@ def _schema_modules() -> list[str]:
 # keeps CI green while ensuring the test still catches NEW regressions of the
 # same shape. Remove an entry when its tracking issue is closed.
 KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
-    # #6665 — Orchestrator.max_parallel_tasks attribute drift
-    "api.orchestration": "#6665",
-    "api.workflow_automation": "#6665",
     # #6666 — missing internal modules (tests.benchmarks, mcp.autobot_server, scripts.*)
     "api.api_benchmarks": "#6666",
     "api.autobot_mcp_router": "#6666",

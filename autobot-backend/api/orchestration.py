@@ -123,7 +123,7 @@ async def execute_workflow(
 
         # Update max parallel tasks if specified
         if request.max_parallel_tasks:
-            orchestrator.max_parallel_tasks = request.max_parallel_tasks
+            orchestrator.config.max_parallel_tasks = request.max_parallel_tasks
 
         # Create and execute workflow
         result = await create_and_execute_workflow(request.goal, request.context)
@@ -514,7 +514,7 @@ async def get_orchestration_status(
             content={
                 "status": "operational",
                 "active_workflows": performance_report.get("active_workflows", 0),
-                "max_parallel_tasks": orchestrator.max_parallel_tasks,
+                "max_parallel_tasks": orchestrator.config.max_parallel_tasks,
                 "total_agents": len(orchestrator.agent_capabilities),
                 "capabilities": {
                     "execution_strategies": [
