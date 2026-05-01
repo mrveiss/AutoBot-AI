@@ -46,7 +46,14 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.time_utils import utc_timestamp
-from playwright.async_api import Page
+
+try:
+    # playwright is an optional runtime dep; the captcha-resolution flow only
+    # runs when browser automation is enabled. `Page` is used purely as a type
+    # hint in this module (#6667).
+    from playwright.async_api import Page
+except ImportError:  # pragma: no cover
+    from typing import Any as Page  # type: ignore[assignment, misc]
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
