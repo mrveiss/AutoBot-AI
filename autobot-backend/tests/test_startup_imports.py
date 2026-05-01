@@ -68,11 +68,7 @@ def _schema_modules() -> list[str]:
 # affected /api/* endpoints are absent in production. xfail-marking them
 # keeps CI green while ensuring the test still catches NEW regressions of the
 # same shape. Remove an entry when its tracking issue is closed.
-KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
-    # #6667 — optional deps not guarded (playwright, docker)
-    "api.captcha": "#6667",
-    "api.sandbox": "#6667",
-}
+KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {}
 
 
 @pytest.mark.parametrize("module_name", ALWAYS_IMPORT_AT_BOOT)
