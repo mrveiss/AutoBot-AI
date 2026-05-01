@@ -141,6 +141,23 @@ repos:
         stages: [pre-commit]
         description: "Move BaseModel subclasses to domain schemas_*.py files (#6056)"
 
+  # AutoBot custom: regression-prevention for #6558 (decorator order) +
+  # #6633 (stacked-duplicate). In Python ``@A @B def f`` ≡ ``f = A(B(f))``;
+  # if ``@with_error_handling`` is placed above ``@router.*`` the FastAPI
+  # router registers the unwrapped function and the error wrapper becomes
+  # dead code. #6558 swapped 1801 endpoints across 188 files; this hook
+  # blocks the regression. Also catches two adjacent
+  # ``@with_error_handling`` decorators (#6633).
+  - repo: local
+    hooks:
+      - id: decorator-order
+        name: Check @with_error_handling/@router decorator order (#6638)
+        entry: tools/lint/check_decorator_order.py
+        language: python
+        files: ^autobot-backend/api/.*\.py$
+        stages: [pre-commit]
+        description: "Ensure @router.* is OUTERMOST and @with_error_handling is not stacked (#6558, #6633)"
+
   # Python-specific checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
