@@ -173,6 +173,18 @@ class BaseAgent(ABC):
         Used for request routing and service discovery.
         """
 
+    @abstractmethod
+    async def is_available(self) -> bool:
+        """
+        Return whether this agent is currently available for processing.
+
+        Issue #6659: Promoted from per-subclass implementation to abstract
+        contract.  Required to be ``async`` because container-deployed agents
+        need to make a network/health-check call; in-process agents can simply
+        ``return True`` synchronously inside the coroutine.  Callers MUST
+        ``await`` the result regardless of deployment mode.
+        """
+
     async def health_check(self) -> AgentHealth:
         """
         Return current health status of the agent.
@@ -590,8 +602,12 @@ class LocalAgent(BaseAgent):
         """Initialize local agent with given type in local deployment mode."""
         super().__init__(agent_type, DeploymentMode.LOCAL)
 
-    def is_available(self) -> bool:
-        """Check if agent is available for processing"""
+    async def is_available(self) -> bool:
+        """Check if agent is available for processing.
+
+        Issue #6659: Async to match the BaseAgent contract; LocalAgent has no
+        I/O to perform so the coroutine resolves immediately.
+        """
         return True
 
 
