@@ -69,9 +69,6 @@ def _schema_modules() -> list[str]:
 # keeps CI green while ensuring the test still catches NEW regressions of the
 # same shape. Remove an entry when its tracking issue is closed.
 KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
-    # #6664 — MODERATE_RISK_PATTERNS missing from api.schemas_terminal
-    "api.terminal": "#6664",
-    "api.terminal_handlers": "#6664",
     # #6665 — Orchestrator.max_parallel_tasks attribute drift
     "api.orchestration": "#6665",
     "api.workflow_automation": "#6665",
