@@ -33,11 +33,6 @@ router = APIRouter(prefix="/project", tags=["project_state"])
     operation="get_project_status",
     error_code_prefix="PROJECT_STATE",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_project_status",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",

@@ -1168,11 +1168,6 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
     operation="test_performance_monitoring",
     error_code_prefix="MONITORING",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_performance_monitoring",
-    error_code_prefix="MONITORING",
-)
 @router.post("/test/performance", response_model=TestPerformanceResponse)
 @monitor_performance("api_test")
 async def test_performance_monitoring(

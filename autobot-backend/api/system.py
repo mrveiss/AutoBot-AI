@@ -168,11 +168,6 @@ def _build_frontend_meta_config() -> dict:
     operation="get_frontend_config",
     error_code_prefix="SYSTEM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_frontend_config",
-    error_code_prefix="SYSTEM",
-)
 @router.get("/frontend-config", response_model=SystemFrontendConfigResponse)
 @cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
@@ -202,11 +197,6 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_health",
-    error_code_prefix="SYSTEM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
@@ -272,11 +262,6 @@ async def get_system_health(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_info",
-    error_code_prefix="SYSTEM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
@@ -465,11 +450,6 @@ async def dynamic_import(
     operation="get_detailed_health",
     error_code_prefix="SYSTEM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_detailed_health",
-    error_code_prefix="SYSTEM",
-)
 @router.get("/health/detailed", response_model=SystemHealthResponse)
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 async def get_detailed_health(
@@ -608,11 +588,6 @@ def _determine_overall_health_status(health_status: dict) -> None:
     operation="get_cache_stats",
     error_code_prefix="SYSTEM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cache_stats",
-    error_code_prefix="SYSTEM",
-)
 @router.get("/cache/stats", response_model=SystemCacheStatsResponse)
 @cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
@@ -721,11 +696,6 @@ def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:
     operation="get_cache_activity",
     error_code_prefix="SYSTEM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cache_activity",
-    error_code_prefix="SYSTEM",
-)
 @router.get("/cache/activity", response_model=SystemCacheActivityResponse)
 @cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)):
@@ -783,11 +753,6 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_metrics",
-    error_code_prefix="SYSTEM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_metrics",

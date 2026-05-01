@@ -847,11 +847,6 @@ async def stream_message(
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="chat_health_check",
-    error_code_prefix="CHAT",
-)
 async def chat_health_check(
     current_user: dict = Depends(get_current_user),
     request: Request = None,
@@ -2021,11 +2016,6 @@ async def get_enhanced_chat_capabilities(
     operation="translate_text",
     error_code_prefix="TRANSLATE",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="translate_text",
-    error_code_prefix="CHAT",
-)
 async def translate_text(
     body: TranslateRequest,
     current_user: dict = Depends(get_current_user),
@@ -2054,11 +2044,6 @@ async def translate_text(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_language",
     error_code_prefix="TRANSLATE",
-)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="detect_language",
-    error_code_prefix="CHAT",
 )
 async def detect_language(
     body: DetectLanguageRequest,
