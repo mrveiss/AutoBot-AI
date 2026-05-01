@@ -69,13 +69,6 @@ def _schema_modules() -> list[str]:
 # keeps CI green while ensuring the test still catches NEW regressions of the
 # same shape. Remove an entry when its tracking issue is closed.
 KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
-    # #6666 — missing internal modules (tests.benchmarks, mcp.autobot_server, scripts.*)
-    "api.api_benchmarks": "#6666",
-    "api.autobot_mcp_router": "#6666",
-    "api.llm_awareness": "#6666",
-    "api.log_forwarding": "#6666",
-    "api.state_tracking": "#6666",
-    "api.validation_dashboard": "#6666",
     # #6667 — optional deps not guarded (playwright, docker)
     "api.captcha": "#6667",
     "api.sandbox": "#6667",

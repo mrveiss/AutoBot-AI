@@ -31,13 +31,34 @@ from constants.threshold_constants import TimingConstants
 # Add scripts path for log forwarder import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.logging.log_forwarder import (
-    DestinationConfig,
-    DestinationScope,
-    DestinationType,
-    LogForwarder,
-    SyslogProtocol,
-)
+try:
+    # log_forwarder lives in autobot-infrastructure/shared/scripts/logging/ —
+    # only available when the infrastructure repo is on PYTHONPATH (#6666).
+    from scripts.logging.log_forwarder import (
+        DestinationConfig,
+        DestinationScope,
+        DestinationType,
+        LogForwarder,
+        SyslogProtocol,
+    )
+except ImportError as _log_forwarder_import_error:
+    from autobot_shared.missing_dep import MissingDep as _MissingDep
+
+    DestinationConfig = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationConfig", _log_forwarder_import_error
+    )
+    DestinationScope = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationScope", _log_forwarder_import_error
+    )
+    DestinationType = _MissingDep(  # type: ignore[assignment, misc]
+        "DestinationType", _log_forwarder_import_error
+    )
+    LogForwarder = _MissingDep(  # type: ignore[assignment, misc]
+        "LogForwarder", _log_forwarder_import_error
+    )
+    SyslogProtocol = _MissingDep(  # type: ignore[assignment, misc]
+        "SyslogProtocol", _log_forwarder_import_error
+    )
 from api.schemas_system import (
     LogForwardingDestinationItem,
     LogFwdAutoStartResponse,
