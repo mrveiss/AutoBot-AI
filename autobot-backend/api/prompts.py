@@ -346,11 +346,6 @@ def _build_prompt_save_response(
     operation="save_prompt",
     error_code_prefix="PROMPTS",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="save_prompt",
-    error_code_prefix="PROMPTS",
-)
 @router.post("/{prompt_id}", response_model=PromptSaveResponse)
 @router.put("/{prompt_id}", response_model=PromptSaveResponse)  # Issue #570: Support PUT for frontend compatibility
 @with_error_handling(

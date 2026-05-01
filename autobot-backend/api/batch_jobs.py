@@ -802,11 +802,6 @@ async def batch_load(batch_request: APIBatchRequest):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_chat_initialization",
-    error_code_prefix="BATCH",
-)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_chat_initialization",
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/chat-init", response_model=BatchChatInitResponse)

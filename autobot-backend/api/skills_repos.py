@@ -98,11 +98,6 @@ async def add_repo(
     operation="list_repos",
     error_code_prefix="SKILLS_REPOS",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_repos",
-    error_code_prefix="SKILLS_REPOS",
-)
 @router.get("", summary="List all registered skill repositories", response_model=List[SkillRepoItem])
 @router.get("/", include_in_schema=False, response_model=List[SkillRepoItem])
 @with_error_handling(

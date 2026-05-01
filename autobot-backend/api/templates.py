@@ -87,11 +87,6 @@ async def get_templates_root():
     operation="list_workflow_templates",
     error_code_prefix="TEMPLATES",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_workflow_templates",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates", response_model=TemplateListResponse)
 @smart_cache(
     data_type="templates",
@@ -323,11 +318,6 @@ async def get_template_statistics():
 # --- Parameterized paths below (after all static paths) ---
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_template_details",
-    error_code_prefix="TEMPLATES",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_template_details",

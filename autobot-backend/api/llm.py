@@ -138,11 +138,6 @@ async def test_llm_connection(
     operation="get_available_llm_models",
     error_code_prefix="LLM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_llm_models",
-    error_code_prefix="LLM",
-)
 @router.get("/models", response_model=LLMModelsResponse)
 @cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes - RESTORED
 async def get_available_llm_models(
@@ -165,11 +160,6 @@ async def get_available_llm_models(
         raise HTTPException(status_code=500, detail="Error getting available models")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_current_llm",
-    error_code_prefix="LLM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_llm",
@@ -279,11 +269,6 @@ async def update_llm_provider(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_embedding_models",
-    error_code_prefix="LLM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_embedding_models",
@@ -505,11 +490,6 @@ def _build_active_provider_info(
     operation="get_comprehensive_llm_status",
     error_code_prefix="LLM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_comprehensive_llm_status",
-    error_code_prefix="LLM",
-)
 @router.get("/status/comprehensive", response_model=DataResponse)
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 async def get_comprehensive_llm_status(
@@ -635,11 +615,6 @@ def _get_model_from_cloud_config(unified_config: dict) -> str:
     operation="get_quick_llm_status",
     error_code_prefix="LLM",
 )
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_quick_llm_status",
-    error_code_prefix="LLM",
-)
 @router.get("/status/quick", response_model=DataResponse)
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
 async def get_quick_llm_status(
@@ -710,11 +685,6 @@ def _build_providers_health_dict(results: dict) -> tuple:
     return providers_health, available_count
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_providers_health",
-    error_code_prefix="LLM",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_providers_health",
