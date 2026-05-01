@@ -69,12 +69,6 @@ def _schema_modules() -> list[str]:
 # keeps CI green while ensuring the test still catches NEW regressions of the
 # same shape. Remove an entry when its tracking issue is closed.
 KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
-    # #6664 — MODERATE_RISK_PATTERNS missing from api.schemas_terminal
-    "api.terminal": "#6664",
-    "api.terminal_handlers": "#6664",
-    # #6665 — Orchestrator.max_parallel_tasks attribute drift
-    "api.orchestration": "#6665",
-    "api.workflow_automation": "#6665",
     # #6666 — missing internal modules (tests.benchmarks, mcp.autobot_server, scripts.*)
     "api.api_benchmarks": "#6666",
     "api.autobot_mcp_router": "#6666",
@@ -82,9 +76,9 @@ KNOWN_BROKEN_AT_TEST_INTRODUCTION: dict[str, str] = {
     "api.log_forwarding": "#6666",
     "api.state_tracking": "#6666",
     "api.validation_dashboard": "#6666",
-    # #6667 — optional deps not guarded (playwright, docker)
-    "api.captcha": "#6667",
-    "api.sandbox": "#6667",
+    # #6664 (MODERATE_RISK_PATTERNS), #6665 (Orchestrator.max_parallel_tasks),
+    # and #6667 (playwright/docker optional-dep guards) FIXED in the same PR
+    # that landed this update — entries removed.
 }
 
 

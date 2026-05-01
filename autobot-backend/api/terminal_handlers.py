@@ -30,10 +30,12 @@ from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
-# Import models from dedicated module (Issue #185)
+# Import models from dedicated module (Issue #185).
+# #6664: MODERATE_RISK_PATTERNS / RISKY_COMMAND_PATTERNS live in
+# constants/terminal_constants.py, not in api.schemas_terminal — split the
+# import so this module loads cleanly.
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from api.schemas_terminal import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
     CommandRiskLevel,
     SecurityLevel,
 )

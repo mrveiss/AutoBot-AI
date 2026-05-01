@@ -46,7 +46,18 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.time_utils import utc_timestamp
-from playwright.async_api import Page
+
+# #6667: playwright is an optional runtime dependency (browser-automation
+# stack). Guard the import so this module can be loaded in environments
+# without it. Captcha endpoints will fail at request time with a clear 503
+# rather than crashing the whole boot path.
+try:
+    from playwright.async_api import Page
+
+    _PLAYWRIGHT_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover — env-dependent
+    Page = Any  # type: ignore[assignment,misc]
+    _PLAYWRIGHT_AVAILABLE = False
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants

@@ -271,7 +271,7 @@ class Orchestrator:
             active_workflows=self.active_workflows,
             collaboration=self._collab,
             agent_router=self._agent_router,
-            max_parallel_tasks=self.max_parallel_tasks,
+            max_parallel_tasks=self.config.max_parallel_tasks,  # #6665: attr lives on config, not Orchestrator
         )
 
     def __init__(self, config_mgr=None):

@@ -20,8 +20,20 @@ from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import docker
-from docker.errors import DockerException, ImageNotFound
+# #6667: docker is an optional runtime dependency. Guard the import so this
+# module can be loaded in environments without it (e.g. CI smoke tests,
+# minimal deploys). Sandbox endpoints will fail at request time with a clear
+# 503 rather than crashing the whole boot path.
+try:
+    import docker
+    from docker.errors import DockerException, ImageNotFound
+
+    _DOCKER_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover — env-dependent
+    docker = None  # type: ignore[assignment]
+    DockerException = Exception  # type: ignore[assignment,misc]
+    ImageNotFound = Exception  # type: ignore[assignment,misc]
+    _DOCKER_AVAILABLE = False
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
@@ -93,7 +105,7 @@ class SecureSandboxExecutor:
     - File system restrictions
     """
 
-    def __init__(self, docker_client: Optional[docker.DockerClient] = None):
+    def __init__(self, docker_client: Optional["docker.DockerClient"] = None):  # type: ignore[name-defined]
         """Initialize secure sandbox executor with Docker client and Redis monitoring."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
