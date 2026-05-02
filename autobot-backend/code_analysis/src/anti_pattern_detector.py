@@ -273,7 +273,9 @@ class AntiPatternDetector:
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client
-        self.config = config
+        # #6733: removed `self.config = config` — referenced an undefined name
+        # and was never read elsewhere in the module. Direct AntiPatternDetector()
+        # instantiation now works in any context.
 
         # Cache keys
         self.CACHE_KEY = "anti_pattern_analysis"
@@ -305,9 +307,14 @@ class AntiPatternDetector:
         """
         start_time = time.time()
 
-        patterns = patterns or ["**/*.py"]
-        # Issue #1183: Use module-level constant
-        exclude_patterns = exclude_patterns or _DEFAULT_EXCLUDE_PATTERNS
+        # #6734: use `is None` sentinel instead of `or` idiom — explicit
+        # `exclude_patterns=[]` should disable exclusion, not silently
+        # apply the defaults (the `or` form treated empty list as falsy).
+        if patterns is None:
+            patterns = ["**/*.py"]
+        if exclude_patterns is None:
+            # Issue #1183: Use module-level constant
+            exclude_patterns = _DEFAULT_EXCLUDE_PATTERNS
 
         logger.info(f"Starting anti-pattern analysis in {root_path}")
 
@@ -345,8 +352,41 @@ class AntiPatternDetector:
             f"Anti-pattern analysis complete: {report.total_issues} issues found "
             f"in {analysis_time:.2f}s (health score: {report.health_score:.1f}/100)"
         )
-
         return report
+
+    async def analyze_cross_file_only(
+        self,
+        root_path: str = ".",
+        patterns: List[str] = None,
+        exclude_patterns: List[str] = None,
+    ) -> List[AntiPatternInstance]:
+        """Run only the cross-file rules (#6747).
+
+        The four rules added by #6661 (LSP) and #6684 (consolidation) need
+        a whole-codebase class index, but the production per-file
+        ``AntiPatternDetector.analyze_file()`` in
+        ``code_intelligence/anti_pattern_detector.py`` doesn't build one.
+        This method does the parse pass once and runs ONLY the cross-file
+        rules — letting the scanner finalize step surface them through
+        ``/codebase/problems`` without re-running the per-file rules
+        already covered by the production analyzer.
+
+        Returns:
+            List of AntiPatternInstance for ChromaDB persistence.
+        """
+        # Default-arg handling: same `is None` discipline as analyze() (#6734)
+        if patterns is None:
+            patterns = ["**/*.py"]
+        if exclude_patterns is None:
+            exclude_patterns = _DEFAULT_EXCLUDE_PATTERNS
+
+        await self._parse_codebase(root_path, patterns, exclude_patterns)
+
+        results: List[AntiPatternInstance] = []
+        results.extend(await self._detect_lsp_violations())
+        results.extend(await self._detect_duplicate_enums())
+        results.extend(await self._detect_duplicate_class_shapes())
+        return results
 
     async def _parse_codebase(
         self, root_path: str, patterns: List[str], exclude_patterns: List[str]
