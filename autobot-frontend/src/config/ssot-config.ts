@@ -438,11 +438,25 @@ function buildConfig(): AutoBotConfig {
 
     // Computed URLs as getters
     get backendUrl(): string {
-      return `${httpProtocol}://${vm.main}:${port.backend}`;
+      // #6642 pattern: detect protocol from window.location at runtime, not
+      // from build-time VITE_HTTP_PROTOCOL. The env var defaults to 'http'
+      // and produced http:// URLs that browsers blocked as mixed-content
+      // when the page itself was served over HTTPS. Mirror the runtime
+      // detection that getBackendWsUrl() and websocketUrl already use so
+      // behaviour stays correct regardless of the build-time env.
+      const proto =
+        typeof window !== 'undefined'
+          ? (window.location.protocol === 'https:' ? 'https' : 'http')
+          : httpProtocol;
+      return `${proto}://${vm.main}:${port.backend}`;
     },
 
     get frontendUrl(): string {
-      return `${httpProtocol}://${vm.frontend}:${port.frontend}`;
+      const proto =
+        typeof window !== 'undefined'
+          ? (window.location.protocol === 'https:' ? 'https' : 'http')
+          : httpProtocol;
+      return `${proto}://${vm.frontend}:${port.frontend}`;
     },
 
     get redisUrl(): string {
