@@ -72,11 +72,24 @@ _jina_session_lock: Optional[asyncio.Lock] = None
 class LinkPipeline(BasePipeline):
     """Pipeline for processing web links and URLs."""
 
-    def __init__(self):
-        """Initialize link processing pipeline."""
+    def __init__(
+        self,
+        pipeline_name: str = "link",
+        supported_types: List[MediaType] = None,
+    ):
+        """Initialize link processing pipeline.
+
+        Issue #6755: accepts the parent's full signature with sensible
+        defaults so factory callers (`cls(name, supported_types)`) keep
+        working. The historical no-arg call site is unaffected.
+        """
         super().__init__(
-            pipeline_name="link",
-            supported_types=[MediaType.LINK],
+            pipeline_name=pipeline_name,
+            supported_types=(
+                supported_types
+                if supported_types is not None
+                else [MediaType.LINK]
+            ),
         )
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
