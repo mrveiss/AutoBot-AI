@@ -448,6 +448,22 @@ class StandardizedAgent(BaseAgent):
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities - must be implemented by subclasses"""
 
+    async def is_available(self) -> bool:
+        """In-process default — override in subclasses with external dependencies.
+
+        #6659 promoted ``is_available`` to an abstract method on ``BaseAgent``
+        so container-deployed agents can do a network/health probe. The
+        contract for in-process StandardizedAgent subclasses is "always
+        available unless overridden". Without this default every
+        StandardizedAgent subclass crashes at instantiation
+        (``TypeError: Can't instantiate abstract class …``), which took down
+        the backend at module-load time of the JSONFormatterAgent
+        singleton — see backend-error.log on 2026-05-02.
+        Subclasses needing an LLM/network probe override this and return
+        the probe result.
+        """
+        return True
+
     # Convenience methods for common action patterns
 
     def register_simple_action(
