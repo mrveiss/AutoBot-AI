@@ -194,6 +194,55 @@ async def test_lsp_skips_abstract_parent(fixture_root):
 
 
 @pytest.mark.asyncio
+async def test_lsp_skips_docstring_plus_raise_notimplemented_stub(fixture_root):
+    """Parent body of ``\"docstring\"; raise NotImplementedError`` is a stub —
+    children adding behaviour must NOT be flagged.
+
+    Regression: dogfood pass over autobot-backend produced 2 false-positive
+    LSP_EXCEPTION_CONTRACT_CHANGED findings against ``BaseModalProcessor.process``
+    because the original detector only matched length-1 bodies and missed the
+    very common ``\"\"\"docstring\"\"\"`` + ``raise NotImplementedError`` form.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "modal_case",
+        '''
+        class BaseModalProcessor:
+            async def process(self, input_data):
+                """Process input and return result"""
+                raise NotImplementedError
+
+        class VisionProcessor(BaseModalProcessor):
+            async def process(self, input_data):
+                if input_data is None:
+                    raise ValueError("missing input")  # OK — parent is stub
+                return "vision-result"
+        ''',
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    lsp = [
+        ap
+        for ap in report.anti_patterns
+        if ap.pattern_type
+        in (
+            apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
+            apd.AntiPatternType.LSP_EXCEPTION_CONTRACT_CHANGED,
+        )
+    ]
+    assert not lsp, (
+        f"docstring + raise NotImplementedError parent must be treated as a "
+        f"stub; unexpected findings: {[(ap.pattern_type.value, ap.entity_name) for ap in lsp]}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_lsp_skips_mixin_classes(fixture_root):
     """Mixin classes are not subject to LSP overrides."""
     apd = _load_detector_module()
