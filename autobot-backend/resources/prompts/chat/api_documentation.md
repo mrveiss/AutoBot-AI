@@ -25,7 +25,7 @@ You are providing detailed information about AutoBot's 518+ API endpoints. Focus
 
 ### API Overview
 
-**Base URL**: `http://172.16.168.20:8001`
+**Base URL**: `http://{{ vm_main }}:{{ port_backend }}`
 
 **API Versions:**
 - `/api/v1/` - Current stable version
@@ -167,7 +167,7 @@ Response: {
 Chat streaming uses WebSocket for real-time communication:
 
 ```javascript
-const ws = new WebSocket('ws://172.16.168.20:8001/api/v1/chat/stream');
+const ws = new WebSocket('ws://{{ vm_main }}:{{ port_backend }}/api/v1/chat/stream');
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -247,7 +247,7 @@ import requests
 
 # Simple chat request
 response = requests.post(
-    "http://172.16.168.20:8001/api/v1/chat/stream",
+    "http://{{ vm_main }}:{{ port_backend }}/api/v1/chat/stream",
     json={"message": "Hello", "session_id": "test"},
     stream=True
 )
@@ -260,7 +260,7 @@ for line in response.iter_lines():
 **JavaScript/TypeScript:**
 ```typescript
 const apiClient = {
-  baseURL: 'http://172.16.168.20:8001',
+  baseURL: 'http://{{ vm_main }}:{{ port_backend }}',
 
   async chat(message: string, sessionId: string) {
     const response = await fetch(`${this.baseURL}/api/v1/chat/stream`, {
@@ -283,15 +283,15 @@ const apiClient = {
 **cURL:**
 ```bash
 # Chat request
-curl -X POST http://172.16.168.20:8001/api/v1/chat/stream \
+curl -X POST http://{{ vm_main }}:{{ port_backend }}/api/v1/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello", "session_id": "test"}'
 
 # Knowledge search
-curl "http://172.16.168.20:8001/api/v1/knowledge/search?q=installation"
+curl "http://{{ vm_main }}:{{ port_backend }}/api/v1/knowledge/search?q=installation"
 
 # Upload file
-curl -X POST http://172.16.168.20:8001/api/v1/knowledge/upload \
+curl -X POST http://{{ vm_main }}:{{ port_backend }}/api/v1/knowledge/upload \
   -F "file=@document.pdf" \
   -F "category=documentation" \
   -F "host=autobot"

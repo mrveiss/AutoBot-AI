@@ -39,12 +39,12 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 
 **Frontend Connection Issues:**
 
-*Symptom*: Cannot connect to frontend at 172.16.168.21:5173
+*Symptom*: Cannot connect to frontend at {{ vm_frontend }}:{{ port_frontend }}
 
 *Diagnosis Steps*:
-1. Check if frontend VM is running: `ssh autobot@172.16.168.21`
+1. Check if frontend VM is running: `ssh autobot@{{ vm_frontend }}`
 2. Verify frontend service: `docker ps` on Frontend VM
-3. Test network: `ping 172.16.168.21` from main machine
+3. Test network: `ping {{ vm_frontend }}` from main machine
 4. Check ports: `netstat -tlnp | grep 5173` on Frontend VM
 
 *Solutions*:
@@ -59,9 +59,9 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 
 *Diagnosis Steps*:
 1. Check backend logs: `logs/backend.log`
-2. Verify backend health: `curl http://172.16.168.20:8001/api/health`
-3. Test Redis connection: `redis-cli -h 172.16.168.23 ping`
-4. Check Ollama status: `curl http://172.16.168.24:11434/api/tags`
+2. Verify backend health: `curl http://{{ vm_main }}:{{ port_backend }}/api/health`
+3. Test Redis connection: `redis-cli -h {{ vm_redis }} ping`
+4. Check Ollama status: `curl http://{{ vm_ollama }}:{{ port_ollama }}/api/tags`
 
 *Solutions*:
 - If Redis timeout: Check Redis VM connectivity and memory
@@ -90,7 +90,7 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 *Symptom*: Search returns no results or errors
 
 *Diagnosis Steps*:
-1. Check Redis vector index: `redis-cli -h 172.16.168.23 -n 3 FT._LIST`
+1. Check Redis vector index: `redis-cli -h {{ vm_redis }} -n 3 FT._LIST`
 2. Verify vectorization status: GET `/api/v1/knowledge/vectorization/status`
 3. Check embedding service availability
 4. Review search query logs
@@ -123,7 +123,7 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 
 *Diagnosis Steps*:
 1. Check VM resources: CPU, memory, disk on each VM
-2. Review Redis memory usage: `redis-cli -h 172.16.168.23 INFO memory`
+2. Review Redis memory usage: `redis-cli -h {{ vm_redis }} INFO memory`
 3. Check Ollama model memory: Available VRAM
 4. Monitor network latency between VMs
 
@@ -140,15 +140,15 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 - Setup: `logs/setup.log`
 - Docker: `docker logs <container_name>`
 
-**Frontend VM (172.16.168.21):**
+**Frontend VM ({{ vm_frontend }}):**
 - Application: `/home/autobot/logs/frontend.log`
 - Vite: `/home/autobot/logs/vite.log`
 
-**AI Stack VM (172.16.168.24):**
+**AI Stack VM ({{ vm_aistack }}):**
 - Ollama: `docker logs ollama`
 - Vectorization: `/home/autobot/logs/vectorization.log`
 
-**Redis VM (172.16.168.23):**
+**Redis VM ({{ vm_redis }}):**
 - Redis: `docker logs redis-stack`
 - Persistence: `/var/lib/redis/`
 
@@ -157,16 +157,16 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 **Check Service Health:**
 ```bash
 # Backend health
-curl http://172.16.168.20:8001/api/health
+curl http://{{ vm_main }}:{{ port_backend }}/api/health
 
 # Redis health
-redis-cli -h 172.16.168.23 ping
+redis-cli -h {{ vm_redis }} ping
 
 # Ollama health
-curl http://172.16.168.24:11434/api/tags
+curl http://{{ vm_ollama }}:{{ port_ollama }}/api/tags
 
 # Frontend accessibility
-curl http://172.16.168.21:5173
+curl http://{{ vm_frontend }}:{{ port_frontend }}
 ```
 
 **View Logs:**
@@ -187,10 +187,10 @@ journalctl -u autobot -f
 for i in {20..25}; do ping -c 1 172.16.168.$i; done
 
 # SSH test
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 'echo OK'
+ssh -i ~/.ssh/autobot_key autobot@{{ vm_frontend }} 'echo OK'
 
 # Port test
-nc -zv 172.16.168.23 6379
+nc -zv {{ vm_redis }} 6379
 ```
 
 ### Documentation References

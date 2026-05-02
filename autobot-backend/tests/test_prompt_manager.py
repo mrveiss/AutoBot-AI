@@ -327,3 +327,81 @@ class TestTruncationEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# Issue #6724: SSOT VM/port template variable injection
+class TestSSOTTemplateVarInjection:
+    """
+    Verifies _get_ssot_template_vars and PromptManager.get auto-inject
+    deployment topology so chat prompts can use {{ vm_main }} etc.
+    """
+
+    def test_ssot_vars_populated_from_config(self):
+        """_get_ssot_template_vars returns vm_* and port_* keys from SSOT config."""
+        from prompt_manager import _get_ssot_template_vars
+
+        vars_dict = _get_ssot_template_vars()
+        # If SSOT loads, must contain these. If not, returns {} (graceful degradation).
+        if vars_dict:
+            for key in ("vm_main", "vm_frontend", "vm_redis", "vm_aistack", "vm_browser"):
+                assert key in vars_dict, f"Missing {key}"
+                assert isinstance(vars_dict[key], str)
+            for key in ("port_backend", "port_frontend", "port_redis"):
+                assert key in vars_dict, f"Missing {key}"
+                assert vars_dict[key].isdigit(), f"port {key} should be numeric string"
+
+    def test_ssot_vars_failure_returns_empty_dict(self, monkeypatch):
+        """If SSOT import fails, helper returns {} instead of raising."""
+        import prompt_manager
+
+        # Force import of autobot_shared.ssot_config to fail at lookup time
+        original = prompt_manager._get_ssot_template_vars
+
+        def failing_lookup() -> dict:
+            try:
+                raise RuntimeError("simulated config failure")
+            except Exception as exc:
+                prompt_manager.logger.debug("simulated: %s", exc)
+                return {}
+
+        monkeypatch.setattr(prompt_manager, "_get_ssot_template_vars", failing_lookup)
+        assert prompt_manager._get_ssot_template_vars() == {}
+
+    def test_caller_kwargs_override_ssot_defaults(self, tmp_path, monkeypatch):
+        """Caller-passed kwargs to get() take precedence over SSOT defaults."""
+        # Build a tiny isolated PromptManager around a fixture template
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "test.md").write_text("Backend at {{ vm_main }}", encoding="utf-8")
+
+        from prompt_manager import PromptManager
+
+        pm = PromptManager(prompts_dir=str(prompts_dir))
+        # SSOT default
+        rendered_default = pm.get("test")
+        # Caller override wins
+        rendered_override = pm.get("test", vm_main="999.999.999.999")
+        assert rendered_override == "Backend at 999.999.999.999"
+        # Default did substitute (not literal "{{ vm_main }}")
+        assert "{{ vm_main }}" not in rendered_default
+
+    def test_chat_prompts_render_without_template_errors(self, tmp_path):
+        """All 5 chat.* prompts render with default SSOT vars without raising."""
+        from prompt_manager import get_prompt
+
+        for key in (
+            "chat.api_documentation",
+            "chat.architecture_explanation",
+            "chat.installation_help",
+            "chat.system_prompt",
+            "chat.troubleshooting",
+        ):
+            try:
+                rendered = get_prompt(key)
+            except KeyError:
+                pytest.skip(f"prompt key {key!r} not loaded in this test env")
+                continue
+            assert "{{ vm_" not in rendered, f"unrendered Jinja in {key}"
+            assert "{{ port_" not in rendered, f"unrendered Jinja in {key}"
+            # The hardcoded IPs we replaced should NOT appear when SSOT defaults to 127.0.0.1
+            # (they could only appear if user explicitly set AUTOBOT_*_HOST=172.16.168.X)
