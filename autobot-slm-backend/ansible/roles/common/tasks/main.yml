@@ -2,15 +2,19 @@
 # Common role - Base system configuration for all AutoBot hosts
 # Applied to all VMs before service-specific roles
 
-- name: "Common | Update apt cache"
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
-  become: yes
-  retries: 3
-  delay: 5
-  register: _apt_update
-  until: _apt_update is success
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml for
+# rationale. Ansible's apt module aborts on any partial-fetch warning even
+# with retries:3 + cache_valid_time, because every retry sees the same
+# unreachable PPA and hits the same hard failure.
+- name: "Common | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   tags: ['common', 'packages']
 
 - name: "Common | Install base packages"

@@ -24,11 +24,23 @@
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Grafana | Refresh apt cache after PPA add (best-effort; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: grafana_install | bool
+  tags: ['grafana', 'packages']
+
 - name: "Grafana | Install Grafana"
   ansible.builtin.apt:
     name: grafana
     state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
-    update_cache: true
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 

@@ -16,6 +16,18 @@
 # ==========================================================
 # System packages (assume blank host)
 # ==========================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "SLM | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['slm', 'packages']
+
 - name: "SLM | Install prerequisites"
   ansible.builtin.apt:
     name:
@@ -29,7 +41,6 @@
       - software-properties-common
       - build-essential
     state: present
-    update_cache: true
   tags: ['slm', 'packages']
 
 # ==========================================================
@@ -39,7 +50,21 @@
   ansible.builtin.apt_repository:
     repo: ppa:ansible/ansible
     state: present
-    update_cache: true
+    # #6719: don't trigger Ansible-module apt-get update here — the bounded
+    # shell update below tolerates the same Launchpad timeouts that this
+    # PPA add would otherwise abort on.
+    update_cache: false
+  tags: ['slm', 'packages', 'ansible']
+
+- name: "SLM | Refresh apt cache after PPA add (best-effort; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   tags: ['slm', 'packages', 'ansible']
 
 - name: "SLM | Install Ansible from PPA (2.17+)"
