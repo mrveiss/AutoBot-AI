@@ -107,6 +107,9 @@ jobs:
         echo "Checking $(echo "$files" | wc -l) changed .py file(s) for banned patterns..."
         echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
 
+    - name: Block hardcoded value regressions (#694, #6725)
+      run: bash pipeline-scripts/check-hardcoded-values-pr.sh
+
     - name: Check for unused imports with autoflake
       run: |
         source .venv/bin/activate
