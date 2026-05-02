@@ -101,7 +101,6 @@ export class KnowledgeController {
     accessOptions?: { access_level?: string; visibility?: string }
   ): Promise<string> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Build request with proper typing (Issue #685: hierarchical access)
       const request: AddTextRequest = {
@@ -133,13 +132,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to add document: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   async addUrlDocument(url: string, category?: string, tags?: string[]): Promise<string> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Build request with proper typing
       const request: AddUrlRequest = {
@@ -168,13 +165,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to add URL: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   async addFileDocument(file: File, category?: string, tags?: string[]): Promise<string> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Build options with proper typing
       const options: AddFileOptions = {
@@ -206,7 +201,6 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to upload file: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
@@ -228,7 +222,6 @@ export class KnowledgeController {
 
   async deleteDocument(documentId: string): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       await knowledgeRepository.deleteDocument(documentId)
       this.knowledgeStore.deleteDocument(documentId)
@@ -240,13 +233,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to delete document: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       await knowledgeRepository.bulkDeleteDocuments(documentIds)
       this.knowledgeStore.bulkDeleteDocuments(documentIds)
@@ -258,14 +249,12 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to delete documents: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   // Issue #747: Bulk update operations
   async bulkUpdateCategory(documentIds: string[], category: string): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Issue #821: Use allSettled so one failure doesn't abort remaining updates
       const results = await Promise.allSettled(
@@ -294,13 +283,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to update categories: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   async bulkAddTags(documentIds: string[], tagsToAdd: string[]): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Get current documents and add new tags
       const updates = documentIds.map(id => {
@@ -328,13 +315,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to add tags: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
   async bulkRemoveTags(documentIds: string[], tagsToRemove: string[]): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       // Get current documents and remove specified tags
       const updates = documentIds.map(id => {
@@ -362,7 +347,6 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Failed to remove tags: ${errorMessage}`)
       throw error
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
@@ -436,7 +420,6 @@ export class KnowledgeController {
   // Load all documents
   async loadAllDocuments(): Promise<void> {
     try {
-      this.knowledgeStore.setLoading(true)
 
       const response = await knowledgeRepository.getAllEntries()
       logger.debug('Knowledge entries response:', response)
@@ -479,7 +462,6 @@ export class KnowledgeController {
       logger.error('Failed to load documents:', error)
       this.appStore.setGlobalError(`Failed to load documents: ${errorMessage}`)
     } finally {
-      this.knowledgeStore.setLoading(false)
     }
   }
 
@@ -509,20 +491,17 @@ export class KnowledgeController {
 
   async exportKnowledgeBase(): Promise<Blob> {
     try {
-      this.appStore.setLoading(true, 'Exporting knowledge base...')
       return await knowledgeRepository.exportKnowledge()
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       this.appStore.setGlobalError(`Export failed: ${errorMessage}`)
       throw error
     } finally {
-      this.appStore.setLoading(false)
     }
   }
 
   async cleanupKnowledgeBase(): Promise<void> {
     try {
-      this.appStore.setLoading(true, 'Cleaning up knowledge base...')
 
       await knowledgeRepository.cleanupKnowledge()
       await this.refreshStats()
@@ -532,13 +511,11 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Cleanup failed: ${errorMessage}`)
       throw error
     } finally {
-      this.appStore.setLoading(false)
     }
   }
 
   async reindexKnowledgeBase(): Promise<void> {
     try {
-      this.appStore.setLoading(true, 'Reindexing knowledge base...')
 
       await knowledgeRepository.reindexKnowledgeBase()
       await this.refreshStats()
@@ -548,7 +525,6 @@ export class KnowledgeController {
       this.appStore.setGlobalError(`Reindexing failed: ${errorMessage}`)
       throw error
     } finally {
-      this.appStore.setLoading(false)
     }
   }
 
