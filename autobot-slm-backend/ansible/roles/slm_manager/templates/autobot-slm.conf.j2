@@ -185,6 +185,39 @@ server {
         proxy_read_timeout 300s;
     }
 
+    # FastAPI OpenAPI docs (#6749 follow-up — without these, the SPA fallback
+    # serves index.html for /openapi.json /docs /redoc instead of the spec).
+    # Use `=` for /openapi.json (exact match) so it can't shadow real routes;
+    # `^~` for /docs and /redoc so prefix match takes priority over the SPA
+    # catch-all.
+    location = /openapi.json {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+    location ^~ /docs {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+    location ^~ /redoc {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
 {% else %}
     # ── Standalone mode ───────────────────────────────────────
     # SLM API at both /api/ and /slm/api/ (#3268: agents always use /slm/api/)
