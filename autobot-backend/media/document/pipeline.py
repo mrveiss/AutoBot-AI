@@ -38,11 +38,24 @@ logger = logging.getLogger(__name__)
 class DocumentPipeline(BasePipeline):
     """Pipeline for processing document content (PDF, DOCX, TXT, etc.)."""
 
-    def __init__(self):
-        """Initialize document processing pipeline."""
+    def __init__(
+        self,
+        pipeline_name: str = "document",
+        supported_types: List[MediaType] = None,
+    ):
+        """Initialize document processing pipeline.
+
+        Issue #6755: accepts the parent's full signature with sensible
+        defaults so factory callers (`cls(name, supported_types)`) keep
+        working. The historical no-arg call site is unaffected.
+        """
         super().__init__(
-            pipeline_name="document",
-            supported_types=[MediaType.DOCUMENT, MediaType.TEXT],
+            pipeline_name=pipeline_name,
+            supported_types=(
+                supported_types
+                if supported_types is not None
+                else [MediaType.DOCUMENT, MediaType.TEXT]
+            ),
         )
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
