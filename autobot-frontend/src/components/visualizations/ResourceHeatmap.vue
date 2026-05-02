@@ -42,14 +42,22 @@
     </div>
 
     <div v-else class="heatmap-container">
-      <!-- ApexCharts Heatmap -->
+      <!-- ApexCharts Heatmap — only mount once chartSeries has data; mounting
+           against an empty series triggers the vue3-apexcharts "Element not
+           found" race (chart instance is created before the parent has any
+           rows to lay out, and the SVG target it looks for never exists). -->
       <apexchart
+        v-if="chartSeries.length > 0"
         ref="chartRef"
         type="heatmap"
         :height="height"
         :options="chartOptions"
         :series="chartSeries"
       />
+      <div v-else class="no-data-state">
+        <i class="fas fa-chart-bar"></i>
+        <span>{{ t('visualizations.resourceHeatmap.noData') }}</span>
+      </div>
 
       <!-- Legend -->
       <div class="heatmap-legend">
@@ -384,7 +392,8 @@ defineExpose({
 }
 
 .loading-state,
-.error-state {
+.error-state,
+.no-data-state {
   display: flex;
   flex-direction: column;
   align-items: center;

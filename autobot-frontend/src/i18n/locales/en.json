@@ -6351,6 +6351,7 @@
       "last24Hours": "Last 24 Hours",
       "last7Days": "Last 7 Days",
       "loadingData": "Loading heatmap data...",
+      "noData": "No metrics available yet",
       "retry": "Retry",
       "legendLow": "Low",
       "legendHigh": "High",
