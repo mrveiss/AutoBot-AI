@@ -334,6 +334,16 @@ class DetectLanguageData(BaseModel):
 class SessionCreate(BaseModel):
     """Session creation model"""
 
+    # #6746: accept client-supplied session_id so frontend and backend stay
+    # aligned on a single UUID. Backend validates and uses it as-is; if absent
+    # or invalid, backend mints a new one. Eliminates the two-phase create
+    # that produced divergent IDs and "blank session" sidebar entries (#6745).
+    id: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="Optional client-supplied session UUID. Validated server-side; "
+        "backend mints a new ID when absent or malformed.",
+    )
     title: Optional[str] = Field(None, max_length=200, description="Session title")
     team_id: Optional[str] = Field(None, description="Team ID for team-scoped sessions (#684)")
     metadata: Optional[Metadata] = Field(default_factory=dict, description="Session metadata")
