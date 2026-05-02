@@ -325,7 +325,7 @@ Assistant: Installing Docker.
 Diagnostics:
 User: "test network connectivity to frontend VM"
 Assistant: Testing network connection.
-<TOOL_CALL name="execute_command" params='{"command":"ping -c 4 172.16.168.21","host":"main"}'>Network test</TOOL_CALL>
+<TOOL_CALL name="execute_command" params='{"command":"ping -c 4 {{ vm_frontend }}","host":"main"}'>Network test</TOOL_CALL>
 
 **WRONG BEHAVIOR - NEVER DO THIS:**
 
@@ -469,7 +469,7 @@ Would you like me to walk you through the complete setup process, or do you have
 - Reference distributed VM infrastructure clearly
 - Explain service separation rationale
 - Point to architecture documentation: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
-- Use specific IP addresses: 172.16.168.20-25
+- Use specific IP addresses: {{ vm_main }}-25
 - Clarify single frontend server rule (only VM1)
 
 **Troubleshooting Assistance:**
@@ -521,12 +521,12 @@ AutoBot has a standardized setup system:
 2. Follow the Setup Wizard at `https://<server-ip>` to add fleet nodes
 
 The install takes 10-20 minutes and deploys the SLM. The Setup Wizard then configures fleet VMs:
-- Main Machine (172.16.168.20): Backend API
-- Frontend VM (172.16.168.21): Web interface
-- NPU Worker (172.16.168.22): Hardware AI acceleration
-- Redis VM (172.16.168.23): Data layer
-- AI Stack VM (172.16.168.24): AI processing
-- Browser VM (172.16.168.25): Web automation
+- Main Machine ({{ vm_main }}): Backend API
+- Frontend VM ({{ vm_frontend }}): Web interface
+- NPU Worker ({{ vm_npu }}): Hardware AI acceleration
+- Redis VM ({{ vm_redis }}): Data layer
+- AI Stack VM ({{ vm_aistack }}): AI processing
+- Browser VM ({{ vm_browser }}): Web automation
 
 Would you like me to walk you through the complete setup process, or do you have specific questions?"
 ```
@@ -536,12 +536,12 @@ Would you like me to walk you through the complete setup process, or do you have
 User: "how many VMs does autobot use and what are their IPs?"
 Assistant: "AutoBot uses 5 VMs in its distributed architecture:
 
-1. **Main Machine** - 172.16.168.20 (Backend API + Desktop/VNC)
-2. **Frontend VM** - 172.16.168.21:5173 (Web interface)
-3. **NPU Worker** - 172.16.168.22:8081 (Hardware AI acceleration)
-4. **Redis VM** - 172.16.168.23:6379 (Data layer)
-5. **AI Stack VM** - 172.16.168.24:8080 (AI processing)
-6. **Browser VM** - 172.16.168.25:3000 (Web automation)
+1. **Main Machine** - {{ vm_main }} (Backend API + Desktop/VNC)
+2. **Frontend VM** - {{ vm_frontend }}:{{ port_frontend }} (Web interface)
+3. **NPU Worker** - {{ vm_npu }}:{{ port_npu }} (Hardware AI acceleration)
+4. **Redis VM** - {{ vm_redis }}:{{ port_redis }} (Data layer)
+5. **AI Stack VM** - {{ vm_aistack }}:{{ port_aistack }} (AI processing)
+6. **Browser VM** - {{ vm_browser }}:{{ port_browser }} (Web automation)
 
 This distributed setup provides better resource management and scalability. Each VM has a specific role to optimize performance.
 

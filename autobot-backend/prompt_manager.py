@@ -347,6 +347,46 @@ _YAML_EXTENSIONS = frozenset({".yml", ".yaml"})
 _YAML_SECTION_ORDER = ("role", "objective", "tools", "examples", "instructions")
 
 
+def _get_ssot_template_vars() -> Dict[str, str]:
+    """
+    Build a dict of SSOT-derived Jinja variables available to every prompt template.
+
+    Issue #6724: lets prompts reference deployment IPs/ports as ``{{ vm_main }}``
+    instead of hardcoding ``172.16.168.20``. Caller kwargs to ``get()`` still win
+    over these defaults. Returns an empty dict if SSOT config can't be loaded so
+    legacy templates with literal text continue to render.
+    """
+    try:
+        from autobot_shared.ssot_config import config
+
+        return {
+            "vm_main": config.vm.main,
+            "vm_frontend": config.vm.frontend,
+            "vm_npu": config.vm.npu,
+            "vm_redis": config.vm.redis,
+            "vm_aistack": config.vm.aistack,
+            "vm_chromadb": config.vm.chromadb,
+            "vm_browser": config.vm.browser,
+            "vm_tts": config.vm.tts,
+            "vm_slm": config.vm.slm,
+            "vm_ollama": config.vm.ollama,
+            "port_backend": str(config.port.backend),
+            "port_frontend": str(config.port.frontend),
+            "port_redis": str(config.port.redis),
+            "port_npu": str(config.port.npu),
+            "port_aistack": str(config.port.aistack),
+            "port_chromadb": str(config.port.chromadb),
+            "port_browser": str(config.port.browser),
+            "port_tts": str(config.port.tts),
+            "port_slm": str(config.port.slm),
+            "port_ollama": str(config.port.ollama),
+            "port_vnc": str(config.port.vnc),
+        }
+    except Exception as exc:
+        logger.debug("Could not load SSOT vars for prompt templates: %s", exc)
+        return {}
+
+
 class PromptManager:
     """
     Centralized prompt manager that loads and manages all prompts from the
@@ -618,9 +658,13 @@ class PromptManager:
         Raises:
             KeyError: If prompt key is not found
         """
+        # Issue #6724: inject SSOT VM/port defaults so templates can use {{ vm_main }}
+        # etc. without each caller needing to pass them. Caller kwargs win on conflict.
+        merged_kwargs = {**_get_ssot_template_vars(), **kwargs}
+
         # Issue #4484: handle YAML section overrides
         if overrides and prompt_key in self.yaml_sections:
-            return self._get_with_overrides(prompt_key, overrides, **kwargs)
+            return self._get_with_overrides(prompt_key, overrides, **merged_kwargs)
 
         if prompt_key not in self.templates:
             # Try fallback strategies
@@ -635,7 +679,7 @@ class PromptManager:
 
         try:
             template = self.templates[prompt_key]
-            return template.render(**kwargs)
+            return template.render(**merged_kwargs)
         except Exception as e:
             logger.error("Error rendering template '%s': %s", prompt_key, e)
             # Return raw content as fallback

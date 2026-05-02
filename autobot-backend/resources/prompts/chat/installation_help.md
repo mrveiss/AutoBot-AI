@@ -49,33 +49,33 @@ journalctl -u autobot-slm-backend -f
 
 Explain the 5-VM distributed architecture clearly:
 
-1. **Main Machine (172.16.168.20)** - WSL2 environment
+1. **Main Machine ({{ vm_main }})** - WSL2 environment
    - Backend API on port 8001
    - Desktop/Terminal VNC on port 6080
    - Development workspace
 
-2. **Frontend VM (172.16.168.21:5173)** - Web Interface
+2. **Frontend VM ({{ vm_frontend }}:{{ port_frontend }})** - Web Interface
    - ONLY frontend server allowed
    - Vue.js application
    - Single frontend server rule enforced
 
-3. **NPU Worker VM (172.16.168.22:8081)** - Hardware AI
+3. **NPU Worker VM ({{ vm_npu }}:{{ port_npu }})** - Hardware AI
    - Orange Pi NPU acceleration
    - AI model inference
    - Hardware-optimized processing
 
-4. **Redis VM (172.16.168.23:6379)** - Data Layer
+4. **Redis VM ({{ vm_redis }}:{{ port_redis }})** - Data Layer
    - Multiple Redis databases (0-6)
    - Conversation history
    - Knowledge base index
    - Session management
 
-5. **AI Stack VM (172.16.168.24:8080)** - AI Processing
+5. **AI Stack VM ({{ vm_aistack }}:{{ port_aistack }})** - AI Processing
    - Ollama LLM service
    - AI model management
    - Background processing
 
-6. **Browser VM (172.16.168.25:3000)** - Web Automation
+6. **Browser VM ({{ vm_browser }}:{{ port_browser }})** - Web Automation
    - Playwright browser automation
    - Web debugging
    - Testing infrastructure
@@ -90,7 +90,7 @@ Explain the 5-VM distributed architecture clearly:
 **VM Connection Issues:**
 - Verify SSH key setup: `~/.ssh/autobot_key`
 - Check VM network: All VMs should be on 172.16.168.0/24
-- Test connectivity: `ping 172.16.168.21`
+- Test connectivity: `ping {{ vm_frontend }}`
 
 **Build Failures:**
 - Try: `scripts/start-services.sh --rebuild`
