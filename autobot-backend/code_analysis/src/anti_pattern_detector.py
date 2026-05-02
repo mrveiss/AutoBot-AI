@@ -94,6 +94,9 @@ class AntiPatternType(Enum):
     # Issue #6661: Liskov Substitution Principle violations
     LSP_SIGNATURE_INCOMPATIBLE = "lsp_signature_incompatible"
     LSP_EXCEPTION_CONTRACT_CHANGED = "lsp_exception_contract_changed"
+    # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
+    DUPLICATE_ENUM = "duplicate_enum"
+    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
 
 
 @dataclass
@@ -326,6 +329,9 @@ class AntiPatternDetector:
         anti_patterns.extend(await self._detect_data_clumps())
         # Issue #6661: Liskov Substitution Principle violations
         anti_patterns.extend(await self._detect_lsp_violations())
+        # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
+        anti_patterns.extend(await self._detect_duplicate_enums())
+        anti_patterns.extend(await self._detect_duplicate_class_shapes())
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -1299,6 +1305,238 @@ class AntiPatternDetector:
                             related_entities=[parent.name, parent.file_path],
                         )
                     )
+
+        return issues
+
+    # ========== Consolidation Opportunity Detection (Issue #6684) ==========
+
+    _ENUM_BASE_NAMES = frozenset(
+        {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"}
+    )
+    # Class-shape rule: skip patterns where shared method names is by design
+    _SHAPE_SKIP_BASE_NAMES = frozenset(
+        {
+            "BaseModel",      # Pydantic — sharing field names is fine
+            "Enum",
+            "IntEnum",
+            "StrEnum",
+            "Exception",
+            "BaseException",
+            "TypedDict",
+            "NamedTuple",
+        }
+    )
+    _SHAPE_MIN_METHODS = 5
+    _SHAPE_JACCARD_THRESHOLD = 0.7
+    _ENUM_JACCARD_THRESHOLD = 0.7
+    _ENUM_MIN_VALUES = 3
+
+    def _is_enum_class(self, cls_info: ClassInfo) -> bool:
+        """True when the class inherits from an Enum-family base."""
+        return any(b in self._ENUM_BASE_NAMES for b in cls_info.base_classes)
+
+    def _enum_value_set(self, cls_info: ClassInfo) -> Set[str]:
+        """Extract the set of enum *value* string literals from a class body.
+
+        Re-parses the source file (cheap; cached at the file level by the
+        OS/page cache).  Falls back to attribute names when values are not
+        string literals — that still gives a useful overlap signal.
+        """
+        try:
+            with open(cls_info.file_path, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=cls_info.file_path)
+        except Exception:
+            return set()
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != cls_info.name:
+                continue
+            values: Set[str] = set()
+            for stmt in node.body:
+                target_name: Optional[str] = None
+                value_node: Optional[ast.AST] = None
+                if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                    tgt = stmt.targets[0]
+                    if isinstance(tgt, ast.Name):
+                        target_name = tgt.id
+                    value_node = stmt.value
+                elif isinstance(stmt, ast.AnnAssign) and isinstance(
+                    stmt.target, ast.Name
+                ):
+                    target_name = stmt.target.id
+                    value_node = stmt.value
+                if target_name is None or target_name.startswith("_"):
+                    continue
+                if (
+                    isinstance(value_node, ast.Constant)
+                    and isinstance(value_node.value, str)
+                ):
+                    values.add(value_node.value.lower())
+                else:
+                    # Fall back to the attribute name (lowered) — gives a
+                    # useful signal for `auto()` enums and ints alike.
+                    values.add(target_name.lower())
+            return values
+        return set()
+
+    @staticmethod
+    def _jaccard(a: Set[str], b: Set[str]) -> float:
+        union = a | b
+        if not union:
+            return 0.0
+        return len(a & b) / len(union)
+
+    def _shares_base_class(self, a: ClassInfo, b: ClassInfo) -> bool:
+        """True when a and b share at least one base class (already related)."""
+        if not a.base_classes or not b.base_classes:
+            return False
+        return bool(set(a.base_classes) & set(b.base_classes))
+
+    async def _detect_duplicate_enums(self) -> List[AntiPatternInstance]:
+        """Cluster enum classes whose value sets overlap above threshold.
+
+        Issue #6684: AutoBot's ``constants/status_enums.py`` is the canonical
+        home for status values, but many modules redeclare overlapping enums
+        (StepStatus, TaskStatus, PhasePromotionStatus, ...).  This detector
+        flags any pair of enum classes whose value sets have Jaccard
+        similarity >= 0.7 with at least 3 shared values.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        enum_data: List[Tuple[str, ClassInfo, Set[str]]] = []
+        for full_name, cls_info in self.classes.items():
+            if not self._is_enum_class(cls_info):
+                continue
+            values = self._enum_value_set(cls_info)
+            if len(values) >= self._ENUM_MIN_VALUES:
+                enum_data.append((full_name, cls_info, values))
+
+        # O(n^2) over enums only — n is small in practice (~50 in this repo).
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for i, (full_a, cls_a, vals_a) in enumerate(enum_data):
+            for full_b, cls_b, vals_b in enum_data[i + 1 :]:
+                # Skip if one inherits from the other (already canonical-vs-extension)
+                if cls_a.name in cls_b.base_classes or cls_b.name in cls_a.base_classes:
+                    continue
+                similarity = self._jaccard(vals_a, vals_b)
+                if similarity < self._ENUM_JACCARD_THRESHOLD:
+                    continue
+                shared = sorted(vals_a & vals_b)
+                pair_key = tuple(sorted([full_a, full_b]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                issues.append(
+                    AntiPatternInstance(
+                        pattern_type=AntiPatternType.DUPLICATE_ENUM,
+                        severity=Severity.MEDIUM,
+                        file_path=cls_a.file_path,
+                        line_number=cls_a.line_number,
+                        entity_name=cls_a.name,
+                        description=(
+                            f"Enum '{cls_a.name}' overlaps {len(vals_a & vals_b)}/"
+                            f"{len(vals_a | vals_b)} values with '{cls_b.name}' in "
+                            f"{cls_b.file_path} (Jaccard={similarity:.2f}). "
+                            f"Shared values: {shared[:5]}"
+                            f"{' (truncated)' if len(shared) > 5 else ''}."
+                        ),
+                        metrics={
+                            "other_enum": cls_b.name,
+                            "other_file": cls_b.file_path,
+                            "jaccard_similarity": round(similarity, 3),
+                            "shared_value_count": len(vals_a & vals_b),
+                            "union_size": len(vals_a | vals_b),
+                            "shared_values": shared,
+                        },
+                        suggestion=(
+                            "Consolidate into a single canonical enum (see "
+                            "constants/status_enums.py for the existing pattern). "
+                            "Importing the canonical enum eliminates value drift "
+                            "and makes cross-module status comparisons type-safe."
+                        ),
+                        refactoring_effort="medium",
+                        related_entities=[cls_b.name, cls_b.file_path],
+                    )
+                )
+
+        return issues
+
+    async def _detect_duplicate_class_shapes(self) -> List[AntiPatternInstance]:
+        """Flag class pairs that share method-name sets above threshold but
+        DO NOT share a base class.  Indicates a missing extracted base /
+        Mixin / Protocol that should formalise the shared contract.
+
+        Excludes Pydantic models, exceptions, NamedTuples, TypedDicts —
+        these all naturally share method names by design.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        candidates: List[Tuple[str, ClassInfo, Set[str]]] = []
+        for full_name, cls_info in self.classes.items():
+            # Skip enums and exception trees — different rules apply
+            if self._is_enum_class(cls_info):
+                continue
+            if cls_info.has_base_class(*self._SHAPE_SKIP_BASE_NAMES):
+                continue
+            method_names = {
+                m.name
+                for m in cls_info.methods
+                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and not m.name.startswith("_")
+            }
+            if len(method_names) < self._SHAPE_MIN_METHODS:
+                continue
+            candidates.append((full_name, cls_info, method_names))
+
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for i, (full_a, cls_a, names_a) in enumerate(candidates):
+            for full_b, cls_b, names_b in candidates[i + 1 :]:
+                if self._shares_base_class(cls_a, cls_b):
+                    continue
+                similarity = self._jaccard(names_a, names_b)
+                if similarity < self._SHAPE_JACCARD_THRESHOLD:
+                    continue
+                shared = sorted(names_a & names_b)
+                pair_key = tuple(sorted([full_a, full_b]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                issues.append(
+                    AntiPatternInstance(
+                        pattern_type=AntiPatternType.DUPLICATE_CLASS_SHAPE,
+                        severity=Severity.LOW,
+                        file_path=cls_a.file_path,
+                        line_number=cls_a.line_number,
+                        entity_name=cls_a.name,
+                        description=(
+                            f"Class '{cls_a.name}' shares {len(names_a & names_b)}/"
+                            f"{len(names_a | names_b)} public method names with "
+                            f"'{cls_b.name}' in {cls_b.file_path} "
+                            f"(Jaccard={similarity:.2f}) but they do NOT share a "
+                            f"base class.  Suggests a missing extracted base / "
+                            f"Mixin / Protocol.  Shared methods: {shared[:5]}"
+                            f"{' (truncated)' if len(shared) > 5 else ''}."
+                        ),
+                        metrics={
+                            "other_class": cls_b.name,
+                            "other_file": cls_b.file_path,
+                            "jaccard_similarity": round(similarity, 3),
+                            "shared_method_count": len(names_a & names_b),
+                            "union_size": len(names_a | names_b),
+                            "shared_methods": shared,
+                        },
+                        suggestion=(
+                            "Extract a shared base class (Template Method) or a "
+                            "Protocol describing the common interface.  See "
+                            "BaseIntegration → SlackIntegration / JiraIntegration "
+                            "for the canonical pattern in this repo."
+                        ),
+                        refactoring_effort="medium",
+                        related_entities=[cls_b.name, cls_b.file_path],
+                    )
+                )
 
         return issues
 
