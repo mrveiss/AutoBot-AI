@@ -91,6 +91,9 @@ class AntiPatternType(Enum):
     PRIMITIVE_OBSESSION = "primitive_obsession"
     LAZY_CLASS = "lazy_class"
     REFUSED_BEQUEST = "refused_bequest"
+    # Issue #6661: Liskov Substitution Principle violations
+    LSP_SIGNATURE_INCOMPATIBLE = "lsp_signature_incompatible"
+    LSP_EXCEPTION_CONTRACT_CHANGED = "lsp_exception_contract_changed"
 
 
 @dataclass
@@ -132,7 +135,7 @@ class ClassInfo:
     name: str
     file_path: str
     line_number: int
-    methods: List[ast.FunctionDef]
+    methods: List[ast.AST]  # ast.FunctionDef | ast.AsyncFunctionDef (#6661)
     attributes: Set[str]
     base_classes: List[str]
     method_calls: Dict[str, List[str]]  # method -> list of called methods/attrs
@@ -321,6 +324,8 @@ class AntiPatternDetector:
         anti_patterns.extend(await self._detect_lazy_classes())
         anti_patterns.extend(await self._detect_dead_code())
         anti_patterns.extend(await self._detect_data_clumps())
+        # Issue #6661: Liskov Substitution Principle violations
+        anti_patterns.extend(await self._detect_lsp_violations())
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -437,7 +442,7 @@ class AntiPatternDetector:
 
     @staticmethod
     def _extract_method_call_data(
-        methods: List[ast.FunctionDef],
+        methods: List[ast.AST]  # ast.FunctionDef | ast.AsyncFunctionDef (#6661),
     ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
         """Extract method calls and external references from a list of AST methods.
 
@@ -466,8 +471,15 @@ class AntiPatternDetector:
     ) -> Optional[ClassInfo]:
         """Analyze a class definition"""
         try:
-            # Extract methods
-            methods = [n for n in node.body if isinstance(n, ast.FunctionDef)]
+            # Extract methods (#6661: include AsyncFunctionDef so the LSP
+            # detector can catch sync/async signature mismatches between
+            # parent and child overrides — previously async methods were
+            # silently skipped by every existing detector too).
+            methods = [
+                n
+                for n in node.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
 
             # Extract attributes (from __init__ and class body)
             attributes = set()
@@ -1023,6 +1035,270 @@ class AntiPatternDetector:
                         related_entities=list(methods[:5]),
                     )
                 )
+
+        return issues
+
+    # ========== Liskov Substitution Principle Detection (Issue #6661) ==========
+
+    # Names that look like ABC/Protocol stubs in the parent — children adding
+    # behavior on top of these is the *purpose*, not an LSP violation.
+    _ABSTRACT_PARENT_NAMES = frozenset(
+        {"ABC", "ABCMeta", "Protocol", "RuntimeProtocol"}
+    )
+    _MIXIN_SUFFIXES = ("Mixin", "Protocol", "ABC")
+
+    def _is_async_method(self, method: ast.AST) -> bool:
+        """True when the method is declared `async def`."""
+        return isinstance(method, ast.AsyncFunctionDef)
+
+    def _required_positional_count(self, method: ast.AST) -> int:
+        """Count positional args without defaults (excluding ``self``/``cls``)."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return 0
+        args = method.args.args
+        # Strip the bound argument (self/cls) if present
+        if args and args[0].arg in ("self", "cls"):
+            args = args[1:]
+        defaults = method.args.defaults or []
+        return max(0, len(args) - len(defaults))
+
+    def _is_abstract_or_stub(self, method: ast.AST) -> bool:
+        """Parent overrides should be skipped if the parent body is an
+        abstract / Protocol stub — children must add behavior."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return True
+        # @abstractmethod / @abc.abstractmethod
+        for dec in method.decorator_list:
+            name = ""
+            if isinstance(dec, ast.Name):
+                name = dec.id
+            elif isinstance(dec, ast.Attribute):
+                name = dec.attr
+            if "abstract" in name.lower():
+                return True
+        body = method.body
+        if not body:
+            return True
+        if len(body) == 1:
+            stmt = body[0]
+            # `pass` / `...` / `raise NotImplementedError`
+            if isinstance(stmt, ast.Pass):
+                return True
+            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+                if stmt.value.value is Ellipsis or stmt.value.value is None:
+                    return True
+            if isinstance(stmt, ast.Raise):
+                exc = stmt.exc
+                if isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
+                    return True
+                if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                    if exc.func.id == "NotImplementedError":
+                        return True
+        # Docstring-only body counts as a stub too
+        if (
+            len(body) == 1
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            return True
+        return False
+
+    def _is_skippable_class(self, cls_info: ClassInfo) -> bool:
+        """Mixins / Protocols / pure ABCs are not subject to LSP overrides."""
+        if any(cls_info.name.endswith(suf) for suf in self._MIXIN_SUFFIXES):
+            return True
+        if cls_info.has_base_class(*self._ABSTRACT_PARENT_NAMES):
+            return True
+        return False
+
+    def _exception_types_raised(self, method: ast.AST) -> Set[str]:
+        """Static set of exception type names ``raise``d directly in body."""
+        names: Set[str] = set()
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return names
+        for node in ast.walk(method):
+            if isinstance(node, ast.Raise) and node.exc is not None:
+                exc = node.exc
+                if isinstance(exc, ast.Name):
+                    names.add(exc.id)
+                elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                    names.add(exc.func.id)
+                elif isinstance(exc, ast.Call) and isinstance(exc.func, ast.Attribute):
+                    names.add(exc.func.attr)
+        return names
+
+    def _docstring_mentions_raises(self, method: ast.AST, exc_name: str) -> bool:
+        """Best-effort: parent's docstring documents the exception type."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return False
+        doc = ast.get_docstring(method) or ""
+        return exc_name in doc
+
+    def _find_parent_method(
+        self, parent: ClassInfo, name: str
+    ) -> Optional[ast.AST]:
+        for m in parent.methods:
+            if (
+                isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and m.name == name
+            ):
+                return m
+        return None
+
+    def _resolve_parent(self, child: ClassInfo) -> Optional[ClassInfo]:
+        """Look up the FIRST in-codebase parent class. Returns None when
+        the parent is external (stdlib/library) — those are out of scope."""
+        for base_name in child.base_classes:
+            for full_name, info in self.classes.items():
+                if info.name == base_name:
+                    return info
+        return None
+
+    async def _detect_lsp_violations(self) -> List[AntiPatternInstance]:
+        """Detect Liskov Substitution Principle violations across class
+        hierarchies. Two high-confidence rules (Issue #6661):
+
+        * ``LSP_SIGNATURE_INCOMPATIBLE`` — sync/async mismatch between an
+          override and its parent, or required-param removal.
+        * ``LSP_EXCEPTION_CONTRACT_CHANGED`` — the override raises an
+          exception type that the parent neither raises nor mentions in
+          its docstring's Raises clause.
+
+        Excludes ABC/Protocol stubs, ``@abstractmethod`` parents, and
+        Mixin/Protocol classes — adding behavior to those is the *point*
+        of inheritance, not a contract break.
+        """
+        issues: List[AntiPatternInstance] = []
+
+        for full_name, child in self.classes.items():
+            if self._is_skippable_class(child):
+                continue
+            parent = self._resolve_parent(child)
+            if parent is None or self._is_skippable_class(parent):
+                continue
+
+            for child_method in child.methods:
+                if not isinstance(
+                    child_method, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
+                    continue
+                parent_method = self._find_parent_method(parent, child_method.name)
+                if parent_method is None:
+                    continue
+                if self._is_abstract_or_stub(parent_method):
+                    continue
+
+                # --- Signature: sync/async mismatch ---
+                if self._is_async_method(child_method) != self._is_async_method(
+                    parent_method
+                ):
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} changes "
+                                f"sync/async: parent is "
+                                f"{'async' if self._is_async_method(parent_method) else 'sync'}, "
+                                f"child is "
+                                f"{'async' if self._is_async_method(child_method) else 'sync'}. "
+                                "Polymorphic callers will silently get an unawaited coroutine "
+                                "(or fail to await) depending on which subclass they hold."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "parent_async": self._is_async_method(parent_method),
+                                "child_async": self._is_async_method(child_method),
+                            },
+                            suggestion=(
+                                "Unify the signature: if any subclass needs I/O, promote "
+                                "the parent contract to ``async def``; the in-process "
+                                "implementations can simply ``return value`` inside the "
+                                "coroutine. See #6659 for a worked example."
+                            ),
+                            refactoring_effort="low",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
+
+                # --- Signature: required-param removal ---
+                child_required = self._required_positional_count(child_method)
+                parent_required = self._required_positional_count(parent_method)
+                if child_required < parent_required:
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} drops "
+                                f"required positional params: parent requires "
+                                f"{parent_required}, child requires {child_required}. "
+                                "A factory call like ``cls(arg1, arg2)`` against the parent "
+                                "will crash with TypeError on this subclass."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "parent_required_args": parent_required,
+                                "child_required_args": child_required,
+                            },
+                            suggestion=(
+                                "Restore the parent's positional params with sensible "
+                                "defaults so factory callers keep working. See #6660 for "
+                                "a worked example with __init__."
+                            ),
+                            refactoring_effort="low",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
+
+                # --- Exception contract: child raises type parent doesn't ---
+                child_excs = self._exception_types_raised(child_method)
+                parent_excs = self._exception_types_raised(parent_method)
+                new_excs = child_excs - parent_excs
+                # Filter out exceptions the parent's docstring documents
+                undocumented = {
+                    e
+                    for e in new_excs
+                    if not self._docstring_mentions_raises(parent_method, e)
+                }
+                if undocumented:
+                    issues.append(
+                        AntiPatternInstance(
+                            pattern_type=AntiPatternType.LSP_EXCEPTION_CONTRACT_CHANGED,
+                            severity=Severity.HIGH,
+                            file_path=child.file_path,
+                            line_number=child_method.lineno,
+                            entity_name=f"{child.name}.{child_method.name}",
+                            description=(
+                                f"Override of {parent.name}.{child_method.name} raises "
+                                f"{sorted(undocumented)} which the parent neither raises "
+                                "nor documents in its Raises clause. Polymorphic callers "
+                                "against the parent contract have no reason to catch these."
+                            ),
+                            metrics={
+                                "parent_class": parent.name,
+                                "parent_file": parent.file_path,
+                                "new_exceptions": sorted(undocumented),
+                            },
+                            suggestion=(
+                                "Either return an error value matching the parent's return "
+                                "contract, or promote the new exception into the parent's "
+                                "documented Raises clause and propagate it through every "
+                                "sibling subclass. See #6658 for a worked example."
+                            ),
+                            refactoring_effort="medium",
+                            related_entities=[parent.name, parent.file_path],
+                        )
+                    )
 
         return issues
 
