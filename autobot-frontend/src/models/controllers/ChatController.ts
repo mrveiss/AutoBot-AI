@@ -605,7 +605,6 @@ export class ChatController {
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
     try {
-      this.getAppStore()?.setLoading(true, 'Creating new chat...')
 
       // Create session in store first for immediate UI feedback
       const sessionId = this.chatStore.createNewSession(title)
@@ -625,13 +624,11 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
   async loadChatSessions(): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Loading chat sessions...')
 
       const sessions = await chatRepository.getChatList()
 
@@ -653,7 +650,6 @@ export class ChatController {
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -672,7 +668,6 @@ export class ChatController {
       }
 
       logger.debug(`Loading messages for session: ${sessionId}`)
-      this.getAppStore()?.setLoading(true, 'Loading messages...')
 
       const messages = await chatRepository.getChatMessages(sessionId)
       logger.debug(`Received ${messages.length} messages from repository`)
@@ -716,7 +711,6 @@ export class ChatController {
       logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(`Failed to load messages: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -779,7 +773,6 @@ export class ChatController {
     fileOptions?: Record<string, unknown>
   ): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Deleting chat...')
 
       // CRITICAL FIX: Enhanced deletion with proper error handling and persistence
       let backendDeleteSucceeded = false
@@ -866,7 +859,6 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(`Failed to delete chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error // Re-throw to let caller handle
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -931,7 +923,6 @@ export class ChatController {
   // Cleanup operations with confirmation
   async clearAllChats(): Promise<void> {
     try {
-      this.getAppStore()?.setLoading(true, 'Clearing all chats...')
 
       // Note: cleanupAllChatData doesn't exist in repository, clearing from store only
       this.chatStore.clearAllSessions()
@@ -942,7 +933,6 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(`Failed to clear chats: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
@@ -1026,7 +1016,6 @@ export class ChatController {
   // Connection test method
   async testConnection(): Promise<boolean> {
     try {
-      this.getAppStore()?.setLoading(true, 'Testing connection...')
 
       // Try to create a minimal chat session
       const testResponse = await chatRepository.createNewChat('Connection Test')
@@ -1047,7 +1036,6 @@ export class ChatController {
       logger.error('Connection test failed:', error)
       return false
     } finally {
-      this.getAppStore()?.setLoading(false)
     }
   }
 
