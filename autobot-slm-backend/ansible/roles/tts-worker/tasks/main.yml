@@ -51,6 +51,18 @@
 # ============================================================
 # System dependencies
 # ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "TTS Worker | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['tts', 'packages']
+
 - name: "TTS Worker | Install system dependencies"
   ansible.builtin.apt:
     name:
@@ -59,7 +71,6 @@
       - python3-venv
       - libsndfile1
     state: present
-    update_cache: true
   tags: ['tts', 'packages']
 
 # ============================================================

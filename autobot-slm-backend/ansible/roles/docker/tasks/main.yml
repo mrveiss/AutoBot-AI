@@ -17,6 +17,19 @@
 # ============================================================
 # Phase 2: Install Docker Engine (Debian/Ubuntu)
 # ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Docker | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
 - name: "Docker | Install prerequisite packages (Debian)"
   ansible.builtin.apt:
     name:
@@ -24,7 +37,6 @@
       - curl
       - gnupg
     state: present
-    update_cache: true
   when: _docker_is_debian | bool
   tags: ['docker', 'packages']
 
@@ -65,7 +77,21 @@
       {{ ansible_distribution_release }} {{ docker_apt_repo_channel }}
     state: present
     filename: docker
-    update_cache: true
+    # #6719: refresh handled by the bounded-shell task below; the apt module's
+    # update_cache aborts on flaky third-party PPAs.
+    update_cache: false
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Refresh apt cache after Docker repo add (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   when: _docker_is_debian | bool
   tags: ['docker', 'packages']
 

@@ -55,11 +55,24 @@
     - ansible_os_family == "Debian"
     - _grafana_installed.rc != 0
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: Grafana | Refresh apt cache after PPA add (best-effort, bounded; #6719)
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
+
 - name: Install Grafana
   ansible.builtin.apt:
     name: grafana
     state: present
-    update_cache: true
   when:
     - ansible_os_family == "Debian"
     - _grafana_installed.rc != 0
