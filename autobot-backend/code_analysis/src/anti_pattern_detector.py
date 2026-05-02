@@ -1108,9 +1108,44 @@ class AntiPatternDetector:
         defaults = method.args.defaults or []
         return max(0, len(args) - len(defaults))
 
+    @staticmethod
+    def _is_docstring_stmt(stmt: ast.stmt) -> bool:
+        """True when the statement is a bare string literal (function docstring)."""
+        return (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        )
+
+    @staticmethod
+    def _is_stub_statement(stmt: ast.stmt) -> bool:
+        """True when the statement is a stub form: ``pass`` / ``...`` /
+        ``raise NotImplementedError``."""
+        if isinstance(stmt, ast.Pass):
+            return True
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+            if stmt.value.value is Ellipsis or stmt.value.value is None:
+                return True
+        if isinstance(stmt, ast.Raise):
+            exc = stmt.exc
+            if isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
+                return True
+            if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
+                if exc.func.id == "NotImplementedError":
+                    return True
+        return False
+
     def _is_abstract_or_stub(self, method: ast.AST) -> bool:
         """Parent overrides should be skipped if the parent body is an
-        abstract / Protocol stub — children must add behavior."""
+        abstract / Protocol stub — children must add behavior.
+
+        Recognized stub bodies (a leading docstring is allowed and ignored):
+          * ``pass``
+          * ``...``  (Ellipsis as expression statement)
+          * ``raise NotImplementedError`` / ``raise NotImplementedError(...)``
+          * docstring-only body
+          * docstring + any of the above
+        """
         if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return True
         # @abstractmethod / @abc.abstractmethod
@@ -1125,28 +1160,15 @@ class AntiPatternDetector:
         body = method.body
         if not body:
             return True
-        if len(body) == 1:
-            stmt = body[0]
-            # `pass` / `...` / `raise NotImplementedError`
-            if isinstance(stmt, ast.Pass):
-                return True
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
-                if stmt.value.value is Ellipsis or stmt.value.value is None:
-                    return True
-            if isinstance(stmt, ast.Raise):
-                exc = stmt.exc
-                if isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
-                    return True
-                if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name):
-                    if exc.func.id == "NotImplementedError":
-                        return True
-        # Docstring-only body counts as a stub too
-        if (
-            len(body) == 1
-            and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, ast.Constant)
-            and isinstance(body[0].value.value, str)
-        ):
+
+        # Strip an optional leading docstring; the remaining body must be
+        # either empty (docstring-only) or a single stub statement.
+        non_doc_body = (
+            body[1:] if self._is_docstring_stmt(body[0]) else list(body)
+        )
+        if not non_doc_body:
+            return True  # docstring-only stub
+        if len(non_doc_body) == 1 and self._is_stub_statement(non_doc_body[0]):
             return True
         return False
 
