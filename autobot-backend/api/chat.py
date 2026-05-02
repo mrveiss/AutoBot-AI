@@ -354,6 +354,42 @@ def _validate_session_id(session_id: Optional[str]) -> None:
         raise ValidationError("Invalid session ID format")
 
 
+def _to_persisted_message(api_data: Dict[str, Any], default_type: str) -> Dict[str, Any]:
+    """Translate API-shape (role/content) to disk-shape (sender/content/type).
+
+    #6744: api/chat.py historically called ``add_message(session_id, dict)``
+    but the method signature is ``add_message(sender, text, ...)``. Python
+    silently accepted the type mismatch and the message ended up in the
+    in-memory default-history bucket because ``session_id`` defaulted to
+    None. Persistence only worked when the streaming workflow path
+    (``chat_workflow/manager.py:add_messages_batch``) flushed at end-of-
+    stream — so any failed/interrupted stream lost both user and assistant
+    messages. This helper produces the canonical disk-shape dict; callers
+    then use ``add_messages_batch(session_id, [msg])`` (correct signature).
+
+    Schema mapping:
+        role     → sender
+        content  → content (unchanged)
+        metadata → metadata (unchanged, defaults to ``{}``)
+        + type   ← caller's default ("message" for user, "response" for assistant)
+        + sources ← [] (RAG citations; populated elsewhere)
+        authorId → authorId (preserved for shared-session attribution, #3282)
+    """
+    sender = api_data.get("role") or api_data.get("sender") or "system"
+    persisted: Dict[str, Any] = {
+        "id": api_data["id"],
+        "sender": sender,
+        "content": api_data.get("content", ""),
+        "timestamp": api_data.get("timestamp"),
+        "type": default_type,
+        "metadata": api_data.get("metadata") or {},
+        "sources": api_data.get("sources", []),
+    }
+    if "authorId" in api_data:
+        persisted["authorId"] = api_data["authorId"]
+    return persisted
+
+
 async def _store_and_log_user_message(
     message: "ChatMessage",
     session_id: str,
@@ -387,8 +423,11 @@ async def _store_and_log_user_message(
     if author_id:
         user_message_data["authorId"] = author_id
 
-    if hasattr(chat_history_manager, "add_message"):
-        await chat_history_manager.add_message(session_id, user_message_data)
+    if hasattr(chat_history_manager, "add_messages_batch"):
+        # #6744: was add_message(session_id, dict) — wrong-signature silent no-op.
+        await chat_history_manager.add_messages_batch(
+            session_id, [_to_persisted_message(user_message_data, "message")]
+        )
 
     # Issue #3282: Broadcast new user message to all session collaborators
     try:
@@ -548,8 +587,11 @@ async def _store_and_log_ai_response(
         "session_id": session_id,
     }
 
-    if hasattr(chat_history_manager, "add_message"):
-        await chat_history_manager.add_message(session_id, ai_message_data)
+    if hasattr(chat_history_manager, "add_messages_batch"):
+        # #6744: was add_message(session_id, dict) — wrong-signature silent no-op.
+        await chat_history_manager.add_messages_batch(
+            session_id, [_to_persisted_message(ai_message_data, "response")]
+        )
 
     log_chat_event(
         "response_generated",
@@ -1415,8 +1457,11 @@ async def _store_enhanced_user_message(
         "session_id": session_id,
     }
 
-    if hasattr(chat_history_manager, "add_message"):
-        await chat_history_manager.add_message(session_id, user_message_data)
+    if hasattr(chat_history_manager, "add_messages_batch"):
+        # #6744: was add_message(session_id, dict) — wrong-signature silent no-op.
+        await chat_history_manager.add_messages_batch(
+            session_id, [_to_persisted_message(user_message_data, "message")]
+        )
 
     log_chat_event(
         "enhanced_message_received",
@@ -1588,8 +1633,11 @@ async def _store_enhanced_ai_response(
         "session_id": session_id,
     }
 
-    if hasattr(chat_history_manager, "add_message"):
-        await chat_history_manager.add_message(session_id, ai_message_data)
+    if hasattr(chat_history_manager, "add_messages_batch"):
+        # #6744: was add_message(session_id, dict) — wrong-signature silent no-op.
+        await chat_history_manager.add_messages_batch(
+            session_id, [_to_persisted_message(ai_message_data, "response")]
+        )
 
     log_chat_event(
         "enhanced_response_generated",
