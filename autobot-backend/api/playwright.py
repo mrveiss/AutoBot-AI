@@ -569,9 +569,17 @@ async def get_worker_status():
             f"{BROWSER_VM_URL}/status",
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
-            result = await response.json()
-            logger.info("Worker status: %s", result.get("status"))
-            return result
+            data = await response.json()
+            logger.info("Worker status: %s", data.get("status"))
+            # Browser VM returns null fields when no session is connected;
+            # PlaywrightWorkerStatusResponse.browser_connected is non-nullable
+            # so coerce to bool here (None -> False).
+            page_open = data.get("page_open")
+            return {
+                "status": str(data.get("status") or "unknown"),
+                "browser_connected": bool(data.get("browser_connected")),
+                "page_open": page_open if isinstance(page_open, bool) else None,
+            }
     except aiohttp.ClientError as e:
         logger.warning("Browser VM unreachable: %s", e)
         return {

@@ -137,9 +137,14 @@ class GlobalErrorHandler {
 
         return response
       } catch (error) {
-        // Don't log expected health check failures
+        // Don't log expected health check failures or AbortError
+        // (AbortError fires legitimately when components abort in-flight
+        // requests on unmount or rapid navigation — not a real failure).
         const isHealthCheck = typeof args[0] === 'string' && args[0].includes('/health')
-        if (!isHealthCheck) {
+        const isAbortError =
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (error as Error)?.name === 'AbortError'
+        if (!isHealthCheck && !isAbortError) {
           logger.error('Fetch error:', error)
         }
 
