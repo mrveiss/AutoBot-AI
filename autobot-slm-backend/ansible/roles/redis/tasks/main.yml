@@ -28,10 +28,16 @@
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
-- name: "Redis | Update apt cache"
-  apt:
-    update_cache: yes
-  become: yes
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Redis | Refresh apt cache after PPA add (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 

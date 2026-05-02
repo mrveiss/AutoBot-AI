@@ -78,6 +78,18 @@
     path: /usr/local/bin/ollama
   register: _ollama_binary
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Install | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  when: not _ollama_binary.stat.exists
+
 - name: "Install | Install LLM dependencies"
   ansible.builtin.apt:
     name:
@@ -85,7 +97,6 @@
       - ca-certificates
       - zstd
     state: present
-    update_cache: true
   when: not _ollama_binary.stat.exists
 
 - name: "Install | Download Ollama installer"

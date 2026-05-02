@@ -126,6 +126,18 @@
 # ============================================================
 # Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
 # ============================================================
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+- name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'packages']
+
 - name: "Backend | Install backend-specific system dependencies"
   ansible.builtin.apt:
     name:
@@ -159,7 +171,6 @@
       # Matplotlib GUI backend
       - python3-tk
     state: present
-    update_cache: true
   tags: ['backend', 'packages']
 
 
