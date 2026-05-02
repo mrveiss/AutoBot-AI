@@ -43,16 +43,24 @@
     - not _nodesource_repo.stat.exists
   tags: ['deps', 'nodejs']
 
+# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml for
+# rationale. Ansible's apt module aborts on any partial-fetch warning, the
+# CLI does not. cache_valid_time alone isn't enough once cache ages past 1h.
+- name: "nodejs | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['deps', 'nodejs']
+
 - name: "nodejs | Install Node.js"
   ansible.builtin.apt:
     name: nodejs
     state: present
-    update_cache: true
-    # #6719: cache_valid_time avoids aborting Phase 0 when a third-party PPA
-    # (Launchpad ansible/deadsnakes) has a transient timeout. apt-get update
-    # would log a warning and proceed; Ansible's apt module treats the same
-    # warning as a hard failure. Skip refresh entirely when cache is fresh.
-    cache_valid_time: 3600
   become: true
   tags: ['deps', 'nodejs']
 
