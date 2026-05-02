@@ -140,7 +140,7 @@ onMounted(async () => {
 
     <!-- Tabs -->
     <div class="border-b border-default">
-      <nav class="-mb-px flex space-x-8">
+      <nav class="-mb-px flex gap-8">
         <button
           @click="activeTab = 'backend'"
           :class="[
