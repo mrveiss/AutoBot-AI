@@ -342,11 +342,6 @@ def _build_list_entities_response(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_entity",
-    error_code_prefix="MEMORY",
-)
 @router.post("/entities", status_code=201, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -411,11 +406,6 @@ async def create_entity(
         raise HTTPException(status_code=500, detail="Failed to create entity")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_all_entities",
-    error_code_prefix="MEMORY",
-)
 @router.get("/entities/all", response_model=MemoryEntityListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -461,11 +451,6 @@ async def list_all_entities(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_orphaned_conversation_entities",
-    error_code_prefix="MEMORY",
-)
 @router.get("/entities/orphans", response_model=MemoryOrphanScanResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -783,11 +768,6 @@ async def _detect_orphaned_entities(
     return _find_orphaned_entities(all_entities, existing_session_ids)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_orphaned_conversation_entities",
-    error_code_prefix="MEMORY",
-)
 @router.delete("/entities/orphans", response_model=MemoryOrphanCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -838,11 +818,6 @@ async def cleanup_orphaned_conversation_entities(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_entity_by_id",
-    error_code_prefix="MEMORY",
-)
 @router.get("/entities/{entity_id}", response_model=MemoryEntityDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -901,11 +876,6 @@ async def get_entity_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve entity")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_entity_by_name",
-    error_code_prefix="MEMORY",
-)
 @router.get("/entities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -962,11 +932,6 @@ async def get_entity_by_name(
         raise HTTPException(status_code=500, detail="Failed to search entity")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_observations",
-    error_code_prefix="MEMORY",
-)
 @router.patch("/entities/{entity_id}/observations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1030,11 +995,6 @@ async def add_observations(
         raise HTTPException(status_code=500, detail="Failed to add observations")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_entity",
-    error_code_prefix="MEMORY",
-)
 @router.delete("/entities/{entity_id}", response_model=MemoryDeleteEntityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1098,11 +1058,6 @@ async def delete_entity(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_relation",
-    error_code_prefix="MEMORY",
-)
 @router.post("/relations", status_code=201, response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1172,11 +1127,6 @@ async def create_relation(
         raise HTTPException(status_code=500, detail="Failed to create relation")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_related_entities",
-    error_code_prefix="MEMORY",
-)
 @router.get("/entities/{entity_id}/relations", response_model=MemoryRelatedEntitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1232,11 +1182,6 @@ async def get_related_entities(
         raise HTTPException(status_code=500, detail="Failed to get related entities")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_relation",
-    error_code_prefix="MEMORY",
-)
 @router.delete("/relations", response_model=MemoryDeleteRelationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1307,11 +1252,6 @@ async def delete_relation(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_entities",
-    error_code_prefix="MEMORY",
-)
 @router.get("/search", response_model=MemorySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1385,11 +1325,6 @@ async def search_entities(
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_entity_graph",
-    error_code_prefix="MEMORY",
-)
 @router.get("/graph", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1453,11 +1388,6 @@ async def get_entity_graph(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="memory_health_check",
-    error_code_prefix="MEMORY",
-)
 @router.get("/health", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1591,11 +1521,6 @@ def _build_invalidate_relation_response(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="invalidate_entity",
-    error_code_prefix="MEMORY",
-)
 @router.patch("/entities/{entity_id}/invalidate", response_model=MemoryEntityInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1660,11 +1585,6 @@ async def invalidate_entity(
         raise HTTPException(status_code=500, detail="Failed to invalidate entity")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="invalidate_relation",
-    error_code_prefix="MEMORY",
-)
 @router.patch("/relations/invalidate", response_model=MemoryRelationInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

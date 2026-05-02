@@ -25,11 +25,6 @@ router = APIRouter(
 )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reload_chat_workflow",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.post("/chat-workflow", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -76,11 +71,6 @@ async def reload_chat_workflow():
         raise HTTPException(status_code=500, detail="Failed to reload chat workflow")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reload_module",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.post("/module", response_model=ReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -126,11 +116,6 @@ async def reload_module(request: ReloadRequest):
         raise HTTPException(status_code=500, detail="Failed to reload module")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_reload_status",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.get("/status", response_model=Metadata)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -152,11 +137,6 @@ async def get_reload_status():
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_hot_reload",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.post("/start", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -187,11 +167,6 @@ async def start_hot_reload():
         raise HTTPException(status_code=500, detail="Failed to start hot reload")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stop_hot_reload",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.post("/stop", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -214,11 +189,6 @@ async def stop_hot_reload():
         raise HTTPException(status_code=500, detail="Failed to stop hot reload")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="hot_reload_health",
-    error_code_prefix="HOT_RELOAD",
-)
 @router.get("/health", response_model=HotReloadHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

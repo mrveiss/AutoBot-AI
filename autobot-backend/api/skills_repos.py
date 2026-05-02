@@ -54,11 +54,6 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
     return repo
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_repo",
-    error_code_prefix="SKILLS_REPOS",
-)
 @router.post("/", summary="Register a new skill repository", response_model=SkillRepoAddResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -93,11 +88,6 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_repos",
-    error_code_prefix="SKILLS_REPOS",
-)
 @router.get("", summary="List all registered skill repositories", response_model=List[SkillRepoItem])
 @router.get("/", include_in_schema=False, response_model=List[SkillRepoItem])
 @with_error_handling(
@@ -127,11 +117,6 @@ async def list_repos() -> List[Dict[str, Any]]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="sync_repo",
-    error_code_prefix="SKILLS_REPOS",
-)
 @router.post("/{repo_id}/sync", summary="Sync packages from a repository", response_model=SkillRepoSyncResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -161,11 +146,6 @@ async def sync_repo(
     return {"synced": len(packages), "repo": repo.name}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="browse_repo",
-    error_code_prefix="SKILLS_REPOS",
-)
 @router.get("/{repo_id}/browse", summary="Browse packages in a repository", response_model=SkillRepoBrowseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

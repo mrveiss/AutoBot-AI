@@ -77,11 +77,6 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
 # ===== CATEGORY CRUD OPERATIONS (Issue #411) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/categories", response_model=KnowledgeCategoryCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -139,11 +134,6 @@ async def create_category(
             raise HTTPException(status_code=400, detail=error_message)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category_tree",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/tree", response_model=KnowledgeCategoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -205,11 +195,6 @@ async def get_category_tree(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/{category_id}", response_model=KnowledgeCategoryDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -253,11 +238,6 @@ async def get_category(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category_by_path",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/path/{path:path}", response_model=KnowledgeCategoryDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -296,11 +276,6 @@ async def get_category_by_path(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.put("/categories/{category_id}", response_model=KnowledgeCategoryUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -366,11 +341,6 @@ async def update_category(
             raise HTTPException(status_code=400, detail=error_message)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/categories/{category_id}", response_model=KnowledgeCategoryDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -453,11 +423,6 @@ def _raise_delete_category_error(result: dict) -> None:
 # ===== CATEGORY HIERARCHY OPERATIONS (Issue #411) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category_children",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/{category_id}/children", response_model=KnowledgeCategoryChildrenResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -504,11 +469,6 @@ async def get_category_children(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category_ancestors",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/{category_id}/ancestors", response_model=KnowledgeCategoryAncestorsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -558,11 +518,6 @@ async def get_category_ancestors(
 # ===== CATEGORY-FACT OPERATIONS (Issue #411) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_facts_in_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/{category_id}/facts", response_model=KnowledgeCategoryFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -628,11 +583,6 @@ async def get_facts_in_category(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="assign_fact_to_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/facts/{fact_id}/category", response_model=KnowledgeFactAssignCategoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -688,11 +638,6 @@ async def assign_fact_to_category(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_categories_by_path",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/categories/search", response_model=KnowledgeCategorySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

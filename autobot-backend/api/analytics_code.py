@@ -53,11 +53,6 @@ def set_analytics_dependencies(controller, state):
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="index_codebase",
-    error_code_prefix="ANALYTICS",
-)
 @router.post("/code/index", response_model=AnalyticsCodeIndexResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -93,11 +88,6 @@ async def index_codebase(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_analysis_status",
-    error_code_prefix="ANALYTICS",
-)
 @router.get("/code/status", response_model=AnalyticsCodeStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -154,11 +144,6 @@ async def get_code_analysis_status(
     return status
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_quality_assessment",
-    error_code_prefix="ANALYTICS",
-)
 @router.get("/quality/assessment", response_model=AnalyticsCodeQualityAssessmentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -228,11 +213,6 @@ async def get_code_quality_assessment(
     return quality_assessment
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_quality_metrics",
-    error_code_prefix="ANALYTICS",
-)
 @router.get("/code/quality-metrics", response_model=AnalyticsCodeQualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -343,11 +323,6 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     return insights
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_communication_chains",
-    error_code_prefix="ANALYTICS",
-)
 @router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -476,11 +451,6 @@ def _generate_communication_chain_insights(
     return insights
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_communication_chains_detailed",
-    error_code_prefix="ANALYTICS",
-)
 @router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -625,11 +595,6 @@ def _score_to_grade(score: float) -> str:
     return "F"
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_quality_score",
-    error_code_prefix="ANALYTICS",
-)
 @router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -120,11 +120,6 @@ def _build_search_metrics(metrics) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="advanced_rag_search",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/advanced_search", response_model=AdvancedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -188,11 +183,6 @@ async def advanced_search(
     return response
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rerank_results",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/rerank_results", response_model=RerankResultsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -238,11 +228,6 @@ async def rerank_results(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_rag_config",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/config/rag", response_model=RagConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -270,11 +255,6 @@ async def get_rag_configuration(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_rag_config",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.put("/config/rag", response_model=UpdateRagConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -321,11 +301,6 @@ async def update_rag_configuration(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_loop_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/loop/status", response_model=LoopStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -368,11 +343,6 @@ async def get_loop_status(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="approve_loop_variant",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/loop/approve", response_model=LoopApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -407,11 +377,6 @@ async def approve_loop_variant(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reject_loop_variant",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/loop/reject", response_model=LoopRejectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -443,11 +408,6 @@ async def reject_loop_variant(
     return {"message": "Pending variant rejected and cleared"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_rag_stats",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/stats/rag", response_model=RagStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -477,11 +437,6 @@ async def get_rag_stats(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="run_rag_benchmark",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/benchmark/run", response_model=BenchmarkRunResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -615,11 +570,6 @@ async def run_rag_benchmark(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_entity_history",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/entity/{entity_id}/history", response_model=EntityHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

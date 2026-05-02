@@ -141,11 +141,6 @@ SEARCH_EXAMPLES_DATA = {
 _get_code_search_agent = lazy_singleton(get_npu_code_search)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="index_codebase",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.post("/index", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -198,11 +193,6 @@ async def index_codebase(request: CodeSearchIndexRequest):
         raise HTTPException(status_code=500, detail="Indexing failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_code",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.post("/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -275,11 +265,6 @@ async def search_code(request: CodeSearchRequest):
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_code_get",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.get("/search", response_model=CodeSearchGetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -305,11 +290,6 @@ async def search_code_get(
     return await search_code(request)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_search_status",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -367,11 +347,6 @@ async def get_search_status():
         raise HTTPException(status_code=500, detail="Status check failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_search_cache",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.delete("/cache", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -410,11 +385,6 @@ async def clear_search_cache():
         raise HTTPException(status_code=500, detail="Cache clear failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_search_examples",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.get("/examples", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -771,11 +741,6 @@ async def _analyze_all_pattern_types() -> dict:
     return analysis_results
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_declarations",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.post("/analytics/declarations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -809,11 +774,6 @@ async def analyze_declarations(request: CodeAnalyticsRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_code_duplicates",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.post("/analytics/duplicates", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -861,11 +821,6 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
         raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_codebase_statistics",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.get("/analytics/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -958,11 +913,6 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_refactor_suggestions",
-    error_code_prefix="CODE_SEARCH",
-)
 @router.post("/analytics/refactor-suggestions", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

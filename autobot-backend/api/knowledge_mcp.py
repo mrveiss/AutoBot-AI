@@ -296,11 +296,6 @@ def _get_knowledge_management_tools() -> List[McpToolsResponse]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_tools",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.get("/mcp/tools", response_model=List[McpToolsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -321,11 +316,6 @@ async def get_mcp_tools(
     return tools
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_search_knowledge_base",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/search_knowledge_base", response_model=McpSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -372,11 +362,6 @@ async def mcp_search_knowledge_base(
         return {"success": False, "error": "Internal server error", "results": []}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_add_to_knowledge_base",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/add_to_knowledge_base", response_model=McpAddDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -412,11 +397,6 @@ async def mcp_add_to_knowledge_base(
         return {"success": False, "error": "Internal server error"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_get_knowledge_stats",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/get_knowledge_stats", response_model=McpKnowledgeStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -460,11 +440,6 @@ async def mcp_get_knowledge_stats(
         return {"success": False, "error": "Internal server error", "stats": {}}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_summarize_knowledge_topic",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/summarize_knowledge_topic", response_model=McpSummarizeTopicResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -529,11 +504,6 @@ async def mcp_summarize_knowledge_topic(
         return {"success": False, "error": "Internal server error", "summary": ""}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_vector_similarity_search",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/vector_similarity_search", response_model=McpVectorSimilarityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -583,11 +553,6 @@ async def mcp_vector_similarity_search(
         return {"success": False, "error": "Internal server error", "results": []}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_langchain_qa_chain",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/langchain_qa_chain", response_model=McpQaChainResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -714,11 +679,6 @@ _VECTOR_OPERATIONS = {
 }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_redis_vector_operations",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.post("/mcp/redis_vector_operations", response_model=McpRedisVectorOpsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -752,11 +712,6 @@ async def mcp_redis_vector_operations(
         return {"success": False, "error": "Internal server error"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_schema",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.get("/mcp/schema", response_model=McpSchemaResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -786,11 +741,6 @@ async def get_mcp_schema(
 
 
 # Health check for MCP bridge
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mcp_health",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
 @router.get("/mcp/health", response_model=McpHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

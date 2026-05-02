@@ -209,11 +209,6 @@ async def _delete_facts_in_batches(
     return deleted_count
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="deduplicate_facts",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/deduplicate", response_model=DeduplicateFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -271,11 +266,6 @@ async def deduplicate_facts(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_duplicates",
-    error_code_prefix="KB",
-)
 @router.post("/deduplicate/advanced", response_model=FindDuplicatesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -334,11 +324,6 @@ async def find_duplicates(
 # ===== DATA QUALITY METRICS (Issue #418) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_data_quality_metrics",
-    error_code_prefix="KB",
-)
 @router.get("/quality", response_model=DataQualityMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -450,11 +435,6 @@ def _build_quality_summary(quality: dict) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_dashboard",
-    error_code_prefix="KB",
-)
 @router.get("/health/dashboard", response_model=HealthDashboardResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -686,11 +666,6 @@ def _perform_fast_scan(
     return scanner, result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_host_changes",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/scan_host_changes", response_model=ScanHostChangesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -866,11 +841,6 @@ def _build_orphan_response(total_checked: int, orphaned_facts: list) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_orphaned_facts",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/orphans", response_model=FindOrphanedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -909,11 +879,6 @@ async def find_orphaned_facts(
     return _build_orphan_response(total_checked, orphaned_facts)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_orphaned_facts",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/orphans", response_model=CleanupOrphanedFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1080,11 +1045,6 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
     return total_checked, total_with_session, orphaned_facts, session_stats
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_session_orphans",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/session-orphans", response_model=FindSessionOrphansResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1191,11 +1151,6 @@ async def _delete_orphan_facts(
     return deleted_count, preserved_count, preserved_facts
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_session_orphans",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/session-orphans", response_model=CleanupSessionOrphansResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1266,11 +1221,6 @@ async def cleanup_session_orphan_facts(
 # ===== IMPORT/EXPORT OPERATIONS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_for_unimported_files",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/import/scan", response_model=ScanUnimportedFilesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1320,11 +1270,6 @@ async def scan_for_unimported_files(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_knowledge",
-    error_code_prefix="KB",
-)
 @router.post("/export", response_model=ExportKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1390,11 +1335,6 @@ async def export_knowledge(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="import_knowledge",
-    error_code_prefix="KB",
-)
 @router.post("/import", response_model=ImportKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1539,11 +1479,6 @@ def _handle_update_fact_result(result: dict, fact_id: str) -> dict:
     raise HTTPException(status_code=500, detail=error_message)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_fact",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.put("/fact/{fact_id}", response_model=UpdateFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1590,11 +1525,6 @@ async def update_fact(
     return _handle_update_fact_result(result, fact_id)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_fact",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/fact/{fact_id}", response_model=DeleteFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1663,11 +1593,6 @@ async def delete_fact(
 # ===== BULK OPERATION ENDPOINTS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="bulk_delete",
-    error_code_prefix="KB",
-)
 @router.delete("/bulk", response_model=BulkDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1716,11 +1641,6 @@ async def bulk_delete_facts(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="bulk_update_category",
-    error_code_prefix="KB",
-)
 @router.post("/bulk/category", response_model=BulkCategoryUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1767,11 +1687,6 @@ async def bulk_update_category(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_knowledge_base",
-    error_code_prefix="KB",
-)
 @router.post("/cleanup", response_model=CleanupKnowledgeBaseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1827,11 +1742,6 @@ async def cleanup_knowledge_base(
 # ===== BACKUP AND RESTORE ENDPOINTS (Issue #419) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_backup",
-    error_code_prefix="KB",
-)
 @router.post("/backup", response_model=CreateBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1885,11 +1795,6 @@ async def create_backup(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="restore_backup",
-    error_code_prefix="KB",
-)
 @router.post("/restore", response_model=RestoreBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1948,11 +1853,6 @@ async def restore_backup(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_backups",
-    error_code_prefix="KB",
-)
 @router.get("/backups", response_model=ListBackupsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1998,11 +1898,6 @@ async def list_backups(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_backup",
-    error_code_prefix="KB",
-)
 @router.delete("/backup", response_model=DeleteBackupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

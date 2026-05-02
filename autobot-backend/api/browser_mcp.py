@@ -464,11 +464,6 @@ def _get_browser_extraction_tools() -> List[MCPTool]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_browser_mcp_tools",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -531,11 +526,6 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="navigate_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/navigate", response_model=BrowserNavigateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -573,11 +563,6 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="click_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/click", response_model=BrowserClickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -605,11 +590,6 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="fill_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/fill", response_model=BrowserFillResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -642,11 +622,6 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="screenshot_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/screenshot", response_model=BrowserScreenshotResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -678,11 +653,6 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="evaluate_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/evaluate", response_model=BrowserEvaluateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -713,11 +683,6 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="wait_for_selector_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/wait_for_selector", response_model=BrowserWaitForSelectorResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -750,11 +715,6 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_text_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/get_text", response_model=BrowserGetTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -779,11 +739,6 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_attribute_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/get_attribute", response_model=BrowserGetAttributeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -812,11 +767,6 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="select_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/select", response_model=BrowserSelectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -845,11 +795,6 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="hover_mcp",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.post("/mcp/hover", response_model=BrowserHoverResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -874,11 +819,6 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_browser_mcp_status",
-    error_code_prefix="BROWSER_MCP",
-)
 @router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

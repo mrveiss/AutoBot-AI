@@ -74,11 +74,6 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
 # ===== COLLECTION CRUD OPERATIONS (Issue #412) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/collections", response_model=KnowledgeCollectionCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -134,11 +129,6 @@ async def create_collection(
         raise HTTPException(status_code=400, detail=error_message)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_collections",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/collections", response_model=KnowledgeCollectionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -193,11 +183,6 @@ async def list_collections(
         raise HTTPException(status_code=500, detail=error_message)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/collections/{collection_id}", response_model=KnowledgeCollectionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -247,11 +232,6 @@ async def get_collection(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.put("/collections/{collection_id}", response_model=KnowledgeCollectionUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -317,11 +297,6 @@ async def update_collection(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/collections/{collection_id}", response_model=KnowledgeCollectionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -387,11 +362,6 @@ async def delete_collection(
 # ===== COLLECTION MEMBERSHIP OPERATIONS (Issue #412) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_facts_to_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/collections/{collection_id}/facts", response_model=KnowledgeCollectionAddFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -457,11 +427,6 @@ async def add_facts_to_collection(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="remove_facts_from_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/collections/{collection_id}/facts", response_model=KnowledgeCollectionRemoveFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -525,11 +490,6 @@ async def remove_facts_from_collection(
         _raise_kb_error(result.get("message", "Unknown error"), 400)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_facts_in_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/collections/{collection_id}/facts", response_model=KnowledgeCollectionFactsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -596,11 +556,6 @@ async def get_facts_in_collection(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_fact_collections",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/facts/{fact_id}/collections", response_model=KnowledgeFactCollectionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -656,11 +611,6 @@ async def get_fact_collections(
 # ===== COLLECTION BULK OPERATIONS (Issue #412) =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_collection",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/collections/{collection_id}/export", response_model=KnowledgeCollectionExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -725,11 +675,6 @@ async def export_collection(
         _raise_kb_error(result.get("message", "Unknown error"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="bulk_delete_collection_facts",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/collections/{collection_id}/bulk-delete", response_model=KnowledgeCollectionBulkDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

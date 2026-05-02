@@ -35,11 +35,6 @@ router = APIRouter(tags=["knowledge-rag-feedback"])
 _STREAM_TTL_SECONDS = TTL_30_DAYS
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_rag_feedback",
-    error_code_prefix="KNOWLEDGE_RAG_FEEDBACK",
-)
 @router.post("/rag-feedback", response_model=RagFeedbackResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

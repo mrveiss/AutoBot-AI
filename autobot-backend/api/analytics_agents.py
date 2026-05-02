@@ -50,11 +50,6 @@ router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_agents_performance",
-    error_code_prefix="AGENT",
-)
 @router.get("/performance", response_model=AgentAllPerformanceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -90,11 +85,6 @@ async def get_all_agents_performance(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_performance",
-    error_code_prefix="AGENT",
-)
 @router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -138,11 +128,6 @@ async def get_agent_performance(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_history",
-    error_code_prefix="AGENT",
-)
 @router.get("/{agent_id}/history", response_model=AgentHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -171,11 +156,6 @@ async def get_agent_history(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recent_tasks",
-    error_code_prefix="AGENT",
-)
 @router.get("/tasks/recent", response_model=AgentRecentTasksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -207,11 +187,6 @@ async def get_recent_tasks(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="compare_agents",
-    error_code_prefix="AGENT",
-)
 @router.get("/comparison", response_model=AgentComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -303,11 +278,6 @@ def _check_agent_metrics(metrics) -> list:
     return recommendations
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_recommendations",
-    error_code_prefix="AGENT",
-)
 @router.get("/recommendations", response_model=AgentRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -361,11 +331,6 @@ async def get_agent_recommendations(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_trends",
-    error_code_prefix="AGENT",
-)
 @router.get("/trends", response_model=AgentPerformanceTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -392,11 +357,6 @@ async def get_performance_trends(
     return trends
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_types",
-    error_code_prefix="AGENT",
-)
 @router.get("/types", response_model=AgentTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -424,11 +384,6 @@ async def get_agent_types(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="track_task_start",
-    error_code_prefix="AGENT",
-)
 @router.post("/tasks/start", response_model=AgentTaskStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -462,11 +417,6 @@ async def track_task_start(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="track_task_complete",
-    error_code_prefix="AGENT",
-)
 @router.post("/tasks/complete", response_model=AgentTaskCompleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

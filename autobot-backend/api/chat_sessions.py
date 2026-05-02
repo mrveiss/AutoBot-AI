@@ -326,11 +326,6 @@ _EXPORT_CONTENT_TYPES = {
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_messages",
-    error_code_prefix="CHAT",
-)
 @router.get("/chat/sessions/{session_id}", response_model=DataResponse[SessionMessagesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -378,11 +373,6 @@ async def get_session_messages(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_sessions",
-    error_code_prefix="CHAT",
-)
 @router.get("/chat/sessions", response_model=DataResponse[SessionListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -739,11 +729,6 @@ async def _track_session_in_memory_graph(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_session",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat/sessions", response_model=DataResponse[SessionCreateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -831,11 +816,6 @@ async def create_session(session_data: SessionCreate, request: Request):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_session",
-    error_code_prefix="CHAT",
-)
 @router.put("/chat/sessions/{session_id}", response_model=DataResponse[SessionUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1337,11 +1317,6 @@ def _build_delete_session_response(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_session",
-    error_code_prefix="CHAT",
-)
 @router.delete("/chat/sessions/{session_id}", response_model=DataResponse[SessionDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1422,11 +1397,6 @@ async def delete_session(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_session",
-    error_code_prefix="CHAT",
-)
 @router.get("/chat/sessions/{session_id}/export", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1518,11 +1488,6 @@ def _clear_and_restore_session(
     return len(messages_to_restore)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reset_chat",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat/reset", response_model=DataResponse[ChatResetData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1696,11 +1661,6 @@ async def _process_activity_batch(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_session_activity",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat/sessions/{session_id}/activities", response_model=DataResponse[ActivityAddData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1765,11 +1725,6 @@ async def add_session_activity(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_session_activities_batch",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat/sessions/{session_id}/activities/batch", response_model=DataResponse[ActivityBatchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1873,11 +1828,6 @@ async def _fetch_activities_from_graph(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_activities",
-    error_code_prefix="CHAT",
-)
 @router.get("/chat/sessions/{session_id}/activities", response_model=DataResponse[SessionActivitiesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1960,11 +1910,6 @@ async def _share_session_facts(
     return await kb_manager.share_facts(fact_ids, share_with, shared_by)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_session",
-    error_code_prefix="CHAT",
-)
 @router.post("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionShareData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2017,11 +1962,6 @@ async def share_session(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_share_preview",
-    error_code_prefix="CHAT",
-)
 @router.get("/chat/sessions/{session_id}/share/preview", response_model=DataResponse[SessionSharePreviewData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

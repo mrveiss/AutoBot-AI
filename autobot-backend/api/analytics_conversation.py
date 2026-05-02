@@ -734,11 +734,6 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_conversations",
-    error_code_prefix="CONVFLOW",
-)
 @router.get("/analyze", response_model=ConversationAnalysisResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -794,11 +789,6 @@ async def analyze_conversations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_intent_stats",
-    error_code_prefix="CONVFLOW",
-)
 @router.get("/intents", response_model=ConversationIntentsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -862,11 +852,6 @@ async def get_intent_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_flow_paths",
-    error_code_prefix="CONVFLOW",
-)
 @router.get("/flows", response_model=ConversationFlowsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -935,11 +920,6 @@ async def get_flow_paths(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_bottlenecks",
-    error_code_prefix="CONVFLOW",
-)
 @router.get("/bottlenecks", response_model=ConversationBottlenecksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -979,11 +959,6 @@ async def get_bottlenecks(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_hourly_distribution",
-    error_code_prefix="CONVFLOW",
-)
 @router.get("/distribution", response_model=ConversationDistributionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1028,11 +1003,6 @@ async def get_hourly_distribution(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="detect_intent",
-    error_code_prefix="CONVFLOW",
-)
 @router.post("/detect-intent", response_model=ConversationDetectIntentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

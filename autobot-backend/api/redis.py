@@ -19,11 +19,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_config",
-    error_code_prefix="REDIS",
-)
 @router.get("/config", response_model=RedisConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -39,11 +34,6 @@ async def get_redis_config():
         raise HTTPException(status_code=500, detail="Error getting Redis config")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_redis_config",
-    error_code_prefix="REDIS",
-)
 @router.post("/config", response_model=RedisConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -60,11 +50,6 @@ async def update_redis_config(config_data: dict):
         raise HTTPException(status_code=500, detail="Error updating Redis config")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_status",
-    error_code_prefix="REDIS",
-)
 @router.get("/status", response_model=RedisConnectionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -84,11 +69,6 @@ async def get_redis_status():
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_redis_connection",
-    error_code_prefix="REDIS",
-)
 @router.post("/test_connection", response_model=RedisConnectionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -108,11 +88,6 @@ async def test_redis_connection():
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="REDIS",
-)
 @router.get("/health", response_model=RedisHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -99,11 +99,6 @@ async def broadcast_startup_message(message: StartupMessage):
             startup_state["websocket_clients"].discard(ws)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_startup_status",
-    error_code_prefix="STARTUP",
-)
 @router.get("/status", response_model=StartupStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -168,11 +163,6 @@ async def startup_websocket(websocket: WebSocket):
             startup_state["websocket_clients"].discard(websocket)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_startup_phase",
-    error_code_prefix="STARTUP",
-)
 @router.post("/phase", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

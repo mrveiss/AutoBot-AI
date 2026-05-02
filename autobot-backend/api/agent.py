@@ -699,11 +699,6 @@ async def _execute_goal_with_error_handling(
     return {"message": str(orchestrator_result)}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="receive_goal",
-    error_code_prefix="AGENT",
-)
 @router.post("/goal", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -771,11 +766,6 @@ async def receive_goal(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="pause_agent",
-    error_code_prefix="AGENT",
-)
 @router.post("/pause", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -833,11 +823,6 @@ async def pause_agent_api(
     return {"message": "Agent paused successfully."}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="resume_agent",
-    error_code_prefix="AGENT",
-)
 @router.post("/resume", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -895,11 +880,6 @@ async def resume_agent_api(
     return {"message": "Agent resumed successfully."}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="command_approval",
-    error_code_prefix="AGENT",
-)
 @router.post("/command_approval", response_model=AgentCommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -942,11 +922,6 @@ async def command_approval(
     return JSONResponse(status_code=500, content={"message": error_message})
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_command",
-    error_code_prefix="AGENT",
-)
 @router.post("/execute_command", response_model=AgentCommandExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1132,11 +1107,6 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_enhanced_goal",
-    error_code_prefix="AGENT",
-)
 @router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1201,11 +1171,6 @@ async def execute_enhanced_goal(
         await handle_ai_stack_error(e, "Enhanced goal execution")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="coordinate_multi_agent_task",
-    error_code_prefix="AGENT",
-)
 @router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1272,11 +1237,6 @@ async def coordinate_multi_agent_task(
         await handle_ai_stack_error(e, "Multi-agent coordination")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="comprehensive_research_task",
-    error_code_prefix="AGENT",
-)
 @router.post("/research/comprehensive", response_model=DataResponse[AgentResearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1342,11 +1302,6 @@ async def comprehensive_research_task(
         await handle_ai_stack_error(e, "Comprehensive research")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_development_task",
-    error_code_prefix="AGENT",
-)
 @router.post("/development/analyze", response_model=DataResponse[DevelopmentAnalysisData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1386,11 +1341,6 @@ async def analyze_development_task(
         await handle_ai_stack_error(e, "Development analysis")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_available_agents",
-    error_code_prefix="AGENT",
-)
 @router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1439,11 +1389,6 @@ async def list_available_agents():
         await handle_ai_stack_error(e, "List available agents")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agents_status",
-    error_code_prefix="AGENT",
-)
 @router.get("/agents/status", response_model=DataResponse[AgentStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1485,11 +1430,6 @@ async def get_agents_status():
         await handle_ai_stack_error(e, "Agent status check")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_agent_health",
-    error_code_prefix="AGENT",
-)
 @router.get("/health/enhanced", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

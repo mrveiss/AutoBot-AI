@@ -28,15 +28,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/project", tags=["project_state"])
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_project_status",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",
     key_func=lambda detailed=False: f"status:{'detailed' if detailed else 'fast'}",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT_STATE",
 )
 async def get_project_status(detailed: bool = False):
     """Get overall project development status
@@ -78,11 +78,6 @@ async def get_project_status(detailed: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="run_validation",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.post("/validate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -124,11 +119,6 @@ async def run_validation():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_validation_report",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -156,11 +146,6 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_phases",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/phases", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -217,11 +202,6 @@ async def get_all_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="activate_phase",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.post("/phase/{phase_id}/activate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -263,11 +243,6 @@ async def activate_phase(phase_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="auto_progress_phases",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.post("/auto-progress", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -291,11 +266,6 @@ async def auto_progress_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="PROJECT_STATE",
-)
 @router.get("/health", response_model=ProjectStateHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

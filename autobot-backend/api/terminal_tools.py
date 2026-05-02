@@ -35,11 +35,6 @@ router = APIRouter(tags=["terminal-tools"])
 # Tool Management endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="install_tool",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/install-tool", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -65,11 +60,6 @@ async def install_tool(request: ToolInstallRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_tool_installed",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/check-tool", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -85,11 +75,6 @@ async def check_tool_installed(tool_name: str):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validate_command",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/validate-command", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -105,11 +90,6 @@ async def validate_command(command: str):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_package_managers",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/package-managers", response_model=PackageManagersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

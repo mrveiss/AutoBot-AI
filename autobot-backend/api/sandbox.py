@@ -42,11 +42,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_command",
-    error_code_prefix="SANDBOX",
-)
 @router.post("/execute", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -108,11 +103,6 @@ async def execute_command(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_script",
-    error_code_prefix="SANDBOX",
-)
 @router.post("/execute/script", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -174,11 +164,6 @@ async def execute_script(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_batch",
-    error_code_prefix="SANDBOX",
-)
 @router.post("/execute/batch", response_model=SandboxExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -309,11 +294,6 @@ def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_sandbox_stats",
-    error_code_prefix="SANDBOX",
-)
 @router.get("/stats", response_model=SandboxStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -369,11 +349,6 @@ async def get_sandbox_stats(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_security_levels",
-    error_code_prefix="SANDBOX",
-)
 @router.get("/security-levels", response_model=SandboxSecurityLevelsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -443,11 +418,6 @@ async def get_security_levels(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_sandbox_examples",
-    error_code_prefix="SANDBOX",
-)
 @router.get("/examples", response_model=SandboxExamplesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

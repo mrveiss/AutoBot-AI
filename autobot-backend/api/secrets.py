@@ -560,11 +560,6 @@ def audit_log(
 # API Endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_secret",
-    error_code_prefix="SECRETS",
-)
 @router.post("/", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -620,11 +615,6 @@ async def create_secret(
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_secrets",
-    error_code_prefix="SECRETS",
-)
 @router.get("/", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -658,11 +648,6 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_secret_types",
-    error_code_prefix="SECRETS",
-)
 @router.get("/types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -687,11 +672,6 @@ async def get_secret_types(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_secrets_status",
-    error_code_prefix="SECRETS",
-)
 @router.get("/status", response_model=SecretsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -724,11 +704,6 @@ async def get_secrets_status(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_secrets_stats",
-    error_code_prefix="SECRETS",
-)
 @router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -778,11 +753,6 @@ async def get_secrets_stats(
         raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_secret",
-    error_code_prefix="SECRETS",
-)
 @router.get("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -858,11 +828,6 @@ async def get_secret(
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_secret",
-    error_code_prefix="SECRETS",
-)
 @router.put("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -926,11 +891,6 @@ async def update_secret(
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_secret",
-    error_code_prefix="SECRETS",
-)
 @router.delete("/{secret_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -990,11 +950,6 @@ async def delete_secret(
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="transfer_secrets",
-    error_code_prefix="SECRETS",
-)
 @router.post("/transfer", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1037,11 +992,6 @@ async def transfer_secrets(
         raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_chat_cleanup_info",
-    error_code_prefix="SECRETS",
-)
 @router.get("/chat/{chat_id}/cleanup", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1062,11 +1012,6 @@ async def get_chat_cleanup_info(
         raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_chat_secrets",
-    error_code_prefix="SECRETS",
-)
 @router.delete("/chat/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

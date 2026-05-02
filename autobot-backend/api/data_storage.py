@@ -256,11 +256,6 @@ def get_database_files() -> list[dict]:
     return sorted(db_files, key=lambda x: x["size_bytes"], reverse=True)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_storage_stats",
-    error_code_prefix="STORAGE",
-)
 @router.get("/stats", response_model=StorageStats)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -297,11 +292,6 @@ async def get_storage_stats():
         raise_server_error("STORAGE_0001", "Error getting storage stats")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_database_files",
-    error_code_prefix="STORAGE",
-)
 @router.get("/databases", response_model=DataStorageDatabasesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -326,11 +316,6 @@ async def get_database_files_endpoint():
         raise_server_error("STORAGE_0002", "Error getting database files")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_category_details",
-    error_code_prefix="STORAGE",
-)
 @router.get("/category/{category_path}", response_model=DataStorageCategoryDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -416,11 +401,6 @@ def _scan_and_remove_files(
     return files_removed, bytes_freed, errors
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_category",
-    error_code_prefix="STORAGE",
-)
 @router.post("/cleanup", response_model=CleanupResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -483,11 +463,6 @@ async def cleanup_category(
         raise_server_error("STORAGE_0004", "Error during cleanup")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_old_backups",
-    error_code_prefix="STORAGE",
-)
 @router.post("/cleanup/old-backups", response_model=DataStorageOldBackupsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -539,11 +514,6 @@ async def cleanup_old_backups(
         raise_server_error("STORAGE_0005", "Error cleaning up old backups")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_conversation",
-    error_code_prefix="STORAGE",
-)
 @router.delete("/conversations/{conversation_id}", response_model=DataStorageDeleteConversationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -603,11 +573,6 @@ async def delete_conversation(
         raise_server_error("STORAGE_0006", "Error deleting conversation")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_conversations_summary",
-    error_code_prefix="STORAGE",
-)
 @router.get("/conversations/summary", response_model=DataStorageConversationsSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

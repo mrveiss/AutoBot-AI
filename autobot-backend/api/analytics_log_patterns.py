@@ -782,11 +782,6 @@ def _build_mining_summary(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="mine_log_patterns",
-    error_code_prefix="LOGPAT",
-)
 @router.get("/mine", response_model=PatternMiningResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -878,11 +873,6 @@ def _analyze_pattern_lines(
     return timestamps, levels, sources, hourly_dist
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pattern_details",
-    error_code_prefix="LOGPAT",
-)
 @router.get("/pattern/{pattern_id}", response_model=LogPatternDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -932,11 +922,6 @@ async def get_pattern_details(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_error_hotspots",
-    error_code_prefix="LOGPAT",
-)
 @router.get("/hotspots", response_model=LogPatternHotspotsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1015,11 +1000,6 @@ def _aggregate_log_stats(
     return total, by_level, by_source, by_hour, timestamps
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_log_stats",
-    error_code_prefix="LOGPAT",
-)
 @router.get("/stats", response_model=LogPatternStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1064,11 +1044,6 @@ async def get_log_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_realtime_summary",
-    error_code_prefix="LOGPAT",
-)
 @router.get("/realtime", response_model=LogPatternRealtimeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

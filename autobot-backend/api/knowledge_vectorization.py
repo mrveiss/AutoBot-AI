@@ -329,11 +329,6 @@ async def _perform_uncached_batch_check(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_vectorization_status_batch",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorization_status", response_model=VectorizationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -611,11 +606,6 @@ def _build_vectorization_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vectorize_existing_facts",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorize_facts", response_model=VectorizeFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1077,11 +1067,6 @@ async def _vectorize_fact_background(
         await _update_job_status(kb_instance, job_id, job_data)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vectorize_individual_fact",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorize_fact/{fact_id}", response_model=VectorizeFactJobResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1156,11 +1141,6 @@ async def _vectorize_single_document(kb, document_id: str) -> dict:
         return {"id": document_id, "status": "error", "error": "Vectorization failed"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_vectorize_documents",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorize_documents", response_model=VectorizeDocumentsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1220,11 +1200,6 @@ async def batch_vectorize_documents(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vectorization_job_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/vectorize_job/{job_id}", response_model=VectorizeJobStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1288,11 +1263,6 @@ def _collect_failed_keys(keys: list, results: list) -> List[str]:
     return failed_keys
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_failed_vectorization_jobs",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/vectorize_jobs/failed", response_model=FailedJobsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1350,11 +1320,6 @@ async def get_failed_vectorization_jobs(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="retry_vectorization_job",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorize_jobs/{job_id}/retry", response_model=RetryJobResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1407,11 +1372,6 @@ async def retry_vectorization_job(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_vectorization_job",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/vectorize_jobs/{job_id}", response_model=DeleteJobResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1453,11 +1413,6 @@ async def delete_vectorization_job(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_failed_vectorization_jobs",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.delete("/vectorize_jobs/failed/clear", response_model=ClearFailedJobsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1521,11 +1476,6 @@ async def clear_failed_vectorization_jobs(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_background_vectorization",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/vectorize_facts/background", response_model=BackgroundVectorizationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1558,11 +1508,6 @@ async def start_background_vectorization(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vectorization_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/vectorize_facts/status", response_model=VectorizationStatusPollResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1778,11 +1723,6 @@ async def _run_reindex(collection_name: str, batch_size: int) -> None:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reindex_with_context",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post(
     "/reindex_with_context",
     response_model=ReindexWithContextResponse,
@@ -1835,11 +1775,6 @@ async def reindex_with_context(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_reindex_with_context_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/reindex_with_context/status", response_model=ReindexWithContextStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

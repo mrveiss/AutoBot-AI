@@ -326,11 +326,6 @@ def _build_timeline_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_evolution_timeline",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -401,11 +396,6 @@ async def get_evolution_timeline(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pattern_evolution",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -580,11 +570,6 @@ def _build_trends_success_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_quality_trends",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -657,11 +642,6 @@ async def get_quality_trends(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_snapshot",
-    error_code_prefix="EVOLUTION",
-)
 @router.post("/snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -699,11 +679,6 @@ async def record_quality_snapshot(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_pattern_snapshot",
-    error_code_prefix="EVOLUTION",
-)
 @router.post("/pattern-snapshot", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -823,11 +798,6 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_evolution_data",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/export", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -889,11 +859,6 @@ async def export_evolution_data(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_evolution_summary",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1229,11 +1194,6 @@ def _validate_evolution_repo_path(repo_path_str: str):
     return repo_path, None  # codeql[py/path-injection]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="trigger_evolution_analysis",
-    error_code_prefix="EVOLUTION",
-)
 @router.post("/analyze", response_model=EvolutionAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

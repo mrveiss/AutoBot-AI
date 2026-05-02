@@ -95,11 +95,6 @@ def _deserialize_job(data: str) -> BatchJob:
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_batch_job",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.post("", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -147,11 +142,6 @@ async def create_batch_job(
     return job
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_batch_jobs",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("", response_model=BatchJobList)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -211,11 +201,6 @@ async def list_batch_jobs(
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_job",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/{job_id}", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -250,11 +235,6 @@ async def get_batch_job(
     return _deserialize_job(job_data.decode("utf-8"))
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_batch_job",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -303,11 +283,6 @@ async def delete_batch_job(
     return {"status": "success", "job_id": job_id, "message": "Job deleted"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_job_logs",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -353,11 +328,6 @@ async def get_job_logs(
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_batch_templates",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/templates/", response_model=List[BatchTemplate])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -391,11 +361,6 @@ async def list_batch_templates(
     return templates
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_batch_template",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.post("/templates/", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -434,11 +399,6 @@ async def create_batch_template(
     return template
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_template",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/templates/{template_id}", response_model=BatchTemplate)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -468,11 +428,6 @@ async def get_batch_template(
     return BatchTemplate(**template_dict)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_batch_template",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.delete("/templates/{template_id}", response_model=BatchTemplateDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -508,11 +463,6 @@ async def delete_batch_template(
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_batch_schedules",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/schedules/", response_model=List[BatchSchedule])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -546,11 +496,6 @@ async def list_batch_schedules(
     return schedules
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_batch_schedule",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.post("/schedules/", response_model=BatchSchedule)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -593,11 +538,6 @@ async def create_batch_schedule(
     return schedule
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_batch_schedule",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.delete("/schedules/{schedule_id}", response_model=BatchScheduleDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -633,11 +573,6 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_jobs_health",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/health", response_model=BatchJobsHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -717,11 +652,6 @@ def _process_session_file(filename: str, chats_directory: str):
         return None
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_status",
-    error_code_prefix="BATCH",
-)
 @router.get("/status", response_model=BatchStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -740,11 +670,6 @@ async def get_batch_status():
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_load",
-    error_code_prefix="BATCH",
-)
 @router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -799,11 +724,6 @@ async def batch_load(batch_request: APIBatchRequest):
     return APIBatchResponse(responses=responses, errors=errors, timing=timing)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_chat_initialization",
-    error_code_prefix="BATCH_JOBS",
-)
 @router.get("/chat-init", response_model=BatchChatInitResponse)
 @router.post("/chat-init", response_model=BatchChatInitResponse)
 @with_error_handling(

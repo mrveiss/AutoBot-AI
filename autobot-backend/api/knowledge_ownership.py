@@ -82,11 +82,6 @@ async def _get_fact_with_ownership(kb, fact_id: str, user_id: str):
     return fact
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_fact",
-    error_code_prefix="KNOWLEDGE_OWNERSHIP",
-)
 @router.post("/api/knowledge/facts/{fact_id}/share", response_model=KnowledgeShareFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -150,11 +145,6 @@ async def share_fact(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unshare_fact",
-    error_code_prefix="KNOWLEDGE_OWNERSHIP",
-)
 @router.delete("/api/knowledge/facts/{fact_id}/share/{user_id_to_remove}", response_model=KnowledgeUnshareFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -218,11 +208,6 @@ async def unshare_fact(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_fact_visibility",
-    error_code_prefix="KNOWLEDGE_OWNERSHIP",
-)
 @router.put("/api/knowledge/facts/{fact_id}/visibility", response_model=KnowledgeUpdateVisibilityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -315,11 +300,6 @@ async def _fetch_fact_details(
     return facts
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_my_facts",
-    error_code_prefix="KNOWLEDGE_OWNERSHIP",
-)
 @router.get("/api/knowledge/facts/mine", response_model=KnowledgeMyFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -382,11 +362,6 @@ async def get_my_facts(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_shared_facts",
-    error_code_prefix="KNOWLEDGE_OWNERSHIP",
-)
 @router.get("/api/knowledge/facts/shared-with-me", response_model=KnowledgeSharedWithMeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

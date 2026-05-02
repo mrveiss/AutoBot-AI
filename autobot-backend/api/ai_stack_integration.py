@@ -64,11 +64,6 @@ router = APIRouter(tags=["ai-stack"])
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="ai_stack_health_check",
-    error_code_prefix="AI_STACK",
-)
 @router.get("/health", response_model=DataResponse[AIStackHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -104,11 +99,6 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_ai_agents",
-    error_code_prefix="AI_STACK",
-)
 @router.get("/agents", response_model=DataResponse[AIStackAgentsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -132,11 +122,6 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rag_query",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/rag/query", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -181,11 +166,6 @@ async def rag_query(
     return create_success_response(rag_result, "RAG query completed successfully")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reformulate_query",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/rag/reformulate", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -208,11 +188,6 @@ async def reformulate_query(
     return create_success_response(result, "Query reformulated successfully")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_documents",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/rag/analyze-documents", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -238,11 +213,6 @@ async def analyze_documents(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/chat/enhanced", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -295,11 +265,6 @@ async def enhanced_chat(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="extract_knowledge",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/knowledge/extract", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -327,11 +292,6 @@ async def extract_knowledge(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_search",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -377,11 +337,6 @@ async def enhanced_knowledge_search(
     return create_success_response(results, "Enhanced knowledge search completed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_knowledge",
-    error_code_prefix="AI_STACK",
-)
 @router.get("/knowledge/system", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -408,11 +363,6 @@ async def get_system_knowledge(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="comprehensive_research",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/research/comprehensive", response_model=DataResponse[ComprehensiveResearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -454,11 +404,6 @@ async def comprehensive_research(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="web_research",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/research/web", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -489,11 +434,6 @@ async def web_research(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_code",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/development/search-code", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -518,11 +458,6 @@ async def search_code(
     return create_success_response(result, "Code search completed successfully")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_development_speedup",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/development/analyze-speedup", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -553,11 +488,6 @@ async def analyze_development_speedup(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="classify_content",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/classification/classify", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -685,11 +615,6 @@ async def _execute_sequential_agents(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="multi_agent_query",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/orchestrate/multi-agent-query", response_model=DataResponse[MultiAgentQueryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -736,11 +661,6 @@ async def multi_agent_query(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="legacy_rag_search",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/legacy/rag-search", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -761,11 +681,6 @@ async def legacy_rag_search(
     return await rag_query(request)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="legacy_enhanced_chat",
-    error_code_prefix="AI_STACK",
-)
 @router.post("/legacy/enhanced-chat", response_model=DataResponse[AIStackAgentPayload])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

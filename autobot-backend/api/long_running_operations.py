@@ -92,11 +92,6 @@ async def get_operation_manager():
 
 
 # Enhanced API endpoints with AutoBot-specific operations
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_codebase_indexing",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/codebase/index", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -175,11 +170,6 @@ async def start_codebase_indexing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_comprehensive_testing",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/testing/comprehensive", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -256,11 +246,6 @@ async def start_comprehensive_testing(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_knowledge_base_population",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/knowledge-base/populate", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -316,11 +301,6 @@ async def start_knowledge_base_population(
         raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_security_scan",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/security/scan", response_model=Dict[str, str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -374,11 +354,6 @@ async def start_security_scan(
 
 
 # Legacy operation migration endpoints
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="migrate_existing_operation",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/migrate/existing", response_model=LongRunningOperationMigrateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -424,11 +399,6 @@ async def migrate_existing_operation(
 
 
 # Operation status and control endpoints (proxy to integration manager)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_operation_status",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.get("/{operation_id}", response_model=LongRunningOperationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -450,11 +420,6 @@ async def get_operation_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_operations",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.get("/", response_model=LongRunningOperationListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -509,11 +474,6 @@ async def list_operations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cancel_operation",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/{operation_id}/cancel", response_model=LongRunningOperationCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -536,11 +496,6 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="resume_operation",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.post("/{operation_id}/resume", response_model=LongRunningOperationResumeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -636,11 +591,6 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 
 
 # Health check endpoint
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="operations_health",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
 @router.get("/health", response_model=LongRunningOperationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

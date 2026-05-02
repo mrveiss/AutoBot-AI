@@ -562,11 +562,6 @@ async def _resolve_agent_effective_config(
     return current_model, current_provider, enabled, "local"
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_agents",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -687,11 +682,6 @@ async def _resolve_agent_entry(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_agents",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/all", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -738,11 +728,6 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_specialized_agents",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/specialized", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -776,11 +761,6 @@ async def list_specialized_agents(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_specialized_agent",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/specialized/{agent_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -811,11 +791,6 @@ async def get_specialized_agent(
     return JSONResponse(status_code=200, content=agent)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agents_usage",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/usage", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -933,11 +908,6 @@ async def get_agents_usage(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_config",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/{agent_id}", response_model=AgentConfigDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1065,11 +1035,6 @@ async def _apply_agent_model_update(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_agent_model",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.post("/agents/{agent_id}/model", response_model=AgentConfigUpdateModelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1113,11 +1078,6 @@ async def update_agent_model(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enable_agent",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.post("/agents/{agent_id}/enable", response_model=AgentConfigEnableDisableResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1169,11 +1129,6 @@ async def enable_agent(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="disable_agent",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.post("/agents/{agent_id}/disable", response_model=AgentConfigEnableDisableResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1262,11 +1217,6 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     return provider_available, response_time
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_agent_health",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/agents/{agent_id}/health", response_model=AgentConfigHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1313,11 +1263,6 @@ async def check_agent_health(
     return JSONResponse(status_code=200, content=health_status)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agents_overview",
-    error_code_prefix="AGENT_CONFIG",
-)
 @router.get("/status/overview", response_model=AgentConfigOverviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -113,11 +113,6 @@ async def get_memory_manager() -> (
 # Use /api/system/health?detailed=true for comprehensive status
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_memory_statistics",
-    error_code_prefix="MEMORY",
-)
 @router.get("/statistics", response_model=MemoryStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -153,11 +148,6 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_task_history",
-    error_code_prefix="MEMORY",
-)
 @router.get("/tasks/history", response_model=MemoryTaskHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -202,11 +192,6 @@ async def get_task_history(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_task",
-    error_code_prefix="MEMORY",
-)
 @router.post("/tasks", response_model=MemoryTaskCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -263,11 +248,6 @@ async def create_task(request: TaskCreateRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_task",
-    error_code_prefix="MEMORY",
-)
 @router.put("/tasks/{task_id}", response_model=MemoryTaskUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -319,11 +299,6 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_markdown_reference",
-    error_code_prefix="MEMORY",
-)
 @router.post("/tasks/{task_id}/markdown-reference", response_model=MemoryMarkdownReferenceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -370,11 +345,6 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_markdown_system",
-    error_code_prefix="MEMORY",
-)
 @router.get("/markdown/scan", response_model=MemoryMarkdownScanResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -399,11 +369,6 @@ async def scan_markdown_system():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_markdown",
-    error_code_prefix="MEMORY",
-)
 @router.get("/markdown/search", response_model=MemoryMarkdownSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -438,11 +403,6 @@ async def search_markdown(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_document_references",
-    error_code_prefix="MEMORY",
-)
 @router.get("/markdown/{file_path:path}/references", response_model=MemoryDocumentReferencesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -471,11 +431,6 @@ async def get_document_references(file_path: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_embedding_cache_stats",
-    error_code_prefix="MEMORY",
-)
 @router.get("/embeddings/cache-stats", response_model=MemoryEmbeddingCacheStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -505,11 +460,6 @@ async def get_embedding_cache_stats():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_old_data",
-    error_code_prefix="MEMORY",
-)
 @router.delete("/cleanup", response_model=MemoryCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -537,11 +487,6 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_active_tasks",
-    error_code_prefix="MEMORY",
-)
 @router.get("/active-tasks", response_model=MemoryActiveTasksResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

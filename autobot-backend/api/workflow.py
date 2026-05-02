@@ -406,11 +406,6 @@ def _legacy_workflow_to_summary(workflow_id: str, workflow_data: Dict) -> Dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_active_workflows",
-    error_code_prefix="WORKFLOW",
-)
 @router.get("/workflows", response_model=WorkflowListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -451,11 +446,6 @@ async def list_active_workflows(admin_check: bool = Depends(check_admin_permissi
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="get_workflow_details",
-    error_code_prefix="WORKFLOW",
-)
 @router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -478,11 +468,6 @@ async def get_workflow_details(
     return {"success": True, "workflow": workflow}
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="get_workflow_status",
-    error_code_prefix="WORKFLOW",
-)
 @router.get("/workflow/{workflow_id}/status", response_model=WorkflowStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -570,11 +555,6 @@ async def _update_step_status_and_metrics(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="approve_workflow_step",
-    error_code_prefix="WORKFLOW",
-)
 @router.post("/workflow/{workflow_id}/approve", response_model=WorkflowApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -621,11 +601,6 @@ async def approve_workflow_step(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_workflow",
-    error_code_prefix="WORKFLOW",
-)
 @router.post("/execute", response_model=WorkflowExecutionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1040,11 +1015,6 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             )
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="cancel_workflow",
-    error_code_prefix="WORKFLOW",
-)
 @router.delete("/workflow/{workflow_id}", response_model=WorkflowCancelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1082,11 +1052,6 @@ async def cancel_workflow(
     return {"success": True, "message": "Workflow cancelled successfully"}
 
 
-@with_error_handling(
-    category=ErrorCategory.NOT_FOUND,
-    operation="get_pending_approvals",
-    error_code_prefix="WORKFLOW",
-)
 @router.get(
     "/workflow/{workflow_id}/pending_approvals",
     response_model=WorkflowPendingApprovalsResponse,

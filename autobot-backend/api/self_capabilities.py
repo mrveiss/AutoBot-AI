@@ -208,11 +208,6 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
 # API endpoint
 # ---------------------------------------------------------------------------
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_capabilities",
-    error_code_prefix="SELF_CAPABILITIES",
-)
 @router.get(
     "/capabilities",
     summary="Dynamic endpoint capability discovery",

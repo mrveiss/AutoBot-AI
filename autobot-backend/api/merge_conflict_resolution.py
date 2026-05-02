@@ -199,11 +199,6 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -259,11 +254,6 @@ async def analyze_conflicts(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="resolve_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.post("/resolve", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -332,11 +322,6 @@ async def resolve_conflicts(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_repository",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.post("/analyze-repository", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -399,11 +384,6 @@ async def analyze_repository_conflicts(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="apply_resolution",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.post("/apply", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -472,11 +452,6 @@ async def apply_resolution(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_resolution_strategies",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.get("/strategies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -544,11 +519,6 @@ async def get_resolution_strategies(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_file_conflicts",
-    error_code_prefix="MERGE_CONFLICT",
-)
 @router.get("/check", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

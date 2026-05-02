@@ -259,11 +259,6 @@ async def _run_all_search_sources(
     return results
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.post("/search/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -315,11 +310,6 @@ async def enhanced_search(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rag_search",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.post("/search/rag", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -453,11 +443,6 @@ async def _store_extracted_facts(
     return stored_facts
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="extract_knowledge",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.post("/extract", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -510,11 +495,6 @@ async def extract_knowledge(
         await handle_ai_stack_error(e, "Knowledge extraction")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_documents",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.post("/analyze/documents", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -560,11 +540,6 @@ async def analyze_documents(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reformulate_query",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.post("/query/reformulate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -608,11 +583,6 @@ async def reformulate_query(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_knowledge_insights",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.get("/system/insights", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -651,11 +621,6 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enhanced_stats",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.get("/stats/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -710,11 +675,6 @@ async def get_enhanced_stats(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_health",
-    error_code_prefix="KNOWLEDGE_ENHANCED",
-)
 @router.get("/health/enhanced", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

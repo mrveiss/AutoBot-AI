@@ -336,11 +336,6 @@ def _search_documentation(
         logger.warning("Documentation search failed: %s", e)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unified_search",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -390,11 +385,6 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unified_stats",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -463,11 +453,6 @@ async def unified_stats(req: Request):
     return stats
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_llm_context",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.post("/context", response_model=KnowledgeUnifiedContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -539,11 +524,6 @@ async def get_llm_context(req: Request, body: ContextRequest):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_documentation",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.get("/documentation/search", response_model=KnowledgeDocumentationSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -597,11 +577,6 @@ async def search_documentation(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="documentation_stats",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.get("/documentation/stats", response_model=KnowledgeDocumentationStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -932,11 +907,6 @@ def _update_category_fact_counts(
             node["metadata"]["fact_count"] = count
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_graph",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.post("/graph", response_model=KnowledgeUnifiedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1007,11 +977,6 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_graph_simple",
-    error_code_prefix="KNOWLEDGE_UNIFIED",
-)
 @router.get("/graph", response_model=KnowledgeUnifiedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

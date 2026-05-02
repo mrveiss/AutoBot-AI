@@ -291,11 +291,6 @@ def _doc_index_tool_schema() -> dict:
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_tools",
-    error_code_prefix="MANUAL_MCP",
-)
 @router.get("/mcp/tools", response_model=List[ManualMCPToolItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -316,11 +311,6 @@ async def get_manual_mcp_tools(
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_lookup",
-    error_code_prefix="MANUAL_MCP",
-)
 @router.post("/mcp/lookup_man_page", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -361,11 +351,6 @@ async def mcp_lookup_man_page(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_search",
-    error_code_prefix="MANUAL_MCP",
-)
 @router.post("/mcp/search_man_pages", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -402,11 +387,6 @@ async def mcp_search_man_pages(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="manual_mcp_doc_index",
-    error_code_prefix="MANUAL_MCP",
-)
 @router.post("/mcp/get_doc_index", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

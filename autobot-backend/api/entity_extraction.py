@@ -157,11 +157,6 @@ def _build_extraction_response(
 # ====================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="entity_extraction",
-    error_code_prefix="ENTITY_EXTRACT",
-)
 @router.post("/extract", response_model=EntityExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -298,11 +293,6 @@ def _process_extraction_results(
     return successful_results, failed_results
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_entity_extraction",
-    error_code_prefix="ENTITY_EXTRACT",
-)
 @router.post("/extract-batch", response_model=BatchExtractionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -373,11 +363,6 @@ async def extract_entities_batch(
         raise HTTPException(status_code=500, detail="Batch extraction failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="entity_extraction_health",
-    error_code_prefix="ENTITY_EXTRACT",
-)
 @router.get("/extract/health", response_model=EntityExtractionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

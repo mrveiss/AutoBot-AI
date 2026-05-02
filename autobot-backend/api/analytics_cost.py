@@ -53,11 +53,6 @@ router = APIRouter(prefix="/cost", tags=["analytics", "cost"])
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_summary",
-    error_code_prefix="COST",
-)
 @router.get("/summary", response_model=CostSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -92,11 +87,6 @@ async def get_cost_summary(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_by_model",
-    error_code_prefix="COST",
-)
 @router.get("/by-model", response_model=CostByModelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -144,11 +134,6 @@ async def get_cost_by_model(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_by_session",
-    error_code_prefix="COST",
-)
 @router.get("/by-session/{session_id}", response_model=SessionCostResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -184,11 +169,6 @@ async def get_cost_by_session(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_trends",
-    error_code_prefix="COST",
-)
 @router.get("/trends", response_model=CostTrendResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -222,11 +202,6 @@ async def get_cost_trends(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_forecast",
-    error_code_prefix="COST",
-)
 @router.get("/forecast", response_model=CostForecastResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -290,11 +265,6 @@ async def get_cost_forecast(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recent_usage",
-    error_code_prefix="COST",
-)
 @router.get("/usage/recent", response_model=UsageRecentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -328,11 +298,6 @@ async def get_recent_usage(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_model_pricing",
-    error_code_prefix="COST",
-)
 @router.get("/pricing", response_model=ModelPricingResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -385,11 +350,6 @@ async def get_model_pricing(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="calculate_cost_estimate",
-    error_code_prefix="COST",
-)
 @router.get("/estimate", response_model=CostEstimateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -426,11 +386,6 @@ async def calculate_cost_estimate(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="set_budget_alert",
-    error_code_prefix="COST",
-)
 @router.post("/budget-alert", response_model=BudgetAlertCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -468,11 +423,6 @@ async def set_budget_alert(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_budget_alerts",
-    error_code_prefix="COST",
-)
 @router.get("/budget-alerts", response_model=BudgetAlertsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -567,11 +517,6 @@ async def _get_current_costs(tracker, today: datetime) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_budget_status",
-    error_code_prefix="COST",
-)
 @router.get("/budget-status", response_model=BudgetStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -612,11 +557,6 @@ async def get_budget_status(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_by_agent_all",
-    error_code_prefix="COST",
-)
 @router.get("/by-agent", response_model=AllAgentCostsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -662,11 +602,6 @@ async def get_cost_by_agent_all(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cost_by_agent_single",
-    error_code_prefix="COST",
-)
 @router.get("/by-agent/{agent_id}", response_model=SingleAgentCostResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -692,11 +627,6 @@ async def get_cost_by_agent_single(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="set_agent_budget",
-    error_code_prefix="COST",
-)
 @router.put("/by-agent/{agent_id}/budget", response_model=AgentBudgetSetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -718,11 +648,6 @@ async def set_agent_budget(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_budget_status",
-    error_code_prefix="COST",
-)
 @router.get("/by-agent/{agent_id}/budget", response_model=AgentBudgetStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

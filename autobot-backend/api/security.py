@@ -38,11 +38,6 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_security_status",
-    error_code_prefix="SECURITY",
-)
 @router.get("/status", response_model=SecurityStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -89,11 +84,6 @@ async def get_security_status(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="approve_command",
-    error_code_prefix="SECURITY",
-)
 @router.post("/approve-command", response_model=CommandApprovalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -123,11 +113,6 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pending_approvals",
-    error_code_prefix="SECURITY",
-)
 @router.get("/pending-approvals", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -150,11 +135,6 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_command_history",
-    error_code_prefix="SECURITY",
-)
 @router.get("/command-history", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -204,11 +184,6 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
         return []
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_audit_log",
-    error_code_prefix="SECURITY",
-)
 @router.get("/audit-log", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -242,11 +217,6 @@ async def get_audit_log(request: Request, limit: int = 100):
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_threat_intel_status",
-    error_code_prefix="SECURITY",
-)
 @router.get("/threat-intel/status", response_model=ThreatIntelStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -275,11 +245,6 @@ async def get_threat_intel_status(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_url_reputation",
-    error_code_prefix="SECURITY",
-)
 @router.post("/threat-intel/check-url", response_model=URLCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -326,11 +291,6 @@ async def check_url_reputation(request: Request, url_request: URLCheckRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_domain_security_stats",
-    error_code_prefix="SECURITY",
-)
 @router.get("/domain-security/stats", response_model=DomainSecurityStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

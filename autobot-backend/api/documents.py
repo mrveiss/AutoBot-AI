@@ -102,11 +102,6 @@ async def _assert_ownership(doc: AIDocument, user_id: str) -> None:
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_document",
-    error_code_prefix="DOCUMENTS",
-)
 @router.post("/documents", status_code=201, response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -138,11 +133,6 @@ async def create_document(
     return doc.model_dump()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_documents",
-    error_code_prefix="DOCUMENTS",
-)
 @router.get("/documents", response_model=AIDocumentListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -184,11 +174,6 @@ async def list_documents(
     return {"documents": [d.model_dump() for d in page], "total": total}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_document",
-    error_code_prefix="DOCUMENTS",
-)
 @router.get("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -209,11 +194,6 @@ async def get_document(
     return doc.model_dump()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_document",
-    error_code_prefix="DOCUMENTS",
-)
 @router.put("/documents/{doc_id}", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -250,11 +230,6 @@ async def update_document(
     return doc.model_dump()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_document",
-    error_code_prefix="DOCUMENTS",
-)
 @router.delete("/documents/{doc_id}", status_code=204, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -280,11 +255,6 @@ async def delete_document(
     logger.info("Deleted AI document %s for user %s", doc_id, uid)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="refine_document",
-    error_code_prefix="DOCUMENTS",
-)
 @router.post("/documents/{doc_id}/refine", response_model=AIDocumentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

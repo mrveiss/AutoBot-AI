@@ -22,11 +22,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/web-research", tags=["web-research"])
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_research_status",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -76,11 +71,6 @@ async def get_research_status():
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enable_web_research",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.post("/enable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -133,11 +123,6 @@ async def enable_web_research():
         raise HTTPException(status_code=500, detail="Failed to enable web research")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="disable_web_research",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.post("/disable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -190,11 +175,6 @@ async def disable_web_research():
         raise HTTPException(status_code=500, detail="Failed to disable web research")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_research_settings",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.get("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -247,11 +227,6 @@ async def get_research_settings():
         raise HTTPException(status_code=500, detail="Failed to get research settings")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_research_settings",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.put("/settings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -314,11 +289,6 @@ async def update_research_settings(settings: WebResearchSettings):
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_web_research",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.post("/test", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -362,11 +332,6 @@ async def test_web_research(query: str = "test query"):
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_research_cache",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.post("/clear-cache", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -399,11 +364,6 @@ async def clear_research_cache():
         raise HTTPException(status_code=500, detail="Failed to clear research cache")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reset_circuit_breakers",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.post("/reset-circuit-breakers", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -436,11 +396,6 @@ async def reset_circuit_breakers():
         raise HTTPException(status_code=500, detail="Failed to reset circuit breakers")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_usage_stats",
-    error_code_prefix="WEB_RESEARCH_SETTINGS",
-)
 @router.get("/usage-stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

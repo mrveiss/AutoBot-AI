@@ -449,11 +449,6 @@ async def _fetch_bridges_info() -> Metadata:
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_all_mcp_tools",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/tools", response_model=MCPRegistryToolsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -502,11 +497,6 @@ async def list_all_mcp_tools() -> Metadata:
     return tools_data
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_bridges",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/bridges", response_model=MCPRegistryBridgesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -551,11 +541,6 @@ async def get_mcp_bridges() -> Metadata:
     return bridges_data
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="invalidate_mcp_cache",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.post("/cache/invalidate", response_model=MCPRegistryCacheInvalidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -584,11 +569,6 @@ async def invalidate_mcp_cache() -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_cache_stats",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/cache/stats", response_model=MCPRegistryCacheStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -696,11 +676,6 @@ def _find_tool_in_list(tools: list, tool_name: str, bridge_name: str) -> dict:
     return tool
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_tool_details",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/tools/{bridge_name}/{tool_name}", response_model=MCPRegistryToolDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -755,11 +730,6 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_registry_health",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/health", response_model=MCPRegistryHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -826,11 +796,6 @@ async def get_mcp_registry_health() -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_registry_stats",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/stats", response_model=MCPRegistryStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -879,11 +844,6 @@ async def get_mcp_registry_stats() -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_registry_info",
-    error_code_prefix="MCP_REGISTRY",
-)
 @router.get("/", response_model=MCPRegistryInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

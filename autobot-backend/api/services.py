@@ -146,11 +146,6 @@ def _build_default_services(redis_status_obj) -> list:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_services",
-    error_code_prefix="SERVICES",
-)
 @router.get("/services", response_model=ServicesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -193,11 +188,6 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get services")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="SERVICES",
-)
 @router.get("/health", response_model=ServicesHealthDeprecatedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -224,11 +214,6 @@ async def get_health(admin_check: bool = Depends(check_admin_permission)):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_services_health",
-    error_code_prefix="SERVICES",
-)
 @router.get("/services/health", response_model=ServicesHealthAggregateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -325,11 +310,6 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vms_status",
-    error_code_prefix="SERVICES",
-)
 @router.get("/vms/status", response_model=ServicesVMsStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -364,11 +344,6 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get VM status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_version",
-    error_code_prefix="SERVICES",
-)
 @router.get("/version", response_model=SystemInfo)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

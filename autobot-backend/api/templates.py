@@ -57,11 +57,6 @@ def _generate_templates_cache_key(category, tags, complexity):
     return "list:" + (":".join(key_parts) if key_parts else "all")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_templates_root",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/", response_model=TemplatesRootResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -82,17 +77,17 @@ async def get_templates_root():
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_workflow_templates",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates", response_model=TemplateListResponse)
 @smart_cache(
     data_type="templates",
     key_func=lambda category=None, tags=None, complexity=None: _generate_templates_cache_key(
         category, tags, complexity
     ),
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_templates",
+    error_code_prefix="TEMPLATES",
 )
 async def list_workflow_templates(
     category: Optional[str] = Query(None, description="Filter by template category"),
@@ -152,11 +147,6 @@ async def list_workflow_templates(
 # --- Static paths MUST be registered before /templates/{template_id} ---
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_secrets_usage",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates/secrets-usage", response_model=TemplateSecretsUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -188,11 +178,6 @@ async def get_secrets_usage():
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_templates",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates/search", response_model=TemplateSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -222,11 +207,6 @@ async def search_templates(
         raise HTTPException(status_code=500, detail="Failed to search templates")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_template_categories",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates/categories", response_model=TemplateCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -256,11 +236,6 @@ async def list_template_categories():
         raise HTTPException(status_code=500, detail="Failed to list categories")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_template_statistics",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates/stats", response_model=TemplateStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -318,14 +293,14 @@ async def get_template_statistics():
 # --- Parameterized paths below (after all static paths) ---
 
 
+@router.get("/templates/{template_id}", response_model=TemplateDetailResponse)
+@smart_cache(
+    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_template_details",
     error_code_prefix="TEMPLATES",
-)
-@router.get("/templates/{template_id}", response_model=TemplateDetailResponse)
-@smart_cache(
-    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
 )
 async def get_template_details(template_id: str):
     """Get detailed information about a specific template (Issue #372 - uses model methods)"""
@@ -346,11 +321,6 @@ async def get_template_details(template_id: str):
         raise HTTPException(status_code=500, detail="Failed to get template")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="preview_template_workflow",
-    error_code_prefix="TEMPLATES",
-)
 @router.get("/templates/{template_id}/preview", response_model=TemplatePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -415,11 +385,6 @@ async def preview_template_workflow(
         raise HTTPException(status_code=500, detail="Failed to preview template")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validate_template_variables",
-    error_code_prefix="TEMPLATES",
-)
 @router.post("/templates/{template_id}/validate", response_model=TemplateValidationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -448,11 +413,6 @@ async def validate_template_variables(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_workflow_from_template",
-    error_code_prefix="TEMPLATES",
-)
 @router.post("/templates/{template_id}/create-workflow", response_model=TemplateCreateWorkflowResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -507,11 +467,6 @@ async def create_workflow_from_template(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_template_workflow",
-    error_code_prefix="TEMPLATES",
-)
 @router.post("/templates/{template_id}/execute", response_model=TemplateExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -161,11 +161,6 @@ def _get_health_grade(score: float) -> tuple:
 # ============ API Endpoints ============
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_anti_patterns",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/analyze", response_model=AnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -223,11 +218,6 @@ async def analyze_anti_patterns(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cached_analysis",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.get("/cached", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -262,11 +252,6 @@ async def get_cached_analysis():
         raise HTTPException(status_code=500, detail="Failed to retrieve cache")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_god_classes",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/god-classes", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -317,11 +302,6 @@ async def detect_god_classes(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_circular_dependencies",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/circular-dependencies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -367,11 +347,6 @@ async def detect_circular_dependencies(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_feature_envy",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/feature-envy", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -418,11 +393,6 @@ async def detect_feature_envy(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_code_smells",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/code-smells", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -480,11 +450,6 @@ async def detect_code_smells(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_dead_code",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/dead-code", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -530,11 +495,6 @@ async def detect_dead_code(request: AntiPatternAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_score",
-    error_code_prefix="ANTI_PATTERN",
-)
 @router.post("/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

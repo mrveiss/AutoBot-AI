@@ -109,11 +109,6 @@ async def get_agent() -> "IntelligentAgent":
 router = APIRouter(tags=["intelligent-agent"])
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="process_natural_language_goal",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
 @router.post("/process", response_model=GoalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -172,11 +167,6 @@ async def process_natural_language_goal(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_info",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
 @router.get("/system-info", response_model=AgentSystemCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -217,11 +207,6 @@ async def get_system_info(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
 @router.get("/health", response_model=HealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -261,11 +246,6 @@ async def health_check(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reload_agent",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
 @router.post("/reload", response_model=AgentReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -289,11 +269,6 @@ async def reload_agent(
     return {"status": "reloaded", "message": "Agent reloaded successfully"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="websocket_stream",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
 @router.websocket("/stream")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
