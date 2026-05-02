@@ -14,7 +14,7 @@ Type=simple
 User=redis_exporter
 Group=redis_exporter
 ExecStart=/opt/redis_exporter/redis_exporter \
-  --redis.addr=redis://{{ ansible_default_ipv4.address }}:{{ redis_port }} \
+  --redis.addr=redis://127.0.0.1:{{ redis_port }} \
   --web.listen-address=:{{ redis_exporter_port }} \
   --web.telemetry-path=/metrics
 {% if redis_password is defined and redis_password %}
