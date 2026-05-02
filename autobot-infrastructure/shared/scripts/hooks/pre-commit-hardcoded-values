@@ -30,15 +30,28 @@ NC='\033[0m'
 VIOLATIONS=0
 WARNINGS=0
 
-# Get staged Python/TypeScript/Vue files (excluding tests and configs)
-get_staged_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+# Get Python/TypeScript/Vue files to scan, applying the same allowlist
+# regardless of source. Issue #6725: when called with file paths as positional
+# args (CI on a PR), use those instead of the staged-files lookup. This lets
+# the same hook run both as a local pre-commit and as a CI gate against the
+# diff between PR base and HEAD without changing any rules.
+get_files_to_scan() {
+    if [ "$#" -gt 0 ]; then
+        printf '%s\n' "$@"
+    else
+        git diff --cached --name-only --diff-filter=ACM 2>/dev/null
+    fi | \
         grep -E '\.(py|ts|vue)$' | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(test_|_test\.py|\.test\.ts|\.spec\.ts)' | \
         grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
         grep -v -E '(path_constants\.py|network_constants\.py|security_constants\.py)' | \
         grep -v -E '(constants/|config\.py$|\.env)' || true
+}
+
+# Backwards-compatible alias for callers/tests that referenced the old name.
+get_staged_files() {
+    get_files_to_scan "$@"
 }
 
 # Check for hardcoded VM IPs
@@ -435,7 +448,7 @@ main() {
     echo ""
 
     local files
-    files=$(get_staged_files)
+    files=$(get_staged_files "$@")
 
     if [[ -z "$files" ]]; then
         echo -e "${GREEN}No Python/TypeScript/Vue files staged for commit.${NC}"
