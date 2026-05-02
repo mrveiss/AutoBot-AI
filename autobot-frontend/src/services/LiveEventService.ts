@@ -68,8 +68,13 @@ class LiveEventService {
   // #6692/#6700: token resolved via shared helper unless caller supplies one
   // explicitly (e.g., test override). Returns null when no token is available
   // so connect() can defer instead of producing a guaranteed-403 handshake.
+  //
+  // Path is `/live` not `/ws/live` — `config.websocketUrl` already ends in
+  // `/api/ws` (see ssot-config.ts websocketUrl getter, baked in by #6271).
+  // Backend WS handler is `/api/ws/live`. Prepending `/ws/` here would build
+  // `wss://host/api/ws/ws/live` and 404 every connection.
   private getUrl(token?: string): string | null {
-    const base = `${config.websocketUrl}/ws/live`
+    const base = `${config.websocketUrl}/live`
     if (token) {
       const sep = base.includes('?') ? '&' : '?'
       return `${base}${sep}token=${encodeURIComponent(token)}`
