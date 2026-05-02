@@ -100,16 +100,20 @@ export class ChatController {
         throw new Error(validation.error)
       }
 
-      // Add user message to store with sending status
+      // #6746: ensure session exists BEFORE addMessage. addMessage no longer
+      // creates a session as a side effect (that was a major churn source —
+      // see #6745). Order: session-first, then attach message.
+      if (!this.chatStore.currentSessionId) {
+        await this.createNewSession()
+      }
+
       const userMessageId = this.chatStore.addMessage({
         content,
         sender: 'user',
         status: 'sending'
       })
-
-      // Ensure we have a current session
-      if (!this.chatStore.currentSessionId) {
-        await this.createNewSession()
+      if (!userMessageId) {
+        throw new Error('Failed to add user message — no current session')
       }
 
       let lastError: Error | null = null
@@ -605,25 +609,21 @@ export class ChatController {
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
     try {
-
-      // Create session in store first for immediate UI feedback
+      // #6746: single-path create — local UUID is registered with the backend
+      // in one round-trip. No two-phase create with diverging IDs.
       const sessionId = this.chatStore.createNewSession(title)
-
-      // Sync with backend with retry logic
       try {
-        await chatRepository.createNewChat(title)
+        await chatRepository.createNewChat(title, undefined, sessionId)
         logger.debug('New chat session synced with backend:', sessionId)
       } catch (error) {
+        // Backend create failed but local session is usable — autosave / send-
+        // message paths will retry. Surface the warning and continue.
         logger.warn('Failed to sync new chat with backend, continuing with local session:', error)
-        // Don't throw error here, allow local session to work
       }
-
       return sessionId
-
     } catch (error: unknown) {
       this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
-    } finally {
     }
   }
 

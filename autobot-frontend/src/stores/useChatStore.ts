@@ -151,9 +151,20 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>) {
+  function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>): string | null {
+    // #6746: don't auto-create a session as a side effect of addMessage.
+    // The previous fallback was a major source of session_id churn (#6745):
+    // any state path that nulled currentSession (page mount, sync, race)
+    // caused subsequent stream chunks to spawn a new session, scattering
+    // assistant replies across blank "Chat N" sidebar entries. Now callers
+    // must own session lifecycle explicitly.
     if (!currentSession.value) {
-      createNewSession()
+      logger.error(
+        'addMessage called with no current session — message dropped. ' +
+          'Caller must invoke createNewSession() first.',
+        message,
+      )
+      return null
     }
 
     const newMessage: ChatMessage = {
@@ -162,8 +173,8 @@ export const useChatStore = defineStore('chat', () => {
       ...message
     }
 
-    currentSession.value!.messages.push(newMessage)
-    currentSession.value!.updatedAt = new Date()
+    currentSession.value.messages.push(newMessage)
+    currentSession.value.updatedAt = new Date()
 
     return newMessage.id
   }

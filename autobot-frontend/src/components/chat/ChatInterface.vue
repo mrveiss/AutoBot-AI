@@ -899,19 +899,14 @@ const heartbeatPoller = usePollingJob(
   { intervalMs: 60_000, maxAttempts: Number.MAX_SAFE_INTEGER }
 )
 
-// Auto-save current session every 2 minutes
-const autoSavePoller = usePollingJob(
-  async () => {
-    if (store.settings.autoSave && store.currentSessionId) {
-      await controller.saveChatSession().catch((error: any) => logger.warn('Auto-save failed:', error))
-    }
-    return null
-  },
-  { intervalMs: 2 * 60 * 1000, maxAttempts: Number.MAX_SAFE_INTEGER }
-)
+// #6746: autosave poller deleted. Backend now persists every chat message
+// via add_messages_batch in the request handler (#6744 fix), so frontend-
+// driven autosave is redundant — and was a session_id churn source: it ran
+// every 2 min against `store.currentSessionId`, which could be racing with
+// pushLocalOnlySessions, syncSessionsWithBackend, or message-poller
+// state churn. Backend writes are now the sole authoritative path.
 
 const startHeartbeat = () => heartbeatPoller.start('')
-const enableAutoSave = () => autoSavePoller.start('')
 
 // Message polling with exponential backoff + circuit breaker (#1100)
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
@@ -1060,7 +1055,7 @@ onMounted(async () => {
   // Start connection monitoring
   checkConnection()
   startHeartbeat()
-  enableAutoSave()
+  // #6746: autosave removed; backend persists messages directly
 
   // Start message polling to fetch new messages
   startMessagePolling()
@@ -1082,7 +1077,6 @@ onUnmounted(() => {
 
   // Clean up intervals
   heartbeatPoller.stop()
-  autoSavePoller.stop()
 
   _stopCountdown()
   messagePoller.stop()
@@ -1100,7 +1094,7 @@ onActivated(() => {
   checkConnection()
 
   // Resume auto-save
-  enableAutoSave()
+  // #6746: autosave removed; backend persists messages directly
 
   // Resume message polling
   startMessagePolling()
@@ -1119,7 +1113,6 @@ onDeactivated(() => {
 
   // Pause intervals while cached
   heartbeatPoller.stop()
-  autoSavePoller.stop()
 
   // Clean up keyboard shortcuts while cached
   document.removeEventListener('keydown', handleKeyboardShortcuts)

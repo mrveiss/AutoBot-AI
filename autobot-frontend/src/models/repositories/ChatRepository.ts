@@ -327,9 +327,19 @@ export class ChatRepository {
   }
 
   // Create new chat session
-  async createNewChat(title?: string, metadata?: Record<string, unknown>): Promise<ChatSession> {
+  async createNewChat(
+    title?: string,
+    metadata?: Record<string, unknown>,
+    id?: string,
+  ): Promise<ChatSession> {
     try {
+      // #6746: pass the client-minted UUID so backend's create_session uses
+      // it as-is instead of minting a new one. Without this, frontend creates
+      // local UUID-A but backend creates UUID-B, and any subsequent
+      // /api/chats/{id}/message calls land in different sessions — that's the
+      // root of #6745 "answer arrived in different session".
       const response = await this.post(`${getApiBase()}/chat/sessions`, {
+        id,
         title: title || 'New Chat',
         metadata: metadata || {}
       })

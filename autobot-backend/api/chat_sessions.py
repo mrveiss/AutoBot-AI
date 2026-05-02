@@ -745,7 +745,14 @@ async def create_session(session_data: SessionCreate, request: Request):
     log_request_context(request, "create_session", request_id)
 
     chat_history_manager = get_chat_history_manager(request)
-    session_id = generate_chat_session_id()
+    # #6746: accept client-supplied session_id when provided and well-formed,
+    # so the frontend's locally-minted UUID survives the round-trip and
+    # frontend/backend stay aligned. Falls back to server-mint when absent
+    # (legacy callers, CLI, tests).
+    if session_data.id and validate_chat_session_id(session_data.id):
+        session_id = session_data.id
+    else:
+        session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
     # SECURITY: Extract authenticated user and add to metadata as owner
