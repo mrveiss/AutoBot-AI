@@ -353,11 +353,6 @@ async def _validate_and_read_upload_file(
     return content
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upload_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -443,11 +438,6 @@ def _build_file_list_response(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_conversation_files",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get(
     "/conversation/{session_id}/list", response_model=ConversationFileListResponse
 )
@@ -540,11 +530,6 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="download_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -634,11 +619,6 @@ async def _generate_file_preview(
     return preview_content, preview_type, preview_available
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="preview_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get(
     "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
 )
@@ -736,11 +716,6 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -785,11 +760,6 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         raise_internal_error("Error deleting file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="transfer_conversation_files",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -849,11 +819,6 @@ async def transfer_conversation_files(
 # ============================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/files/create", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -897,11 +862,6 @@ async def create_conversation_file(
         raise_internal_error("Error creating file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rename_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -942,11 +902,6 @@ async def rename_conversation_file(
         raise_internal_error("Error renaming file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_file_content",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -976,11 +931,6 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
         raise_internal_error("Error reading file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_file_content",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1020,11 +970,6 @@ async def update_file_content(
         raise_internal_error("Error updating file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="copy_conversation_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1065,11 +1010,6 @@ async def copy_conversation_file(
         raise_internal_error("Error copying file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_conversation_files",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get("/conversation/{session_id}/files/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1095,11 +1035,6 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
         raise_internal_error("Error searching files")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="agent_generate_file",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/generate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1218,11 +1153,6 @@ SESSION_MCP_TOOLS = [
 ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="session_mcp_tools",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.get("/conversation/{session_id}/mcp/tools", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1287,11 +1217,6 @@ async def _dispatch_mcp_tool(
     raise_invalid_input("tool_name", f"unknown tool: {tool_name}")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="session_mcp_call_tool",
-    error_code_prefix="CONVERSATION_FILES",
-)
 @router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

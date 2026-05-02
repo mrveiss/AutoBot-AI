@@ -37,11 +37,6 @@ VALID_CONTEXT_LEVELS = {"basic", "detailed", "full"}
 DETAILED_CONTEXT_LEVELS = {"detailed", "full"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_awareness_status",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/status", response_model=LLMAwarenessStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -67,11 +62,6 @@ async def get_awareness_status():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_context",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/context", response_model=LLMSystemContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -142,11 +132,6 @@ async def get_system_context(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_capabilities_summary",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/capabilities", response_model=LLMCapabilitiesSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -187,11 +172,6 @@ async def get_capabilities_summary():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="inject_awareness_context",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.post("/inject-context", response_model=LLMInjectContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -231,11 +211,6 @@ async def inject_awareness_context(request: PromptInjectionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_query_with_awareness",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.post("/analyze-query", response_model=LLMAnalyzeQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -260,11 +235,6 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_capability_summary_text",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/summary/text", response_model=LLMCapabilitySummaryTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -288,11 +258,6 @@ async def get_capability_summary_text():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_phase_information",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/phase-info", response_model=LLMPhaseInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -324,11 +289,6 @@ async def get_phase_information():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_awareness_metrics",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/metrics", response_model=LLMAwarenessMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -369,11 +329,6 @@ async def get_awareness_metrics():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_awareness_data",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.post("/export", response_model=LLMExportAwarenessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -403,11 +358,6 @@ async def export_awareness_data(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="llm_awareness_health",
-    error_code_prefix="LLM_AWARENESS",
-)
 @router.get("/health", response_model=LLMAwarenessHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

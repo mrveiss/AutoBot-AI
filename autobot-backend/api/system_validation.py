@@ -30,11 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validation_health",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.get("/health", response_model=SystemValidationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -56,11 +51,6 @@ async def validation_health():
         raise_server_error("API_0003", "Health check failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="run_comprehensive_validation",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.post("/validate/comprehensive", response_model=SystemValidationResultModel)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -99,11 +89,6 @@ async def run_comprehensive_validation(
         raise_server_error("API_0003", "Validation error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="run_quick_validation",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.get("/validate/quick", response_model=SystemValidationQuickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -171,11 +156,6 @@ async def run_quick_validation():
         raise_server_error("API_0003", "Quick validation error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validate_component",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.get("/validate/component/{component_name}", response_model=SystemValidationComponentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -224,11 +204,6 @@ async def validate_component(component_name: str):
         raise_server_error("API_0003", "Component validation error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_recommendations",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.get("/validate/recommendations", response_model=SystemValidationRecommendationsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -294,11 +269,6 @@ async def get_optimization_recommendations():
         raise_server_error("API_0003", "Recommendations error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_validation_status",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.get("/validate/status", response_model=SystemValidationStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -331,11 +301,6 @@ async def get_validation_status():
         raise_server_error("API_0003", "Status error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="run_performance_benchmark",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
 @router.post("/validate/benchmark", response_model=SystemValidationBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

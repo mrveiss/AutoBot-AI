@@ -404,12 +404,6 @@ async def _get_container_log_sources() -> List[Metadata]:
     return container_logs
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_log_sources",
-    error_code_prefix="LOGS",
-)
-# Issue #552: Fixed duplicate /logs prefix - router already mounted at /api/logs
 @router.get("/sources", response_model=LogSourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -477,11 +471,6 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
         return []
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recent_logs",
-    error_code_prefix="LOGS",
-)
 @router.get("/recent", response_model=LogRecentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -521,11 +510,6 @@ async def get_recent_logs(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_logs",
-    error_code_prefix="LOGS",
-)
 @router.get("/list", response_model=List[LogFileMetadata])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -547,11 +531,6 @@ async def list_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="read_log",
-    error_code_prefix="LOGS",
-)
 @router.get("/read/{filename}", response_model=LogReadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -673,11 +652,6 @@ def _parse_and_limit_container_output(
     return log_lines
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="read_container_logs",
-    error_code_prefix="LOGS",
-)
 @router.get("/container/{service}", response_model=LogContainerResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -783,11 +757,6 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     return parsed
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_logs",
-    error_code_prefix="LOGS",
-)
 @router.get("/unified", response_model=LogUnifiedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -869,11 +838,6 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     return parsed
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stream_log",
-    error_code_prefix="LOGS",
-)
 @router.get("/stream/{filename}", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1002,11 +966,6 @@ async def _search_single_log_file(
     return results
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_logs",
-    error_code_prefix="LOGS",
-)
 @router.get("/search", response_model=LogSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1064,11 +1023,6 @@ async def search_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_log",
-    error_code_prefix="LOGS",
-)
 @router.delete("/clear/{filename}", response_model=AgentMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

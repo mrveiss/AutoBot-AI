@@ -130,11 +130,6 @@ def _build_export_response(
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_conversation",
-    error_code_prefix="CONVEXPORT",
-)
 @router.get("/conversations/{session_id}/export", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -168,11 +163,6 @@ async def export_conversation(
     return _build_export_response(content, session_id, format)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_all_conversations",
-    error_code_prefix="CONVEXPORT",
-)
 @router.get("/conversations/export-all", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -208,11 +198,6 @@ async def export_all_conversations(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="import_conversation",
-    error_code_prefix="CONVEXPORT",
-)
 @router.post("/conversations/import", response_model=ConversationImportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

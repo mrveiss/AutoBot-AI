@@ -567,11 +567,6 @@ def _get_discovery_analysis_tools() -> List[MCPTool]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_filesystem_mcp_tools",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.get("/mcp/tools", response_model=List[MCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -598,11 +593,6 @@ async def get_filesystem_mcp_tools(
 # Tool Implementations
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="read_text_file_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/read_text_file", response_model=FilesystemReadTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -661,11 +651,6 @@ async def read_text_file_mcp(
         raise_internal_error("Failed to read file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="read_media_file_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/read_media_file", response_model=FilesystemReadMediaResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -791,11 +776,6 @@ def _separate_batch_read_results(all_results: list) -> tuple:
     return results, errors
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="read_multiple_files_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/read_multiple_files", response_model=FilesystemReadMultipleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -830,11 +810,6 @@ async def read_multiple_files_mcp(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="write_file_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/write_file", response_model=FilesystemWriteFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -935,11 +910,6 @@ def _apply_edits_to_content(content: str, edits: list) -> tuple:
     return content, edits_applied
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="edit_file_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/edit_file", response_model=FilesystemEditFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -990,11 +960,6 @@ async def edit_file_mcp(
         raise_internal_error("Error editing file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_directory_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/create_directory", response_model=FilesystemCreateDirectoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1024,11 +989,6 @@ async def create_directory_mcp(
         raise_internal_error("Error creating directory")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_directory_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/list_directory", response_model=FilesystemListDirectoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1155,11 +1115,6 @@ async def _build_directory_entries_with_sizes(path: str) -> list:
     return entries
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_directory_with_sizes_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/list_directory_with_sizes", response_model=FilesystemListDirectoryWithSizesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1202,11 +1157,6 @@ async def list_directory_with_sizes_mcp(
         raise_internal_error("Error listing directory")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="move_file_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/move_file", response_model=FilesystemMoveFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1248,11 +1198,6 @@ async def move_file_mcp(
         raise_internal_error("Error moving file")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_files_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/search_files", response_model=FilesystemSearchFilesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1305,11 +1250,6 @@ async def search_files_mcp(
         raise_internal_error("Error searching files")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="directory_tree_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/directory_tree", response_model=FilesystemDirectoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1366,11 +1306,6 @@ async def directory_tree_mcp(
         raise_internal_error("Error building directory tree")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_file_info_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.post("/mcp/get_file_info", response_model=FilesystemFileInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1418,11 +1353,6 @@ async def get_file_info_mcp(
         raise_internal_error("Error getting file info")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_allowed_directories_mcp",
-    error_code_prefix="FILESYSTEM_MCP",
-)
 @router.get("/mcp/list_allowed_directories", response_model=FilesystemListAllowedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -202,11 +202,6 @@ def _destination_to_response(dest) -> LogFwdDestinationResponse:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_destinations",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/destinations", response_model=List[LogForwardingDestinationItem])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -239,11 +234,6 @@ async def list_destinations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_destination",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/destinations/{name}", response_model=LogForwardingDestinationItem)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -280,11 +270,6 @@ async def get_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_destination",
-    error_code_prefix="LOGFWD",
-)
 @router.post("/destinations", response_model=LogFwdCreateUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -332,11 +317,6 @@ async def create_destination_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_destination",
-    error_code_prefix="LOGFWD",
-)
 @router.put("/destinations/{name}", response_model=LogFwdCreateUpdateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -388,11 +368,6 @@ async def update_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_destination",
-    error_code_prefix="LOGFWD",
-)
 @router.delete("/destinations/{name}", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -427,11 +402,6 @@ async def delete_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_destination",
-    error_code_prefix="LOGFWD",
-)
 @router.post("/destinations/{name}/test", response_model=LogFwdTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -476,11 +446,6 @@ async def test_destination(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_all_destinations",
-    error_code_prefix="LOGFWD",
-)
 @router.post("/test-all", response_model=LogFwdTestAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -509,11 +474,6 @@ async def test_all_destinations(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_status",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/status", response_model=LogFwdStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -570,11 +530,6 @@ async def get_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_forwarding",
-    error_code_prefix="LOGFWD",
-)
 @router.post("/start", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -609,11 +564,6 @@ async def start_forwarding(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stop_forwarding",
-    error_code_prefix="LOGFWD",
-)
 @router.post("/stop", response_model=LogFwdMessageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -715,11 +665,6 @@ def _get_syslog_protocol_list() -> list:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_destination_types",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/destination-types", response_model=LogFwdDestinationTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -750,11 +695,6 @@ async def get_destination_types(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_known_hosts",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/known-hosts", response_model=LogFwdKnownHostsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -807,11 +747,6 @@ async def get_known_hosts(
 
 
 # Issue #553: Auto-start configuration
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_auto_start",
-    error_code_prefix="LOGFWD",
-)
 @router.get("/auto-start", response_model=LogFwdAutoStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -836,11 +771,6 @@ async def get_auto_start(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="set_auto_start",
-    error_code_prefix="LOGFWD",
-)
 @router.put("/auto-start", response_model=LogFwdAutoStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

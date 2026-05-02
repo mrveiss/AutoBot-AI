@@ -554,11 +554,6 @@ def _load_tools_from_yaml() -> List[HTTPClientMCPTool]:
     return [HTTPClientMCPTool(**tool) for tool in tool_dicts]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_http_client_mcp_tools",
-    error_code_prefix="HTTP_MCP",
-)
 @router.get("/mcp/tools", response_model=List[HTTPClientMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -652,11 +647,6 @@ async def execute_http_request(
         raise HTTPException(status_code=502, detail="HTTP request failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_get_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/get", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -700,11 +690,6 @@ async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_post_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/post", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -765,11 +750,6 @@ async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_put_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/put", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -822,11 +802,6 @@ async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_patch_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/patch", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -879,11 +854,6 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_delete_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/delete", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -926,11 +896,6 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="http_head_mcp",
-    error_code_prefix="HTTP_CLIENT_MCP",
-)
 @router.post("/mcp/head", response_model=HTTPRequestResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -972,11 +937,6 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_http_client_mcp_status",
-    error_code_prefix="HTTP_MCP",
-)
 @router.get("/mcp/status", response_model=HTTPClientMCPStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

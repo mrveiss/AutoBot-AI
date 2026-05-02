@@ -51,11 +51,6 @@ router = APIRouter(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_fact_relation",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.post("/create", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -103,11 +98,6 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_fact_relation",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.delete("/delete", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -140,11 +130,6 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_fact_relations",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.get("/fact/{fact_id}", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -194,11 +179,6 @@ async def get_fact_relations(
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="traverse_relations",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.post("/traverse", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -233,11 +213,6 @@ async def traverse_relations(req: Request, body: TraverseRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="hybrid_search",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.post("/hybrid-search", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -276,11 +251,6 @@ async def hybrid_search(req: Request, body: HybridSearchRequest):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_relation_stats",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.get("/stats", response_model=KnowledgeRelationResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -309,11 +279,6 @@ async def get_relation_stats(req: Request):
     return result
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_relation_types",
-    error_code_prefix="KNOWLEDGE_RELATIONS",
-)
 @router.get("/types", response_model=KnowledgeRelationTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

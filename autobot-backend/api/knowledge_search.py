@@ -563,11 +563,6 @@ async def _execute_basic_search_with_reranking(
 # ===== SEARCH ENDPOINTS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="consolidated_search",
-    error_code_prefix="KB",
-)
 @router.post("/search", response_model=KnowledgeSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -772,11 +767,6 @@ def _enhanced_search_not_initialized_response() -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search",
-    error_code_prefix="KB",
-)
 @router.post("/enhanced_search", deprecated=True, response_model=EnhancedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -847,11 +837,6 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     return await kb_to_use.enhanced_search(**request.to_search_params())
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rag_enhanced_search",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/rag_search", deprecated=True, response_model=RagSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -915,11 +900,6 @@ async def rag_enhanced_search(request: dict, req: Request):
     return _build_no_results_response(query, reformulated_queries)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="similarity_search",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/similarity_search", deprecated=True, response_model=SimilaritySearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1073,11 +1053,6 @@ async def _fallback_to_enhanced_search(kb_to_use, params: dict):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search_v2",
-    error_code_prefix="KB",
-)
 @router.post("/enhanced_search_v2", deprecated=True, response_model=EnhancedSearchV2Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1136,11 +1111,6 @@ async def enhanced_search_v2(request: dict, req: Request):
     return await kb_to_use.enhanced_search_v2(**params)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_search_analytics",
-    error_code_prefix="KB",
-)
 @router.get("/search_analytics", response_model=SearchAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1179,11 +1149,6 @@ async def get_search_analytics():
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_search_click",
-    error_code_prefix="KB",
-)
 @router.post("/record_click", response_model=RecordClickResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1223,11 +1188,6 @@ async def record_search_click(request: dict):
         return {"success": False, "message": "Search analytics not available"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="expand_query",
-    error_code_prefix="KB",
-)
 @router.post("/expand_query", response_model=ExpandQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

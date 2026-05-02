@@ -41,11 +41,6 @@ router = APIRouter(prefix="/export", tags=["analytics", "export"])
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_cost_csv",
-    error_code_prefix="EXPORT",
-)
 @router.get("/csv/costs", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -92,11 +87,6 @@ async def export_cost_csv(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_agent_csv",
-    error_code_prefix="EXPORT",
-)
 @router.get("/csv/agents", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -150,11 +140,6 @@ async def export_agent_csv(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_usage_csv",
-    error_code_prefix="EXPORT",
-)
 @router.get("/csv/usage", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -226,11 +211,6 @@ async def export_usage_csv(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_full_json",
-    error_code_prefix="EXPORT",
-)
 @router.get("/json/full", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -389,11 +369,6 @@ def _build_agent_metrics_lines(agent_metrics: list) -> list[str]:
     return lines
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_prometheus",
-    error_code_prefix="EXPORT",
-)
 @router.get("/prometheus", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -570,11 +545,6 @@ def _get_grafana_panels() -> list:
     return panels
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_grafana_dashboard",
-    error_code_prefix="EXPORT",
-)
 @router.get("/grafana-dashboard", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -631,11 +601,6 @@ async def export_grafana_dashboard(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_export_formats",
-    error_code_prefix="EXPORT",
-)
 @router.get("/formats", response_model=ExportFormatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

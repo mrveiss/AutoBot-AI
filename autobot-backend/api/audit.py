@@ -102,11 +102,6 @@ def _build_query_dict(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="query_audit_logs",
-    error_code_prefix="AUDIT",
-)
 @router.get("/logs", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -175,11 +170,6 @@ async def query_audit_logs(
         raise_server_error("API_0003", "Audit log query error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_audit_statistics",
-    error_code_prefix="AUDIT",
-)
 @router.get("/statistics", response_model=AuditStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -212,11 +202,6 @@ async def get_audit_statistics(
         raise_server_error("API_0003", "Statistics error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_audit_trail",
-    error_code_prefix="AUDIT",
-)
 @router.get("/session/{session_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -261,11 +246,6 @@ async def get_session_audit_trail(
         raise_server_error("API_0003", "Session audit query error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_user_audit_trail",
-    error_code_prefix="AUDIT",
-)
 @router.get("/user/{user_id}", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -310,11 +290,6 @@ async def get_user_audit_trail(
         raise_server_error("API_0003", "User audit query error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_failed_operations",
-    error_code_prefix="AUDIT",
-)
 @router.get("/failures", response_model=AuditQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -364,11 +339,6 @@ async def get_failed_operations(
         raise_server_error("API_0003", "Failed operations query error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_old_logs",
-    error_code_prefix="AUDIT",
-)
 @router.post("/cleanup", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -414,11 +384,6 @@ async def cleanup_old_logs(
         raise_server_error("API_0003", "Cleanup error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_operation_types",
-    error_code_prefix="AUDIT",
-)
 @router.get("/operations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

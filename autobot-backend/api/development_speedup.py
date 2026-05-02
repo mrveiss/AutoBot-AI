@@ -86,11 +86,6 @@ ANALYSIS_TYPE_HANDLERS: Dict[str, AnalysisHandler] = {
 VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_codebase_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -140,11 +135,6 @@ async def analyze_codebase_endpoint(request: DevelopmentSpeedupAnalysisRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_codebase_get",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -166,11 +156,6 @@ async def analyze_codebase_get(
     return await analyze_codebase_endpoint(request)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_duplicates_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/duplicates", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -219,11 +204,6 @@ async def find_duplicates_endpoint(
         raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_patterns_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -272,11 +252,6 @@ async def analyze_patterns_endpoint(
         raise HTTPException(status_code=500, detail="Pattern analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_imports_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/imports", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -317,11 +292,6 @@ async def analyze_imports_endpoint(
         raise HTTPException(status_code=500, detail="Import analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="detect_dead_code_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/dead-code", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -356,11 +326,6 @@ async def detect_dead_code_endpoint(
         raise HTTPException(status_code=500, detail="Dead code detection failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="find_refactoring_opportunities_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/refactoring", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -410,11 +375,6 @@ async def find_refactoring_opportunities_endpoint(
         raise HTTPException(status_code=500, detail="Refactoring analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_quality_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/quality", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -504,11 +464,6 @@ def _calculate_health_score(result: dict, metrics: dict) -> int:
     return max(0, 100 - (total_issues * 2))  # Simple scoring
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recommendations_endpoint",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/recommendations", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -551,11 +506,6 @@ async def get_recommendations_endpoint(
         raise HTTPException(status_code=500, detail="Recommendations failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_development_speedup_status",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -623,11 +573,6 @@ async def get_development_speedup_status():
         raise HTTPException(status_code=500, detail="Status check failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_analysis_examples",
-    error_code_prefix="DEVELOPMENT_SPEEDUP",
-)
 @router.get("/examples", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

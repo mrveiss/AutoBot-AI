@@ -23,11 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_models",
-    error_code_prefix="MODELS",
-)
 @router.get("/available", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -367,11 +367,6 @@ def _list_directory_contents(target_path: Path) -> tuple:
     return files, total_size, total_files, total_directories
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_files",
-    error_code_prefix="FILES",
-)
 @router.get("/list", response_model=DirectoryListing)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -639,11 +634,6 @@ async def _delete_directory_item(
     return {"message": f"Directory '{target_path.name}' deleted successfully"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upload_file",
-    error_code_prefix="FILES",
-)
 @router.post("/upload", response_model=FilesAPIUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -710,11 +700,6 @@ async def upload_file(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="download_file",
-    error_code_prefix="FILES",
-)
 @router.get("/download/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -774,11 +759,6 @@ async def download_file(request: Request, path: str):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="view_file",
-    error_code_prefix="FILES",
-)
 @router.get("/view/{path:path}", response_model=FileViewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -903,11 +883,6 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     return target_path
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rename_file_or_directory",
-    error_code_prefix="FILES",
-)
 @router.post("/rename", response_model=FileRenameResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -998,11 +973,6 @@ async def _read_text_content(target_file: Path) -> tuple:
         return None, "binary"
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="preview_file",
-    error_code_prefix="FILES",
-)
 @router.get("/preview", response_model=FilePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1051,11 +1021,6 @@ async def preview_file(request: Request, path: str):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_file",
-    error_code_prefix="FILES",
-)
 @router.delete("/delete", response_model=FileDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1131,11 +1096,6 @@ def _log_directory_create_audit(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_directory",
-    error_code_prefix="FILES",
-)
 @router.post("/create_directory", response_model=DirectoryCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1180,11 +1140,6 @@ async def create_directory(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_directory_tree",
-    error_code_prefix="FILES",
-)
 @router.get("/tree", response_model=DirectoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1253,11 +1208,6 @@ async def get_directory_tree(request: Request, path: str = ""):
     return {"path": path, "tree": tree_data}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_file_stats",
-    error_code_prefix="FILES",
-)
 @router.get("/stats", response_model=FileStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

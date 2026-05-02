@@ -58,13 +58,13 @@ async def switch_llm_provider(
     return JSONResponse(status_code=200, content=result)
 
 
+@router.get("/providers", response_model=DataResponse)
+@cache_response(cache_key="llm_providers_list", ttl=30)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_llm_providers",
     error_code_prefix="LLM_PROVIDERS",
 )
-@router.get("/providers", response_model=DataResponse)
-@cache_response(cache_key="llm_providers_list", ttl=30)
 async def list_llm_providers(
     current_user: dict = Depends(get_current_user),
 ):

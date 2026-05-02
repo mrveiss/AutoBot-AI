@@ -215,11 +215,6 @@ VNC_MCP_TOOL_DEFINITIONS = (
 )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vnc_mcp_tools",
-    error_code_prefix="VNC_MCP",
-)
 @router.get("/mcp/tools", response_model=List[VncMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -244,11 +239,6 @@ async def get_vnc_mcp_tools() -> List[VncMCPTool]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_vnc_status_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/check_vnc_status", response_model=VncStatusMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -304,11 +294,6 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="observe_vnc_activity_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/observe_vnc_activity", response_model=VncObservationMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -356,11 +341,6 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_browser_vnc_context_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/get_browser_vnc_context", response_model=BrowserVncContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -431,11 +411,6 @@ async def get_browser_vnc_context_mcp() -> Metadata:
 
 
 # Observation recording endpoint (called by VNC proxy)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_vnc_observation",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/observations/{vnc_type}", response_model=VncRecordObservationResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -475,11 +450,6 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
 # These endpoints allow AI agents to interact with the desktop via MCP tools
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="desktop_mouse_click_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/desktop_mouse_click", response_model=DesktopClickMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -509,11 +479,6 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="desktop_keyboard_type_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/desktop_keyboard_type", response_model=DesktopKeyboardTypeMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -537,11 +502,6 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="desktop_special_key_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/desktop_special_key", response_model=DesktopSpecialKeyMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -565,11 +525,6 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="desktop_screenshot_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/desktop_screenshot", response_model=DesktopScreenshotMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -640,11 +595,6 @@ async def desktop_screenshot_mcp() -> Metadata:
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="desktop_observe_state_mcp",
-    error_code_prefix="VNC_MCP",
-)
 @router.post("/mcp/desktop_observe_state", response_model=DesktopObserveStateMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

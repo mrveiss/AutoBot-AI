@@ -40,11 +40,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_state_tracking_status",
-    error_code_prefix="STATE",
-)
 @router.get("/status", response_model=StateTrackingStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -82,11 +77,6 @@ async def get_state_tracking_status():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_state_summary",
-    error_code_prefix="STATE",
-)
 @router.get("/summary", response_model=StateTrackingSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -112,11 +102,6 @@ async def get_state_summary():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="capture_state_snapshot",
-    error_code_prefix="STATE",
-)
 @router.post("/snapshot", response_model=StateTrackingSnapshotResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -149,11 +134,6 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_state_change",
-    error_code_prefix="STATE",
-)
 @router.post("/change", response_model=StateTrackingChangeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -205,11 +185,6 @@ async def record_state_change(request: StateChangeRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_milestones",
-    error_code_prefix="STATE",
-)
 @router.get("/milestones", response_model=StateTrackingMilestonesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -239,11 +214,6 @@ async def get_milestones():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_metric_trends",
-    error_code_prefix="STATE",
-)
 @router.get("/trends/{metric}", response_model=StateTrackingTrendsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -303,11 +273,6 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recent_changes",
-    error_code_prefix="STATE",
-)
 @router.get("/changes", response_model=StateTrackingChangesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -365,11 +330,6 @@ async def get_recent_changes(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="generate_state_report",
-    error_code_prefix="STATE",
-)
 @router.get("/report", response_model=StateTrackingReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -401,11 +361,6 @@ async def generate_state_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_state_data",
-    error_code_prefix="STATE",
-)
 @router.post("/export", response_model=StateTrackingExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -461,11 +416,6 @@ async def export_state_data(request: StateTrackingExportRequest):
 # Use /api/system/health?detailed=true for comprehensive status
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_metrics",
-    error_code_prefix="STATE",
-)
 @router.get("/metrics/all", response_model=StateTrackingMetricsAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -494,11 +444,6 @@ async def get_all_metrics():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_phase_history",
-    error_code_prefix="STATE",
-)
 @router.get("/phase-history/{phase_name}", response_model=StateTrackingPhaseHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

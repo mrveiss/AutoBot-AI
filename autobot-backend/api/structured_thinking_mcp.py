@@ -251,11 +251,6 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
 )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_structured_thinking_mcp_tools",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.get("/mcp/tools", response_model=List[StructuredThinkingMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -276,11 +271,6 @@ async def get_structured_thinking_mcp_tools() -> List[StructuredThinkingMCPTool]
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="process_thought_mcp",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.post("/mcp/process_thought", response_model=StructuredThinkingProcessThoughtResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -352,11 +342,6 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     return response
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="generate_summary_mcp",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.post("/mcp/generate_summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -424,11 +409,6 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_history_mcp",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.post("/mcp/clear_history", response_model=StructuredThinkingClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -456,11 +436,6 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_structured_session",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.get("/sessions/{session_id}", response_model=StructuredThinkingSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -500,11 +475,6 @@ async def get_structured_session(session_id: str) -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_structured_sessions",
-    error_code_prefix="STRUCTURED_THINKING_MCP",
-)
 @router.get("/sessions", response_model=StructuredThinkingSessionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

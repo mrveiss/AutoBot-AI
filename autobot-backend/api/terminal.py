@@ -319,11 +319,6 @@ router.include_router(tools_router, prefix="/terminal")
 # REST API Endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_terminal_session",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/sessions", response_model=TerminalSessionCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -395,11 +390,6 @@ async def create_terminal_session(
     return response
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_terminal_sessions",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/sessions", response_model=TerminalSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -432,11 +422,6 @@ async def list_terminal_sessions(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_session",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -469,11 +454,6 @@ async def get_terminal_session(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_terminal_session",
-    error_code_prefix="TERMINAL",
-)
 @router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -515,11 +495,6 @@ async def delete_terminal_session(
 # SSH Key Management Endpoints (Issue #211)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="setup_ssh_keys",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -563,11 +538,6 @@ async def setup_ssh_keys(
         raise HTTPException(status_code=500, detail="SSH key setup failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_session_ssh_keys",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -598,11 +568,6 @@ async def list_session_ssh_keys(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_key_to_agent",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -645,11 +610,6 @@ async def add_key_to_ssh_agent(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_key_path",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -685,11 +645,6 @@ async def get_ssh_key_path(
         raise HTTPException(status_code=404, detail=f"Key '{key_name}' not found")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_single_command",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/command", response_model=CommandAssessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -734,11 +689,6 @@ async def execute_single_command(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_terminal_input",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -770,11 +720,6 @@ async def send_terminal_input(
         raise HTTPException(status_code=500, detail="Failed to send input")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_terminal_signal",
-    error_code_prefix="TERMINAL",
-)
 @router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -812,11 +757,6 @@ async def send_terminal_signal(
         raise HTTPException(status_code=500, detail="Failed to send signal")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_command_history",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -856,11 +796,6 @@ async def get_terminal_command_history(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_audit_log",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -972,11 +907,6 @@ async def _run_terminal_message_loop(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="consolidated_terminal_websocket",
-    error_code_prefix="TERMINAL",
-)
 @router.websocket("/ws/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1095,11 +1025,6 @@ async def _run_ssh_message_loop(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="ssh_terminal_websocket",
-    error_code_prefix="TERMINAL",
-)
 @router.websocket("/ws/ssh/{host_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1159,11 +1084,6 @@ async def ssh_terminal_websocket(
 # Information endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="terminal_info",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/", response_model=TerminalInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1203,11 +1123,6 @@ async def terminal_info(
 # Health and Status endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="terminal_health_check",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/health", response_model=TerminalHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1254,11 +1169,6 @@ async def terminal_health_check(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_system_status",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/status", response_model=TerminalSystemStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1303,11 +1213,6 @@ async def get_terminal_system_status(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_capabilities",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1364,11 +1269,6 @@ async def get_terminal_capabilities(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_security_policies",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/security", response_model=TerminalSecurityPoliciesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1411,11 +1311,6 @@ async def get_security_policies(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_features",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/features", response_model=TerminalFeaturesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1475,11 +1370,6 @@ async def get_terminal_features(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_terminal_statistics",
-    error_code_prefix="TERMINAL",
-)
 @router.get("/stats", response_model=TerminalStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

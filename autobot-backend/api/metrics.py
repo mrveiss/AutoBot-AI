@@ -34,11 +34,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_workflow_metrics",
-    error_code_prefix="METRICS",
-)
 @router.get("/workflow/{workflow_id}", response_model=MetricsWorkflowResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -58,11 +53,6 @@ async def get_workflow_metrics(workflow_id: str):
         raise HTTPException(status_code=500, detail="Failed to get workflow metrics")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_summary",
-    error_code_prefix="METRICS",
-)
 @router.get("/performance/summary", response_model=MetricsPerformanceSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -84,11 +74,6 @@ async def get_performance_summary(
         raise HTTPException(status_code=500, detail="Failed to get performance summary")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_current_system_metrics",
-    error_code_prefix="METRICS",
-)
 @router.get("/system/current", response_model=MetricsSystemCurrentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -117,11 +102,6 @@ _HISTORY_DURATION_MAP = {
 }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_metrics_history",
-    error_code_prefix="METRICS",
-)
 @router.get("/system/history", response_model=MetricsSystemHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -159,11 +139,6 @@ async def get_system_metrics_history(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_summary",
-    error_code_prefix="METRICS",
-)
 @router.get("/system/summary", response_model=MetricsSystemSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -190,11 +165,6 @@ async def get_system_summary(
 # Use /api/system/health?detailed=true for comprehensive status
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_workflow_metrics",
-    error_code_prefix="METRICS",
-)
 @router.get("/export/workflow", response_model=MetricsExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -214,11 +184,6 @@ async def export_workflow_metrics(
         raise HTTPException(status_code=500, detail="Failed to export metrics")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_system_metrics",
-    error_code_prefix="METRICS",
-)
 @router.get("/export/system", response_model=MetricsExportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -238,11 +203,6 @@ async def export_system_metrics(
         raise HTTPException(status_code=500, detail="Failed to export system data")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="start_system_monitoring",
-    error_code_prefix="METRICS",
-)
 @router.post("/system/monitoring/start", response_model=MetricsMonitoringStartResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -264,11 +224,6 @@ async def start_system_monitoring():
         raise HTTPException(status_code=500, detail="Failed to start monitoring")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="stop_system_monitoring",
-    error_code_prefix="METRICS",
-)
 @router.post("/system/monitoring/stop", response_model=MetricsMonitoringStopResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -286,11 +241,6 @@ async def stop_system_monitoring():
         raise HTTPException(status_code=500, detail="Failed to stop monitoring")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_metrics_dashboard",
-    error_code_prefix="METRICS",
-)
 @router.get("/dashboard", response_model=MetricsDashboardResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

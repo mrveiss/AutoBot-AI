@@ -414,11 +414,6 @@ async def _store_autobot_config_info(kb_to_use) -> bool:
 # ===== POPULATION ENDPOINTS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="populate_system_commands",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/populate_system_commands", response_model=PopulateSystemCommandsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -631,11 +626,6 @@ async def _populate_man_pages_background(kb_to_use):
         return 0
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="populate_man_pages",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/populate_man_pages", response_model=PopulateManPagesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -667,11 +657,6 @@ async def populate_man_pages(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="refresh_system_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/refresh_system_knowledge", response_model=RefreshSystemKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -713,11 +698,6 @@ async def refresh_system_knowledge(request: dict, req: Request):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_job_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/job_status/{task_id}", response_model=JobStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1030,11 +1010,6 @@ async def _process_all_doc_files(
     return items_added, items_skipped, items_failed
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="populate_autobot_docs",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/populate_autobot_docs", response_model=TaskQueuedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1255,10 +1230,6 @@ async def _index_code_background(task_id: str, root_dir: str, force: bool) -> No
         )
 
 
-@with_error_handling(
-    operation="index_code",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/index/code", response_model=TaskQueuedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1541,11 +1512,6 @@ def _parse_scan_request(request: dict | None) -> tuple[int | None, list | None, 
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_man_pages",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/scan_man_pages", response_model=ScanManPagesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1613,11 +1579,6 @@ async def _store_parsed_man_pages(kb_to_use, parsed_content: list) -> int:
     return items_added
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_man_pages_changes",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/scan_man_pages_changes", response_model=ScanManPagesChangesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -43,11 +43,6 @@ logger = logging.getLogger(__name__)
 config = get_config_manager()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_health",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/health", response_model=LLMOptimizationHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -82,11 +77,6 @@ async def get_optimization_health(admin_check: bool = Depends(check_admin_permis
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_models",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/models/available", response_model=LLMAvailableModelsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -118,11 +108,6 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Failed to get available models")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="select_optimal_model",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.post("/models/select", response_model=LLMSelectModelResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -186,11 +171,6 @@ async def select_optimal_model(
         raise HTTPException(status_code=500, detail="Failed to select optimal model")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="track_model_performance",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.post("/models/performance/track", response_model=LLMTrackPerformanceResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -230,11 +210,6 @@ async def track_model_performance(
         raise HTTPException(status_code=500, detail="Failed to track performance")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_model_performance_history",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/models/performance/history/{model_name}", response_model=LLMModelPerformanceHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -270,11 +245,6 @@ async def get_model_performance_history(
         raise HTTPException(status_code=500, detail="Failed to get performance history")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_suggestions",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/optimization/suggestions", response_model=LLMOptimizationSuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -304,11 +274,6 @@ async def get_optimization_suggestions(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="compare_models",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/models/comparison", response_model=LLMModelsComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -366,11 +331,6 @@ async def compare_models(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to compare models")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="benchmark_model",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.post("/models/benchmark/{model_name}", response_model=LLMBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -436,11 +396,6 @@ async def benchmark_model(
         raise HTTPException(status_code=500, detail="Failed to benchmark model")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_system_resources",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/system/resources", response_model=LLMSystemResourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -501,11 +456,6 @@ async def get_system_resources(admin_check: bool = Depends(check_admin_permissio
         raise HTTPException(status_code=500, detail="Failed to get system resources")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_config",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/config", response_model=LLMOptimizationConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -616,11 +566,6 @@ def _get_local_settings(opt_config: dict) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_inference_optimization_settings",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/inference/settings", response_model=LLMInferenceSettingsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -666,11 +611,6 @@ async def get_inference_optimization_settings(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_inference_optimization_settings",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.post("/inference/settings", response_model=LLMInferenceSettingsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -743,11 +683,6 @@ async def update_inference_optimization_settings(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_inference_metrics",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/inference/metrics", response_model=LLMInferenceMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -783,11 +718,6 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_provider_optimization_summary",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
 @router.get("/inference/provider/{provider_type}/optimizations", response_model=LLMProviderOptimizationSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

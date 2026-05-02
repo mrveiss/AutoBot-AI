@@ -141,11 +141,6 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
         logger.debug("Failed to record observation for %s: %s", vnc_type, e)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vnc_client",
-    error_code_prefix="VNC_PROXY",
-)
 @router.get("/{vnc_type}/vnc.html", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -190,11 +185,6 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="proxy_vnc_assets",
-    error_code_prefix="VNC_PROXY",
-)
 @router.get("/{vnc_type}/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -300,11 +290,6 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         await record_observation(vnc_type, "disconnection", {"status": "closed"})
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vnc_status",
-    error_code_prefix="VNC_PROXY",
-)
 @router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

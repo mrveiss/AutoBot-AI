@@ -139,11 +139,6 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
     return "unhealthy"
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="graph_rag_search",
-    error_code_prefix="GRAPH_RAG",
-)
 @router.post("/search", response_model=GraphRAGSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -206,11 +201,6 @@ async def graph_rag_search(
         raise HTTPException(status_code=500, detail="Graph-RAG search failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="graph_rag_health",
-    error_code_prefix="GRAPH_RAG",
-)
 @router.get("/health", response_model=GraphRAGHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -276,11 +266,6 @@ async def graph_rag_health(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="graph_rag_metrics",
-    error_code_prefix="GRAPH_RAG",
-)
 @router.get("/metrics", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -79,11 +79,6 @@ def _build_pending_response(fact: dict) -> PendingSourceResponse:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_pending_verification",
-    error_code_prefix="KNOWLEDGE_VERIFICATION",
-)
 @router.get("/verification/pending", response_model=KnowledgeVerificationPendingResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -143,11 +138,6 @@ async def list_pending_verification(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="approve_fact",
-    error_code_prefix="KNOWLEDGE_VERIFICATION",
-)
 @router.post("/verification/{fact_id}/approve", response_model=KnowledgeVerificationApproveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -201,11 +191,6 @@ async def approve_fact(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reject_fact",
-    error_code_prefix="KNOWLEDGE_VERIFICATION",
-)
 @router.post("/verification/{fact_id}/reject", response_model=KnowledgeVerificationRejectResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

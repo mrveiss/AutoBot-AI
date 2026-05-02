@@ -50,11 +50,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="query_knowledge_base",
-    error_code_prefix="KB_LIBRARIAN",
-)
 @router.post("/query", response_model=KBQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -112,11 +107,6 @@ async def query_knowledge_base(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_kb_librarian_status",
-    error_code_prefix="KB_LIBRARIAN",
-)
 @router.get("/status", response_model=KbLibrarianStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -148,11 +138,6 @@ async def get_kb_librarian_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="configure_kb_librarian",
-    error_code_prefix="KB_LIBRARIAN",
-)
 @router.put("/configure", response_model=KbLibrarianConfigureResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -527,11 +527,6 @@ chat_knowledge_manager = None
 # API Endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_chat_context",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/context/create", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -566,11 +561,6 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="associate_file_with_chat",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/files/associate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -605,11 +595,6 @@ async def associate_file_with_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upload_file_to_chat",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/files/upload/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -657,11 +642,6 @@ async def upload_file_to_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_temporary_knowledge",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/knowledge/add_temporary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -682,11 +662,6 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pending_knowledge_decisions",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -709,11 +684,6 @@ async def get_pending_knowledge_decisions(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="apply_knowledge_decision",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/knowledge/decide", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -739,11 +709,6 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="compile_chat_to_knowledge",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/compile", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -767,11 +732,6 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_chat_knowledge",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/search", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -794,11 +754,6 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_chat_context",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.get("/context/{chat_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -843,11 +798,6 @@ async def get_chat_context(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.get("/health", response_model=ChatKnowledgeHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -873,11 +823,6 @@ async def health_check():
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_facts",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.get("/chat/sessions/{session_id}/facts", response_model=SessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1003,11 +948,6 @@ def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, l
     return updated_count, failed_count, errors
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="preserve_session_facts",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
 @router.post("/chat/sessions/{session_id}/facts/preserve", response_model=PreserveSessionFactsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

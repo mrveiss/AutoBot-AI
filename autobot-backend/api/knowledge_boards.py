@@ -57,11 +57,6 @@ def _board_entry(board_id: str, name: str, description: str) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_boards",
-    error_code_prefix="KB_BOARDS",
-)
 @router.get("/boards", response_model=KnowledgeBoardsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -104,11 +99,6 @@ async def list_boards(
     return {"boards": boards, "total": len(boards)}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_board",
-    error_code_prefix="KB_BOARDS",
-)
 @router.post("/boards", status_code=201, response_model=KnowledgeBoardCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -146,11 +136,6 @@ async def create_board(
     return {"board_id": board_id, "name": request.name, "created": True}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_board",
-    error_code_prefix="KB_BOARDS",
-)
 @router.delete("/boards/{board_id}", response_model=KnowledgeBoardDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

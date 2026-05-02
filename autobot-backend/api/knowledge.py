@@ -241,11 +241,6 @@ from api.knowledge_population import (
 # ===== ENDPOINTS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_knowledge_stats",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/stats", response_model=KnowledgeStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -302,11 +297,6 @@ async def get_knowledge_stats(
     return KnowledgeStatsResponse(**stats)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_main_categories",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/test_categories_main", response_model=TestCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -327,11 +317,6 @@ async def test_main_categories(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_knowledge_stats_basic",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/stats/basic", response_model=KnowledgeStatsBasic)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -428,11 +413,6 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_main_categories",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories/main", response_model=KnowledgeMainCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -505,11 +485,6 @@ async def get_main_categories(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_knowledge_categories",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/categories", response_model=KnowledgeCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -685,11 +660,6 @@ def _build_ownership_metadata(
     return metadata
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_text_to_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/add_text", response_model=AddTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -958,11 +928,6 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_facts_to_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/facts", response_model=AddFactResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1067,11 +1032,6 @@ async def _fetch_and_extract_url(
         raise HTTPException(status_code=400, detail="Failed to fetch URL")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_url_to_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/url", response_model=AddUrlResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1270,11 +1230,6 @@ def _parse_upload_tags(tags_str) -> list:
         return []
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upload_file_to_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/upload", response_model=UploadFileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1448,11 +1403,6 @@ async def _ingest_audio_source(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="ingest_audio_url",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/audio", response_model=AudioIngestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1500,11 +1450,6 @@ async def ingest_audio_url(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="upload_audio_file",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/audio/upload", response_model=AudioIngestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1605,11 +1550,6 @@ async def upload_audio_file(
 # Includes: /search, /enhanced_search, /rag_search, /similarity_search
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVICE_UNAVAILABLE,
-    operation="get_knowledge_health",
-    error_code_prefix="KB",
-)
 @router.get("/health", response_model=KnowledgeHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1813,11 +1753,6 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_detailed_stats",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/detailed_stats", response_model=DetailedKnowledgeStats)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1866,11 +1801,6 @@ async def get_detailed_stats(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_machine_profile",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/machine_profile", response_model=MachineProfileResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1923,11 +1853,6 @@ async def get_machine_profile(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_man_pages_summary",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/man_pages/summary", response_model=ManPagesSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2008,11 +1933,6 @@ async def get_man_pages_summary(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="initialize_machine_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/machine_knowledge/initialize", response_model=MachineKnowledgeInitResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2065,11 +1985,6 @@ async def initialize_machine_knowledge(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="integrate_man_pages",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/man_pages/integrate", response_model=ManPagesIntegrateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2114,11 +2029,6 @@ async def integrate_man_pages(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_man_pages",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/man_pages/search", response_model=ManPageSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2189,11 +2099,6 @@ async def _clear_kb_via_redis(kb) -> int:
     return len(keys) if keys else 0
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_all_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/clear_all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2264,11 +2169,6 @@ async def clear_all_knowledge(
 
 
 # Legacy endpoints for backward compatibility
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_document_to_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/add_document", response_model=AddTextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2287,11 +2187,6 @@ async def add_document_to_knowledge(
     return await add_text_to_knowledge(request, req)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="query_knowledge",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/query", response_model=QueryKnowledgeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2464,11 +2359,6 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
     return categories_dict
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_facts_by_category",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/facts/by_category", response_model=FactsByCategoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2695,11 +2585,6 @@ def _extract_fact_created_at(fact_data: dict) -> str:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_fact_by_key",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/fact/{fact_key}", response_model=FactByKeyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2743,11 +2628,6 @@ async def get_fact_by_key(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_import_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/import/status", response_model=ImportStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2772,11 +2652,6 @@ async def get_import_status(
     return {"status": "success", "imports": results, "total": len(results)}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_import_statistics",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/import/statistics", response_model=ImportStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2893,11 +2768,6 @@ def _paginate_docs(docs: list, page: int, page_size: int) -> tuple:
     return docs[start:end], total, total_pages
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="browse_documentation",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/docs/browse", response_model=DocsBrowseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2959,11 +2829,6 @@ async def browse_documentation(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_doc_categories",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/docs/categories", response_model=DocsCategoriesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -3035,11 +2900,6 @@ async def get_documentation_categories(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_doc_stats",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/docs/stats", response_model=DocsStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -3096,11 +2956,6 @@ async def get_documentation_stats(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_doc_watcher_status",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -3137,11 +2992,6 @@ async def get_documentation_watcher_status(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="control_doc_watcher",
-    error_code_prefix="KNOWLEDGE",
-)
 @router.post("/docs/watcher/control", response_model=DocsWatcherControlResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

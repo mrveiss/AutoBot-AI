@@ -23,11 +23,6 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_fresh_knowledge_stats",
-    error_code_prefix="KNOWLEDGE_FRESH",
-)
 @router.get("/fresh_stats", response_model=KnowledgeFreshStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -99,11 +94,6 @@ async def get_fresh_knowledge_stats(request: Request = None):
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="debug_redis_connection",
-    error_code_prefix="KNOWLEDGE_FRESH",
-)
 @router.get("/debug_redis", response_model=KnowledgeDebugRedisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -175,11 +165,6 @@ async def debug_redis_connection():
         return {"redis_connection": "failed", "error": "Internal server error"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rebuild_search_index",
-    error_code_prefix="KNOWLEDGE_FRESH",
-)
 @router.post("/rebuild_index", response_model=KnowledgeRebuildIndexResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

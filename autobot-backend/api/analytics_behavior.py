@@ -53,11 +53,6 @@ router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="track_user_event",
-    error_code_prefix="BEHAVIOR",
-)
 @router.post("/track", response_model=BehaviorTrackEventResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -97,11 +92,6 @@ async def track_user_event(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_recent_events",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/events/recent", response_model=BehaviorRecentEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -135,11 +125,6 @@ async def get_recent_events(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_feature_metrics",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/features", response_model=BehaviorFeatureMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -165,11 +150,6 @@ async def get_feature_metrics(
     return metrics
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_feature_comparison",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/features/comparison", response_model=BehaviorFeatureComparisonResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -222,11 +202,6 @@ async def get_feature_comparison(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_user_journey",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/journey/{session_id}", response_model=UserJourneyResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -260,11 +235,6 @@ async def get_user_journey(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_engagement_metrics",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/engagement", response_model=BehaviorEngagementResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -293,11 +263,6 @@ async def get_engagement_metrics(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_daily_stats",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/stats/daily", response_model=BehaviorDailyStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -323,11 +288,6 @@ async def get_daily_stats(
     return stats
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_usage_heatmap",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/stats/heatmap", response_model=BehaviorHeatmapResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -351,11 +311,6 @@ async def get_usage_heatmap(
     return heatmap
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_peak_usage",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/stats/peak", response_model=BehaviorPeakUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -411,11 +366,6 @@ async def get_peak_usage(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_behavior_summary",
-    error_code_prefix="BEHAVIOR",
-)
 @router.get("/summary", response_model=BehaviorSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

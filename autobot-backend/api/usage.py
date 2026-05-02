@@ -45,11 +45,6 @@ router = APIRouter(prefix="/usage", tags=["usage", "analytics"])
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_usage_summary",
-    error_code_prefix="USAGE",
-)
 @router.get("/summary", response_model=UsageSummaryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -98,11 +93,6 @@ async def get_usage_summary(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_usage_by_user_all",
-    error_code_prefix="USAGE",
-)
 @router.get("/by-user", response_model=UsageByUserAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -127,11 +117,6 @@ async def get_usage_by_user_all(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_usage_by_user_single",
-    error_code_prefix="USAGE",
-)
 @router.get("/by-user/{user_id}", response_model=UsageByUserSingleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -151,11 +136,6 @@ async def get_usage_by_user_single(
     return await tracker.get_cost_by_user(user_id)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_my_usage",
-    error_code_prefix="USAGE",
-)
 @router.get("/me", response_model=UsageMyUsageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -194,11 +174,6 @@ async def get_my_usage(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="record_usage_event",
-    error_code_prefix="USAGE",
-)
 @router.post("/record", response_model=UsageRecordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -243,11 +218,6 @@ async def record_usage_event(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="export_usage_csv",
-    error_code_prefix="USAGE",
-)
 @router.get("/export/csv", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -493,11 +493,6 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
         return None
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="calculate_debt",
-    error_code_prefix="DEBT",
-)
 @router.post("/calculate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -547,11 +542,6 @@ async def calculate_technical_debt(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_debt_summary",
-    error_code_prefix="DEBT",
-)
 @router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -584,11 +574,6 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_debt_by_category",
-    error_code_prefix="DEBT",
-)
 @router.get("/by-category/{category}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -689,11 +674,6 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     return change, direction
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_debt_trends",
-    error_code_prefix="DEBT",
-)
 @router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -726,11 +706,6 @@ async def get_debt_trends(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_roi_priorities",
-    error_code_prefix="DEBT",
-)
 @router.get("/roi-priorities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -857,11 +832,6 @@ def _generate_markdown_report(debt_data: dict) -> str:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_debt_report",
-    error_code_prefix="DEBT",
-)
 @router.get("/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

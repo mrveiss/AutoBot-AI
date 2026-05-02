@@ -75,11 +75,6 @@ router = APIRouter()
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_workers",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/workers", response_model=List[NPUWorkerDetails])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -105,11 +100,6 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
         raise_internal_error("Failed to retrieve workers")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="add_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post(
     "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
 )
@@ -154,11 +144,6 @@ async def add_worker(
         raise_internal_error("Failed to register worker")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -200,11 +185,6 @@ async def get_worker(
         raise_internal_error("Failed to retrieve worker")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.put("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -256,11 +236,6 @@ async def update_worker(
         raise_internal_error("Failed to update worker")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="remove_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -298,11 +273,6 @@ async def remove_worker(
         raise_internal_error("Failed to remove worker")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/workers/{worker_id}/test", response_model=WorkerTestResult)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -350,11 +320,6 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_worker_metrics",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get(
     "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
 )
@@ -404,11 +369,6 @@ async def get_worker_metrics(
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_worker_log_level",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -474,11 +434,6 @@ async def _send_log_level_to_worker(
         return response.json()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="set_worker_log_level",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.put("/npu/workers/{worker_id}/logging", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -535,11 +490,6 @@ async def set_worker_log_level(
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_load_balancing_config",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/load-balancing", response_model=LoadBalancingConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -567,11 +517,6 @@ async def get_load_balancing_config(
         raise_internal_error("Failed to retrieve load balancing configuration")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_load_balancing_config",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.put("/npu/load-balancing", response_model=LoadBalancingConfig)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -617,11 +562,6 @@ async def update_load_balancing_config(
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_npu_status",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/status", response_model=NPUStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -672,11 +612,6 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="proxy_npu_health",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/health", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -720,11 +655,6 @@ async def proxy_npu_health():
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="unpair_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/workers/{worker_id}/unpair", response_model=NPUWorkerUnpairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -863,11 +793,6 @@ async def _resolve_repair_worker_info(
     return worker_url, platform, new_worker_id
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="repair_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/workers/{worker_id}/repair", response_model=NPUWorkerRepairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1144,11 +1069,6 @@ async def _execute_worker_pairing(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="pair_worker",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/workers/pair", response_model=NPUWorkerPairResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1427,11 +1347,6 @@ def _build_bootstrap_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="worker_bootstrap",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/workers/bootstrap", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1481,11 +1396,6 @@ async def worker_bootstrap(request: dict):
 # ==============================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pool_stats",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/pool/stats", response_model=Dict[str, Any])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1519,11 +1429,6 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
         raise_internal_error("Failed to retrieve pool stats")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pool_workers",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.get("/npu/pool/workers", response_model=NPUPoolWorkersResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1576,11 +1481,6 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
         raise_internal_error("Failed to retrieve pool workers")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reload_pool_config",
-    error_code_prefix="NPU_WORKERS",
-)
 @router.post("/npu/pool/reload", response_model=NPUPoolReloadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

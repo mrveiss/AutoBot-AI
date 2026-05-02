@@ -268,11 +268,6 @@ def _build_service_distribution(vm_topology: dict) -> dict:
     return service_distribution
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enterprise_status",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -307,11 +302,6 @@ async def get_enterprise_status():
         raise HTTPException(status_code=500, detail="Failed to get enterprise status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enable_enterprise_feature",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.post("/features/enable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -369,11 +359,6 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
         raise HTTPException(status_code=500, detail="Failed to enable feature")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="enable_all_enterprise_features",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.post("/features/enable-all", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -410,11 +395,6 @@ async def enable_all_enterprise_features():
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_enterprise_features",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.get("/features", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -473,11 +453,6 @@ async def list_enterprise_features(
         raise HTTPException(status_code=500, detail="Failed to list features")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="bulk_enable_features",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.post("/features/bulk-enable", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -539,11 +514,6 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         raise HTTPException(status_code=500, detail="Bulk enablement failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enterprise_health",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.get("/health", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -599,11 +569,6 @@ async def get_enterprise_health():
         raise HTTPException(status_code=500, detail="Failed to get health status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="optimize_system_performance",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.post("/performance/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -645,11 +610,6 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         raise HTTPException(status_code=500, detail="Performance optimization failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_infrastructure_status",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.get("/infrastructure", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -699,11 +659,6 @@ async def get_infrastructure_status():
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="deploy_zero_downtime",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.post("/deployment/zero-downtime", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -752,11 +707,6 @@ async def deploy_zero_downtime():
         raise HTTPException(status_code=500, detail="Zero-downtime deployment failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validate_phase4_completion",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
 @router.get("/phase4/validation", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

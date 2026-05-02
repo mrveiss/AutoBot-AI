@@ -88,11 +88,6 @@ def _build_image_modal_input(
 # API Endpoints
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="process_image",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/process/image", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -156,11 +151,6 @@ async def process_image(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="process_audio",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/process/audio", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -233,11 +223,6 @@ async def process_audio(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="process_text",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/process/text", response_model=MultiModalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -297,11 +282,6 @@ async def process_text(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="generate_embedding",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/embeddings/generate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -358,11 +338,6 @@ async def generate_embedding(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cross_modal_search",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -436,11 +411,6 @@ async def cross_modal_search(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_multimodal_stats",
-    error_code_prefix="MULTIMODAL",
-)
 @router.get("/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -610,11 +580,6 @@ def _create_combined_input(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="combine_multimodal_inputs",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/fusion/combine", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -684,11 +649,6 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_stats",
-    error_code_prefix="MULTIMODAL",
-)
 @router.get("/performance/stats", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -735,11 +695,6 @@ async def get_performance_stats(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="optimize_performance",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/performance/optimize", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -775,11 +730,6 @@ async def optimize_performance(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_summary",
-    error_code_prefix="MULTIMODAL",
-)
 @router.get("/performance/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -808,11 +758,6 @@ async def get_performance_summary(
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_batch_size",
-    error_code_prefix="MULTIMODAL",
-)
 @router.post("/performance/batch-size", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -864,11 +809,6 @@ async def update_batch_size(
 
 
 # Health check endpoint
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="MULTIMODAL",
-)
 @router.get("/health", response_model=MultimodalHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

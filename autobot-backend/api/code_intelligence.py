@@ -680,11 +680,6 @@ async def _generate_report_response(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_codebase",
-    error_code_prefix="CODE_INTEL",
-)
 @router.post("/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -797,11 +792,6 @@ def _analyze_inline_code(request: CodeIntelAnalysisRequest) -> JSONResponse:
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_suggestions",
-    error_code_prefix="CODE_INTEL",
-)
 @router.post("/suggestions", response_model=SuggestionsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -831,11 +821,6 @@ async def get_code_suggestions(
     return {"suggestions": suggestions}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="quick_scan",
-    error_code_prefix="CODE_INTEL",
-)
 @router.post("/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -885,11 +870,6 @@ async def quick_scan_file(
         raise_internal_error("Scan failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_score",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -941,11 +921,6 @@ async def get_codebase_health_score(
         raise_internal_error("Health check failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pattern_types",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/pattern-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -981,11 +956,6 @@ async def get_supported_pattern_types(
 # =============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_redis_usage",
-    error_code_prefix="CODE_INTEL",
-)
 @router.post("/redis/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1032,11 +1002,6 @@ async def analyze_redis_usage_endpoint(
         raise_internal_error("Redis analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="scan_redis_file",
-    error_code_prefix="CODE_INTEL",
-)
 @router.post("/redis/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1086,11 +1051,6 @@ async def scan_redis_file(
         raise_internal_error("Scan failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_optimization_types",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/redis/optimization-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1127,11 +1087,6 @@ _REDIS_HEALTH_CACHE_TTL = TTL_5_MINUTES
 _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/redis/health-score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1219,11 +1174,6 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="security_analyze",
-    error_code_prefix="SECURITY",
-)
 @router.post("/security/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1277,11 +1227,6 @@ async def security_analyze(
         raise_internal_error("Security analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="security_scan_file",
-    error_code_prefix="SECURITY",
-)
 @router.post("/security/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1339,11 +1284,6 @@ async def security_scan_file(
         raise_internal_error("File scan failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vulnerability_types",
-    error_code_prefix="SECURITY",
-)
 @router.get("/security/vulnerability-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1383,11 +1323,6 @@ async def list_vulnerability_types(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="security_score",
-    error_code_prefix="SECURITY",
-)
 @router.get("/security/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1445,11 +1380,6 @@ async def get_security_score(
         raise_internal_error("Security score calculation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="security_report",
-    error_code_prefix="SECURITY",
-)
 @router.get("/security/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1488,11 +1418,6 @@ async def get_security_report(
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="performance_analyze",
-    error_code_prefix="PERFORMANCE",
-)
 @router.post("/performance/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1545,11 +1470,6 @@ async def performance_analyze(
         raise_internal_error("Performance analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="performance_scan_file",
-    error_code_prefix="PERFORMANCE",
-)
 @router.post("/performance/scan-file", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1607,11 +1527,6 @@ async def performance_scan_file(
         raise_internal_error("File scan failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_issue_types",
-    error_code_prefix="PERFORMANCE",
-)
 @router.get("/performance/issue-types", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1651,11 +1566,6 @@ async def list_performance_issue_types(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="performance_score",
-    error_code_prefix="PERFORMANCE",
-)
 @router.get("/performance/score", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1722,11 +1632,6 @@ async def get_performance_score(
         raise_internal_error("Performance score calculation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="performance_report",
-    error_code_prefix="PERFORMANCE",
-)
 @router.get("/performance/report", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1765,11 +1670,6 @@ async def get_performance_report(
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_evolution",
-    error_code_prefix="EVOLUTION",
-)
 @router.post("/evolution/analyze", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1826,11 +1726,6 @@ async def analyze_code_evolution(
         raise_internal_error("Evolution analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_pattern_evolution",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/evolution/patterns", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1887,11 +1782,6 @@ async def get_pattern_evolution(
         raise_internal_error("Pattern evolution failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="detect_refactorings",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/evolution/refactorings", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1948,11 +1838,6 @@ async def detect_refactorings(
         raise_internal_error("Refactoring detection failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_timeline",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/evolution/timeline", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2021,11 +1906,6 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_evolution_report",
-    error_code_prefix="EVOLUTION",
-)
 @router.get("/evolution/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2225,11 +2105,6 @@ async def clear_stuck_sec_tasks(
 # These GET stubs prevent 404s and return a consistent "not yet implemented" response.
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_security_findings",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/security/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2253,11 +2128,6 @@ async def get_security_findings(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_performance_findings",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/performance/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2281,11 +2151,6 @@ async def get_performance_findings(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_findings",
-    error_code_prefix="CODE_INTEL",
-)
 @router.get("/redis/findings", response_model=FindingsPlaceholderResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

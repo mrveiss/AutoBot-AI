@@ -40,11 +40,6 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_providers",
-    error_code_prefix="INTEGRATION_CLOUD",
-)
 @router.get("/providers", response_model=List[CloudProviderInfo])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -79,11 +74,6 @@ async def list_providers():
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_connection",
-    error_code_prefix="INTEGRATION_CLOUD",
-)
 @router.post("/test-connection", response_model=CloudConnectionTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -118,11 +108,6 @@ async def test_connection(request: CloudConnectionTestRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_resources",
-    error_code_prefix="INTEGRATION_CLOUD",
-)
 @router.get("/{provider}/resources", response_model=CloudResourcesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -167,11 +152,6 @@ async def list_resources(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_storage",
-    error_code_prefix="INTEGRATION_CLOUD",
-)
 @router.get("/{provider}/storage", response_model=CloudStorageResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -215,11 +195,6 @@ async def list_storage(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_account_info",
-    error_code_prefix="INTEGRATION_CLOUD",
-)
 @router.get("/{provider}/account", response_model=CloudAccountInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

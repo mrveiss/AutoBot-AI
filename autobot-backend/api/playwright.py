@@ -54,11 +54,6 @@ BROWSER_VM_URL = (
 )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_playwright_status",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.get("/status", response_model=PlaywrightStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -82,11 +77,6 @@ async def get_playwright_status():
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.get("/health", response_model=PlaywrightHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -114,11 +104,6 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Playwright service unavailable")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="web_search",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/search", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -160,11 +145,6 @@ async def web_search(request: PlaywrightSearchRequest):
         raise HTTPException(status_code=500, detail="Web search failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_frontend",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/test-frontend", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -199,11 +179,6 @@ async def test_frontend(request: FrontendTestRequest):
         raise HTTPException(status_code=500, detail="Frontend test failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_test_message",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/send-test-message", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -242,11 +217,6 @@ async def send_test_message(request: TestMessageRequest):
         raise HTTPException(status_code=500, detail="Test message failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="capture_screenshot",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/screenshot", response_model=PlaywrightEmbeddedResultResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -286,11 +256,6 @@ async def capture_screenshot(request: PlaywrightScreenshotRequest):
         raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="quick_automation_test",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/automation/quick-test", response_model=PlaywrightQuickTestResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -354,11 +319,6 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="navigate",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/navigate", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -404,11 +364,6 @@ async def navigate_to_url(request: PlaywrightNavigateRequest):
         raise HTTPException(status_code=500, detail="Navigation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="reload",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/reload", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -450,11 +405,6 @@ async def reload_page(request: PlaywrightReloadRequest):
         raise HTTPException(status_code=500, detail="Reload failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="go_back",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/back", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -497,11 +447,6 @@ async def go_back():
         raise HTTPException(status_code=500, detail="Back navigation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="go_forward",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/forward", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -546,11 +491,6 @@ async def go_forward():
         raise HTTPException(status_code=500, detail="Forward navigation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="worker_status",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.get("/worker-status", response_model=PlaywrightWorkerStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -592,11 +532,6 @@ async def get_worker_status():
         return {"status": "error", "browser_connected": False, "page_open": False}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="worker_screenshot",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/worker-screenshot", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -635,11 +570,6 @@ async def take_worker_screenshot():
         raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="interact",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.post("/interact", response_model=PlaywrightBrowserActionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -691,11 +621,6 @@ async def interact_with_page(request: PlaywrightInteractRequest):
         raise HTTPException(status_code=500, detail="Interaction failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_capabilities",
-    error_code_prefix="PLAYWRIGHT",
-)
 @router.get("/capabilities", response_model=PlaywrightCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -287,10 +287,6 @@ def _build_unified_report_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
-)
 @router.get("/report", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -331,10 +327,6 @@ async def get_unified_report():
     return JSONResponse(content=response)
 
 
-@with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
-)
 @router.get("/summary", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -372,10 +364,6 @@ async def get_quick_summary():
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.API,
-    error_code_prefix="UNIFIED",
-)
 @router.get("/trends", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

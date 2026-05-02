@@ -55,11 +55,6 @@ def get_screen_analyzer() -> ScreenAnalyzer:
 
 
 # API Endpoints
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vision_health_check",
-    error_code_prefix="VISION",
-)
 @router.get("/health", response_model=VisionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -103,11 +98,6 @@ async def vision_health_check(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="analyze_screen",
-    error_code_prefix="VISION",
-)
 @router.post("/analyze", response_model=ScreenAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -168,11 +158,6 @@ async def analyze_screen(
         raise HTTPException(status_code=500, detail="Screen analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="detect_elements",
-    error_code_prefix="VISION",
-)
 @router.post("/elements", response_model=VisionDetectElementsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -235,11 +220,6 @@ async def detect_elements(
         raise HTTPException(status_code=500, detail="Element detection failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="extract_text_ocr",
-    error_code_prefix="VISION",
-)
 @router.post("/ocr", response_model=VisionOCRResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -296,11 +276,6 @@ async def extract_text_ocr(
         raise HTTPException(status_code=500, detail="OCR extraction failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_automation_opportunities",
-    error_code_prefix="VISION",
-)
 @router.get("/automation-opportunities", response_model=VisionAutomationOpportunitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -333,11 +308,6 @@ async def get_automation_opportunities(
         raise HTTPException(status_code=500, detail="Failed to identify opportunities")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_element_types",
-    error_code_prefix="VISION",
-)
 @router.get("/element-types", response_model=VisionElementTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -365,11 +335,6 @@ async def get_element_types(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_interaction_types",
-    error_code_prefix="VISION",
-)
 @router.get("/interaction-types", response_model=VisionInteractionTypesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -397,11 +362,6 @@ async def get_interaction_types(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_layout_analysis",
-    error_code_prefix="VISION",
-)
 @router.get("/layout", response_model=VisionLayoutResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -433,11 +393,6 @@ async def get_layout_analysis(
         raise HTTPException(status_code=500, detail="Layout analysis failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vision_service_status",
-    error_code_prefix="VISION",
-)
 @router.get("/status", response_model=VisionStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

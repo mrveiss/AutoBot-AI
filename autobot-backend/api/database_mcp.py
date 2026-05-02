@@ -634,11 +634,6 @@ def _get_database_schema_tools() -> List[DatabaseMCPTool]:
     ]
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_database_mcp_tools",
-    error_code_prefix="DB_MCP",
-)
 @router.get("/mcp/tools", response_model=List[DatabaseMCPTool])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -661,11 +656,6 @@ async def get_database_mcp_tools() -> List[DatabaseMCPTool]:
 # Tool Implementations
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_query_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.post("/mcp/query", response_model=DatabaseQueryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -737,11 +727,6 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Database query error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_execute_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.post("/mcp/execute", response_model=DatabaseExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -808,11 +793,6 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Database execute error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_list_tables_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.post("/mcp/list_tables", response_model=DatabaseListTablesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -866,11 +846,6 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error listing tables")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_describe_schema_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.post("/mcp/describe_schema", response_model=DatabaseDescribeSchemaResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -928,11 +903,6 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error describing schema")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_list_databases_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.get("/mcp/list_databases", response_model=DatabaseListDatabasesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -979,11 +949,6 @@ async def database_list_databases_mcp() -> Metadata:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="database_statistics_mcp",
-    error_code_prefix="DATABASE_MCP",
-)
 @router.post("/mcp/statistics", response_model=DatabaseStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1039,11 +1004,6 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(status_code=500, detail="Error getting statistics")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_database_mcp_status",
-    error_code_prefix="DB_MCP",
-)
 @router.get("/mcp/status", response_model=DatabaseMCPStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

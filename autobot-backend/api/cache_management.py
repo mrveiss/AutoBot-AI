@@ -125,11 +125,6 @@ def _process_data_type_stats_results(
 # ── Redis-level endpoints (consolidated from cache.py, Issue #1286) ──
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cache_stats",
-    error_code_prefix="CACHE",
-)
 @router.get("/stats", response_model=RedisStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -179,11 +174,6 @@ async def get_cache_stats():
     return {"status": "success", "stats": stats}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_redis_cache",
-    error_code_prefix="CACHE",
-)
 @router.post("/redis/clear/{database}", response_model=RedisClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -230,11 +220,6 @@ async def clear_redis_cache(database: str):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_cache_type",
-    error_code_prefix="CACHE",
-)
 @router.post("/clear/{cache_type}", response_model=CacheClearTypeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -264,11 +249,6 @@ async def clear_cache_type(cache_type: str):
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="save_cache_config",
-    error_code_prefix="CACHE",
-)
 @router.post("/config", response_model=CacheConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -303,11 +283,6 @@ async def save_cache_config(config_data: Metadata):
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cache_config",
-    error_code_prefix="CACHE",
-)
 @router.get("/config", response_model=CacheConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -337,11 +312,6 @@ async def get_cache_config():
     return {"status": "success", "config": default_config, "source": "default"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="warmup_caches",
-    error_code_prefix="CACHE",
-)
 @router.post("/warmup", response_model=CacheWarmupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -368,11 +338,6 @@ async def warmup_caches():
 # ── Advanced cache management endpoints ──
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_advanced_cache_stats",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.get("/advanced-stats", response_model=CacheStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -416,11 +381,6 @@ async def get_advanced_cache_stats(
         raise HTTPException(status_code=500, detail="Error getting cache stats")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="warm_cache",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.post("/warm", response_model=WarmCacheResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -465,11 +425,6 @@ async def warm_cache(
         raise HTTPException(status_code=500, detail="Error warming cache")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="invalidate_cache",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.delete("/invalidate/{data_type}", response_model=InvalidateCacheResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -502,11 +457,6 @@ async def invalidate_cache(
         raise HTTPException(status_code=500, detail="Error invalidating cache")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_all_cache",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.post("/clear-all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -653,11 +603,6 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
         return False
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cache_health_check",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.get("/health", response_model=CacheHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -689,11 +634,6 @@ async def cache_health_check():
 # =========================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="semantic_cache_stats",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.get("/semantic-cache/stats", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -710,11 +650,6 @@ async def semantic_cache_stats(
     return cache.get_stats()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="semantic_cache_clear",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.delete("/semantic-cache/clear", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -732,11 +667,6 @@ async def semantic_cache_clear(
     return {"status": "cleared", **result}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="semantic_cache_config",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.put("/semantic-cache/config", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -764,11 +694,6 @@ async def semantic_cache_update_config(
 # =========================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="context_sufficiency_stats",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.get("/context-sufficiency/stats", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -785,11 +710,6 @@ async def context_sufficiency_stats(
     return evaluator.get_stats()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="context_sufficiency_config",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.put("/context-sufficiency/config", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -813,11 +733,6 @@ async def context_sufficiency_update_config(
 # ---------------------------------------------------------------------------
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="topic_cache_stats",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.get("/topic-cache/stats", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -834,11 +749,6 @@ async def topic_cache_stats(
     return cache.get_stats()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="topic_cache_config",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
 @router.put("/topic-cache/config", response_model=dict)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

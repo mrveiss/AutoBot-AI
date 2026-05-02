@@ -138,11 +138,6 @@ async def _authenticate_and_build_user_data(
     return user_data
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="login",
-    error_code_prefix="AUTH",
-)
 @router.post("/login", response_model=LoginResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -224,11 +219,6 @@ async def login(request: Request, login_data: LoginRequest):
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="logout",
-    error_code_prefix="AUTH",
-)
 @router.post("/logout", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -260,11 +250,6 @@ async def logout(request: Request, logout_data: LogoutRequest):
         return {"success": True, "message": "Logged out successfully"}
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_current_user_info",
-    error_code_prefix="AUTH",
-)
 @router.get("/me", response_model=AuthUserInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -314,11 +299,6 @@ async def get_current_user_info(request: Request):
         raise HTTPException(status_code=500, detail="Error retrieving user information")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_authentication",
-    error_code_prefix="AUTH",
-)
 @router.get("/check", response_model=AuthCheckResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -363,11 +343,6 @@ async def check_authentication(request: Request):
         }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_permission",
-    error_code_prefix="AUTH",
-)
 @router.get("/permissions/{operation}", response_model=AuthPermissionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -456,11 +431,6 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
     config_manager.save_settings()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="change_password",
-    error_code_prefix="AUTH",
-)
 @router.post("/change-password", response_model=ChangePasswordResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -522,11 +492,6 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="signup",
-    error_code_prefix="AUTH",
-)
 @router.post("/signup", response_model=SignupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -603,11 +568,6 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="refresh_token",
-    error_code_prefix="AUTH",
-)
 @router.post("/refresh", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

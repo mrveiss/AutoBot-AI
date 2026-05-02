@@ -227,11 +227,6 @@ async def _collect_prompt_files(
         return []
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_prompts",
-    error_code_prefix="PROMPTS",
-)
 @router.get("/", response_model=PromptsListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -294,11 +289,6 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Error getting prompts")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_prompts_cache",
-    error_code_prefix="PROMPTS",
-)
 @router.post("/cache/clear", response_model=PromptsCacheClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -341,11 +331,6 @@ def _build_prompt_save_response(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="save_prompt",
-    error_code_prefix="PROMPTS",
-)
 @router.post("/{prompt_id}", response_model=PromptSaveResponse)
 @router.put("/{prompt_id}", response_model=PromptSaveResponse)  # Issue #570: Support PUT for frontend compatibility
 @with_error_handling(
@@ -453,11 +438,6 @@ async def _write_prompt_from_default(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="revert_prompt",
-    error_code_prefix="PROMPTS",
-)
 @router.post("/{prompt_id}/revert", response_model=PromptRevertResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

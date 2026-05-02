@@ -57,11 +57,6 @@ def _require_browser():
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/health", response_model=ResearchBrowserHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -90,11 +85,6 @@ async def health_check():
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="research_url",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.post("/url", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -111,11 +101,6 @@ async def research_url(request: BrowserResearchRequest):
     return JSONResponse(status_code=200, content=result)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="handle_session_action",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.post("/session/action", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -166,11 +151,6 @@ async def handle_session_action(request: SessionAction):
     return JSONResponse(status_code=200, content=result)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_session_status",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/session/{session_id}/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -200,11 +180,6 @@ async def get_session_status(session_id: str):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="download_mhtml",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/session/{session_id}/mhtml/{filename}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -251,11 +226,6 @@ async def download_mhtml(session_id: str, filename: str):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_session",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.delete("/session/{session_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -273,11 +243,6 @@ async def cleanup_session(session_id: str):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_sessions",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/sessions", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -308,11 +273,6 @@ async def list_sessions():
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="navigate_session",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.post("/session/{session_id}/navigate", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -332,11 +292,6 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_browser_info",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/browser/{session_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -438,11 +393,6 @@ def _get_browser_actions() -> list:
 # These endpoints tie browser sessions to chat conversations like terminal
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_or_create_chat_browser_session",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.post("/chat-session", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -511,11 +461,6 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_chat_browser_session",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.get("/chat-session/{conversation_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -567,11 +512,6 @@ async def get_chat_browser_session(conversation_id: str):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_chat_browser_session",
-    error_code_prefix="RESEARCH_BROWSER",
-)
 @router.delete("/chat-session/{conversation_id}", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

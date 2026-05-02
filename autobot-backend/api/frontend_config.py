@@ -156,11 +156,6 @@ def _build_fallback_config() -> Dict[str, Any]:
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_frontend_config",
-    error_code_prefix="FRONTEND_CONFIG",
-)
 @router.get("/frontend-config", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

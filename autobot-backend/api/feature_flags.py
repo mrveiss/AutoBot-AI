@@ -81,11 +81,6 @@ async def require_admin(
     return current_user
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_feature_flags_status",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.get("/feature-flags/status", response_model=FeatureFlagStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -111,11 +106,6 @@ async def get_feature_flags_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_enforcement_mode",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.put("/feature-flags/enforcement-mode", response_model=FeatureFlagEnforcementModeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -184,11 +174,6 @@ async def update_enforcement_mode(
         raise HTTPException(status_code=500, detail="Failed to update mode")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="set_endpoint_enforcement",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.put("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointSetResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -243,11 +228,6 @@ async def set_endpoint_enforcement(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="remove_endpoint_enforcement",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.delete("/feature-flags/endpoint/{endpoint:path}", response_model=FeatureFlagEndpointRemoveResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -291,11 +271,6 @@ async def remove_endpoint_enforcement(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_access_control_metrics",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.get("/access-control/metrics", response_model=AccessControlMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -342,11 +317,6 @@ async def get_access_control_metrics(
         raise HTTPException(status_code=500, detail="Failed to get metrics")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_endpoint_metrics",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.get("/access-control/endpoint/{endpoint:path}", response_model=AccessControlEndpointMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -379,11 +349,6 @@ async def get_endpoint_metrics(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_user_metrics",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.get("/access-control/user/{username}", response_model=AccessControlUserMetricsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -416,11 +381,6 @@ async def get_user_metrics(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cleanup_old_metrics",
-    error_code_prefix="FEATURE_FLAGS",
-)
 @router.post("/access-control/cleanup", response_model=AccessControlCleanupResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

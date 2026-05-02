@@ -141,11 +141,6 @@ async def execute_workflow(
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_workflow_plan",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.post("/workflow/plan", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -211,11 +206,6 @@ async def create_workflow_plan(
         raise HTTPException(status_code=500, detail="Plan creation failed")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_performance",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/agents/performance", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -249,11 +239,6 @@ async def get_agent_performance(
         raise HTTPException(status_code=500, detail="Failed to get performance report")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="recommend_agents",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.post("/agents/recommend", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -308,11 +293,6 @@ async def recommend_agents(
         raise HTTPException(status_code=500, detail="Failed to get recommendations")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_active_workflows",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/workflow/active", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -364,11 +344,6 @@ async def get_active_workflows(
         raise HTTPException(status_code=500, detail="Failed to get active workflows")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_execution_strategies",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/strategies", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -416,11 +391,6 @@ async def get_execution_strategies(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_agent_capabilities",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/capabilities", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -491,11 +461,6 @@ async def get_agent_capabilities(
         raise HTTPException(status_code=500, detail="Failed to get capabilities")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_orchestration_status",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/status", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -551,11 +516,6 @@ async def get_orchestration_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_orchestration_examples",
-    error_code_prefix="ORCHESTRATION",
-)
 @router.get("/examples", response_model=DataResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
