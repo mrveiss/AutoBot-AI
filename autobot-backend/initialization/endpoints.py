@@ -131,7 +131,11 @@ def register_root_endpoints(app: FastAPI) -> None:
             "service": "autobot-backend",
             "services": services,
             "ai_enhanced": ai_stack_ready,
-            "agent_count": _get_agent_count(state),
+            # `_get_agent_count` only counts AI Stack agents, not the local
+            # backend agent registry. Renamed to make the semantic explicit so
+            # consumers don't conflate this with the (much larger) total in
+            # /api/agents/registry. (#6749 follow-up — Chrome-plugin TODO #8.)
+            "ai_stack_agent_count": _get_agent_count(state),
             "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
             "circuit_breakers": _get_circuit_breaker_states(),
         }
