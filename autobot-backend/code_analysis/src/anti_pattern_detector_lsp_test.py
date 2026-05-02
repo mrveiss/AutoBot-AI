@@ -194,6 +194,64 @@ async def test_lsp_skips_abstract_parent(fixture_root):
 
 
 @pytest.mark.asyncio
+async def test_lsp_skips_child_with_widened_preconditions(fixture_root):
+    """Child override that widens the parent's signature (adds defaults)
+    must NOT be flagged.
+
+    Regression: #6755 dogfood pass produced 5 false-positive
+    LSP_SIGNATURE_INCOMPATIBLE findings against ``BasePipeline`` subclasses
+    AFTER they were correctly fixed to accept the parent's args with
+    defaults. The original rule (``child_required < parent_required``)
+    flagged this — but a child widening preconditions is correct LSP.
+    The corrected rule compares child's TOTAL positional slots against
+    parent's REQUIRED count.
+    """
+    apd = _load_detector_module()
+    _write_module(
+        fixture_root,
+        "widening",
+        """
+        from typing import List
+
+        class BasePipeline:
+            def __init__(self, pipeline_name: str, supported_types: List[str]):
+                self.pipeline_name = pipeline_name
+                self.supported_types = supported_types
+
+        class DocumentPipeline(BasePipeline):
+            # Widens preconditions — accepts both as kwargs OR positional, with
+            # defaults matching the historical hardcoded values. Factory call
+            # `cls("doc", [])` still works against the parent contract.
+            def __init__(
+                self,
+                pipeline_name: str = "document",
+                supported_types: List[str] = None,
+            ):
+                super().__init__(
+                    pipeline_name=pipeline_name,
+                    supported_types=supported_types if supported_types is not None else ["DOCUMENT"],
+                )
+        """,
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    sig_issues = [
+        ap
+        for ap in report.anti_patterns
+        if ap.pattern_type == apd.AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE
+    ]
+    assert not sig_issues, (
+        f"child widening preconditions should NOT be flagged; got: "
+        f"{[(ap.entity_name, ap.description[:80]) for ap in sig_issues]}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_lsp_skips_docstring_plus_raise_notimplemented_stub(fixture_root):
     """Parent body of ``\"docstring\"; raise NotImplementedError`` is a stub —
     children adding behaviour must NOT be flagged.

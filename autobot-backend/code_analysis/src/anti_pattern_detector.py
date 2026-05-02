@@ -1108,6 +1108,18 @@ class AntiPatternDetector:
         defaults = method.args.defaults or []
         return max(0, len(args) - len(defaults))
 
+    def _total_positional_count(self, method: ast.AST) -> int:
+        """Count total positional slots — required + with-default — excluding
+        ``self``/``cls``. A child can WIDEN preconditions by adding defaults,
+        which is correct LSP; the comparison that matters is whether the child
+        accepts as many positional slots as the parent requires (#6755)."""
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return 0
+        args = method.args.args
+        if args and args[0].arg in ("self", "cls"):
+            args = args[1:]
+        return len(args)
+
     @staticmethod
     def _is_docstring_stmt(stmt: ast.stmt) -> bool:
         """True when the statement is a bare string literal (function docstring)."""
@@ -1294,10 +1306,20 @@ class AntiPatternDetector:
                         )
                     )
 
-                # --- Signature: required-param removal ---
-                child_required = self._required_positional_count(child_method)
+                # --- Signature: child rejects positional args parent accepts ---
+                # LSP correctness: a child override can WIDEN preconditions
+                # (accept more inputs via defaults) but must NOT NARROW them.
+                # The original bug class (#6660) was a child with `def __init__(self):`
+                # under a parent with `def __init__(self, agent_type, ...):` —
+                # `cls(agent_type)` crashes on the child because it has no slot
+                # for that positional. The check is: count the child's TOTAL
+                # positional slots (required + optional with defaults), and
+                # compare against the parent's REQUIRED count. If the child
+                # has fewer slots than the parent requires, factory calls
+                # against the parent's required-positional surface will fail.
+                child_total_positional = self._total_positional_count(child_method)
                 parent_required = self._required_positional_count(parent_method)
-                if child_required < parent_required:
+                if child_total_positional < parent_required:
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.LSP_SIGNATURE_INCOMPATIBLE,
@@ -1306,17 +1328,17 @@ class AntiPatternDetector:
                             line_number=child_method.lineno,
                             entity_name=f"{child.name}.{child_method.name}",
                             description=(
-                                f"Override of {parent.name}.{child_method.name} drops "
-                                f"required positional params: parent requires "
-                                f"{parent_required}, child requires {child_required}. "
-                                "A factory call like ``cls(arg1, arg2)`` against the parent "
-                                "will crash with TypeError on this subclass."
+                                f"Override of {parent.name}.{child_method.name} accepts "
+                                f"{child_total_positional} positional args but the parent "
+                                f"requires {parent_required}. A factory call like "
+                                "``cls(arg1, arg2)`` against the parent contract will "
+                                "crash with TypeError on this subclass."
                             ),
                             metrics={
                                 "parent_class": parent.name,
                                 "parent_file": parent.file_path,
                                 "parent_required_args": parent_required,
-                                "child_required_args": child_required,
+                                "child_total_positional_args": child_total_positional,
                             },
                             suggestion=(
                                 "Restore the parent's positional params with sensible "
