@@ -14,9 +14,16 @@ data-driven configuration pattern for improved maintainability.
 
 import importlib
 import logging
-from typing import List, Tuple
+import os
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
+
+# #6797: load-result registry — populated by load_feature_routers() so callers
+# (health endpoint, dashboards) can introspect what loaded vs failed without
+# scraping logs. Each entry: {"name": str, "module": str, "loaded": bool,
+# "error": Optional[str]}.
+_LOAD_RESULTS: List[Dict[str, Any]] = []
 
 
 # Issue #281: Router configurations as data instead of repetitive code blocks
@@ -505,6 +512,9 @@ def _load_single_router(
     Issue #281: Extracted helper for loading individual routers to eliminate
     repetitive try/except blocks and enable data-driven router loading.
 
+    #6797: appends a structured result entry to ``_LOAD_RESULTS`` so callers
+    can introspect load status without scraping logs.
+
     Args:
         module_path: Full Python module path (e.g., 'backend.api.workflow')
         prefix: URL prefix for the router (e.g., '/workflow')
@@ -518,15 +528,44 @@ def _load_single_router(
         module = importlib.import_module(module_path)
         router = getattr(module, "router")
         logger.info("✅ Optional router loaded: %s", name)
+        _LOAD_RESULTS.append(
+            {"name": name, "module": module_path, "loaded": True, "error": None}
+        )
         return (router, prefix, tags, name)
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: %s - %s", name, e)
+        _LOAD_RESULTS.append(
+            {
+                "name": name,
+                "module": module_path,
+                "loaded": False,
+                "error": f"ImportError: {e}",
+            }
+        )
         return None
     except AttributeError as e:
         logger.warning(
             "⚠️ Router not found in module %s: %s - %s", module_path, name, e
         )
+        _LOAD_RESULTS.append(
+            {
+                "name": name,
+                "module": module_path,
+                "loaded": False,
+                "error": f"AttributeError: {e}",
+            }
+        )
         return None
+
+
+def get_feature_router_load_results() -> List[Dict[str, Any]]:
+    """Return the current load-results registry (#6797).
+
+    Used by the /api/health/feature-routers endpoint and any operator tooling
+    that wants to surface partial-boot state without scraping logs. Returns
+    a copy so callers can mutate freely.
+    """
+    return list(_LOAD_RESULTS)
 
 
 def load_feature_routers() -> List[Tuple]:
@@ -537,10 +576,19 @@ def load_feature_routers() -> List[Tuple]:
     Original implementation had 53 repetitive try/except blocks (~716 lines).
     Now uses FEATURE_ROUTER_CONFIGS list and _load_single_router helper.
 
+    #6797: When fewer routers loaded than configured, escalate the summary log
+    to ERROR (was always INFO) so the partial-boot state is loud at deploy
+    time. Optional strict mode via ``AUTOBOT_FEATURE_ROUTERS_STRICT=1`` raises
+    instead of warning, for production deploys that want hard guarantees.
+
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
+    # Reset results — supports test environments that load_feature_routers()
+    # multiple times in a single process.
+    _LOAD_RESULTS.clear()
+
     optional_routers = []
 
     for module_path, prefix, tags, name in FEATURE_ROUTER_CONFIGS:
@@ -548,9 +596,23 @@ def load_feature_routers() -> List[Tuple]:
         if result:
             optional_routers.append(result)
 
-    logger.info(
-        "📊 Loaded %s/%s feature routers",
-        len(optional_routers),
-        len(FEATURE_ROUTER_CONFIGS),
-    )
+    loaded = len(optional_routers)
+    expected = len(FEATURE_ROUTER_CONFIGS)
+    if loaded < expected:
+        # #6797: escalate from INFO so partial-boot state is visible.
+        failed = [r for r in _LOAD_RESULTS if not r["loaded"]]
+        logger.error(
+            "📊 Loaded %s/%s feature routers — %s FAILED: %s",
+            loaded,
+            expected,
+            len(failed),
+            ", ".join(r["name"] for r in failed),
+        )
+        if os.getenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "").lower() in {"1", "true", "yes"}:
+            raise RuntimeError(
+                f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
+                f"failed to load: {', '.join(r['name'] for r in failed)}"
+            )
+    else:
+        logger.info("📊 Loaded %s/%s feature routers", loaded, expected)
     return optional_routers

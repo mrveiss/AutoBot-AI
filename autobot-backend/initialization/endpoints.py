@@ -171,6 +171,35 @@ def register_root_endpoints(app: FastAPI) -> None:
             "circuit_breakers": states,
         }
 
+    @app.get("/api/health/feature-routers")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def feature_routers_health():
+        """Surface feature-router load status (#6797).
+
+        Returns the structured load-results registry populated by
+        ``load_feature_routers()``. Until this endpoint existed, the
+        graceful-fallback pattern from #281 silently dropped failed routers
+        (boot succeeded with /api/* endpoints absent — see #6583, #6664-6667).
+        SLM dashboards and operators can now poll this endpoint to detect
+        partial-boot state without scraping logs.
+        """
+        from initialization.router_registry.feature_routers import (
+            FEATURE_ROUTER_CONFIGS,
+            get_feature_router_load_results,
+        )
+
+        results = get_feature_router_load_results()
+        loaded_count = sum(1 for r in results if r["loaded"])
+        expected = len(FEATURE_ROUTER_CONFIGS)
+        return {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "expected": expected,
+            "loaded": loaded_count,
+            "failed": expected - loaded_count,
+            "all_loaded": loaded_count == expected,
+            "routers": results,
+        }
+
     @app.get("/api/version")
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def root_version():
