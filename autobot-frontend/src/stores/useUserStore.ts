@@ -213,15 +213,18 @@ export const useUserStore = defineStore('user', () => {
   }
 
   // Theme and accessibility helpers
+  // Theme is applied via the `data-theme` attribute to match the SSOT
+  // selector convention in src/assets/tailwind.css (`@variant dark
+  // (&:where([data-theme="dark"], [data-theme="dark"] *))`). Setting a
+  // `dark` class instead leaves Tailwind's `dark:` utilities and the
+  // design-token CSS unmatched, which is why /preferences could show
+  // "Dark" while pages still rendered in light mode (#6772).
   function applyTheme() {
     const currentTheme = theme.value
     const root = document.documentElement
 
-    if (currentTheme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
+    root.setAttribute('data-theme', currentTheme)
+    root.style.colorScheme = currentTheme
 
     // Update meta theme-color for mobile browsers
     const metaThemeColor = document.querySelector('meta[name="theme-color"]')
