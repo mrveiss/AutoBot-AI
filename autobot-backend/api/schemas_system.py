@@ -556,14 +556,12 @@ class GitHubFileContentsResponse(BaseModel):
 
 
 
-class GitHubProviderInfo(BaseModel):
-    """Single provider descriptor returned by GET /providers."""
-
-    id: str
-    name: str
-    description: str
-    required_settings: List[str]
-    optional_settings: List[str]
+# #6792: GitHubProviderInfo is identical in shape to VCSProviderInfo
+# (id/name/description/required_settings/optional_settings). Aliased to the
+# canonical VCS class to avoid drift; the only caller (api/integration_github.py)
+# continues to import the GitHubProviderInfo name from this module so the
+# OpenAPI label stays domain-specific while the runtime type is shared.
+from api.schemas_workflows import VCSProviderInfo as GitHubProviderInfo  # noqa: E402, F401
 
 
 # ---------------------------------------------------------------------------
