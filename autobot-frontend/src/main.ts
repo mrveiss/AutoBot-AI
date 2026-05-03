@@ -157,8 +157,19 @@ if ('serviceWorker' in navigator) {
         }
       })
     } catch (error) {
-      logger.warn('Service Worker registration failed:', error)
-      // Service Worker is optional - app works fine without it
+      // Service Worker is optional — app works fine without it.
+      // #6790: SecurityError on self-signed cert deploys is expected and not
+      // actionable for users; surface it at debug only. Other failures
+      // (network, syntax, scope) are still real → warn.
+      const isCertError =
+        error instanceof Error &&
+        error.name === 'SecurityError' &&
+        /SSL certificate/i.test(error.message)
+      if (isCertError) {
+        logger.debug('Service Worker registration skipped (untrusted cert)')
+      } else {
+        logger.warn('Service Worker registration failed:', error)
+      }
     }
   })
 }

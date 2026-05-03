@@ -109,6 +109,26 @@ def test_api_module_imports(module_name: str) -> None:
     importlib.import_module(module_name)
 
 
+def _extract_class_names(source: str) -> list[str]:
+    """Extract top-level (column-0) ``class Foo(...):`` names from source text.
+
+    Skips nested class definitions inside functions or other classes — only
+    flags module-level shadowing, which is what bites import resolution.
+    """
+    names: list[str] = []
+    for line in source.splitlines():
+        if not line.startswith("class "):
+            continue
+        name_part = line[len("class ") :]
+        for sep in ("(", ":"):
+            idx = name_part.find(sep)
+            if idx != -1:
+                name_part = name_part[:idx]
+                break
+        names.append(name_part.strip())
+    return names
+
+
 @pytest.mark.parametrize("module_name", _schema_modules())
 def test_no_duplicate_class_names_in_schema_module(module_name: str) -> None:
     """Within a single schemas_*.py module, no class name may appear twice.
@@ -120,19 +140,7 @@ def test_no_duplicate_class_names_in_schema_module(module_name: str) -> None:
     module = importlib.import_module(module_name)
     backend_root = Path(__file__).resolve().parent.parent
     source = (backend_root / module_name.replace(".", "/")).with_suffix(".py").read_text()
-    class_names: list[str] = []
-    for line in source.splitlines():
-        stripped = line.lstrip()
-        if not stripped.startswith("class "):
-            continue
-        # Extract class name between "class " and the first "(" or ":"
-        name_part = stripped[len("class ") :]
-        for sep in ("(", ":"):
-            idx = name_part.find(sep)
-            if idx != -1:
-                name_part = name_part[:idx]
-                break
-        class_names.append(name_part.strip())
+    class_names = _extract_class_names(source)
     duplicates = sorted({n for n in class_names if class_names.count(n) > 1})
     assert not duplicates, (
         f"Duplicate class names in {module_name}: {duplicates}. "
@@ -141,3 +149,51 @@ def test_no_duplicate_class_names_in_schema_module(module_name: str) -> None:
     )
     # Touch the module to silence the unused-import lint
     assert module is not None
+
+
+def test_no_duplicate_class_names_across_schema_modules() -> None:
+    """No class name appears in more than one ``schemas_*.py`` module (#6798).
+
+    A name defined in two schema files is fine until a third file tries to
+    import it — last-write-wins on the import path silently substitutes the
+    other shape and the request breaks at runtime. The smoke test catches the
+    same pattern that caused #6604/#6606 but at cross-module granularity.
+
+    Allowlist below documents intentional shared names (e.g. \"Config\" inner
+    classes, generic envelopes). Add a new entry only with explicit
+    justification.
+    """
+    # Names known to legitimately appear in multiple schemas_*.py modules.
+    # Add to this set only after verifying the duplicates are intentional and
+    # share an identical shape.
+    #
+    # The three names below were discovered by this test on its first run and
+    # are tracked for cleanup in #6799 (1 identical, 2 with real shape
+    # mismatches). Removed from this set as #6799 closes them.
+    INTENTIONAL_SHARED: set[str] = {
+        "CodeSearchGetResponse",  # #6799 — identical shape, dedup
+        "CodeSearchRequest",      # #6799 — DIFFERENT shape, rename one
+        "FilePreviewResponse",    # #6799 — DIFFERENT shape, rename one
+    }
+
+    backend_root = Path(__file__).resolve().parent.parent
+    seen: dict[str, str] = {}  # class_name -> first source module
+    collisions: list[str] = []
+    for module_name in _schema_modules():
+        source = (backend_root / module_name.replace(".", "/")).with_suffix(".py").read_text()
+        for class_name in _extract_class_names(source):
+            if class_name in INTENTIONAL_SHARED:
+                continue
+            if class_name in seen and seen[class_name] != module_name:
+                collisions.append(
+                    f"{class_name!r}: defined in both "
+                    f"{seen[class_name]} and {module_name}"
+                )
+            else:
+                seen[class_name] = module_name
+    assert not collisions, (
+        "Cross-module class-name collisions detected — same name in two "
+        "schemas_*.py files will shadow on whichever import path resolves "
+        "last. Rename one or add to INTENTIONAL_SHARED with justification:\n  - "
+        + "\n  - ".join(collisions)
+    )

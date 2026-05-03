@@ -57,8 +57,32 @@ class MissingDep:
             f"(original error: {self._error})"
         )
 
-    def __getattr__(self, item: str) -> NoReturn:
+    def __getattr__(self, item: str) -> object:
+        """Raise ImportError on real attribute access — but stay silent for
+        dunder attributes the Python ``typing`` module probes during type
+        expression evaluation (#6794).
+
+        Without the dunder short-circuit, ``Optional[missing_dep_instance]``
+        triggers ``hasattr(t, '__typing_subst__')`` which fires this method
+        and crashes module load.
+        """
+        # typing.Union / typing.Optional probe these dunders; absence is
+        # signalled by AttributeError, not ImportError.
+        if item.startswith("__") and item.endswith("__"):
+            raise AttributeError(item)
         raise ImportError(
             f"{self._name} is not available — install the optional dependencies "
             f"(original error: {self._error})"
         )
+
+    def __getitem__(self, _params: object) -> "MissingDep":
+        """Support ``Optional[MissingDep_instance]`` and similar generic-like
+        subscripting at module-load time without raising.
+
+        #6794: previously every caller had to remember to use string forward-
+        references (``\"Optional[Stub]\"``) to prevent the type expression from
+        crashing the module at import time. The sentinel now no-ops on
+        subscript so ``Optional[stub]`` evaluates safely; the actual point of
+        failure stays at runtime call / non-dunder attribute access.
+        """
+        return self

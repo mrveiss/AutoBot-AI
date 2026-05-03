@@ -79,15 +79,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["log-forwarding"])
 
 # Singleton forwarder instance.
-# #6666 follow-up: when scripts.logging is missing, LogForwarder is a
-# _MissingDep that raises ImportError on subscript — so Optional[LogForwarder]
-# crashes the module at load time. Use string forward-references so the type
-# expression is only resolved by callers that actually reach the runtime path.
-_forwarder: "Optional[LogForwarder]" = None
+# #6794: _MissingDep now no-ops on type subscript so Optional[LogForwarder]
+# evaluates safely even when scripts.logging is missing — no forward-ref
+# string needed.
+_forwarder: Optional[LogForwarder] = None
 _forwarder_lock = asyncio.Lock()
 
 
-async def _get_forwarder() -> "LogForwarder":
+async def _get_forwarder() -> LogForwarder:
     """Get or create the log forwarder singleton."""
     global _forwarder
     async with _forwarder_lock:
