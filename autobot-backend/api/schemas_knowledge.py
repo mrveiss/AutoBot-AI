@@ -3242,13 +3242,10 @@ class PreserveSessionFactsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class CodeSearchGetResponse(BaseModel):
-    """Response for GET /search (delegates to POST search_code).
-
-    Shape is service-delegated; uses extra=allow to pass through all fields.
-    """
-
-    model_config = {"extra": "allow"}
+# #6799: removed duplicate CodeSearchGetResponse (was here AND in
+# schemas_code.py with identical shape). The canonical definition lives in
+# schemas_code.py:1179. Only api/code_search.py imported this name and it
+# already pulls from schemas_code.
 
     success: bool = True
 
@@ -3731,8 +3728,13 @@ class FileTransferResponse(BaseModel):
     total_failed: int
 
 
-class FilePreviewResponse(BaseModel):
-    """Response model for file preview."""
+class ConversationFilePreviewResponse(BaseModel):
+    """Response model for conversation-attached file preview (#6799 — renamed
+    from ``FilePreviewResponse`` to disambiguate from the system-level
+    ``FilePreviewResponse`` in schemas_system.py which has a different shape
+    (``type/url/content`` for filesystem preview vs the conversation-attached
+    ``file_info/preview_available/preview_content`` here).
+    """
 
     file_info: ConversationFileInfo
     preview_available: bool
@@ -3921,7 +3923,13 @@ class ResearchRequest(BaseModel):
     include_web: bool = Field(True)
 
 
-class CodeSearchRequest(BaseModel):
+class KbCodeSearchRequest(BaseModel):
+    """KB-side code search request (#6799 — renamed from ``CodeSearchRequest``
+    to disambiguate from the search-engine ``CodeSearchRequest`` in
+    schemas_code.py with a different shape (``query/search_type/language/
+    max_results`` vs the KB ``query/search_scope/include_npu`` here).
+    """
+
     query: str = Field(..., min_length=1)
     search_scope: str = Field("codebase")
     include_npu: bool = Field(True)

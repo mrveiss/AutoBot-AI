@@ -26,7 +26,7 @@ from api.schemas_knowledge import (
     ConvFileUpdateContentRequest,
     ConversationFileInfo,
     ConversationFileListResponse,
-    FilePreviewResponse,
+    ConversationFilePreviewResponse,
     FileTransferRequest,
     FileTransferResponse,
     FileUploadResponse,
@@ -620,7 +620,7 @@ async def _generate_file_preview(
 
 
 @router.get(
-    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
+    "/conversation/{session_id}/preview/{file_id}", response_model=ConversationFilePreviewResponse
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -638,7 +638,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         file_id: File ID to preview
 
     Returns:
-        FilePreviewResponse with preview content or metadata
+        ConversationFilePreviewResponse with preview content or metadata
 
     Raises:
         403: Insufficient permissions or not session owner
@@ -679,7 +679,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
             file_info
         )
 
-        return FilePreviewResponse(
+        return ConversationFilePreviewResponse(
             file_info=file_info,
             preview_available=preview_available,
             preview_content=preview_content,
