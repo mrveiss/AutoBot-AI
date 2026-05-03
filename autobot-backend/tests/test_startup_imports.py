@@ -167,14 +167,10 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
     # Add to this set only after verifying the duplicates are intentional and
     # share an identical shape.
     #
-    # The three names below were discovered by this test on its first run and
-    # are tracked for cleanup in #6799 (1 identical, 2 with real shape
-    # mismatches). Removed from this set as #6799 closes them.
-    INTENTIONAL_SHARED: set[str] = {
-        "CodeSearchGetResponse",  # #6799 — identical shape, dedup
-        "CodeSearchRequest",      # #6799 — DIFFERENT shape, rename one
-        "FilePreviewResponse",    # #6799 — DIFFERENT shape, rename one
-    }
+    # #6799 cleanup complete: CodeSearchGetResponse (deduped to schemas_code),
+    # CodeSearchRequest (KB variant → KbCodeSearchRequest), FilePreviewResponse
+    # (KB variant → ConversationFilePreviewResponse). Set returns to empty.
+    INTENTIONAL_SHARED: set[str] = set()
 
     backend_root = Path(__file__).resolve().parent.parent
     seen: dict[str, str] = {}  # class_name -> first source module

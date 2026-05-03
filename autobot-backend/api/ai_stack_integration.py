@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from api.schemas_knowledge import (
-    CodeSearchRequest,
+    KbCodeSearchRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
     EnhancedChatRequest,
@@ -441,7 +441,7 @@ async def web_research(
     error_code_prefix="AI_STACK_INTEGRATION",
 )
 async def search_code(
-    request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
+    request: KbCodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
 ):
     """
     Search codebase using NPU-accelerated AI.
