@@ -1,0 +1,70 @@
+# GitHub Actions workflow — backend startup-import smoke test (#6789 / #6540)
+#
+# Catches the recurring #6042 migration-regression family at PR time:
+#   #6536 BaseModel orphan imports, #6569 Metadata orphan, #6604 duplicate-class
+#   collisions, #6609 required-field-no-default, #6613 stale singleton attr.
+#
+# Fails the PR if any new backend module loses the ability to fresh-import.
+# Known-broken modules tracked in KNOWN_BROKEN_AT_TEST_INTRODUCTION inside
+# tests/test_startup_imports.py with issue refs.
+
+name: Backend Startup Import Smoke
+
+on:
+  push:
+    branches: [main, Dev_new_gui, develop]
+  pull_request:
+    branches: [main, Dev_new_gui, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  startup-import-smoke:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Python 3.12 via deadsnakes PPA
+        run: |
+          if ! command -v python3.12 &> /dev/null; then
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt-get update -y
+            sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+          fi
+
+      - name: Set up Python virtual environment
+        run: |
+          rm -rf .venv 2>/dev/null || true
+          python3.12 -m venv .venv
+          source .venv/bin/activate
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+
+      - name: Install backend dependencies
+        run: |
+          source .venv/bin/activate
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install pytest >/dev/null
+          python -m pip install -r autobot-backend/requirements.txt 2>&1 | tail -5
+
+      - name: Run startup-import smoke test
+        run: |
+          source .venv/bin/activate
+          python -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line || {
+            echo ""
+            echo "Backend startup-import smoke test FAILED."
+            echo ""
+            echo "If known-broken, add to KNOWN_BROKEN_AT_TEST_INTRODUCTION in"
+            echo "autobot-backend/tests/test_startup_imports.py with issue ref."
+            exit 1
+          }
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv || true
