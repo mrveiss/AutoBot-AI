@@ -1555,8 +1555,19 @@ async def upload_audio_file(
 async def probe_knowledge(
     request: Optional[Request] = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for the knowledge base."""
+    """Issue #3333: probe registration for the knowledge base.
+
+    Issue #6905: increments ``autobot_kb_degradation_total`` on every
+    degraded/down outcome with ``endpoint="probe"`` so the SLO dashboard
+    keeps the kb_uninit signal once the legacy /health route is sunset
+    by #6902.
+    """
+    from knowledge.metrics import autobot_kb_degradation_total
+
     if request is None or not hasattr(request.app.state, "knowledge_base"):
+        autobot_kb_degradation_total.labels(
+            endpoint="probe", reason="kb_uninit"
+        ).inc()
         return ComponentHealth(
             name="knowledge",
             status="degraded",
@@ -1565,11 +1576,17 @@ async def probe_knowledge(
     try:
         kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
         if kb is None:
+            autobot_kb_degradation_total.labels(
+                endpoint="probe", reason="kb_uninit"
+            ).inc()
             return ComponentHealth(
                 name="knowledge", status="down", detail="kb instance is None"
             )
         return ComponentHealth(name="knowledge", status="ok")
     except Exception as exc:
+        autobot_kb_degradation_total.labels(
+            endpoint="probe", reason="probe_error"
+        ).inc()
         return ComponentHealth(
             name="knowledge",
             status="down",
