@@ -36,7 +36,7 @@ from api.schemas_agent import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config.manager import get_config_manager
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
@@ -702,7 +702,7 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
     Issue #744: Requires admin authentication.
     """
     try:
-        llm_interface = LLMInterface()
+        llm_interface = get_llm_service()
         metrics = llm_interface.get_metrics()
 
         return {

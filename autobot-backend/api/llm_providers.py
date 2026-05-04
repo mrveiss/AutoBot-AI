@@ -24,10 +24,15 @@ router = APIRouter()
 
 
 def _get_llm_interface():
-    """Get LLMInterface instance (for endpoints that need provider_routing/_is_provider_healthy)."""
-    from llm_interface_pkg.interface import LLMInterface
+    """Return the LLMService singleton (#3185).
 
-    return LLMInterface()
+    Name retained for backwards compatibility — LLMService exposes
+    ``provider_routing`` and ``is_provider_healthy`` matching the
+    LLMInterface surface this module previously used.
+    """
+    from services.llm_service import get_llm_service
+
+    return get_llm_service()
 
 
 @router.post("/switch", response_model=DataResponse)
@@ -95,7 +100,7 @@ async def test_llm_provider(
             status_code=404,
             detail=f"Unknown provider: {provider_name}",
         )
-    is_healthy, error = await llm._is_provider_healthy(provider_name)
+    is_healthy, error = await llm.is_provider_healthy(provider_name)
     return JSONResponse(
         status_code=200,
         content={"provider": provider_name, "available": is_healthy, "error": error},

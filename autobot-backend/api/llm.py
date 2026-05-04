@@ -41,10 +41,15 @@ TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
 
 
 def _get_llm_interface():
-    """Get LLMInterface instance (#536)."""
-    from llm_interface_pkg.interface import LLMInterface
+    """Return the LLMService singleton (#3185).
 
-    return LLMInterface()
+    Name retained for backwards compatibility — callers below access
+    ``_tier_router`` which LLMService exposes alongside the public
+    ``tier_router`` property.
+    """
+    from services.llm_service import get_llm_service
+
+    return get_llm_service()
 
 
 @router.get("/config", response_model=LLMConfigResponse)
