@@ -21,7 +21,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from autobot_types import TaskComplexity
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
@@ -49,7 +49,7 @@ class ClassificationAgent(StandardizedAgent):
     # Agent identifier for SSOT config lookup
     AGENT_ID = "classification"
 
-    def __init__(self, llm_interface: Optional[LLMInterface] = None):
+    def __init__(self, llm_interface=None):  # llm_interface: LLMService instance from services.llm_service
         """Initialize classification agent with explicit LLM configuration."""
         super().__init__("classification")
 
@@ -58,7 +58,7 @@ class ClassificationAgent(StandardizedAgent):
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.llm = llm_interface or LLMInterface()
+        self.llm = llm_interface or get_llm_service()
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 

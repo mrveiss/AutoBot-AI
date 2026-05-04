@@ -17,7 +17,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest
@@ -35,7 +35,7 @@ class ChatAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the Chat Agent with explicit LLM configuration (no fallbacks)."""
         super().__init__("chat")
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -179,7 +179,7 @@ class ChatAgent(StandardizedAgent):
             messages.append({"role": "user", "content": message})
 
             # Generate response using optimized settings for chat
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="chat",  # This will use the chat-specific model
                 temperature=LLMDefaults.DEFAULT_TEMPERATURE,

@@ -47,9 +47,9 @@ class TaskRetryStrategy:
     async def _get_llm(self):
         """Lazily initialize LLM interface."""
         if self._llm is None:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            self._llm = LLMInterface()
+            self._llm = get_llm_service()
         return self._llm
 
     async def generate_retry(
@@ -77,7 +77,7 @@ class TaskRetryStrategy:
             prompt = self._build_retry_prompt(
                 task_type, goal, original_strategy, failure_reason, previous_score
             )
-            response = await llm.chat_completion(
+            response = await llm.chat(
                 messages=[
                     {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": prompt},
@@ -137,7 +137,7 @@ class TaskRetryStrategy:
             content = (
                 response
                 if isinstance(response, (str, dict))
-                else response.get("content", "{}")
+                else getattr(response, "content", "{}")
             )
             data = content if isinstance(content, dict) else json.loads(content)
             return RetryApproach(
