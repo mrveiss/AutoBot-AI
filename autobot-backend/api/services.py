@@ -13,7 +13,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_system import (
@@ -190,27 +189,6 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Failed to get services")
 
 
-@register_health_probe("services")
-async def probe_services(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for services module.
-
-    The legacy ``/health`` route is deprecated boilerplate (PR #3353), so this
-    probe is a static load check — if the module imported, it is ok.
-    """
-    try:
-        return ComponentHealth(
-            name="services",
-            status="ok",
-            detail="module loaded",
-        )
-    except Exception as exc:
-        return ComponentHealth(
-            name="services",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
 
 
 @router.get("/health", response_model=ServicesHealthDeprecatedResponse)
