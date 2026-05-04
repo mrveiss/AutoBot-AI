@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - Dev_new_gui
+  pull_request:
+    branches:
+      - Dev_new_gui
+    # Required status check via branch protection (#6723) — must run on PR
   schedule:
     - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
 
