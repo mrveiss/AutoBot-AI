@@ -144,7 +144,7 @@ class AgentType(Enum):
 
 
 @dataclass
-class AgentCapability:
+class AgentCapabilityDescriptor:
     """Describes an agent's capabilities and constraints."""
 
     agent_type: AgentType
@@ -182,7 +182,7 @@ class DistributedAgentInfo:
 
 # Default agent capabilities configuration
 DEFAULT_AGENT_CAPABILITIES = {
-    AgentType.CHAT: AgentCapability(
+    AgentType.CHAT: AgentCapabilityDescriptor(
         agent_type=AgentType.CHAT,
         model_size="1B",
         specialization="Conversational interactions",
@@ -199,7 +199,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         ],
         resource_usage="Low",
     ),
-    AgentType.SYSTEM_COMMANDS: AgentCapability(
+    AgentType.SYSTEM_COMMANDS: AgentCapabilityDescriptor(
         agent_type=AgentType.SYSTEM_COMMANDS,
         model_size="1B",
         specialization="System command generation",
@@ -212,7 +212,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Complex system analysis", "Multi-server orchestration"],
         resource_usage="Low",
     ),
-    AgentType.RAG: AgentCapability(
+    AgentType.RAG: AgentCapabilityDescriptor(
         agent_type=AgentType.RAG,
         model_size="3B",
         specialization="Document synthesis",
@@ -225,7 +225,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Real-time data", "Interactive tasks"],
         resource_usage="Medium-High",
     ),
-    AgentType.KNOWLEDGE_RETRIEVAL: AgentCapability(
+    AgentType.KNOWLEDGE_RETRIEVAL: AgentCapabilityDescriptor(
         agent_type=AgentType.KNOWLEDGE_RETRIEVAL,
         model_size="1B",
         specialization="Fast fact lookup",
@@ -238,7 +238,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Complex synthesis", "Cross-document analysis"],
         resource_usage="Low",
     ),
-    AgentType.RESEARCH: AgentCapability(
+    AgentType.RESEARCH: AgentCapabilityDescriptor(
         agent_type=AgentType.RESEARCH,
         model_size="3B + Playwright",
         specialization="Web research coordination",
@@ -252,7 +252,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         resource_usage="High",
     ),
     # Issue #60: Specialized agent capabilities
-    AgentType.DATA_ANALYSIS: AgentCapability(
+    AgentType.DATA_ANALYSIS: AgentCapabilityDescriptor(
         agent_type=AgentType.DATA_ANALYSIS,
         model_size="3B",
         specialization="Data analysis and pattern detection",
@@ -260,7 +260,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Large dataset processing", "Real-time streaming data"],
         resource_usage="Medium",
     ),
-    AgentType.CODE_GENERATION: AgentCapability(
+    AgentType.CODE_GENERATION: AgentCapabilityDescriptor(
         agent_type=AgentType.CODE_GENERATION,
         model_size="3B",
         specialization="Programming assistance and code generation",
@@ -268,7 +268,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Complex system architecture", "Runtime debugging"],
         resource_usage="Medium",
     ),
-    AgentType.TRANSLATION: AgentCapability(
+    AgentType.TRANSLATION: AgentCapabilityDescriptor(
         agent_type=AgentType.TRANSLATION,
         model_size="1B",
         specialization="Multi-language translation",
@@ -280,7 +280,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Rare languages", "Highly specialized jargon"],
         resource_usage="Low",
     ),
-    AgentType.SUMMARIZATION: AgentCapability(
+    AgentType.SUMMARIZATION: AgentCapabilityDescriptor(
         agent_type=AgentType.SUMMARIZATION,
         model_size="3B",
         specialization="Text and document summarization",
@@ -292,7 +292,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Very long documents", "Technical precision"],
         resource_usage="Medium",
     ),
-    AgentType.SENTIMENT_ANALYSIS: AgentCapability(
+    AgentType.SENTIMENT_ANALYSIS: AgentCapabilityDescriptor(
         agent_type=AgentType.SENTIMENT_ANALYSIS,
         model_size="1B",
         specialization="Sentiment and emotion classification",
@@ -300,7 +300,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Sarcasm detection", "Cultural nuance"],
         resource_usage="Low",
     ),
-    AgentType.IMAGE_ANALYSIS: AgentCapability(
+    AgentType.IMAGE_ANALYSIS: AgentCapabilityDescriptor(
         agent_type=AgentType.IMAGE_ANALYSIS,
         model_size="3B",
         specialization="Image analysis and vision tasks",
@@ -308,7 +308,7 @@ DEFAULT_AGENT_CAPABILITIES = {
         limitations=["Video processing", "3D reconstruction"],
         resource_usage="Medium-High",
     ),
-    AgentType.AUDIO_PROCESSING: AgentCapability(
+    AgentType.AUDIO_PROCESSING: AgentCapabilityDescriptor(
         agent_type=AgentType.AUDIO_PROCESSING,
         model_size="3B",
         specialization="Audio transcription and analysis",
