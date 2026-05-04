@@ -17,37 +17,10 @@ config_manager = get_unified_config_manager()
 class TestConfigurationMigration:
     """Test migration from direct environment access to centralized configuration"""
 
-    def test_llm_interface_config_migration(self):
-        """Test that LLM interface uses centralized configuration"""
-        from llm_interface import LLMInterface
-
-        # Create test config manager
-        test_config = ConfigManager()
-        test_config.set("llm.openai.api_key", "test_api_key")
-        test_config.set("llm.ollama.base_url", "http://test-ollama:11434")
-
-        # Patch the global config manager
-        with patch("src.llm_interface.config_manager", test_config):
-            llm = LLMInterface()
-
-            # Verify it uses config values
-            assert llm.openai_api_key == "test_api_key"
-            assert llm.ollama_host == "http://test-ollama:11434"
-
-    def test_llm_interface_environment_fallback(self):
-        """Test that LLM interface falls back to environment variables"""
-        from llm_interface import LLMInterface
-
-        # Create config manager without API key set
-        test_config = ConfigManager()
-
-        # Test environment variable fallback
-        with patch("src.llm_interface.config_manager", test_config):
-            with patch.dict(os.environ, {"OPENAI_API_KEY": "env_api_key"}):
-                llm = LLMInterface()
-
-                # Should get value from environment
-                assert llm.openai_api_key == "env_api_key"
+    # NOTE: Two LLMInterface config-migration tests were removed when the
+    # LLMInterface god-class was retired (#3185). LLMService (services.llm_service)
+    # consumes config via its provider registry; equivalent migration coverage
+    # is tracked separately.
 
     def test_hardware_acceleration_config_usage(self):
         """Test that hardware acceleration uses centralized configuration"""

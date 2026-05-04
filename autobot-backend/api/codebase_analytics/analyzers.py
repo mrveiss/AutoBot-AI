@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import aiofiles
 
 from constants.network_constants import NetworkConstants
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -1342,12 +1342,12 @@ async def detect_hardcodes_and_debt_with_llm(
     """
     empty_result: Dict[str, List[Metadata]] = {"hardcodes": [], "technical_debt": []}
     try:
-        llm = LLMInterface()
+        llm = get_llm_service()
         prompt = _LLM_HARDCODE_DEBT_PROMPT.format(
             language=language, file_path=file_path, code_snippet=code_snippet[:800]
         )
         messages = [{"role": "user", "content": prompt}]
-        response = await llm.chat_completion(messages, llm_type="task")
+        response = await llm.chat(messages, llm_type="task")
         result = _parse_llm_json_response(response.content.strip())
         return result if result else empty_result
     except Exception as e:

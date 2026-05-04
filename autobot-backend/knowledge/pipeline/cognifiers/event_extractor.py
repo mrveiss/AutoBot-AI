@@ -21,7 +21,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class EventExtractor(BaseCognifier):
             batch_size: Number of chunks to process per batch
         """
         self.batch_size = batch_size
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     async def process(self, context: PipelineContext) -> PipelineContext:
         """
@@ -105,8 +105,8 @@ class EventExtractor(BaseCognifier):
         """Extract events from a single chunk."""
         try:
             prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             parsed = parse_llm_json_response(response.content)
             raw_events = parsed if isinstance(parsed, list) else []

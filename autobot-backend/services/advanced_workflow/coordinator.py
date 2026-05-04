@@ -12,7 +12,7 @@ import uuid
 from typing import Dict, List
 
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.workflow_automation import (
     AutomationMode,
@@ -40,7 +40,7 @@ class WorkflowCoordinator:
         # Core components
         self.base_manager = WorkflowAutomationManager()
         self.enhanced_orchestrator = get_orchestrator()
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
         self.knowledge_base = KnowledgeBase()
 
         # Specialized components (composition pattern)

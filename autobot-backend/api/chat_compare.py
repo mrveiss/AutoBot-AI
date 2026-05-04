@@ -41,15 +41,15 @@ _compare_interface: Optional[object] = None
 
 
 async def _get_compare_interface() -> object:
-    """Return the process-level LLMInterface singleton, initializing it once (#5023)."""
+    """Return the process-level LLMService singleton, initializing it once (#5023)."""
     global _compare_interface
     if _compare_interface is not None:
         return _compare_interface
     async with _init_lock:
         if _compare_interface is None:
-            from llm_interface_pkg.interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            _compare_interface = LLMInterface()
+            _compare_interface = get_llm_service()
     return _compare_interface
 
 

@@ -508,17 +508,17 @@ class LLMFailsafeAgent(StandardizedAgent):
         """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            llm = LLMInterface()
+            llm = get_llm_service()
             for model in self.primary_models:
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
-                        llm.chat_completion(messages, llm_type="task"),
+                        llm.chat(messages, llm_type="task"),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
-                    response = response_data.get("response", "")
+                    response = response_data.content
                     if response and response.strip():
                         return self._build_llm_response(
                             response, LLMTier.PRIMARY, model, context, start_time
@@ -542,18 +542,18 @@ class LLMFailsafeAgent(StandardizedAgent):
         """Try secondary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.SECONDARY]["requests"] += 1
         try:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service
 
-            llm = LLMInterface()
+            llm = get_llm_service()
             simplified_prompt = self._simplify_prompt(prompt)
             for model in self.secondary_models:
                 try:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
-                        llm.chat_completion(messages, llm_type="task"),
+                        llm.chat(messages, llm_type="task"),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
-                    response = response_data.get("response", "")
+                    response = response_data.content
                     if response and response.strip():
                         return self._build_llm_response(
                             response,

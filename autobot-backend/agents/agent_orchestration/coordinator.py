@@ -21,7 +21,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .agent_execution import AgentExecutor
 from .distributed_management import DistributedAgentManager
@@ -114,7 +114,7 @@ class DistributedAgentCoordinator:
 
         Issue #620.
         """
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)

@@ -18,7 +18,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -35,7 +35,7 @@ class RAGAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the RAG Agent with explicit LLM configuration (no fallbacks)."""
         super().__init__("rag")
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -185,7 +185,7 @@ class RAGAgent(StandardizedAgent):
             document_context = self._build_document_context(documents)
             messages = self._build_rag_messages(query, document_context)
 
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="rag",
                 temperature=0.5,
@@ -235,7 +235,7 @@ class RAGAgent(StandardizedAgent):
                 {"role": "user", "content": f"Original query: {original_query}"},
             ]
 
-            response = await self.llm_interface.chat_completion(
+            response = await self.llm_interface.chat(
                 messages=messages,
                 llm_type="rag",
                 temperature=0.6,

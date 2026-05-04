@@ -17,7 +17,7 @@ from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity, EntityType
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class EntityExtractor(BaseCognifier):
         self.batch_size = batch_size
         self.mode = mode
         self.nlp_threshold = nlp_threshold
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
         self._nlp_model: Optional[Any] = None
 
     def _get_nlp(self) -> Any:
@@ -250,8 +250,8 @@ class EntityExtractor(BaseCognifier):
         """Extract entities from a single chunk."""
         try:
             prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             parsed = parse_llm_json_response(response.content)
             raw_entities = parsed if isinstance(parsed, list) else []

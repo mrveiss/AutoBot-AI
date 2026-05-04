@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (
     "src.config",
-    "src.llm_interface",
     "services",
     "utils",
 )

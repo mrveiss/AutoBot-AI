@@ -21,7 +21,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.relationship import Relationship, RelationType
 from knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class RelationshipExtractor(BaseCognifier):
         self.batch_size = batch_size
         self.mode = mode
         self.nlp_threshold = nlp_threshold
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
     def _select_mode(self, chunks: List[ProcessedChunk]) -> str:
         """
@@ -245,8 +245,8 @@ class RelationshipExtractor(BaseCognifier):
             prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(
                 entities=entity_list, text=chunk.content
             )
-            response = await self.llm.chat_completion(
-                messages=[{"role": "user", "content": prompt}]
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}]
             )
             parsed = parse_llm_json_response(response.content)
             raw_rels = parsed if isinstance(parsed, list) else []

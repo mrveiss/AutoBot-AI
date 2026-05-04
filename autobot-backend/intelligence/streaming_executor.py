@@ -20,7 +20,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,9 @@ class StreamingCommandExecutor:
     """Real-time streaming command executor with intelligent commentary."""
 
     def __init__(
-        self, llm_interface: LLMInterface, command_validator: CommandValidator
+        self,
+        llm_interface: Any,  # duck-typed; accepts LLMService (Phase 2D #3185)
+        command_validator: CommandValidator,
     ):
         """
         Initialize the streaming executor.
@@ -493,9 +495,13 @@ class StreamingCommandExecutor:
             )
 
             # Get LLM commentary
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=50
+            # Note: generate_response() did not exist; replaced with chat() (Phase 2D #3185)
+            _resp = await self.llm_interface.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=50,
             )
+            response = _resp.content
 
             # Skip if LLM suggests it
             if response.strip().upper() == "SKIP":
@@ -528,9 +534,13 @@ class StreamingCommandExecutor:
                 "Use emojis when appropriate."
             )
 
-            response = await self.llm_interface.generate_response(
-                prompt, temperature=0.7, max_tokens=75
+            # Note: generate_response() did not exist; replaced with chat() (Phase 2D #3185)
+            _resp = await self.llm_interface.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=75,
             )
+            response = _resp.content
 
             yield StreamChunk(
                 timestamp=self._get_timestamp(),

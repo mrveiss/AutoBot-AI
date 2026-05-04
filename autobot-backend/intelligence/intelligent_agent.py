@@ -35,7 +35,7 @@ from intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service  # Phase 2D #3185
 from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 
@@ -101,7 +101,7 @@ class IntelligentAgent:
 
     def __init__(
         self,
-        llm_interface: LLMInterface,
+        llm_interface: Any,  # duck-typed; accepts LLMService (Phase 2D #3185)
         knowledge_base: KnowledgeBase,
         worker_node: WorkerNode,
         command_validator: CommandValidator,
@@ -503,13 +503,16 @@ class IntelligentAgent:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length.
 
         Get LLM analysis response for a complex goal.
+        Note: generate_response() did not exist on LLMInterface; replaced with
+        chat() + .content extraction (Phase 2D #3185).
         """
         system_prompt = self._build_llm_system_prompt(user_input)
-        return await self.llm_interface.generate_response(
-            system_prompt,
+        response = await self.llm_interface.chat(
+            [{"role": "user", "content": system_prompt}],
             temperature=0.3,
             max_tokens=500,
         )
+        return response.content
 
     def _create_analysis_result_chunk(self, llm_response: str) -> StreamChunk:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
@@ -826,7 +829,7 @@ _agent_lock = _asyncio.Lock()
 
 
 async def get_intelligent_agent(
-    llm_interface: LLMInterface = None,
+    llm_interface: Any = None,  # duck-typed; accepts LLMService (Phase 2D #3185)
     knowledge_base: KnowledgeBase = None,
     worker_node: WorkerNode = None,
     command_validator: CommandValidator = None,

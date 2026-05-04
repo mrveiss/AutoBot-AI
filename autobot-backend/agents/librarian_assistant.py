@@ -20,7 +20,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.http_client import get_http_client
 from config import config
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class LibrarianAssistant:
         """Initialize the Librarian Assistant Agent."""
         self.config = config
         self.knowledge_base = KnowledgeBase()
-        self.llm = LLMInterface()
+        self.llm = get_llm_service()
 
         # Configuration
         self.enabled = self.config.get_nested("librarian_assistant.enabled", True)
@@ -350,8 +350,8 @@ class LibrarianAssistant:
         """
         try:
             prompt = self._build_assessment_prompt(content_data)
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
-            return self._parse_assessment_response(response, content_data)
+            llm_response = await self.llm.chat([{"role": "user", "content": prompt}])
+            return self._parse_assessment_response(llm_response.content, content_data)
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
             return self._build_fallback_assessment(
@@ -647,8 +647,8 @@ class LibrarianAssistant:
                 "Format sources as: [Source: Domain Name]"
             )
 
-            summary = await self.llm.chat([{"role": "user", "content": prompt}])
-            return summary
+            llm_response = await self.llm.chat([{"role": "user", "content": prompt}])
+            return llm_response.content
 
         except Exception as e:
             logger.error("Error creating research summary: %s", e)

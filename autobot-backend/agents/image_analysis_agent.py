@@ -21,7 +21,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -37,7 +37,7 @@ class ImageAnalysisAgent(StandardizedAgent):
     def __init__(self):
         """Initialize the Image Analysis Agent with LLM configuration."""
         super().__init__("image_analysis")
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
@@ -116,7 +116,7 @@ class ImageAnalysisAgent(StandardizedAgent):
         try:
             logger.info("Image Analysis Agent processing: %s...", request_text[:50])
             session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_completion_optimized(
+            response = await self.llm_interface.chat_optimized(
                 agent_type=self.AGENT_ID,
                 user_message=request_text,
                 session_id=session_id,
