@@ -50,6 +50,65 @@ _ALLOWED_IMPORT_MODULES = (
 )
 
 
+# Issue #6908: surface feature-router partial-boot through the canonical
+# /api/system/health aggregator so oncall scrapers see the partial state
+# without scraping the dedicated /api/health/feature-routers endpoint.
+# Registers at import time alongside the rest of the system module.
+from api.system_health import (  # noqa: E402 — registration must happen at import
+    ComponentHealth,
+    register_health_probe,
+)
+
+
+@register_health_probe("feature_routers")
+async def _probe_feature_routers(request=None) -> ComponentHealth:
+    """Reflect ``_LOAD_RESULTS`` from #6797 into the canonical aggregator.
+
+    Per #6808, ``_LOAD_RESULTS`` is per-uvicorn-worker — each worker reports
+    its own snapshot. Cross-worker aggregation is tracked separately; this
+    probe is the per-worker view, which is sufficient for the canonical
+    surface to flag any partial boot.
+    """
+    try:
+        from initialization.router_registry.feature_routers import (
+            get_feature_router_load_results,
+        )
+
+        results = get_feature_router_load_results()
+        total = len(results)
+        if total == 0:
+            return ComponentHealth(
+                name="feature_routers",
+                status="degraded",
+                detail="load results empty — feature routers may not have been loaded yet",
+            )
+        loaded = [r for r in results if r.get("loaded")]
+        failed = [r for r in results if not r.get("loaded")]
+        if not failed:
+            return ComponentHealth(
+                name="feature_routers",
+                status="ok",
+                detail=f"{len(loaded)}/{total} routers loaded",
+                data={"loaded": len(loaded), "total": total},
+            )
+        return ComponentHealth(
+            name="feature_routers",
+            status="degraded",
+            detail=f"only {len(loaded)}/{total} routers loaded",
+            data={
+                "loaded": len(loaded),
+                "total": total,
+                "failed": [r.get("name") for r in failed],
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="feature_routers",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
 async def _check_conversation_files_db(request: Request, health_status: dict) -> None:
     """Check conversation files database health (Issue #315 - extracted)."""
     if not hasattr(request.app.state, "conversation_file_manager"):
@@ -199,7 +258,6 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 
 @router.get("/health", response_model=SystemHealthResponse)
 @router.get("/system/health", response_model=SystemHealthResponse)  # Frontend compatibility alias
-@cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
@@ -218,6 +276,11 @@ async def get_system_health(
     string-valued statuses are merged into ``components`` to preserve the
     frontend ``HealthCheckResponse`` shape. Per-component diagnostic detail
     (latency, error reason, structured data) lives under ``probes``.
+
+    Issue #6906: ``@cache_response`` was removed because the embedded probe
+    results flip status second-by-second; a 30s TTL hid real failures.
+    Probe execution is bounded at ~2s by the registry's per-probe timeout,
+    so the uncached aggregator is acceptable on its own.
     """
     try:
         # Import app_state to get initialization status
