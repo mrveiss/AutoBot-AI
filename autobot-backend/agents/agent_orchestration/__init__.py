@@ -35,7 +35,7 @@ from .types import (
     SUMMARIZATION_PATTERNS,
     SYSTEM_COMMAND_PATTERNS,
     TRANSLATION_PATTERNS,
-    AgentCapability,
+    AgentCapabilityDescriptor,
     AgentType,
     DistributedAgentInfo,
 )
@@ -43,7 +43,7 @@ from .types import (
 __all__ = [
     # Types and enums
     "AgentType",
-    "AgentCapability",
+    "AgentCapabilityDescriptor",
     "DistributedAgentInfo",
     "DEFAULT_AGENT_CAPABILITIES",
     # Pattern constants

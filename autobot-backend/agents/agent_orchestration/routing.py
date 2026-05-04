@@ -28,7 +28,7 @@ from .types import (
     SUMMARIZATION_PATTERNS,
     SYSTEM_COMMAND_PATTERNS,
     TRANSLATION_PATTERNS,
-    AgentCapability,
+    AgentCapabilityDescriptor,
     AgentType,
 )
 
@@ -40,7 +40,7 @@ class AgentRouter:
 
     def __init__(
         self,
-        agent_capabilities: Dict[AgentType, AgentCapability],
+        agent_capabilities: Dict[AgentType, AgentCapabilityDescriptor],
         llm_interface: Any,
     ):
         """
