@@ -33,7 +33,6 @@ from auth_middleware import check_admin_permission
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from api.schemas_common import DataResponse
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     CodeGenerationHealthResponse,
     CodeGenerationRefactoringTypesResponse,
@@ -862,23 +861,6 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 
 
-@register_health_probe("analytics_code_generation")
-async def probe_analytics_code_generation(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for the code-generation analytics module."""
-    try:
-        return ComponentHealth(
-            name="analytics_code_generation",
-            status="ok",
-            detail="module loaded",
-        )
-    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
-        return ComponentHealth(
-            name="analytics_code_generation",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
 
 
 @router.get("/health", response_model=CodeGenerationHealthResponse)

@@ -27,7 +27,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
     LLMPatternsCacheOpportunitiesResponse,
@@ -940,23 +939,6 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 
 
-@register_health_probe("analytics_llm_patterns")
-async def probe_analytics_llm_patterns(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for the LLM-patterns analytics module."""
-    try:
-        return ComponentHealth(
-            name="analytics_llm_patterns",
-            status="ok",
-            detail="module loaded",
-        )
-    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
-        return ComponentHealth(
-            name="analytics_llm_patterns",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
 
 
 @router.get("/health", response_model=LLMPatternsHealthResponse)

@@ -37,12 +37,48 @@ router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 async def probe_error_resilience(
     request: Optional[Request] = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for error-resilience subsystem."""
+    """Issue #3333 / #6907: probe reflects actual breaker + budget state.
+
+    Singleton resolution alone hid the failure mode the file was designed
+    to surface (Issue #4342). Reports ``degraded`` when any circuit
+    breaker is open or any error budget is exhausted, and passes the
+    affected names through ``data`` for diagnostic dashboards.
+    """
     try:
-        get_circuit_breaker_manager()
-        get_error_budget_tracker()
-        get_fallback_manager()
-        return ComponentHealth(name="error_resilience", status="ok")
+        cb_status = get_circuit_breaker_manager().get_status()
+        budget_status = get_error_budget_tracker().get_status()
+        get_fallback_manager()  # liveness only — no rich state to inspect
+        open_breakers = [
+            name for name, cb in cb_status.items() if cb.get("state") == "open"
+        ]
+        exhausted_budgets = [
+            name
+            for name, budget in budget_status.items()
+            if budget.get("has_budget") is False
+        ]
+        if open_breakers or exhausted_budgets:
+            return ComponentHealth(
+                name="error_resilience",
+                status="degraded",
+                detail=(
+                    f"{len(open_breakers)} breaker(s) open, "
+                    f"{len(exhausted_budgets)} budget(s) exhausted"
+                ),
+                data={
+                    "open_breakers": open_breakers,
+                    "exhausted_budgets": exhausted_budgets,
+                    "total_breakers": len(cb_status),
+                    "total_budgets": len(budget_status),
+                },
+            )
+        return ComponentHealth(
+            name="error_resilience",
+            status="ok",
+            data={
+                "total_breakers": len(cb_status),
+                "total_budgets": len(budget_status),
+            },
+        )
     except Exception as exc:
         return ComponentHealth(
             name="error_resilience",

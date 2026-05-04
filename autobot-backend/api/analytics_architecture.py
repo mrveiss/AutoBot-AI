@@ -31,7 +31,6 @@ import aiofiles
 from fastapi import APIRouter, Depends, Query, Request
 
 from auth_middleware import check_admin_permission
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     AnalyticsArchitectureConsistencyResponse,
     AnalyticsArchitectureDiagramResponse,
@@ -1335,27 +1334,6 @@ async def check_consistency(
     }
 
 
-@register_health_probe("analytics_architecture")
-async def probe_analytics_architecture(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for the architecture analytics module."""
-    try:
-        return ComponentHealth(
-            name="analytics_architecture",
-            status="ok",
-            detail="module loaded",
-            data={
-                "available_patterns": len(PatternType),
-                "templates_loaded": len(PATTERN_TEMPLATES),
-            },
-        )
-    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
-        return ComponentHealth(
-            name="analytics_architecture",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
 
 
 @router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
