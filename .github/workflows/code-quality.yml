@@ -110,6 +110,9 @@ jobs:
     - name: Block hardcoded value regressions (#694, #6725)
       run: bash pipeline-scripts/check-hardcoded-values-pr.sh
 
+    - name: Block hardcoded-IP fallback regressions (#6783)
+      run: bash pipeline-scripts/check-hardcoded-ip-fallbacks-pr.sh
+
     - name: Check for unused imports with autoflake
       run: |
         source .venv/bin/activate
