@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enterprise_feature_manager import (
@@ -515,29 +515,7 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         raise HTTPException(status_code=500, detail="Bulk enablement failed")
 
 
-@register_health_probe("enterprise_features")
-async def probe_enterprise_features(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for enterprise_features module."""
-    try:
-        manager = get_enterprise_manager()
-        return ComponentHealth(
-            name="enterprise_features",
-            status="ok" if manager is not None else "degraded",
-            detail=(
-                "enterprise manager initialized"
-                if manager is not None
-                else "enterprise manager unavailable"
-            ),
-            data={"manager_initialized": manager is not None},
-        )
-    except Exception as exc:
-        return ComponentHealth(
-            name="enterprise_features",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("enterprise_features", get_enterprise_manager)
 
 
 @router.get("/health", response_model=DataResponse)

@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 from api.schemas_knowledge import (
     KbCodeSearchRequest,
     ContentClassificationRequest,
@@ -66,28 +66,7 @@ router = APIRouter(tags=["ai-stack"])
 # ====================================================================
 
 
-@register_health_probe("ai_stack")
-async def probe_ai_stack(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for ai_stack module.
-
-    Lightweight check: verify the AI Stack client singleton can be resolved.
-    Avoids the network round-trip the full handler performs.
-    """
-    try:
-        client = await get_ai_stack_client()
-        if client is None:
-            return ComponentHealth(
-                name="ai_stack", status="down", detail="client unavailable"
-            )
-        return ComponentHealth(name="ai_stack", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="ai_stack",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("ai_stack", get_ai_stack_client, async_getter=True)
 
 
 @router.get("/health", response_model=DataResponse[AIStackHealthData])

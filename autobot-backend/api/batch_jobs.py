@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_redis_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
@@ -574,27 +574,7 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-@register_health_probe("batch_jobs")
-async def probe_batch_jobs(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for batch-jobs Redis backing store."""
-    try:
-        redis_client = await get_async_redis_client(database="main")
-        if redis_client is None:
-            return ComponentHealth(
-                name="batch_jobs",
-                status="down",
-                detail="redis client unavailable",
-            )
-        await redis_client.ping()
-        return ComponentHealth(name="batch_jobs", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="batch_jobs",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_redis_probe("batch_jobs", database="main")
 
 
 @router.get("/health", response_model=BatchJobsHealthResponse)
