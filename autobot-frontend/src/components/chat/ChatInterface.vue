@@ -271,7 +271,6 @@ import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watc
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { usePollingJob } from '@/composables/usePollingJob'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
@@ -534,10 +533,13 @@ const submitOverseerQuery = async (query: string) => {
 // Provide submit function to child components
 provide('submitOverseerQuery', submitOverseerQuery)
 
-// Connection state with stabilized status management
+// Connection state with stabilized status management.
+// #6773: backend-health is now sourced from `appStore.backendStatus`, which is
+// driven by `OptimizedHealthMonitor` (the canonical /api/system/health poller
+// wired in App.vue). Removed the local 60 s heartbeat poller that previously
+// also hit /api/system/health, eliminating duplicate polling.
 const baseConnectionStatus = ref(t('status.connected'))
 const isConnected = ref(true)
-const lastHeartbeat = ref(Date.now())
 const connectionStatus = computed(() => {
   // If typing, show typing status temporarily
   if (store.isTyping) {
@@ -873,31 +875,24 @@ const onCommandCommented = async (commentData: any) => {
   }
 }
 
-// Connection monitoring - MIGRATED to use AppConfig
-const checkConnection = async () => {
-  try {
-    // MIGRATED: Use AppConfig for connection validation
-    const isConnectionValid = await appConfig.validateConnection()
-
-    if (isConnectionValid) {
-      isConnected.value = true
-      baseConnectionStatus.value = t('status.connected')
-      lastHeartbeat.value = Date.now()
-    } else {
-      isConnected.value = false
-      baseConnectionStatus.value = t('status.disconnected')
-    }
-  } catch (error) {
-    isConnected.value = false
-    baseConnectionStatus.value = t('status.disconnected')
-  }
+// #6773: connection state is mirrored from `appStore.backendStatus`, which
+// `OptimizedHealthMonitor` updates from /api/system/health. Replaces the
+// previous 60 s `appConfig.validateConnection()` poller — that poller was
+// hitting the same endpoint as `OptimizedHealthMonitor`, producing duplicate
+// /api/system/health requests per polling interval.
+const syncConnectionFromStore = (): void => {
+  const cls = appStore.backendStatus.class
+  // 'success' is the only state that maps to "connected"; both 'warning'
+  // (degraded) and 'error' (disconnected) surface as not-connected here, to
+  // preserve the previous boolean semantics expected by isConnected consumers.
+  isConnected.value = cls === 'success'
+  baseConnectionStatus.value = cls === 'success'
+    ? t('status.connected')
+    : t('status.disconnected')
 }
 
-// Heartbeat: check connection every 60 s (reduced from 30 to minimise UI updates)
-const heartbeatPoller = usePollingJob(
-  async () => { await checkConnection(); return null },
-  { intervalMs: 60_000, maxAttempts: Number.MAX_SAFE_INTEGER }
-)
+// React to OptimizedHealthMonitor → appStore updates immediately.
+watch(() => appStore.backendStatus.class, syncConnectionFromStore, { immediate: false })
 
 // #6746: autosave poller deleted. Backend now persists every chat message
 // via add_messages_batch in the request handler (#6744 fix), so frontend-
@@ -905,8 +900,6 @@ const heartbeatPoller = usePollingJob(
 // every 2 min against `store.currentSessionId`, which could be racing with
 // pushLocalOnlySessions, syncSessionsWithBackend, or message-poller
 // state churn. Backend writes are now the sole authoritative path.
-
-const startHeartbeat = () => heartbeatPoller.start('')
 
 // Message polling with exponential backoff + circuit breaker (#1100)
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
@@ -1052,9 +1045,10 @@ onMounted(async () => {
   // Load NoVNC URL after initialization
   await loadNovncUrl()
 
-  // Start connection monitoring
-  checkConnection()
-  startHeartbeat()
+  // #6773: connection state mirrors appStore.backendStatus (driven by
+  // OptimizedHealthMonitor). Seed once from current store state so initial
+  // render reflects the latest known status without an extra fetch.
+  syncConnectionFromStore()
   // #6746: autosave removed; backend persists messages directly
 
   // Start message polling to fetch new messages
@@ -1075,9 +1069,7 @@ onUnmounted(() => {
   _lgMediaQuery?.removeEventListener('change', _onLgBreakpoint)
   _lgMediaQuery = null
 
-  // Clean up intervals
-  heartbeatPoller.stop()
-
+  // Clean up intervals (#6773: heartbeatPoller removed — see syncConnectionFromStore)
   _stopCountdown()
   messagePoller.stop()
 })
@@ -1087,11 +1079,9 @@ onUnmounted(() => {
 onActivated(() => {
   logger.debug('[ChatInterface] Activated from keep-alive - resuming operations')
 
-  // Resume heartbeat monitoring
-  startHeartbeat()
-
-  // Resume connection checking
-  checkConnection()
+  // #6773: re-seed connection state from the canonical store on re-activation;
+  // the watch() above keeps it in sync going forward.
+  syncConnectionFromStore()
 
   // Resume auto-save
   // #6746: autosave removed; backend persists messages directly
@@ -1111,8 +1101,8 @@ onDeactivated(() => {
   // Pause message polling (will resume on onActivated)
   messagePoller.stop()
 
-  // Pause intervals while cached
-  heartbeatPoller.stop()
+  // #6773: heartbeatPoller removed — connection state is now passive (watcher
+  // on appStore.backendStatus); no interval to pause.
 
   // Clean up keyboard shortcuts while cached
   document.removeEventListener('keydown', handleKeyboardShortcuts)
