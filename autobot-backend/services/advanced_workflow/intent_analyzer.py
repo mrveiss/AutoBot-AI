@@ -11,7 +11,7 @@ import json
 import logging
 from typing import List
 
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 from .models import WorkflowComplexity, WorkflowIntent
@@ -33,9 +33,9 @@ _INTENT_KEYWORDS = {
 class IntentAnalyzer:
     """Analyzes user intent using AI and fallback heuristics"""
 
-    def __init__(self, llm_interface: LLMInterface = None):
+    def __init__(self, llm_interface=None):
         """Initialize intent analyzer with optional LLM interface."""
-        self.llm_interface = llm_interface or LLMInterface()
+        self.llm_interface = llm_interface or get_llm_service()
 
     async def analyze_user_intent(self, user_request: str) -> Metadata:
         """Analyze user intent using AI"""
@@ -56,13 +56,13 @@ complexity, and requirements:
             7. Success criteria
             """
 
-            response = await self.llm_interface.chat_completion(
-                model="default", messages=[{"role": "user", "content": analysis_prompt}]
+            response = await self.llm_interface.chat(
+                messages=[{"role": "user", "content": analysis_prompt}]
             )
 
-            if response and response.get("content"):
+            if response and response.content:
                 try:
-                    analysis = json.loads(response["content"])
+                    analysis = json.loads(response.content)
                     return analysis
                 except json.JSONDecodeError:
                     return self._fallback_intent_analysis(user_request)

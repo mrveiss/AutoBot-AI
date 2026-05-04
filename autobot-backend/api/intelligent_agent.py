@@ -44,14 +44,14 @@ def get_lazy_dependencies():
     try:
         from intelligence.intelligent_agent import IntelligentAgent
         from knowledge_base import KnowledgeBase
-        from llm_interface import LLMInterface
+        from services.llm_service import get_llm_service
         from utils.command_validator import CommandValidator
         from worker_node import WorkerNode
 
         return (
             IntelligentAgent,
             KnowledgeBase,
-            LLMInterface,
+            get_llm_service,
             CommandValidator,
             WorkerNode,
         )
@@ -82,7 +82,7 @@ async def get_agent() -> "IntelligentAgent":
             (
                 IntelligentAgent,
                 KnowledgeBase,
-                LLMInterface,
+                get_llm_service,
                 CommandValidator,
                 WorkerNode,
             ) = get_lazy_dependencies()
@@ -91,7 +91,7 @@ async def get_agent() -> "IntelligentAgent":
                 "Initializing intelligent agent with lazy-loaded dependencies..."
             ),
             _agent_instance = IntelligentAgent(
-                LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
+                get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator()
             )
             await _agent_instance.initialize()
             logger.info(

@@ -51,7 +51,7 @@ from api.system_health import ComponentHealth, register_health_probe
 
 # Import existing components
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
 from api.schemas_common import DataResponse
@@ -147,7 +147,7 @@ class ChatKnowledgeManager:
         """Initialize manager with knowledge base and storage paths."""
         self.knowledge_base = KnowledgeBase()
         self.chat_history_manager = ChatHistoryManager()
-        self.llm_interface = LLMInterface()
+        self.llm_interface = get_llm_service()
 
         # In-memory storage (should be persisted to database in production)
         self.chat_contexts: Dict[str, ChatKnowledgeContext] = {}
@@ -447,10 +447,10 @@ class ChatKnowledgeManager:
         Format the summary with clear sections and bullet points.
         """
 
-        summary_response = await self.llm_interface.chat_completion(
-            model="default", messages=[{"role": "user", "content": summary_prompt}]
+        summary_response = await self.llm_interface.chat(
+            messages=[{"role": "user", "content": summary_prompt}]
         )
-        summary = summary_response.get("content", "")
+        summary = summary_response.content
 
         context = self.chat_contexts.get(chat_id)
         compiled_knowledge = self._build_compiled_knowledge_dict(

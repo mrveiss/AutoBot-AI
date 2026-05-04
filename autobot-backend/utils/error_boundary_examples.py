@@ -203,18 +203,18 @@ def integrate_with_llm_interface():
     """Example showing how to add error boundaries to LLM operations"""
 
     @error_boundary(
-        component="llm_interface",
-        function="chat_completion",
+        component="llm_service",
+        function="chat",
         recovery_strategy=RecoveryStrategy.FALLBACK,
     )
     async def safe_llm_chat(messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """Wrapped LLM chat with error boundary"""
         try:
-            # Import LLM interface here to avoid circular imports
-            from llm_interface import LLMInterface
+            # Import LLM service here to avoid circular imports
+            from services.llm_service import get_llm_service
 
-            llm = LLMInterface()
-            response = await llm.achat_completion(messages, **kwargs)
+            llm = get_llm_service()
+            response = await llm.chat(messages, **kwargs)
             return response
         except Exception as e:
             logger.error("LLM chat failed: %s", e)

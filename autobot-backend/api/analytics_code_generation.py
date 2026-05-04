@@ -50,17 +50,10 @@ from api.schemas_analytics import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-from autobot_shared.missing_dep import MissingDep as _MissingDep
+# LLM Service for real code generation
+from services.llm_service import get_llm_service
 
-# LLM Interface for real code generation
-try:
-    from llm_interface import LLMInterface
-
-    LLM_INTERFACE_AVAILABLE = True
-except ImportError as _e:
-    LLM_INTERFACE_AVAILABLE = False
-    LLMInterface = _MissingDep("LLMInterface", _e)  # type: ignore[assignment]
-    logging.warning("LLMInterface not available - code generation will fail")
+LLM_INTERFACE_AVAILABLE = True
 
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
@@ -462,16 +455,11 @@ class CodeGenerationEngine:
             )
         return self._redis
 
-    def _get_llm_client(self) -> "LLMInterface":
+    def _get_llm_client(self):
         """Get or create LLM client lazily."""
         if self._llm_client is None:
-            if not LLM_INTERFACE_AVAILABLE:
-                raise RuntimeError(
-                    "LLM Interface is not available. "
-                    "Code generation requires LLM connectivity."
-                )
-            self._llm_client = LLMInterface()
-            logger.info("LLMInterface initialized for code generation")
+            self._llm_client = get_llm_service()
+            logger.info("LLMService initialized for code generation")
         return self._llm_client
 
     def _generate_version_id(self, code: str) -> str:
@@ -557,8 +545,8 @@ class CodeGenerationEngine:
                 )
             messages.append({"role": "user", "content": prompt})
 
-            # Call LLM via chat_completion
-            response = await llm_client.chat_completion(
+            # Call LLM via chat
+            response = await llm_client.chat(
                 messages=messages,
                 llm_type="task",  # Use task-optimized model
                 temperature=0.2,  # Lower temperature for code generation

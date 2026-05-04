@@ -50,31 +50,31 @@ class ResourceFactory:
 
     @staticmethod
     async def get_llm_interface(request: Request = None):
-        """Get or create LLMInterface instance with app.state caching"""
+        """Get or create LLMService instance with app.state caching"""
         try:
             # Try app.state first
             if request is not None:
                 llm = getattr(request.app.state, "llm_interface", None)
                 if llm is not None:
-                    logger.debug("Using pre-initialized LLMInterface from app.state")
+                    logger.debug("Using pre-initialized LLMService from app.state")
                     return llm
 
-            # Fallback to module-level import and creation
-            from llm_interface import LLMInterface
+            # Fallback to singleton accessor
+            from services.llm_service import get_llm_service
 
-            logger.info("Creating new LLMInterface instance (expensive operation)")
+            logger.info("Returning LLMService singleton")
 
-            llm = LLMInterface()
+            llm = get_llm_service()
 
             # Cache in app state if available
             if request is not None:
                 request.app.state.llm_interface = llm
-                logger.info("Cached LLMInterface in app.state for future requests")
+                logger.info("Cached LLMService in app.state for future requests")
 
             return llm
 
         except Exception as e:
-            logger.error("Failed to create LLMInterface: %s", e)
+            logger.error("Failed to get LLMService: %s", e)
             raise
 
     @staticmethod
@@ -190,7 +190,7 @@ async def get_kb(request: Request = None):
 
 
 async def get_llm(request: Request = None):
-    """Shorthand for getting LLMInterface"""
+    """Shorthand for getting LLMService"""
     return await ResourceFactory.get_llm_interface(request)
 
 

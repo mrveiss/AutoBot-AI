@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission, get_current_user
+from services.llm_service import get_llm_service
 from utils.advanced_cache_manager import cache_response
 from api.schemas_common import DataResponse, SuccessResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -23,7 +24,7 @@ router = APIRouter()
 
 
 def _get_llm_interface():
-    """Get LLMInterface instance."""
+    """Get LLMInterface instance (for endpoints that need provider_routing/_is_provider_healthy)."""
     from llm_interface_pkg.interface import LLMInterface
 
     return LLMInterface()
@@ -47,7 +48,7 @@ async def switch_llm_provider(
     provider = switch_data.get("provider")
     if not provider:
         raise HTTPException(status_code=400, detail="provider is required")
-    llm = _get_llm_interface()
+    llm = get_llm_service()
     result = await llm.switch_provider(
         provider,
         model=switch_data.get("model", ""),
@@ -69,7 +70,7 @@ async def list_llm_providers(
     current_user: dict = Depends(get_current_user),
 ):
     """List all configured LLM providers with status."""
-    llm = _get_llm_interface()
+    llm = get_llm_service()
     statuses = await llm.get_all_provider_status()
     return JSONResponse(
         status_code=200,
