@@ -22,10 +22,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     DFAAnalysisResponse,
     DFAAnalyzeFileRequest,
@@ -1254,6 +1255,25 @@ async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     return {"sanitizers": sorted(SANITIZERS)}
+
+
+@register_health_probe("analytics_dfa")
+async def probe_analytics_dfa(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the DFA analytics module."""
+    try:
+        return ComponentHealth(
+            name="analytics_dfa",
+            status="ok",
+            detail="module loaded",
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_dfa",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=DfaHealthResponse)

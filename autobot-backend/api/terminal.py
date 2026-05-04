@@ -118,7 +118,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+
+from api.system_health import ComponentHealth, register_health_probe
 
 # Response schemas for OpenAPI documentation and response validation
 from api.schemas_terminal import (
@@ -1121,6 +1123,30 @@ async def terminal_info(
 
 
 # Health and Status endpoints
+
+
+@register_health_probe("terminal")
+async def probe_terminal(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for terminal module."""
+    try:
+        active_sessions = len(simple_pty_manager.sessions)
+        return ComponentHealth(
+            name="terminal",
+            status="ok",
+            detail=f"{active_sessions} active sessions",
+            data={
+                "active_sessions": active_sessions,
+                "manager_initialized": simple_pty_manager is not None,
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="terminal",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=TerminalHealthResponse)

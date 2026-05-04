@@ -15,8 +15,9 @@ import os
 import sys
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     AlertThresholdRequest,
     ErrorMonitoringAlertThresholdResponse,
@@ -207,6 +208,39 @@ def _calculate_health_status(
         if condition:
             return status_val, score
     return "excellent", 100
+
+
+@register_health_probe("error_monitoring")
+async def probe_error_monitoring(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for error-monitoring service."""
+    try:
+        stats = get_error_statistics()
+        total_errors = stats.get("total_errors", 0)
+        severities = stats.get("severities", {}) or {}
+        critical = severities.get("critical", 0)
+        high = severities.get("high", 0)
+        health_status, _ = _calculate_health_status(critical, high, total_errors)
+        if health_status in ("excellent", "healthy"):
+            return ComponentHealth(name="error_monitoring", status="ok")
+        if health_status in ("warning", "degraded"):
+            return ComponentHealth(
+                name="error_monitoring",
+                status="degraded",
+                detail=health_status,
+            )
+        return ComponentHealth(
+            name="error_monitoring",
+            status="down",
+            detail=health_status,
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="error_monitoring",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=ErrorMonitoringDataResponse)

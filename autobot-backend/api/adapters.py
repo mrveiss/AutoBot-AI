@@ -9,10 +9,12 @@ status endpoints for the formal adapter registry.
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from llm_interface_pkg.adapters.registry import get_adapter_registry
 from api.schemas_common import DataResponse
@@ -94,6 +96,29 @@ async def list_adapter_models(
             "total": len(models),
         },
     )
+
+
+@register_health_probe("adapters")
+async def probe_adapters(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for adapters module."""
+    try:
+        registry = get_adapter_registry()
+        adapters = registry.list_adapters()
+        adapter_count = len(adapters)
+        return ComponentHealth(
+            name="adapters",
+            status="ok" if adapter_count > 0 else "degraded",
+            detail=f"{adapter_count} adapters registered",
+            data={"adapter_count": adapter_count},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="adapters",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=DataResponse)

@@ -11,10 +11,11 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_common import SuccessResponse
 from api.schemas_workflows import (
     ElevationAuthorization,
@@ -318,6 +319,30 @@ async def revoke_elevation_session(session_token: str):
         logger.info("Elevation session revoked: %s", session_token)
 
     return {"success": True, "message": "Session revoked"}
+
+
+@register_health_probe("elevation")
+async def probe_elevation(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for elevation module."""
+    try:
+        active = len(elevation_sessions)
+        pending = len(
+            [r for r in pending_requests.values() if r["status"] == "pending"]
+        )
+        return ComponentHealth(
+            name="elevation",
+            status="ok",
+            detail=f"{active} active sessions, {pending} pending",
+            data={"active_sessions": active, "pending_requests": pending},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="elevation",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=ElevationHealthResponse)

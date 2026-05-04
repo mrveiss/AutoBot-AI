@@ -37,10 +37,11 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
@@ -728,6 +729,31 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     except Exception as e:
         logger.error("Failed to get tool details: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@register_health_probe("mcp_registry")
+async def probe_mcp_registry(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the MCP bridge registry."""
+    try:
+        if not MCP_BRIDGES:
+            return ComponentHealth(
+                name="mcp_registry",
+                status="degraded",
+                detail="no MCP bridges configured",
+            )
+        return ComponentHealth(
+            name="mcp_registry",
+            status="ok",
+            data={"bridge_count": len(MCP_BRIDGES)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="mcp_registry",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=MCPRegistryHealthResponse)

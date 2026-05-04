@@ -12,9 +12,10 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_system import (
     CacheClearTypeResponse,
     CacheConfigResponse,
@@ -601,6 +602,28 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
     except Exception as e:
         logger.error("Error warming cache for %s: %s", data_type, e)
         return False
+
+
+@register_health_probe("cache")
+async def probe_cache(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for cache-manager health."""
+    try:
+        stats = await advanced_cache.get_stats()
+        if stats.get("status") == "enabled":
+            return ComponentHealth(name="cache", status="ok")
+        return ComponentHealth(
+            name="cache",
+            status="degraded",
+            detail=str(stats.get("status") or "cache not enabled"),
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="cache",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=CacheHealthResponse)

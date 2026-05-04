@@ -28,10 +28,12 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Request,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
@@ -588,6 +590,28 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             operation_integration_manager.websocket_connections[operation_id].remove(
                 websocket
             )
+
+
+@register_health_probe("long_running")
+async def probe_long_running(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for long-running operations manager."""
+    try:
+        if not _OPERATIONS_AVAILABLE:
+            return ComponentHealth(
+                name="long_running",
+                status="down",
+                detail="operations framework not available",
+            )
+        operation_integration_manager.get_all_operations()
+        return ComponentHealth(name="long_running", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="long_running",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 # Health check endpoint

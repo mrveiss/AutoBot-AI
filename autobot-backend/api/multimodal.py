@@ -12,7 +12,9 @@ import time
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
@@ -806,6 +808,29 @@ async def update_batch_size(
             "error": "Internal server error",
             "timestamp": time.time(),
         }
+
+
+@register_health_probe("multimodal")
+async def probe_multimodal(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for multimodal module.
+
+    Lightweight check: confirm the module-imported ``unified_processor`` is
+    bound. Skips the lazy torch import the handler performs.
+    """
+    try:
+        if unified_processor is None:
+            return ComponentHealth(
+                name="multimodal", status="down", detail="processor unavailable"
+            )
+        return ComponentHealth(name="multimodal", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="multimodal",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 # Health check endpoint

@@ -208,16 +208,22 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 async def get_system_health(
     request: Request = None,
 ):
-    """Get system health status.
+    """Get aggregated system health status.
 
     Public endpoint — no auth required. Frontend health monitors check this
     before login. Issue #916: removed admin_check to allow unauthenticated access.
+
+    Issue #3333: This is the canonical aggregator. Components registered via
+    ``api.system_health.register_health_probe`` are run concurrently and their
+    string-valued statuses are merged into ``components`` to preserve the
+    frontend ``HealthCheckResponse`` shape. Per-component diagnostic detail
+    (latency, error reason, structured data) lives under ``probes``.
     """
     try:
         # Import app_state to get initialization status
+        from api.system_health import collect_system_health
         from initialization.lifespan import app_state
 
-        # Check various system components
         health_status = {
             "status": "healthy",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -245,6 +251,35 @@ async def get_system_health(
         # Check conversation files database if request is available (Issue #315 - use helper)
         if request:
             await _check_conversation_files_db(request, health_status)
+
+        # Issue #3333: merge registered probe results into components dict.
+        # ``components`` stays Record<string,string> for frontend compat;
+        # rich per-probe data (latency, detail, structured payload) is exposed
+        # under ``probes`` for callers that want it.
+        aggregated = await collect_system_health(request)
+        # Map probe vocabulary to the legacy frontend vocabulary
+        # (``HealthCheckResponse`` documented as Record<string,"healthy"|"unhealthy"|...>).
+        _PROBE_TO_LEGACY = {
+            "ok": "healthy",
+            "degraded": "degraded",
+            "down": "unhealthy",
+        }
+        for component in aggregated.components:
+            health_status["components"][component.name] = _PROBE_TO_LEGACY.get(
+                component.status, component.status
+            )
+        # Preserve the worst-of severity from the aggregator so a probe reporting
+        # "down" surfaces as "unhealthy" at the top level rather than being
+        # silently downgraded to "degraded".
+        if (
+            aggregated.status != "ok"
+            and health_status["status"] == "healthy"
+        ):
+            health_status["status"] = _PROBE_TO_LEGACY[aggregated.status]
+        health_status["probes"] = [
+            component.model_dump(exclude_none=True)
+            for component in aggregated.components
+        ]
 
         return health_status
 

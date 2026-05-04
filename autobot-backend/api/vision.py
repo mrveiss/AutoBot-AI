@@ -12,10 +12,12 @@ Author: mrveiss
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
+
+from api.system_health import ComponentHealth, register_health_probe
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
@@ -55,6 +57,30 @@ def get_screen_analyzer() -> ScreenAnalyzer:
 
 
 # API Endpoints
+@register_health_probe("vision")
+async def probe_vision(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for vision module.
+
+    Lightweight check: confirm the lazily-initialized screen analyzer can be
+    constructed/reused via the module-level singleton helper.
+    """
+    try:
+        analyzer = get_screen_analyzer()
+        if analyzer is None:
+            return ComponentHealth(
+                name="vision", status="down", detail="analyzer unavailable"
+            )
+        return ComponentHealth(name="vision", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="vision",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
+
+
 @router.get("/health", response_model=VisionHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

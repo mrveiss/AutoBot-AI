@@ -10,9 +10,11 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from auth_middleware import check_admin_permission, get_current_user
 
@@ -205,6 +207,32 @@ async def get_system_info(
         capabilities=list(capabilities_info.get("available_tools", {}).keys()),
         available_tools=list(capabilities_info.get("installed_tools", [])),
     )
+
+
+@register_health_probe("intelligent_agent")
+async def probe_intelligent_agent(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for intelligent_agent module.
+
+    Lightweight check: inspect the module-level lazy singleton without forcing
+    initialization. ``ok`` if already initialized; ``degraded`` if not yet
+    initialized (legitimate cold-start state).
+    """
+    try:
+        if _agent_instance is None:
+            return ComponentHealth(
+                name="intelligent_agent",
+                status="degraded",
+                detail="agent not yet initialized",
+            )
+        return ComponentHealth(name="intelligent_agent", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="intelligent_agent",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=HealthResponse)

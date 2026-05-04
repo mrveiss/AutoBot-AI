@@ -25,10 +25,11 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
@@ -574,6 +575,32 @@ async def get_optimization_recommendations(
         status_code=200,
         content=result,
     )
+
+
+@register_health_probe("analytics_embedding_patterns")
+async def probe_analytics_embedding_patterns(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the embedding-patterns analytics module.
+
+    Reuses the redis-ping check from the existing /health route.
+    """
+    try:
+        analyzer = get_embedding_analyzer()
+        redis = await analyzer._get_redis()
+        await redis.ping()
+        return ComponentHealth(
+            name="analytics_embedding_patterns",
+            status="ok",
+            detail="redis ping ok",
+            data={"redis_connected": True},
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_embedding_patterns",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=DataResponse)

@@ -20,8 +20,9 @@ Used for:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_system import (
     FailureAnalysisRequest,
     FailureAnalysisResponse,
@@ -101,6 +102,31 @@ async def analyze_failure(request: FailureAnalysisRequest):
     except Exception as e:
         logger.error("Unexpected error analyzing task %s: %s", request.task_id, e)
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+
+@register_health_probe("diagnostics")
+async def probe_diagnostics(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for diagnostics module."""
+    try:
+        engine = get_engine()
+        return ComponentHealth(
+            name="diagnostics",
+            status="ok" if engine is not None else "degraded",
+            detail=(
+                "causal inference engine ready"
+                if engine is not None
+                else "engine unavailable"
+            ),
+            data={"engine_ready": engine is not None},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="diagnostics",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=HealthCheckResponse)

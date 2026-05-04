@@ -20,8 +20,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from api.schemas_workflows import CaptchaResolutionRequest, CaptchaResolutionResponse
 from autobot_shared.time_utils import utc_timestamp
@@ -184,6 +186,30 @@ async def get_pending_captchas() -> JSONResponse:
         raise HTTPException(
             status_code=500,
             detail="Failed to get pending CAPTCHAs",
+        )
+
+
+@register_health_probe("captcha")
+async def probe_captcha(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for captcha module.
+
+    Lightweight check: confirm the captcha human-loop service singleton
+    resolves. Skips ``get_pending_captchas`` aggregation the handler performs.
+    """
+    try:
+        service = get_captcha_human_loop()
+        if service is None:
+            return ComponentHealth(
+                name="captcha", status="down", detail="service unavailable"
+            )
+        return ComponentHealth(name="captcha", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="captcha",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
         )
 
 

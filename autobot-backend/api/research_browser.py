@@ -10,10 +10,13 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -54,6 +57,32 @@ def _require_browser():
         raise HTTPException(
             status_code=503,
             detail="Research browser unavailable: playwright not installed",
+        )
+
+
+@register_health_probe("research_browser")
+async def probe_research_browser(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for research_browser module.
+
+    Lightweight check: inspect the module-level ``_BROWSER_AVAILABLE`` flag
+    set at import time. ``down`` when playwright is not installed; otherwise
+    ``ok``. Skips the manager call the handler performs.
+    """
+    try:
+        if not _BROWSER_AVAILABLE:
+            return ComponentHealth(
+                name="research_browser",
+                status="down",
+                detail="playwright not installed",
+            )
+        return ComponentHealth(name="research_browser", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="research_browser",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
         )
 
 

@@ -24,7 +24,9 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from api.schemas_code import (
     CodeAction,
@@ -1139,6 +1141,32 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
     """
     engine = await get_engine()
     return await engine.complete(request)
+
+
+@register_health_probe("ide_integration")
+async def probe_ide_integration(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for ide_integration module."""
+    try:
+        engine = await get_engine()
+        rules_loaded = len(engine.rules)
+        return ComponentHealth(
+            name="ide_integration",
+            status="ok" if rules_loaded > 0 else "degraded",
+            detail=f"{rules_loaded} rules loaded",
+            data={
+                "rules_loaded": rules_loaded,
+                "disabled_rules": len(engine.disabled_rules),
+                "cache_size": len(engine.analysis_cache),
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="ide_integration",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", summary="Health check", response_model=IDEHealthResponse)

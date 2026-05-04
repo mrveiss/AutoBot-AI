@@ -22,6 +22,7 @@ from api.schemas_system import (
     ServiceOperationResponse,
     ServiceStatusResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
@@ -278,6 +279,36 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
     except Exception as e:
         logger.error("Get status error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get status")
+
+
+@register_health_probe("redis_service")
+async def probe_redis_service(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for Redis service-manager health."""
+    try:
+        manager = await get_service_manager()
+        health = await manager.get_health()
+        overall = (health.overall_status or "").lower()
+        if overall in ("healthy", "ok"):
+            return ComponentHealth(name="redis_service", status="ok")
+        if overall in ("degraded", "warning"):
+            return ComponentHealth(
+                name="redis_service",
+                status="degraded",
+                detail=health.overall_status,
+            )
+        return ComponentHealth(
+            name="redis_service",
+            status="down",
+            detail=health.overall_status or "service unhealthy",
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="redis_service",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=HealthStatusResponse)

@@ -21,7 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_knowledge import (
     NLCodeExplanationResponse,
     NLDomainsResponse,
@@ -1271,6 +1272,31 @@ async def list_supported_domains():
             for domain in QueryDomain
         ]
     }
+
+
+@register_health_probe("natural_language_search")
+async def probe_natural_language_search(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the NL search code explainer."""
+    try:
+        if _code_explainer is None:
+            return ComponentHealth(
+                name="natural_language_search",
+                status="down",
+                detail="code explainer not initialized",
+            )
+        return ComponentHealth(
+            name="natural_language_search",
+            status="ok",
+            data={"llm_available": bool(_code_explainer.llm_available)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="natural_language_search",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=NLSearchHealthResponse)

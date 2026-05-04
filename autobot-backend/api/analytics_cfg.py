@@ -21,12 +21,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     CFGAnalyzeFileRequest,
     CFGAnalyzeRequest,
@@ -1362,6 +1363,25 @@ async def detect_infinite_loops(
             ),
         },
     )
+
+
+@register_health_probe("analytics_cfg")
+async def probe_analytics_cfg(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the CFG analytics module."""
+    try:
+        return ComponentHealth(
+            name="analytics_cfg",
+            status="ok",
+            detail="module loaded",
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_cfg",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=DataResponse)

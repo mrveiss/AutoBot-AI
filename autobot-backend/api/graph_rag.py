@@ -22,10 +22,12 @@ Endpoints:
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from api.schemas_knowledge import (
     GraphRAGHealthResponse,
@@ -199,6 +201,34 @@ async def graph_rag_search(
     except Exception as e:
         logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Graph-RAG search failed")
+
+
+@register_health_probe("graph_rag")
+async def probe_graph_rag(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the Graph-RAG service."""
+    if request is None:
+        return ComponentHealth(
+            name="graph_rag",
+            status="degraded",
+            detail="request not provided; cannot reach app.state",
+        )
+    try:
+        service = getattr(request.app.state, "graph_rag_service", None)
+        if service is None:
+            return ComponentHealth(
+                name="graph_rag",
+                status="down",
+                detail="graph_rag_service not initialized in app state",
+            )
+        return ComponentHealth(name="graph_rag", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="graph_rag",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=GraphRAGHealthResponse)
