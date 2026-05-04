@@ -13,7 +13,7 @@ import base64
 import logging
 import os
 import tempfile
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -54,25 +54,8 @@ def _get_whisper_pipeline() -> Optional[Any]:
 class AudioPipeline(BasePipeline):
     """Pipeline for processing audio content (voice, music, sound)."""
 
-    def __init__(
-        self,
-        pipeline_name: str = "audio",
-        supported_types: List[MediaType] = None,
-    ):
-        """Initialize audio processing pipeline.
-
-        Issue #6755: accepts the parent's full signature with sensible
-        defaults so factory callers (`cls(name, supported_types)`) keep
-        working. The historical no-arg call site is unaffected.
-        """
-        super().__init__(
-            pipeline_name=pipeline_name,
-            supported_types=(
-                supported_types
-                if supported_types is not None
-                else [MediaType.AUDIO]
-            ),
-        )
+    PIPELINE_NAME = "audio"
+    SUPPORTED_TYPES = [MediaType.AUDIO]
 
     async def _process_impl(self, media_input: MediaInput) -> ProcessingResult:
         """Process audio content."""

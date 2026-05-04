@@ -10,7 +10,7 @@
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import List
+from typing import ClassVar, List, Optional
 
 from media.core.types import MediaInput, MediaType, PipelineMetrics, ProcessingResult
 
@@ -112,18 +112,53 @@ class BasePipeline(MediaPipeline):
     Base implementation of MediaPipeline with common functionality.
 
     Subclasses can override specific methods while inheriting shared logic.
+
+    Subclasses declare two class-level constants — ``PIPELINE_NAME`` and
+    ``SUPPORTED_TYPES`` — which serve as defaults when the constructor is
+    called with no arguments (the historical ``Pipeline()`` factory call).
+    Factory callers (``cls(name, supported_types)``) keep working because
+    explicit args still override the class-level defaults. This eliminated
+    five identical ``__init__`` blocks across the document/link/audio/video/
+    image subclasses (#6779, follow-up to #6755 / #6660).
     """
 
-    def __init__(self, pipeline_name: str, supported_types: List[MediaType]):
+    # Subclasses override these. ``None`` here means "no default" — passing
+    # ``None`` to ``__init__`` then raises so we never silently construct
+    # a misconfigured pipeline.
+    PIPELINE_NAME: ClassVar[Optional[str]] = None
+    SUPPORTED_TYPES: ClassVar[Optional[List[MediaType]]] = None
+
+    def __init__(
+        self,
+        pipeline_name: Optional[str] = None,
+        supported_types: Optional[List[MediaType]] = None,
+    ):
         """
         Initialize base pipeline.
 
         Args:
-            pipeline_name: Name identifier for this pipeline
-            supported_types: List of media types this pipeline supports
+            pipeline_name: Name identifier for this pipeline.  Falls back to
+                the subclass's ``PIPELINE_NAME`` class attribute when omitted.
+            supported_types: Media types this pipeline supports.  Falls back
+                to the subclass's ``SUPPORTED_TYPES`` class attribute when
+                omitted.
         """
-        super().__init__(pipeline_name)
-        self.supported_types = supported_types
+        resolved_name = pipeline_name if pipeline_name is not None else self.PIPELINE_NAME
+        if resolved_name is None:
+            raise TypeError(
+                f"{type(self).__name__} requires 'pipeline_name' argument or "
+                "PIPELINE_NAME class attribute"
+            )
+        resolved_types = (
+            supported_types if supported_types is not None else self.SUPPORTED_TYPES
+        )
+        if resolved_types is None:
+            raise TypeError(
+                f"{type(self).__name__} requires 'supported_types' argument or "
+                "SUPPORTED_TYPES class attribute"
+            )
+        super().__init__(resolved_name)
+        self.supported_types = resolved_types
 
     def supports(self, media_type: MediaType) -> bool:
         """Check if media type is in supported types list."""
