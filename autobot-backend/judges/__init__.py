@@ -162,17 +162,16 @@ class BaseLLMJudge:
     async def _get_llm_evaluation(self, prompt: str) -> Dict[str, Any]:
         """Get structured evaluation from LLM"""
         if not self.llm_interface:
-            from llm_interface import LLMInterface
+            from services.llm_service import get_llm_service  # Phase 2D #3185
 
-            self.llm_interface = LLMInterface()
+            self.llm_interface = get_llm_service()
 
         try:
-            response = await self.llm_interface.chat_completion(
-                messages=[
+            response = await self.llm_interface.chat(
+                [
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
-                structured_output=True,
                 temperature=0.1,  # Low temperature for consistent judgments
             )
 
@@ -208,7 +207,7 @@ Be precise, objective, and helpful in your judgments."""
 
     async def _parse_llm_response(
         self,
-        llm_response: Dict[str, Any],
+        llm_response: Any,
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
@@ -216,11 +215,14 @@ Be precise, objective, and helpful in your judgments."""
     ) -> JudgmentResult:
         """Parse LLM response into structured JudgmentResult"""
         try:
-            # Extract or parse JSON from response
-            if isinstance(llm_response, str):
-                evaluation = json.loads(llm_response)
+            # Extract text content from LLMResponse, str, or legacy dict (Phase 2D #3185)
+            if hasattr(llm_response, "content"):
+                raw_text = llm_response.content
+            elif isinstance(llm_response, str):
+                raw_text = llm_response
             else:
-                evaluation = llm_response.get("content", llm_response)
+                raw_text = llm_response.get("content", "")
+            evaluation = json.loads(raw_text)
 
             # Parse criterion scores
             criterion_scores = []

@@ -31,16 +31,16 @@ from .validator import CodeValidator
 
 logger = logging.getLogger(__name__)
 
-# LLM Interface availability
+# LLM service (replaces LLMInterface singleton — Phase 2D #3185)
 try:
-    from llm_interface import LLMInterface
+    from services.llm_service import get_llm_service
 
     LLM_INTERFACE_AVAILABLE = True
 except ImportError:
+    get_llm_service = None  # type: ignore[assignment]
     LLM_INTERFACE_AVAILABLE = False
-    LLMInterface = None
     logger.warning(
-        "LLMInterface not available - code generation will fail without LLM client"
+        "LLMService not available - code generation will fail without LLM client"
     )
 
 
@@ -79,12 +79,12 @@ class LLMCodeGenerator:
         # If no client provided, try to create one
         if llm_client is None:
             if LLM_INTERFACE_AVAILABLE:
-                logger.info("Creating LLMInterface for code generation")
-                self.llm_client = LLMInterface()
+                logger.info("Creating LLMService for code generation")
+                self.llm_client = get_llm_service()
             else:
                 raise RuntimeError(
                     "LLM client is required for code generation. "
-                    "Either provide an llm_client parameter or ensure LLMInterface is available."
+                    "Either provide an llm_client parameter or ensure LLMService is available."
                 )
         else:
             self.llm_client = llm_client
@@ -329,21 +329,11 @@ class LLMCodeGenerator:
             {"role": "user", "content": user_prompt},
         ]
 
-        # Use LLMInterface's chat_completion method (standard AutoBot API)
-        if hasattr(self.llm_client, "chat_completion"):
-            response = await self.llm_client.chat_completion(
-                messages=messages,
-                llm_type="task",  # Use task-optimized settings
-                model_name=self.model_name,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
-            return response.content
-        # Fallback for custom clients with chat method
-        elif hasattr(self.llm_client, "chat"):
+        # LLMService.chat() is the standard AutoBot API (Phase 2D #3185)
+        if hasattr(self.llm_client, "chat"):
             response = await self.llm_client.chat(
                 messages=messages,
-                model=self.model_name,
+                model_name=self.model_name,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
@@ -358,7 +348,7 @@ class LLMCodeGenerator:
             return response.content
         else:
             raise ValueError(
-                "LLM client must have chat_completion, chat, or generate method. "
+                "LLM client must have chat or generate method. "
                 f"Client type: {type(self.llm_client).__name__}"
             )
 

@@ -19,9 +19,9 @@ from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 from skills.registry import get_skill_registry
 
 try:
-    from llm_interface_pkg import LLMInterface
+    from services.llm_service import get_llm_service
 except ImportError:
-    LLMInterface = None  # type: ignore[assignment,misc]
+    get_llm_service = None  # type: ignore[assignment]
 
 
 def _tokenize(text: str) -> Set[str]:
@@ -119,8 +119,8 @@ class SkillRouterSkill(BaseSkill):
 
         Raises ValueError if LLM unavailable or response unparseable.
         """
-        if LLMInterface is None:
-            raise ValueError("LLMInterface not available")
+        if get_llm_service is None:
+            raise ValueError("LLMService not available")
 
         summaries = [
             f"- {c['name']}: {c['description']} " f"(tags: {', '.join(c['tags'])}, tools: {', '.join(c['tools'])})"
@@ -133,8 +133,8 @@ class SkillRouterSkill(BaseSkill):
             + '\n\nRespond with JSON only: {"skill": "<name>", "reason": "<brief reason>"}'
         )
         messages = [{"role": "user", "content": prompt}]
-        llm = LLMInterface()
-        response = await llm.chat_completion(messages, llm_type="task")
+        llm = get_llm_service()
+        response = await llm.chat(messages)
 
         content = response.content.strip()
         match = re.search(r"\{.*?\}", content, re.DOTALL)
