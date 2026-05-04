@@ -133,6 +133,23 @@ export const platformIcons = {
 // HELPER FUNCTIONS
 // ============================================================================
 
+// #6796: telemetry — log (with stack trace) the first time getFileIcon
+// receives a non-string `filename`, so the upstream serialization bug can
+// be found from a real session. We only warn once per page load to avoid
+// drowning the console.
+let _nonStringFilenameWarned = false
+function _warnNonStringFilenameOnce(value: unknown): void {
+  if (_nonStringFilenameWarned) return
+  _nonStringFilenameWarned = true
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[iconMappings #6796] getFileIcon received non-string filename — ' +
+      'upstream payload (likely TreeNode.name) is not a string. ' +
+      `typeof=${typeof value} value=${String(value).slice(0, 80)}`,
+    new Error('iconMappings non-string trace'),
+  )
+}
+
 /**
  * Get icon for file based on extension
  */
@@ -142,6 +159,7 @@ export function getFileIcon(filename: string, isFolder: boolean = false): string
   // boundary, and TreeNode.name occasionally arrives as null/number/undefined,
   // which crashed KnowledgeBrowser with "t.split is not a function".
   if (typeof filename !== 'string' || filename.length === 0) {
+    if (typeof filename !== 'string') _warnNonStringFilenameOnce(filename)
     return fileTypeIcons.file
   }
 
