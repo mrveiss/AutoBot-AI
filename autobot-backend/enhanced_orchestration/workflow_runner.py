@@ -17,7 +17,7 @@ from enhanced_orchestration.collaboration_coordinator import CollaborationCoordi
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
 from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
-from enhanced_orchestration.workflow_planning import WorkflowPlanner as StrategyPlanner
+from enhanced_orchestration.workflow_planning import StrategyPlanner
 from event_manager import get_event_manager as _get_event_manager
 from orchestration.performance_tracker import PerformanceTracker
 

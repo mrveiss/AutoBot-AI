@@ -60,9 +60,7 @@ from enhanced_orchestration.types import (
 )
 from enhanced_orchestration.agent_router import AgentRouter
 from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
-from enhanced_orchestration.workflow_planning import (
-    WorkflowPlanner as StrategyPlanner,
-)
+from enhanced_orchestration.workflow_planning import StrategyPlanner
 from enhanced_orchestration.workflow_runner import WorkflowRunner
 
 logger = get_logger("orchestrator")

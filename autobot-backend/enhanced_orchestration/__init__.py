@@ -36,7 +36,7 @@ from .types import (
     ExecutionStrategy,
     WorkflowPlan,
 )
-from .workflow_planning import WorkflowPlanner
+from .workflow_planning import StrategyPlanner
 from .workflow_runner import WorkflowRunner
 
 # Backward compatibility alias
@@ -53,7 +53,7 @@ __all__ = [
     # Strategy handler
     "ExecutionStrategyHandler",
     # Workflow planner
-    "WorkflowPlanner",
+    "StrategyPlanner",
     # Issue #3293: success criteria
     "SuccessCriteriaType",
     "SuccessCriteria",
