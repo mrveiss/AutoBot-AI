@@ -166,18 +166,61 @@ offending line.
 
 ## Sunset of legacy routes
 
-The 44 per-module `/health` routes are kept for one release as a deprecation
-grace period. They will be removed in a follow-up PR after:
+The 38 per-module `/health` routes (after #6903 dropped 6 boilerplate ones)
+are kept as a deprecation grace period. They will be removed in a follow-up
+PR (tracked at #6902) after the criteria below are all met.
 
-1. A grep of deployment configs (Ansible, k8s, monitoring) confirms no
-   external scraper still hits them.
-2. The frontend has migrated `useBatchProcessing.ts:263`,
-   `useOperationsApi.ts:117`, and `usePrometheusMetrics.ts:368/583` off
-   their per-module health calls.
-3. A `Sunset:` HTTP response header has been live on the legacy routes for
-   one release.
+### Sunset signal
 
-The sunset PR is not in scope for #3333.
+Issue #6902 wired `SunsetLegacyHealthMiddleware`
+(`autobot-backend/middleware/sunset_legacy_health.py`) into the FastAPI
+middleware stack. Every `GET /api/<module>/health` response now carries:
+
+```
+Sunset: Wed, 02 Sep 2026 00:00:00 GMT
+Deprecation: true
+Link: </api/system/health>; rel="successor-version"
+```
+
+The canonical aggregator (`/api/system/health` and its alias `/api/health`)
+is exempted — those headers do not appear on the migration target.
+
+External scrapers (Prometheus exporters, k8s liveness probes, oncall
+dashboards) should treat the `Sunset` header as a signal to migrate to
+`/api/system/health` before the date elapses.
+
+### Pre-deletion audit checklist
+
+Before the route-deletion PR can run:
+
+1. **Deployment configs** — grep Ansible playbooks, k8s manifests, and
+   Prometheus job specs for `/api/<module>/health` paths. Confirm zero
+   live scrapers remain.
+   ```bash
+   grep -rn "/api/[a-z_-]\+/health" autobot-infrastructure/ \
+     k8s/ prometheus/ monitoring/ 2>/dev/null
+   ```
+2. **Server-side access logs** — sample 7 days of nginx/uvicorn logs and
+   confirm zero hits on per-module `/health` paths from external IPs.
+3. **Frontend callers** — these three callers still consume rich
+   per-module response shapes (active_jobs, redis_connected, etc.) that
+   the canonical aggregator's `ComponentHealth.data` does not expose.
+   Either enrich the relevant probes' `data` payload, or accept that the
+   UI may lose some diagnostic fields:
+   - `useBatchProcessing.ts:263` → `/api/batch-jobs/health`
+   - `useOperationsApi.ts:117` → `/api/long-running/health`
+   - `usePrometheusMetrics.ts:368/583` → `/api/monitoring/services/health`
+4. **`Sunset:` header live for at least one release** — the middleware
+   shipped with PR #6912 (commit landed on `Dev_new_gui` at 2026-05-04).
+5. **Pre-commit hook becomes hard-line** — drop the `# noqa: health-route`
+   suppression escape hatch from the production code path.
+
+When all five gates clear, the route-deletion PR can:
+
+- Delete the 38 `@router.get("/health")` definitions across `autobot-backend/api/`
+- Delete the now-orphaned `*HealthResponse` Pydantic schemas
+- Verify `git grep "@router.get.*['\"]/health['\"]" autobot-backend/api/ | wc -l` == 1
+- Remove the middleware (no legacy paths left to decorate)
 
 ## Testing a probe
 
