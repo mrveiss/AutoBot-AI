@@ -20,7 +20,8 @@ from typing import Any
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
-from llm_interface import LLMType, get_llm_interface
+from llm_interface_pkg.types import LLMType
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -168,15 +169,15 @@ class ContradictionDetector:
     """
 
     def __init__(self, llm_interface=None) -> None:
-        self._llm = llm_interface or get_llm_interface()
+        self._llm = llm_interface or get_llm_service()
 
     async def _check_group(
         self, texts: list[str]
     ) -> tuple[list[ConflictPair], list[str]]:
         """Run LLM contradiction check on a single group of texts."""
         prompt = _build_prompt(texts)
-        response = await self._llm.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+        response = await self._llm.chat(
+            [{"role": "user", "content": prompt}],
             llm_type=LLMType.EXTRACTION,
             structured_output=True,
         )

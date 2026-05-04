@@ -24,7 +24,8 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from config.manager import get_config_manager as _get_config_manager
-from llm_interface import LLMType, get_llm_interface
+from llm_interface_pkg.types import LLMType
+from services.llm_service import get_llm_service
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 
 from .base_agent import DeploymentMode
@@ -69,7 +70,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.llm_interface = llm_interface or get_llm_interface()
+        self.llm_interface = llm_interface or get_llm_service()
 
         # Configuration
         self.max_facts_per_chunk = config_manager.get(
@@ -491,8 +492,8 @@ Return the results as a JSON array of facts. Example format:
     ) -> Optional[List[Dict[str, Any]]]:
         """Get raw facts from LLM response. Returns None on error."""
         prompt = self._build_extraction_prompt(content, context)
-        response = await self.llm_interface.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+        response = await self.llm_interface.chat(
+            [{"role": "user", "content": prompt}],
             llm_type=LLMType.EXTRACTION,
             structured_output=True,
         )
