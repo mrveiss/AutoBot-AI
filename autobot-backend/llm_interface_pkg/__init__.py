@@ -2,22 +2,25 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-LLM Interface Package - Consolidated interface for all LLM providers.
+LLM shared-infra package.
 
-Extracted from llm_interface.py as part of Issue #381 god class refactoring.
-This package provides a modular, maintainable structure for LLM operations.
+After LLMInterface retirement (#3185), this package no longer ships a
+god-class orchestrator. Canonical inference lives in
+``services.llm_service.LLMService`` over ``llm_providers/``.
 
-Issue #551: Added L1/L2 caching, provider fallback, and streaming protection.
+What remains here is shared infra reused across the new stack:
 
-Package Structure:
-    types.py       - Enums (ProviderType, LLMType)
-    models.py      - Dataclasses (LLMSettings, LLMResponse, ChatMessage, LLMRequest)
-    hardware.py    - Hardware detection and backend selection
-    streaming.py   - Streaming state and failure management
-    cache.py       - L1/L2 dual-tier caching (Issue #551)
+    types.py          - Enums (ProviderType, LLMType)
+    models.py         - Dataclasses (LLMSettings, LLMResponse, ChatMessage, LLMRequest)
+    hardware.py       - Hardware detection and backend selection
+    streaming.py      - Streaming state and failure management
+    cache.py          - L1/L2 dual-tier caching (Issue #551)
+    optimization/     - Prompt compression, rate limiting, connection pooling
+    tiered_routing/   - Lightweight vs. complex model routing (Issue #748)
+    adapters/         - Adapter registry (Issue #1403) for diagnostic endpoints
     mock_providers.py - Local fallback and mock implementations
-    interface.py   - Main LLMInterface class
-    providers/     - Provider-specific implementations (Ollama, OpenAI, vLLM, etc.)
+    providers/        - Legacy provider impls retained as shared infra (ollama
+                        back-edge, transformers, mock_handler)
 """
 
 # Adapter registry (Issue #1403)
@@ -29,23 +32,18 @@ from .cache import CachedResponse, LLMResponseCache, get_llm_cache
 # Hardware detection
 from .hardware import TORCH_AVAILABLE, HardwareDetector
 
-# Main interface
-from .interface import LLMInterface
-
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
 
 # Models
 from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
 
-# Provider implementations
+# Provider implementations (legacy — kept as shared infra for ollama back-edge)
 from .providers import (
     LocalHandler,
     MockHandler,
     OllamaProvider,
-    OpenAIProvider,
     TransformersProvider,
-    VLLMProviderHandler,
 )
 
 # Streaming management
@@ -77,13 +75,9 @@ __all__ = [
     "MockPalm",
     "local_llm",
     "palm",
-    # Main interface
-    "LLMInterface",
-    # Providers
+    # Providers (legacy shared infra)
     "OllamaProvider",
-    "OpenAIProvider",
     "TransformersProvider",
-    "VLLMProviderHandler",
     "MockHandler",
     "LocalHandler",
     # Adapter registry (Issue #1403)
