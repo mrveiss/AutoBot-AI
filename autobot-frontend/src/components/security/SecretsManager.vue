@@ -787,7 +787,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 // @ts-ignore - JavaScript API client without type declarations
 import { secretsApiClient } from '@/utils/SecretsApiClient';
-import { useAppStore } from '@/stores/useAppStore';
+import { useChatStore } from '@/stores/useChatStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
@@ -1347,14 +1347,14 @@ const saveSecret = async () => {
 
   saving.value = true;
   try {
-    const appStore = useAppStore();
+    const chatStore = useChatStore();
 
     // Build base secret data
     const secretData: any = {
       name: secretForm.name,
       type: secretForm.type,
       scope: secretForm.scope,
-      chat_id: secretForm.scope === 'chat' ? (secretForm.chat_id || appStore.currentSessionId) : null,
+      chat_id: secretForm.scope === 'chat' ? (secretForm.chat_id || chatStore.currentSessionId) : null,
       description: secretForm.description,
       expires_at: secretForm.expires_at ? new Date(secretForm.expires_at).toISOString() : null,
       tags: secretForm.tags,
