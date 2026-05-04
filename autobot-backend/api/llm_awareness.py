@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 
 from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
@@ -361,28 +361,7 @@ async def export_awareness_data(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@register_health_probe("llm_awareness")
-async def probe_llm_awareness(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for llm_awareness module.
-
-    Lightweight check: confirm the awareness singleton resolves. Skips the
-    full ``get_system_context`` call the handler performs.
-    """
-    try:
-        awareness = get_llm_self_awareness()
-        if awareness is None:
-            return ComponentHealth(
-                name="llm_awareness", status="down", detail="awareness unavailable"
-            )
-        return ComponentHealth(name="llm_awareness", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="llm_awareness",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("llm_awareness", get_llm_self_awareness)
 
 
 @router.get("/health", response_model=LLMAwarenessHealthResponse)

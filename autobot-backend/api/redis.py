@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from services.config_service import ConfigService
@@ -91,31 +91,7 @@ async def test_redis_connection():
         }
 
 
-@register_health_probe("redis")
-async def probe_redis(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for Redis connectivity.
-
-    Uses the async client + ``await client.ping()`` so the probe never blocks
-    the asyncio event loop. The legacy ``ConnectionTester.test_redis_connection``
-    helper is sync; calling it from an async probe stalls every other probe in
-    ``asyncio.gather``.
-    """
-    try:
-        client = await get_async_redis_client(database="main")
-        if client is None:
-            return ComponentHealth(
-                name="redis", status="down", detail="redis client unavailable"
-            )
-        await client.ping()
-        return ComponentHealth(name="redis", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="redis",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_redis_probe("redis", database="main")
 
 
 @router.get("/health", response_model=RedisHealthResponse)

@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 
 from api.schemas_agent import (
     InferenceOptimizationSettings,
@@ -45,28 +45,7 @@ logger = logging.getLogger(__name__)
 config = get_config_manager()
 
 
-@register_health_probe("llm_optimization")
-async def probe_llm_optimization(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for llm_optimization module.
-
-    Lightweight check: confirm the model-optimizer singleton resolves. Skips
-    the ``refresh_available_models`` round-trip to Ollama the handler performs.
-    """
-    try:
-        optimizer = get_model_optimizer()
-        if optimizer is None:
-            return ComponentHealth(
-                name="llm_optimization", status="down", detail="optimizer unavailable"
-            )
-        return ComponentHealth(name="llm_optimization", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="llm_optimization",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("llm_optimization", get_model_optimizer)
 
 
 @router.get("/health", response_model=LLMOptimizationHealthResponse)

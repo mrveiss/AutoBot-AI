@@ -13,7 +13,11 @@ from api.system_health import (
     _reset_probes_for_testing,
     collect_system_health,
     list_registered_probes,
+    probe_app_state,
+    probe_singleton,
+    register_app_state_probe,
     register_health_probe,
+    register_singleton_probe,
 )
 
 
@@ -135,6 +139,107 @@ def test_aggregator_status_when_probe_returns_down():
     statuses = {c.name: c.status for c in result.components}
     assert statuses["ok_probe"] == "ok"
     assert statuses["dead_probe"] == "down"
+
+
+def test_probe_singleton_ok_when_getter_returns_non_none():
+    probe = probe_singleton("toy", lambda: object())
+    result = asyncio.run(probe(None))
+    assert result.name == "toy"
+    assert result.status == "ok"
+
+
+def test_probe_singleton_down_when_getter_returns_none():
+    probe = probe_singleton("toy", lambda: None)
+    result = asyncio.run(probe(None))
+    assert result.status == "down"
+    assert "None" in (result.detail or "")
+
+
+def test_probe_singleton_down_when_getter_raises():
+    def boom():
+        raise RuntimeError("boom")
+
+    probe = probe_singleton("toy", boom)
+    result = asyncio.run(probe(None))
+    assert result.status == "down"
+    assert "RuntimeError" in (result.detail or "")
+
+
+def test_probe_singleton_supports_async_getter():
+    async def get_async():
+        return object()
+
+    probe = probe_singleton("toy", get_async, async_getter=True)
+    result = asyncio.run(probe(None))
+    assert result.status == "ok"
+
+
+def test_probe_app_state_degraded_when_request_missing():
+    probe = probe_app_state("toy", "missing_attr")
+    result = asyncio.run(probe(None))
+    assert result.status == "degraded"
+    assert "missing_attr" in (result.detail or "")
+
+
+def test_probe_app_state_degraded_when_attr_missing():
+    class _State: ...
+
+    class _App:
+        state = _State()
+
+    class _Request:
+        app = _App()
+
+    probe = probe_app_state("toy", "missing_attr")
+    result = asyncio.run(probe(_Request()))
+    assert result.status == "degraded"
+
+
+def test_probe_app_state_down_when_attr_is_none():
+    class _State:
+        configured = None
+
+    class _App:
+        state = _State()
+
+    class _Request:
+        app = _App()
+
+    probe = probe_app_state("toy", "configured")
+    result = asyncio.run(probe(_Request()))
+    assert result.status == "down"
+    assert "is None" in (result.detail or "")
+
+
+def test_probe_app_state_ok_when_attr_set():
+    class _State:
+        configured = "ready"
+
+    class _App:
+        state = _State()
+
+    class _Request:
+        app = _App()
+
+    probe = probe_app_state("toy", "configured")
+    result = asyncio.run(probe(_Request()))
+    assert result.status == "ok"
+
+
+def test_register_singleton_probe_one_liner_registers_under_name():
+    register_singleton_probe("toy_singleton", lambda: object())
+    assert "toy_singleton" in list_registered_probes()
+    result = asyncio.run(collect_system_health())
+    statuses = {c.name: c.status for c in result.components}
+    assert statuses["toy_singleton"] == "ok"
+
+
+def test_register_app_state_probe_one_liner_registers_under_name():
+    register_app_state_probe("toy_state", "anything")
+    assert "toy_state" in list_registered_probes()
+    result = asyncio.run(collect_system_health())
+    names = {c.name for c in result.components}
+    assert "toy_state" in names
 
 
 def test_probes_run_concurrently_not_serially():

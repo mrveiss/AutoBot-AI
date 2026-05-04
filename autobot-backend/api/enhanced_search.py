@@ -19,7 +19,7 @@ from api.schemas_knowledge import (
     NPUSearchRequest,
     NPUSearchResponse,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 from ai_hardware_accelerator import HardwareDevice
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_llm_logger
@@ -491,26 +491,7 @@ def _generate_system_recommendations(
     return recommendations
 
 
-@register_health_probe("enhanced_search")
-async def probe_enhanced_search(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for the NPU-accelerated search engine."""
-    try:
-        engine = await get_npu_search_engine()
-        if engine is None:
-            return ComponentHealth(
-                name="enhanced_search",
-                status="down",
-                detail="npu_search_engine is None",
-            )
-        return ComponentHealth(name="enhanced_search", status="ok")
-    except Exception as exc:
-        return ComponentHealth(
-            name="enhanced_search",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=True)
 
 
 # Health check endpoint

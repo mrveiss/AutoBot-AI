@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
@@ -32,29 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@register_health_probe("system_validation")
-async def probe_system_validation(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #3333: probe registration for system_validation module."""
-    try:
-        validator = get_system_validator()
-        return ComponentHealth(
-            name="system_validation",
-            status="ok" if validator is not None else "degraded",
-            detail=(
-                "validator initialized"
-                if validator is not None
-                else "validator unavailable"
-            ),
-            data={"validator_initialized": validator is not None},
-        )
-    except Exception as exc:
-        return ComponentHealth(
-            name="system_validation",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-        )
+register_singleton_probe("system_validation", get_system_validator)
 
 
 @router.get("/health", response_model=SystemValidationHealthResponse)

@@ -104,6 +104,47 @@ async def probe_my_module(request: Optional[Request] = None) -> ComponentHealth:
    the same name overwrites and logs a warning — do NOT call the decorator
    inside a function body.
 
+## Composable helpers (Issue #6904)
+
+Three repeating probe patterns have one-liner registration helpers in
+`api/system_health.py`. Use them instead of hand-writing the boilerplate:
+
+| Pattern | One-liner |
+|---|---|
+| Singleton-resolve (`getter()` non-None) | `register_singleton_probe(name, getter)` — pass `async_getter=True` for async getters |
+| Redis ping on a named database | `register_redis_probe(name, database="main")` — always uses `get_async_redis_client` to avoid blocking the event loop |
+| `request.app.state.<attr>` initialized | `register_app_state_probe(name, "attr")` |
+
+Example call sites (registered at module import time):
+
+```python
+# autobot-backend/api/vision.py
+from api.system_health import register_singleton_probe
+from utils.screen_analyzer import get_screen_analyzer
+
+register_singleton_probe("vision", get_screen_analyzer)
+
+
+# autobot-backend/api/redis.py
+from api.system_health import register_redis_probe
+
+register_redis_probe("redis", database="main")
+
+
+# autobot-backend/api/graph_rag.py
+from api.system_health import register_app_state_probe
+
+register_app_state_probe("graph_rag", "graph_rag_service")
+```
+
+The factory functions `probe_singleton`, `probe_redis_db`, `probe_app_state`
+are also exported for callers that want a `ProbeFn` to compose with extra
+logic (e.g. pass to `register_health_probe(name)(...)` in a custom block).
+
+Probes with richer behaviour — counting items, mapping multi-valued state to
+`degraded`/`down`, calling multiple getters — stay hand-written with
+`@register_health_probe(name)`.
+
 ## Why a single endpoint
 
 - **External monitors** (k8s liveness, Prometheus exporters, oncall dashboards)

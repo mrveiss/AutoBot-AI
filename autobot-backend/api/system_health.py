@@ -142,3 +142,139 @@ def list_registered_probes() -> list[str]:
 def _reset_probes_for_testing() -> None:
     """Clear the registry. Test-only — DO NOT call in production code."""
     _PROBES.clear()
+
+
+# ----------------------------------------------------------------------------
+# Composable probe helpers (Issue #6904)
+# ----------------------------------------------------------------------------
+#
+# Inspecting the 38 probes registered after #6903 showed three patterns
+# accounting for ~40% of all probe bodies:
+#
+#   1. **singleton-resolve** — call a getter, ok if it returns non-None
+#   2. **redis-ping**       — async-ping a named Redis database
+#   3. **app-state-attr**   — verify ``request.app.state.X`` is initialized
+#
+# The factories below return a ``ProbeFn`` ready to pass to
+# ``register_health_probe(name)``; the ``register_*_probe`` convenience
+# wrappers do both in one line:
+#
+#   register_singleton_probe("vision", get_screen_analyzer)
+#   register_redis_probe("redis", database="main")
+#   register_app_state_probe("memory", "memory_graph")
+#
+# Probes that need richer logic stay hand-written.
+
+
+def probe_singleton(
+    probe_name: str,
+    getter: Callable,
+    *,
+    async_getter: bool = False,
+) -> ProbeFn:
+    """Build a probe that resolves a singleton via ``getter`` and reports ok if non-None.
+
+    Use ``async_getter=True`` when the getter is an async function that needs
+    to be awaited (e.g. ``get_async_redis_client`` style factories).
+    """
+
+    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+        try:
+            instance = await getter() if async_getter else getter()
+            if instance is None:
+                return ComponentHealth(
+                    name=probe_name,
+                    status="down",
+                    detail="singleton returned None",
+                )
+            return ComponentHealth(name=probe_name, status="ok")
+        except Exception as exc:
+            return ComponentHealth(
+                name=probe_name,
+                status="down",
+                detail=f"probe error: {type(exc).__name__}",
+            )
+
+    return _probe
+
+
+def probe_redis_db(probe_name: str, *, database: str = "main") -> ProbeFn:
+    """Build a probe that pings ``database`` via the async Redis client.
+
+    Always uses ``await get_async_redis_client(...) + await client.ping()`` so
+    no probe blocks the asyncio event loop (regression class fixed in PR #6870).
+    """
+
+    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+
+            client = await get_async_redis_client(database=database)
+            if client is None:
+                return ComponentHealth(
+                    name=probe_name,
+                    status="down",
+                    detail=f"redis client unavailable (database={database})",
+                )
+            await client.ping()
+            return ComponentHealth(name=probe_name, status="ok")
+        except Exception as exc:
+            return ComponentHealth(
+                name=probe_name,
+                status="down",
+                detail=f"probe error: {type(exc).__name__}",
+            )
+
+    return _probe
+
+
+def probe_app_state(probe_name: str, attr: str) -> ProbeFn:
+    """Build a probe that checks ``request.app.state.<attr>`` is initialized.
+
+    Returns ``degraded`` when the attribute is missing (e.g. internal callers
+    without a request context) and ``down`` when it is explicitly ``None``.
+    """
+
+    async def _probe(request: Optional[Request] = None) -> ComponentHealth:
+        if request is None or not hasattr(request.app.state, attr):
+            return ComponentHealth(
+                name=probe_name,
+                status="degraded",
+                detail=f"app.state.{attr} not initialized",
+            )
+        try:
+            value = getattr(request.app.state, attr)
+            if value is None:
+                return ComponentHealth(
+                    name=probe_name,
+                    status="down",
+                    detail=f"app.state.{attr} is None",
+                )
+            return ComponentHealth(name=probe_name, status="ok")
+        except Exception as exc:
+            return ComponentHealth(
+                name=probe_name,
+                status="down",
+                detail=f"probe error: {type(exc).__name__}",
+            )
+
+    return _probe
+
+
+def register_singleton_probe(
+    name: str, getter: Callable, *, async_getter: bool = False
+) -> None:
+    """One-line wrapper: build + register a singleton-resolve probe."""
+    register_health_probe(name)(
+        probe_singleton(name, getter, async_getter=async_getter)
+    )
+
+
+def register_redis_probe(name: str, *, database: str = "main") -> None:
+    """One-line wrapper: build + register a Redis-ping probe."""
+    register_health_probe(name)(probe_redis_db(name, database=database))
+
+
+def register_app_state_probe(name: str, attr: str) -> None:
+    """One-line wrapper: build + register an app.state.<attr> probe."""
+    register_health_probe(name)(probe_app_state(name, attr))
