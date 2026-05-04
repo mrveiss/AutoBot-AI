@@ -7,9 +7,11 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
@@ -187,6 +189,30 @@ async def stop_hot_reload():
     except Exception as e:
         logger.error("Failed to stop hot reload: %s", e)
         raise HTTPException(status_code=500, detail="Failed to stop hot reload")
+
+
+@register_health_probe("hot_reload")
+async def probe_hot_reload(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for hot-reload file watcher."""
+    try:
+        from utils.hot_reload_manager import hot_reload_manager
+
+        status = await hot_reload_manager.get_status()
+        if status.get("running"):
+            return ComponentHealth(name="hot_reload", status="ok")
+        return ComponentHealth(
+            name="hot_reload",
+            status="degraded",
+            detail="watcher not running",
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="hot_reload",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=HotReloadHealthResponse)

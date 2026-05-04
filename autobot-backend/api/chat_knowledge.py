@@ -47,6 +47,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history import ChatHistoryManager
+from api.system_health import ComponentHealth, register_health_probe
 
 # Import existing components
 from knowledge_base import KnowledgeBase
@@ -796,6 +797,31 @@ async def get_chat_context(chat_id: str):
     except Exception as e:
         logger.error("Failed to get chat context: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@register_health_probe("chat_knowledge")
+async def probe_chat_knowledge(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the chat-knowledge manager."""
+    try:
+        app_manager = None
+        if request is not None:
+            app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
+        manager = app_manager or chat_knowledge_manager
+        if manager is None:
+            return ComponentHealth(
+                name="chat_knowledge",
+                status="degraded",
+                detail="chat_knowledge_manager not initialized",
+            )
+        return ComponentHealth(name="chat_knowledge", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="chat_knowledge",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=ChatKnowledgeHealthResponse)

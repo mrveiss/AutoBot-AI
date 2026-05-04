@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_workflows import (
     RegistryEndpointsResponse,
     RegistryHealthResponse,
@@ -588,6 +589,31 @@ async def validate_dependencies():
     """Validate router dependencies"""
     errors = registry.validate_dependencies()
     return {"valid": len(errors) == 0, "errors": errors}
+
+
+@register_health_probe("registry")
+async def probe_registry(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the API endpoint registry."""
+    try:
+        if not registry.routers:
+            return ComponentHealth(
+                name="registry",
+                status="degraded",
+                detail="no routers registered",
+            )
+        return ComponentHealth(
+            name="registry",
+            status="ok",
+            data={"total_routers": len(registry.routers)},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="registry",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=RegistryHealthResponse)

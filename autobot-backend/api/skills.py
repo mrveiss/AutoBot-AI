@@ -13,7 +13,9 @@ Includes metrics and health tracking (Issue #4339).
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from api.system_health import ComponentHealth, register_health_probe
 
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
@@ -109,6 +111,28 @@ async def list_categories() -> Dict[str, Any]:
     manager = _get_manager()
     by_cat = manager.list_skills_by_category()
     return {"categories": {cat: len(skills) for cat, skills in by_cat.items()}}
+
+
+@register_health_probe("skills")
+async def probe_skills(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for skills module."""
+    try:
+        registry = get_skill_registry()
+        skill_count = len(registry.list_skills()) if registry else 0
+        return ComponentHealth(
+            name="skills",
+            status="ok" if skill_count > 0 else "degraded",
+            detail=f"{skill_count} skills loaded",
+            data={"skill_count": skill_count},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="skills",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", summary="Get health of all skills", response_model=SkillsAllHealthResponse)

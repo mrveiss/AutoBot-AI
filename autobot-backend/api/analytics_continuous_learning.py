@@ -25,9 +25,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from auth_middleware import check_admin_permission
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     ContinuousLearningFeedbackResponse,
     ContinuousLearningGenerateInsightsResponse,
@@ -1169,6 +1170,34 @@ async def get_config(
     """
     engine = await get_engine()
     return engine.config
+
+
+@register_health_probe("analytics_continuous_learning")
+async def probe_analytics_continuous_learning(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the continuous-learning analytics module.
+
+    Reuses the lightweight engine state checks (running/initialized) from the
+    existing /health route.
+    """
+    try:
+        engine = await get_engine()
+        running = bool(getattr(engine, "_running", False))
+        initialized = bool(getattr(engine, "_initialized", False))
+        status = "ok" if initialized else "degraded"
+        return ComponentHealth(
+            name="analytics_continuous_learning",
+            status=status,
+            detail="engine state probed",
+            data={"running": running, "initialized": initialized},
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_continuous_learning",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", summary="Health check", response_model=ContinuousLearningHealthResponse)

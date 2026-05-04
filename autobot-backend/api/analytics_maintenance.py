@@ -18,9 +18,10 @@ import logging
 from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from auth_middleware import check_admin_permission
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     CustomReportRequest,
     DashboardResponse,
@@ -333,6 +334,32 @@ async def get_unified_dashboard(
     dashboard = await service.get_unified_dashboard(days)
 
     return dashboard
+
+
+@register_health_probe("analytics_maintenance")
+async def probe_analytics_maintenance(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the maintenance analytics module.
+
+    Static probe — the live /health route runs a 7-day dashboard aggregation
+    which is too heavy for the per-probe 2s budget. We confirm the analytics
+    service singleton resolves and report ok.
+    """
+    try:
+        # Resolve singleton; do NOT run the unified-dashboard query (too heavy).
+        get_analytics_service()
+        return ComponentHealth(
+            name="analytics_maintenance",
+            status="ok",
+            detail="service resolved",
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_maintenance",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=MaintenanceHealthStatusResponse)

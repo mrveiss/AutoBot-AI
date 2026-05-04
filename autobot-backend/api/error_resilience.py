@@ -9,10 +9,11 @@ Allows monitoring of system resilience and graceful degradation state.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from services.resilience.circuit_breaker_manager import (
     get_circuit_breaker_manager,
 )
@@ -30,6 +31,24 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
+
+
+@register_health_probe("error_resilience")
+async def probe_error_resilience(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for error-resilience subsystem."""
+    try:
+        get_circuit_breaker_manager()
+        get_error_budget_tracker()
+        get_fallback_manager()
+        return ComponentHealth(name="error_resilience", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="error_resilience",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=ResilienceHealthResponse)

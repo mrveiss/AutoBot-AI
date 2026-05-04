@@ -7,10 +7,13 @@ Provides native API access to containerized Playwright functionality
 """
 
 import logging
+from typing import Optional
 
 import aiohttp
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from auth_middleware import check_admin_permission
+
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
@@ -75,6 +78,34 @@ async def get_playwright_status():
             "ready": False,
             "integration_type": "embedded_docker",
         }
+
+
+@register_health_probe("playwright")
+async def probe_playwright(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for playwright module.
+
+    Lightweight check: inspect the module-level singleton without forcing
+    creation (which would require env-var resolution and a network probe).
+    ``ok`` if already initialized; ``degraded`` if not yet initialized.
+    """
+    try:
+        from services import playwright_service as _ps_mod
+
+        if getattr(_ps_mod, "_playwright_service", None) is None:
+            return ComponentHealth(
+                name="playwright",
+                status="degraded",
+                detail="service not yet initialized",
+            )
+        return ComponentHealth(name="playwright", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="playwright",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=PlaywrightHealthResponse)

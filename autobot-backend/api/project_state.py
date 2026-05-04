@@ -8,10 +8,12 @@ Exposes project development phase information and validation status
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import ComponentHealth, register_health_probe
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
 from api.schemas_common import DataResponse
@@ -264,6 +266,28 @@ async def auto_progress_phases():
     except Exception as e:
         logger.error("Error during auto progression: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@register_health_probe("project_state")
+async def probe_project_state(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the project state manager."""
+    try:
+        manager = get_project_state_manager()
+        if manager is None:
+            return ComponentHealth(
+                name="project_state",
+                status="down",
+                detail="project_state_manager is None",
+            )
+        return ComponentHealth(name="project_state", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="project_state",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=ProjectStateHealthResponse)

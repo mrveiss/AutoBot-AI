@@ -101,6 +101,7 @@ from knowledge.schemas.stats import (
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
 from utils.path_validation import contains_path_traversal
+from api.system_health import ComponentHealth, register_health_probe
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -1548,6 +1549,32 @@ async def upload_audio_file(
 
 # NOTE: Search endpoints moved to knowledge_search.py (Issue #209)
 # Includes: /search, /enhanced_search, /rag_search, /similarity_search
+
+
+@register_health_probe("knowledge")
+async def probe_knowledge(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the knowledge base."""
+    if request is None or not hasattr(request.app.state, "knowledge_base"):
+        return ComponentHealth(
+            name="knowledge",
+            status="degraded",
+            detail="knowledge base not initialized in app state",
+        )
+    try:
+        kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+        if kb is None:
+            return ComponentHealth(
+                name="knowledge", status="down", detail="kb instance is None"
+            )
+        return ComponentHealth(name="knowledge", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="knowledge",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=KnowledgeHealthResponse)

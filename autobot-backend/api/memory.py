@@ -36,6 +36,7 @@ from fastapi.responses import JSONResponse
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.time_utils import now_utc
 from utils.request_utils import generate_request_id
@@ -1386,6 +1387,38 @@ async def get_entity_graph(
 # ====================================================================
 # Health Check Endpoint
 # ====================================================================
+
+
+@register_health_probe("memory")
+async def probe_memory(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the memory graph."""
+    if request is None:
+        return ComponentHealth(
+            name="memory",
+            status="degraded",
+            detail="request not provided; cannot reach app.state",
+        )
+    try:
+        memory_graph = getattr(request.app.state, "memory_graph", None)
+        if memory_graph is None:
+            return ComponentHealth(
+                name="memory",
+                status="down",
+                detail="memory_graph not initialized in app state",
+            )
+        if not getattr(memory_graph, "initialized", False):
+            return ComponentHealth(
+                name="memory", status="degraded", detail="memory_graph not initialized"
+            )
+        return ComponentHealth(name="memory", status="ok")
+    except Exception as exc:
+        return ComponentHealth(
+            name="memory",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=DataResponse)

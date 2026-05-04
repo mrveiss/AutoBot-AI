@@ -26,7 +26,8 @@ from datetime import datetime, timedelta, timezone
 from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     ActiveLearningQuery,
     ConfidenceLevel,
@@ -1072,6 +1073,36 @@ async def run_learning_cycle() -> Dict[str, Any]:
     """
     engine = await get_learning_engine()
     return await engine.run_learning_cycle()
+
+
+@register_health_probe("analytics_pattern_learning")
+async def probe_analytics_pattern_learning(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for the pattern-learning analytics module.
+
+    Reuses the lightweight engine state check from the existing /health route.
+    """
+    try:
+        engine = await get_learning_engine()
+        initialized = bool(getattr(engine, "_initialized", False))
+        redis_connected = getattr(engine, "redis_client", None) is not None
+        status = "ok" if initialized else "degraded"
+        return ComponentHealth(
+            name="analytics_pattern_learning",
+            status=status,
+            detail="engine state probed",
+            data={
+                "initialized": initialized,
+                "redis_connected": redis_connected,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - defensive, never re-raise
+        return ComponentHealth(
+            name="analytics_pattern_learning",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=PatternLearningHealthResponse, summary="Health check")

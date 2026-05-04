@@ -2,9 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
@@ -86,6 +88,28 @@ async def test_redis_connection():
             "status": "disconnected",
             "message": "Failed to connect to Redis",
         }
+
+
+@register_health_probe("redis")
+async def probe_redis(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #3333: probe registration for Redis connectivity."""
+    try:
+        result = ConnectionTester.test_redis_connection()
+        if result.get("status") == "connected":
+            return ComponentHealth(name="redis", status="ok")
+        return ComponentHealth(
+            name="redis",
+            status="down",
+            detail=str(result.get("message")) or "redis disconnected",
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="redis",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+        )
 
 
 @router.get("/health", response_model=RedisHealthResponse)
