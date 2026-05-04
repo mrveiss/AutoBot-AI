@@ -16,7 +16,7 @@ import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePreferences } from '@/composables/usePreferences'
-import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
+import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -43,7 +43,6 @@ const currentTranscript = ref('')
 const bubbles = ref<VoiceBubble[]>([])
 const isActive = ref(false)
 const errorMessage = ref('')
-const wsConnected = ref(false)
 
 // Secure context check — getUserMedia requires HTTPS with a trusted cert (#1059)
 const micAccessAvailable = ref(
@@ -58,7 +57,7 @@ const audioLevel = ref(0)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _recognition: any = null
-let _ws: WebSocket | null = null
+let _voiceUnsubscribe: (() => void) | null = null
 let _vadAudioCtx: AudioContext | null = null
 let _vadNode: AudioWorkletNode | null = null
 let _micStream: MediaStream | null = null
@@ -123,73 +122,35 @@ function _sanitizeForSpeech(text: string): string {
   return lastBreak > 50 ? truncated.slice(0, lastBreak + 1) : truncated
 }
 
-// ─── WebSocket helpers ───────────────────────────────────
+// ─── Voice WS (#6788: shared with useVoiceOutput, single owner) ──────────
 
-function _connectWs(): void {
-  if (_ws && _ws.readyState <= WebSocket.OPEN) return
-
-  const base = getBackendWsUrl()
-  const url = `${base}/api/voice/stream`
-  logger.debug('Connecting voice WS:', url)
-
-  _ws = new WebSocket(url)
-
-  _ws.onopen = () => {
-    wsConnected.value = true
-    logger.debug('Voice WS connected')
-  }
-
-  _ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      _handleWsMessage(msg)
-    } catch (e) {
-      logger.error('Voice WS parse error:', e)
-    }
-  }
-
-  _ws.onclose = () => {
-    wsConnected.value = false
-    logger.debug('Voice WS disconnected')
-    if (mode.value === 'full-duplex' && isActive.value) {
-      logger.warn('WS dropped — falling back to walkie-talkie')
-      mode.value = 'walkie-talkie'
-      errorMessage.value = 'Connection lost. Switched to walkie-talkie.'
-    }
-  }
-
-  _ws.onerror = (e) => {
-    logger.error('Voice WS error:', e)
-  }
+function _subscribeVoice(): void {
+  if (_voiceUnsubscribe) return
+  const { subscribeVoiceMessages } = useVoiceOutput()
+  _voiceUnsubscribe = subscribeVoiceMessages(_handleWsMessage)
 }
 
-function _disconnectWs(): void {
-  if (_ws) {
-    try { _ws.close() } catch { /* ignore */ }
-    _ws = null
+function _unsubscribeVoice(): void {
+  if (_voiceUnsubscribe) {
+    _voiceUnsubscribe()
+    _voiceUnsubscribe = null
   }
-  wsConnected.value = false
 }
 
 function _sendWs(data: Record<string, unknown>): void {
-  if (_ws && _ws.readyState === WebSocket.OPEN) {
-    _ws.send(JSON.stringify(data))
-  }
+  // Fire-and-forget; sendVoiceFrame logs on failure.
+  void useVoiceOutput().sendVoiceFrame(data)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function _handleWsMessage(msg: any): void {
-  const { playAudioChunk } = useVoiceOutput()
-
+  // tts_audio playback is owned by useVoiceOutput; we only react to state.
   switch (msg.type) {
     case 'state':
       logger.debug('Server state:', msg.state)
       break
     case 'tts_start':
       state.value = 'speaking'
-      break
-    case 'tts_audio':
-      playAudioChunk(msg.data)
       break
     case 'tts_end':
       // Handled by isSpeaking watcher when audio queue drains
@@ -566,7 +527,8 @@ function _dispatchTranscript(text: string): void {
       return
     }
 
-    if (mode.value === 'full-duplex' && wsConnected.value) {
+    const { wsConnected: voiceWsConnected } = useVoiceOutput()
+    if (mode.value === 'full-duplex' && voiceWsConnected.value) {
       const { effectiveVoiceId } = useVoiceProfiles()
       _sendWs({ type: 'speak', text: speechText, voice_id: effectiveVoiceId.value })
     } else {
@@ -738,7 +700,7 @@ function _handleVadSpeechEnd(audio: Float32Array): void {
 // ─── Main composable ────────────────────────────────────
 
 export function useVoiceConversation() {
-  const { isSpeaking, unlockAudio, stopSpeaking } = useVoiceOutput()
+  const { isSpeaking, unlockAudio, stopSpeaking, wsConnected } = useVoiceOutput()
 
   const isListening = computed(() => state.value === 'listening')
   const isProcessing = computed(() => state.value === 'processing')
@@ -766,8 +728,8 @@ export function useVoiceConversation() {
     currentLanguage.value = _getShortLanguage()
     unlockAudio()
 
+    _subscribeVoice()
     if (mode.value === 'full-duplex') {
-      _connectWs()
       await _initVad()
       _startListeningInternal()
     } else if (mode.value === 'hands-free') {
@@ -779,7 +741,7 @@ export function useVoiceConversation() {
   function deactivate(): void {
     _stopRecognition()
     _stopHandsFree()
-    _disconnectWs()
+    _unsubscribeVoice()
     _teardownVad()
     stopSpeaking()
     if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
@@ -836,7 +798,6 @@ export function useVoiceConversation() {
     if (wasActive) {
       _stopRecognition()
       _stopHandsFree()
-      _disconnectWs()
       _teardownVad()
       stopSpeaking()
       if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
@@ -847,7 +808,7 @@ export function useVoiceConversation() {
     mode.value = newMode
 
     if (wasActive && newMode === 'full-duplex') {
-      _connectWs()
+      _subscribeVoice()
       _initVad().then(() => _startListeningInternal())
     } else if (wasActive && newMode === 'hands-free') {
       _startHandsFree()
