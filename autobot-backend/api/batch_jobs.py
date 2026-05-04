@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.system_health import register_redis_probe
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
@@ -574,7 +574,45 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-register_redis_probe("batch_jobs", database="main")
+@register_health_probe("batch_jobs")
+async def probe_batch_jobs(
+    request: Optional[Request] = None,
+) -> ComponentHealth:
+    """Issue #6902: probe with rich data so the frontend can read
+    ``probes[name=batch_jobs].data.redis_connected`` from /api/system/health.
+
+    Mirrors the legacy /api/batch-jobs/health response keys.
+    """
+    try:
+        client = await get_async_redis_client(database="main")
+        if client is None:
+            return ComponentHealth(
+                name="batch_jobs",
+                status="down",
+                detail="redis client unavailable",
+                data={"redis_connected": False, "service": "batch_jobs_manager"},
+            )
+        redis_connected = True
+        try:
+            await client.ping()
+        except Exception:
+            redis_connected = False
+        return ComponentHealth(
+            name="batch_jobs",
+            status="ok" if redis_connected else "degraded",
+            detail=None if redis_connected else "redis ping failed",
+            data={
+                "redis_connected": redis_connected,
+                "service": "batch_jobs_manager",
+            },
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="batch_jobs",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+            data={"redis_connected": False, "service": "batch_jobs_manager"},
+        )
 
 
 @router.get("/health", response_model=BatchJobsHealthResponse)
