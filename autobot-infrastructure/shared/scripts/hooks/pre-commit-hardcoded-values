@@ -42,7 +42,7 @@ get_files_to_scan() {
         git diff --cached --name-only --diff-filter=ACM 2>/dev/null
     fi | \
         grep -E '\.(py|ts|vue)$' | \
-        grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
+        grep -v -E '(/__pycache__/|/node_modules/|/\.venv/|/venv/|/archive/|/tmp/|/\.tmp/|^tmp/|^archive/)' | \
         grep -v -E '(test_|_test\.py|\.test\.ts|\.spec\.ts)' | \
         grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
         grep -v -E '(path_constants\.py|network_constants\.py|security_constants\.py)' | \

@@ -88,6 +88,24 @@ class TestHardcodedIPDetection:
         )
         assert result.returncode != 0
 
+    def test_blocks_hardcoded_ip_in_template_loader(self, tmp_path: Path) -> None:
+        """#6782: 'temp' substring filter must NOT exempt production files
+        whose names happen to contain 'temp' (template_loader, temporal_*, etc.)."""
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/template_loader.py": 'X = "172.16.168.20"\n'},
+        )
+        assert result.returncode != 0
+        assert "172.16.168.20" in result.stdout
+
+    def test_blocks_hardcoded_ip_in_temporal_module(self, tmp_path: Path) -> None:
+        """#6782: same fix — temporal_* paths must be scanned."""
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/temporal_search.py": 'X = "172.16.168.21"\n'},
+        )
+        assert result.returncode != 0
+
 
 @pytest.mark.skipif(
     not HOOK_PATH.exists(), reason="hook script missing at expected path"
