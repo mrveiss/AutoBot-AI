@@ -257,12 +257,25 @@ async def get_system_health(
         # rich per-probe data (latency, detail, structured payload) is exposed
         # under ``probes`` for callers that want it.
         aggregated = await collect_system_health(request)
+        # Map probe vocabulary to the legacy frontend vocabulary
+        # (``HealthCheckResponse`` documented as Record<string,"healthy"|"unhealthy"|...>).
+        _PROBE_TO_LEGACY = {
+            "ok": "healthy",
+            "degraded": "degraded",
+            "down": "unhealthy",
+        }
         for component in aggregated.components:
-            health_status["components"][component.name] = (
-                "healthy" if component.status == "ok" else component.status
+            health_status["components"][component.name] = _PROBE_TO_LEGACY.get(
+                component.status, component.status
             )
-        if aggregated.status != "ok" and health_status["status"] == "healthy":
-            health_status["status"] = "degraded"
+        # Preserve the worst-of severity from the aggregator so a probe reporting
+        # "down" surfaces as "unhealthy" at the top level rather than being
+        # silently downgraded to "degraded".
+        if (
+            aggregated.status != "ok"
+            and health_status["status"] == "healthy"
+        ):
+            health_status["status"] = _PROBE_TO_LEGACY[aggregated.status]
         health_status["probes"] = [
             component.model_dump(exclude_none=True)
             for component in aggregated.components

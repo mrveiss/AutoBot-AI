@@ -120,6 +120,23 @@ def test_re_registering_overwrites_and_keeps_one_entry():
     assert result.components[0].detail == "v2"
 
 
+def test_aggregator_status_when_probe_returns_down():
+    @register_health_probe("ok_probe")
+    async def _probe_ok(_request=None):
+        return ComponentHealth(name="ok_probe", status="ok")
+
+    @register_health_probe("dead_probe")
+    async def _probe_dead(_request=None):
+        return ComponentHealth(name="dead_probe", status="down", detail="gone")
+
+    result = asyncio.run(collect_system_health())
+    # Worst-of rollup must surface "down", not silently soften it to "degraded".
+    assert result.status == "down"
+    statuses = {c.name: c.status for c in result.components}
+    assert statuses["ok_probe"] == "ok"
+    assert statuses["dead_probe"] == "down"
+
+
 def test_probes_run_concurrently_not_serially():
     sleeps = [0.5, 0.5, 0.5]
 
