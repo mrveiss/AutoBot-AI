@@ -42,8 +42,18 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Union
 from autobot_shared.tracing import get_tracer
 from llm_interface_pkg.cache import CachedResponse, get_llm_cache
 from llm_interface_pkg.models import LLMRequest, LLMResponse
+from llm_interface_pkg.tiered_routing import TierConfig, TieredModelRouter
 from llm_interface_pkg.types import LLMType, ProviderType
 from llm_providers.provider_registry import ProviderRegistry, get_provider_registry
+
+try:
+    from services.provider_health import ProviderHealthManager, ProviderStatus
+
+    _HEALTH_CHECK_AVAILABLE = True
+except Exception:  # pragma: no cover
+    _HEALTH_CHECK_AVAILABLE = False
+    ProviderHealthManager = None  # type: ignore[assignment]
+    ProviderStatus = None  # type: ignore[assignment]
 
 # OTel tracer shared with llm_interface_pkg — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
@@ -124,6 +134,14 @@ class LLMService:
         self._response_cache = get_llm_cache()
         # Runtime provider override set via switch_provider() (#3185).
         self._active_provider: Optional[str] = None
+        # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
+        try:
+            self._tier_router: Optional[TieredModelRouter] = TieredModelRouter(
+                TierConfig.from_config()
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Tiered routing init failed, disabled: %s", exc)
+            self._tier_router = None
 
     # ------------------------------------------------------------------
     # Per-conversation model configuration
@@ -589,6 +607,112 @@ class LLMService:
         if l2:
             result["l2_cleared"] = await self._response_cache.clear_l2()
         return result
+
+    # ------------------------------------------------------------------
+    # Tiered routing (#3185, ported from LLMInterface._init_tiered_routing)
+    # ------------------------------------------------------------------
+
+    @property
+    def tier_router(self) -> Optional[TieredModelRouter]:
+        """Return the shared TieredModelRouter instance, or None if disabled.
+
+        Callers in api/llm.py reach this to get/set metrics and config.
+        Mirrors ``LLMInterface._tier_router`` (interface.py line 410).
+        """
+        return self._tier_router
+
+    # ------------------------------------------------------------------
+    # Full performance metrics (#3185, ported from LLMInterface.get_metrics)
+    # ------------------------------------------------------------------
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Return aggregated performance metrics for this service.
+
+        Shape mirrors ``LLMInterface.get_metrics()`` (interface.py line 1322)
+        so callers in ``api/llm_optimization.py`` can access the same keys.
+        LLMService does not own the LLMInterface-specific optimization objects
+        (rate-limiter, optimization-router, connection-pool), so those keys
+        are reported as empty dicts.  All other keys are populated from live
+        data.
+
+        Keys returned:
+            total_requests, cache_hits, cache_misses, avg_response_time,
+            fallback_count, provider_usage, cache (L1/L2 detail),
+            tiered_routing (when enabled), optimization (empty dict).
+        """
+        cache_metrics = self.get_cache_metrics()
+        registry_stats = self._registry.get_stats()
+        metrics: Dict[str, Any] = {
+            "total_requests": self._request_count,
+            "cache_hits": cache_metrics.get("l1_hits", 0) + cache_metrics.get("l2_hits", 0),
+            "cache_misses": cache_metrics.get("misses", 0),
+            "avg_response_time": 0.0,
+            "fallback_count": 0,
+            "provider_usage": registry_stats.get("providers", {}),
+            "cache": cache_metrics,
+            # LLMInterface-specific optimization objects not present on LLMService.
+            "optimization": {},
+        }
+        if self._tier_router:
+            metrics["tiered_routing"] = self._tier_router.get_metrics()
+        return metrics
+
+    # ------------------------------------------------------------------
+    # Provider routing map (#3185, ported from LLMInterface.provider_routing)
+    # ------------------------------------------------------------------
+
+    @property
+    def provider_routing(self) -> Dict[str, Any]:
+        """Return a mapping of provider name to provider object.
+
+        Mirrors ``LLMInterface.provider_routing`` (interface.py line 282).
+        Callers in ``api/llm_providers.py`` check ``provider_name in
+        llm.provider_routing`` to validate provider existence before testing.
+        """
+        return dict(self._registry._providers)
+
+    # ------------------------------------------------------------------
+    # Provider health check (#3185, ported from LLMInterface._is_provider_healthy)
+    # ------------------------------------------------------------------
+
+    async def is_provider_healthy(
+        self, provider_name: str
+    ) -> tuple[bool, Optional[str]]:
+        """Check whether a named provider is currently healthy.
+
+        Public equivalent of ``LLMInterface._is_provider_healthy()``
+        (interface.py line 1094).  Uses ``ProviderHealthManager`` when
+        available; falls back to ``registry.health_check_all()`` otherwise.
+
+        Args:
+            provider_name: Registered provider name to check.
+
+        Returns:
+            ``(is_healthy, error_message_or_None)``.
+        """
+        if _HEALTH_CHECK_AVAILABLE and provider_name in ("ollama", "openai"):
+            try:
+                health_result = await ProviderHealthManager.check_provider_health(
+                    provider_name, timeout=2.0, use_cache=True
+                )
+                if health_result.status == ProviderStatus.UNAVAILABLE:
+                    return (
+                        False,
+                        f"{provider_name} unavailable: {health_result.message}",
+                    )
+            except Exception as exc:
+                logger.debug("Health check for %s raised: %s", provider_name, exc)
+            return True, None
+
+        # Fallback: use the registry's cached health check
+        try:
+            health = await self._registry.health_check_all()
+            is_healthy = health.get(provider_name, True)
+            if not is_healthy:
+                return False, f"{provider_name} reported as unavailable"
+        except Exception as exc:
+            logger.debug("Registry health_check_all for %s raised: %s", provider_name, exc)
+        return True, None
 
     # ------------------------------------------------------------------
     # Internal helpers
