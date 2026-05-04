@@ -596,16 +596,45 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
 async def probe_long_running(
     request: Optional[Request] = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for long-running operations manager."""
+    """Issue #3333 / #6902: probe with rich data so the frontend can read
+    ``probes[name=long_running].data.{active_operations,total_operations,...}``
+    from /api/system/health and migrate off the legacy
+    /api/long-running/health route before sunset.
+    """
+    if not _OPERATIONS_AVAILABLE:
+        return ComponentHealth(
+            name="long_running",
+            status="down",
+            detail="operations framework not available",
+            data={
+                "active_operations": 0,
+                "total_operations": 0,
+                "redis_connected": False,
+                "background_processor_running": False,
+            },
+        )
     try:
-        if not _OPERATIONS_AVAILABLE:
-            return ComponentHealth(
-                name="long_running",
-                status="down",
-                detail="operations framework not available",
-            )
-        operation_integration_manager.get_all_operations()
-        return ComponentHealth(name="long_running", status="ok")
+        all_operations = operation_integration_manager.get_all_operations()
+        active_operations = sum(
+            1 for op in all_operations if op.status == OperationStatus.RUNNING
+        )
+        redis_connected = (
+            operation_integration_manager.redis_client is not None
+        )
+        background_processor_running = (
+            operation_integration_manager.operation_manager._background_processor_task
+            is not None
+        )
+        return ComponentHealth(
+            name="long_running",
+            status="ok",
+            data={
+                "active_operations": active_operations,
+                "total_operations": len(all_operations),
+                "redis_connected": redis_connected,
+                "background_processor_running": background_processor_running,
+            },
+        )
     except Exception as exc:
         return ComponentHealth(
             name="long_running",
