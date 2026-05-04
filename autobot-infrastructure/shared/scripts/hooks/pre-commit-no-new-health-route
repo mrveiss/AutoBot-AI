@@ -1,0 +1,139 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No New /health Routes Outside system_health.py
+# ===============================================================
+#
+# Issue #3333 — consolidates 45 scattered /health endpoints behind the single
+# canonical aggregator at /api/system/health (api/system.py). New modules MUST
+# register a probe via api.system_health.register_health_probe instead of
+# defining another @router.get("/health") route.
+#
+# Blocks commits that add new lines matching:
+#   @router.get("/health"...)   — anywhere under autobot-backend/api/
+#   @router.post("/health"...)
+#   @router.get("/system/health"...)
+#
+# Allowed locations (registry + aggregator):
+#   - autobot-backend/api/system.py
+#   - autobot-backend/api/system_health.py
+#
+# Suppression: add a `# noqa: health-route` comment on the offending line.
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Files exempt from the rule.
+EXEMPT_PATHS=(
+    "autobot-backend/api/system.py"
+    "autobot-backend/api/system_health.py"
+)
+
+is_exempt() {
+    local path="$1"
+    for exempt in "${EXEMPT_PATHS[@]}"; do
+        if [[ "$path" == "$exempt" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Pull every "+ @router.{get,post}(.../health...)" line that is not a removal,
+# not a hunk header, and not a noqa-suppressed line — out of the staged diff
+# scoped to autobot-backend/api/. Reports as path:lineno:source.
+collect_violations() {
+    git diff --cached --no-color -U0 -- 'autobot-backend/api/*.py' 2>/dev/null | \
+    awk '
+        /^diff --git/ {
+            # Reset per-file state.
+            file = ""
+            next
+        }
+        /^\+\+\+ b\// {
+            file = substr($0, 7)
+            next
+        }
+        /^@@ / {
+            # Extract +start[,count] from "@@ -A,B +C,D @@"
+            match($0, /\+[0-9]+/)
+            new_lineno = substr($0, RSTART + 1, RLENGTH - 1) + 0
+            next
+        }
+        /^\+/ && !/^\+\+\+/ {
+            line = substr($0, 2)
+            # Match @router.<verb>("/health" or "/system/health"
+            if (line ~ /@router\.(get|post|put|delete)[[:space:]]*\([[:space:]]*["'\''](\/system)?\/health["'\'']/) {
+                if (line !~ /#[[:space:]]*noqa:.*health-route/) {
+                    printf "%s\t%d\t%s\n", file, new_lineno, line
+                }
+            }
+            new_lineno++
+            next
+        }
+    '
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No New /health Routes Outside system_health.py${NC}"
+    echo "Issue #3333 — Health Endpoint Consolidation"
+    echo "================================================"
+    echo ""
+
+    local violations
+    violations=$(collect_violations)
+
+    if [[ -z "$violations" ]]; then
+        echo -e "${GREEN}No new /health route definitions detected.${NC}"
+        exit 0
+    fi
+
+    local count=0
+    while IFS=$'\t' read -r path lineno text; do
+        if is_exempt "$path"; then
+            continue
+        fi
+        echo -e "  ${RED}VIOLATION${NC} ${path}:${lineno}"
+        echo "    ${text}"
+        ((count++))
+    done <<< "$violations"
+
+    echo ""
+    echo "================================================"
+
+    if (( count > 0 )); then
+        echo -e "${RED}COMMIT BLOCKED: $count new /health route definition(s) found${NC}"
+        echo ""
+        echo "Quick fix — register a probe instead of adding another route:"
+        echo ""
+        echo "  from typing import Optional"
+        echo "  from fastapi import Request"
+        echo "  from api.system_health import ComponentHealth, register_health_probe"
+        echo ""
+        echo "  @register_health_probe(\"my_module\")"
+        echo "  async def probe_my_module(request: Optional[Request] = None) -> ComponentHealth:"
+        echo "      ..."
+        echo "      return ComponentHealth(name=\"my_module\", status=\"ok\")"
+        echo ""
+        echo "Probes are aggregated at /api/system/health automatically."
+        echo ""
+        echo "Suppression (last resort): append '# noqa: health-route' to the route line."
+        echo ""
+        exit 1
+    fi
+
+    echo -e "${GREEN}All new /health routes are in exempt files.${NC}"
+    exit 0
+}
+
+main "$@"

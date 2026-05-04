@@ -253,6 +253,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
 
+  # No new /health routes outside api/system_health.py (Issue #3333)
+  - repo: local
+    hooks:
+      - id: no-new-health-route
+        name: No New /health Routes Outside system_health.py (Issue #3333)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-health-route
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new @router.get('/health') definitions; modules must call api.system_health.register_health_probe instead"
+
   # No print()/console.* in production code (Issue #1082)
   - repo: local
     hooks:
