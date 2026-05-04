@@ -30,6 +30,7 @@ Protocol (JSON messages):
 import asyncio
 import base64
 import logging
+import os
 from collections import deque
 from typing import Optional
 
@@ -92,12 +93,23 @@ async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
         task.cancel()
 
 
-# Pipelining depth for TTS streaming (#6752). With depth=1 (the previous
-# behaviour), any TTS-worker latency spike that exceeds the playback duration
-# of the current chunk produced an audible gap on the client (the frontend's
-# gapless scheduler falls back to "now"). Buffering N chunks ahead absorbs
-# jitter up to N * chunk_duration.
-_TTS_PIPELINE_DEPTH = 3
+# Pipelining depth for TTS streaming (#6752, tuned in #6811).
+# Pocket TTS calls run via run_in_executor and serialize on the GIL/model lock,
+# so depth>2 only adds queue contention without true parallelism. depth=2 lets
+# chunk N+1 synthesize while the client plays chunk N — enough to absorb
+# typical jitter without piling backlog. Override with AUTOBOT_TTS_PIPELINE_DEPTH
+# (clamped to 1..8 to prevent ops typos OOMing the worker).
+def _resolve_tts_pipeline_depth() -> int:
+    raw = os.getenv("AUTOBOT_TTS_PIPELINE_DEPTH", "2")
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid AUTOBOT_TTS_PIPELINE_DEPTH=%r; using 2", raw)
+        return 2
+    return max(1, min(8, value))
+
+
+_TTS_PIPELINE_DEPTH = _resolve_tts_pipeline_depth()
 
 
 async def _send_one_chunk(
