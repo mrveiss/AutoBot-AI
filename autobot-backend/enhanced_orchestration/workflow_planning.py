@@ -6,6 +6,13 @@ Workflow Planning Module
 
 Issue #381: Extracted from enhanced_multi_agent_orchestrator.py god class refactoring.
 Contains workflow planning, building, and utility functions.
+
+Note: The class in this module is named ``StrategyPlanner`` — not ``WorkflowPlanner`` —
+to distinguish it from the canonical (but currently unwired) ``orchestration.WorkflowPlanner``
+in ``autobot-backend/orchestration/workflow_planner.py``.  Both classes were historically
+called ``WorkflowPlanner`` and every import site aliased this one ``as StrategyPlanner``;
+the rename removes that aliasing smell (#6817).  The orphan status of the canonical class
+is tracked separately in #6820.
 """
 
 import logging
@@ -18,7 +25,7 @@ from .types import AgentCapability, AgentTask, ExecutionStrategy, WorkflowPlan
 logger = logging.getLogger(__name__)
 
 
-class WorkflowPlanner:
+class StrategyPlanner:
     """Handles workflow plan creation and task management."""
 
     def __init__(self, agent_capabilities: Dict[str, Set[AgentCapability]]):
