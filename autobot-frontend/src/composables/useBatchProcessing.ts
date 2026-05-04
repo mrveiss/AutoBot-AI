@@ -255,13 +255,41 @@ export function useBatchProcessingApi() {
     },
 
     /**
-     * Get batch service health status
+     * Get batch service health status.
+     *
+     * Issue #6902: migrated off the legacy /api/batch-jobs/health (sunset
+     * 2026-09-02) onto the canonical aggregator at /api/system/health. The
+     * `batch_jobs` probe populates `data.redis_connected`; `active_jobs` and
+     * `total_jobs` were never returned by the legacy backend response, so
+     * the fallback values match the prior behaviour.
      */
     async getHealth(): Promise<BatchHealthResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/batch-jobs/health`)
-          return await response.json()
+          const response = await api.get(`${getApiBase()}/system/health`)
+          const payload = await response.json()
+          const probe = (payload?.probes ?? []).find(
+            (p: { name: string }) => p.name === 'batch_jobs'
+          )
+          if (!probe) {
+            return {
+              status: 'unavailable' as const,
+              active_jobs: 0,
+              total_jobs: 0,
+              redis_connected: false,
+              message: 'batch_jobs probe not registered'
+            }
+          }
+          const data = probe.data ?? {}
+          const status: BatchHealthResponse['status'] =
+            probe.status === 'ok' ? 'healthy' : 'unavailable'
+          return {
+            status,
+            active_jobs: 0,
+            total_jobs: 0,
+            redis_connected: Boolean(data.redis_connected),
+            message: probe.detail
+          }
         },
         {
           errorMessage: 'Failed to check batch service health',

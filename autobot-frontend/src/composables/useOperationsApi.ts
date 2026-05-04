@@ -109,13 +109,44 @@ export function useOperationsApi() {
     },
 
     /**
-     * Get operations service health status
+     * Get operations service health status.
+     *
+     * Issue #6902: migrated off the legacy /api/long-running/health (sunset
+     * 2026-09-02) onto the canonical aggregator at /api/system/health. The
+     * `long_running` probe populates `data` with the four diagnostic fields
+     * the UI consumes.
      */
     async getHealth(): Promise<OperationsHealthResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`${getApiBase()}/long-running/health`)
-          return await response.json()
+          const response = await api.get(`${getApiBase()}/system/health`)
+          const payload = await response.json()
+          const probe = (payload?.probes ?? []).find(
+            (p: { name: string }) => p.name === 'long_running'
+          )
+          if (!probe) {
+            return {
+              status: 'unavailable' as const,
+              active_operations: 0,
+              total_operations: 0,
+              redis_connected: false,
+              background_processor_running: false,
+              message: 'long_running probe not registered'
+            }
+          }
+          const data = probe.data ?? {}
+          const status: OperationsHealthResponse['status'] =
+            probe.status === 'ok' ? 'healthy' : 'unavailable'
+          return {
+            status,
+            active_operations: Number(data.active_operations ?? 0),
+            total_operations: Number(data.total_operations ?? 0),
+            redis_connected: Boolean(data.redis_connected),
+            background_processor_running: Boolean(
+              data.background_processor_running
+            ),
+            message: probe.detail
+          }
         },
         {
           errorMessage: 'Failed to check operations health',
