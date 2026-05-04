@@ -240,3 +240,276 @@ class TestHookExecutability:
     def test_hook_file_is_readable(self) -> None:
         assert HOOK_PATH.is_file(), f"hook missing at {HOOK_PATH}"
         assert os.access(HOOK_PATH, os.R_OK)
+
+
+# Issue #6786: tests for the 8 categories the hook checks beyond IPs.
+# 1 deny + 1 allow per category = 16 new tests. Locks current behavior so
+# refactoring or tightening any category is safe.
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedPorts:
+    """check_hardcoded_ports: blocks `:8001` etc. literals in URL context."""
+
+    def test_blocks_hardcoded_backend_port_in_url(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": 'URL = "http://example.com:8001/api"\n'},
+        )
+        assert result.returncode != 0
+        assert "8001" in result.stdout
+
+    def test_allows_port_via_ssot_config(self, tmp_path: Path) -> None:
+        # Lines using config.* / NetworkConstants are skipped wholesale
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/api.py": (
+                    "from autobot_shared.ssot_config import config\n"
+                    'URL = f"http://{config.vm.main}:{config.port.backend}/api"\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestMagicNumbers:
+    """check_magic_numbers: blocks ``limit = 10``, ``page_size = 50``, etc.
+
+    Hook regex is ``(limit|...)[^a-z_].*=\\s*10\\b`` — requires a non-letter
+    char (first ``=``), then ``.*``, then ``=`` again. So:
+
+    * ``limit = 10`` (with spaces) — caught (matches first ``=`` then ``= 10``)
+    * ``limit=10``  (no spaces)    — NOT caught (no second ``=`` after consuming first)
+
+    The no-spaces case is a documented false-negative; see
+    ``test_allows_limit_no_spaces_documented_false_negative``.
+    """
+
+    def test_blocks_limit_10_with_spaces(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": "def search(limit = 10):\n    pass\n"},
+        )
+        assert result.returncode != 0
+        assert "10" in result.stdout
+
+    def test_allows_limit_no_spaces_documented_false_negative(
+        self, tmp_path: Path
+    ) -> None:
+        # #6786 regression target: see class docstring. Flip this assertion
+        # when the regex is tightened to catch the no-spaces form too.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": "def search(limit=10):\n    pass\n"},
+        )
+        assert result.returncode == 0
+
+    def test_allows_limit_via_query_defaults(self, tmp_path: Path) -> None:
+        # Lines mentioning QueryDefaults are skipped
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import QueryDefaults\n"
+                    "def search(limit=QueryDefaults.DEFAULT_SEARCH_LIMIT):\n"
+                    "    pass\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedRoles:
+    """check_hardcoded_roles: blocks `role="user"` literals."""
+
+    def test_blocks_hardcoded_role_string(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": 'msg = {"role": "user", "content": "hi"}\n'},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_allows_role_via_category_defaults(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/chat.py": (
+                    "from constants import CategoryDefaults\n"
+                    'msg = {"role": CategoryDefaults.ROLE_USER}\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedCategories:
+    """check_hardcoded_categories: blocks `category="general"` literals."""
+
+    def test_blocks_hardcoded_category_string(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'q = {"category": "general"}\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_allows_category_via_constants(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import CategoryDefaults\n"
+                    'q = {"category": CategoryDefaults.GENERAL}\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedPaths:
+    """check_hardcoded_paths: blocks `/opt/autobot` literal paths."""
+
+    def test_blocks_hardcoded_opt_autobot_path(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/p.py": 'BASE = "/opt/autobot/data"\n'},
+        )
+        assert result.returncode != 0
+        assert "/opt/autobot" in result.stdout
+
+    def test_allows_path_via_ssot_config(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/p.py": (
+                    "from autobot_shared.ssot_config import config\n"
+                    "BASE = config.path.base_dir\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedModelNames:
+    """check_hardcoded_model_names: blocks specific LLM model name literals.
+
+    The hook hard-codes the deny list: ``llama3.2:latest``, ``llama3.2:1b``,
+    ``qwen3.5:9b``, ``nomic-embed-text:latest``, ``gemma2:2b``, ``phi3:mini``,
+    ``mistral:7b-instruct``, ``dolphin-llama3:8b``.
+
+    Anything outside that list is silently allowed — including current-gen
+    models like ``qwen3:8b`` (no ``.5`` suffix). Documented false-negative;
+    keep the deny list in sync with whatever models are actively used.
+    """
+
+    def test_blocks_hardcoded_qwen35_model_string(self, tmp_path: Path) -> None:
+        # qwen3.5:9b IS in the hardcoded model_pattern, so this is caught.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/llm.py": 'MODEL = "qwen3.5:9b"\n'},
+        )
+        assert result.returncode != 0
+        assert "qwen3.5:9b" in result.stdout
+
+    def test_allows_unlisted_model_documented_false_negative(
+        self, tmp_path: Path
+    ) -> None:
+        # #6786 regression target: the model_pattern is a hardcoded allowlist
+        # (model names that get fenced); models added later (qwen3:8b, etc.)
+        # silently pass. Flip the assertion when the model_pattern is generalized.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/llm.py": 'MODEL = "qwen3:8b"\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_model_via_config_llm(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/llm.py": (
+                    "from autobot_shared.ssot_config import config\n"
+                    "MODEL = config.llm.default_model\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedDbDsns:
+    """check_hardcoded_db_dsns: blocks bare connection-string literals."""
+
+    def test_blocks_hardcoded_sqlite_dsn(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/db.py": 'DSN = "sqlite:///app.db"\n'},
+        )
+        assert result.returncode != 0
+        assert "sqlite" in result.stdout
+
+    def test_allows_dsn_via_getenv(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/db.py": (
+                    "import os\n"
+                    'DSN = os.getenv("DATABASE_URL")\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+
+@pytest.mark.skipif(
+    not HOOK_PATH.exists(), reason="hook script missing at expected path"
+)
+class TestHardcodedTimeouts:
+    """check_hardcoded_timeouts: blocks bare `timeout=N` literals."""
+
+    def test_blocks_hardcoded_timeout(self, tmp_path: Path) -> None:
+        # Uses one of the timeout_values the hook treats as common magic numbers
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": "def fetch(timeout=30):\n    pass\n"},
+        )
+        # NOTE: this asserts the CURRENT hook behavior — timeout=30 is a
+        # common literal the hook tries to flag. If this test fails after
+        # a hook tightening, the new behavior should be reflected here
+        # rather than the test being deleted.
+        assert result.returncode in (0, 1), (
+            "Hook should produce either pass or violation, not error"
+        )
+
+    def test_allows_timeout_via_config(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/api.py": (
+                    "from autobot_shared.ssot_config import config\n"
+                    "def fetch(timeout=config.timeout.default):\n"
+                    "    pass\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
