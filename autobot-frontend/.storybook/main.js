@@ -2,7 +2,7 @@
 const config = {
   stories: ['../src/**/*.stories.ts'],
   addons: [
-    '@storybook/addon-essentials',
+    '@storybook/addon-docs',
   ],
   framework: {
     name: '@storybook/vue3-vite',
