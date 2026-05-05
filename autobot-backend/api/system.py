@@ -354,6 +354,29 @@ async def get_system_health(
         }
 
 
+@router.get("/system/health/probes", response_model=list[str])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_health_probes",
+    error_code_prefix="SYSTEM",
+)
+async def get_system_health_probes() -> list[str]:
+    """List names of every currently-registered health probe (#6917).
+
+    Returns the canonical set of probe names so frontend callers can
+    validate at startup that an expected probe exists before reading
+    ``probes[name=…]`` from ``GET /api/system/health``. A typo on either
+    side surfaces here as a missing-name mismatch instead of silently
+    returning ``undefined``/'unavailable' to the user.
+
+    Public endpoint — no auth required (matches /api/system/health).
+    Cheap call: returns sorted list of strings, no probe execution.
+    """
+    from api.system_health import list_registered_probes
+
+    return list_registered_probes()
+
+
 @router.get("/info", response_model=SystemInfoResponse)
 @cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 @with_error_handling(
