@@ -129,6 +129,18 @@ class LongRunningOperationManager:
                 logger.debug("Background processor cancelled")
             self._background_processor_task = None
 
+    def is_background_processor_running(self) -> bool:
+        """Public accessor for the background processor state (#6921).
+
+        Health probes and monitoring callers used to read the private
+        ``_background_processor_task`` attribute directly. That coupled the
+        probe to internal storage — a refactor renaming/removing the
+        attribute would have made the probe AttributeError silently and the
+        registry would have reported the otherwise-healthy module as
+        ``status="down"``.
+        """
+        return self._background_processor_task is not None
+
     async def _background_processor(self) -> None:
         """Process background operations with concurrency control."""
         while True:
