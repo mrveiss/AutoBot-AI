@@ -79,7 +79,7 @@ class WorkflowTask:
     """
 
     task_id: str
-    description: str
+    description: str = ""
 
     agent_type: Optional[str] = None
     action: Optional[str] = None
