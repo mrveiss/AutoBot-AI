@@ -11,6 +11,7 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -43,6 +44,7 @@ class RequiredEnvVar(BaseModel):
     )
     description: str = Field(
         ...,
+        min_length=1,
         description="One-line purpose of the variable",
     )
     docs_url: Optional[str] = Field(
@@ -57,13 +59,12 @@ class RequiredEnvVar(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Env-var names must be UPPER_SNAKE_CASE starting with a letter."""
-        if not v:
-            raise ValueError("Env var name cannot be empty")
-        if not v[0].isalpha() or not v[0].isupper():
-            raise ValueError("Env var name must start with an uppercase letter")
-        if not all(c.isupper() or c.isdigit() or c == "_" for c in v):
-            raise ValueError("Env var name must be UPPER_SNAKE_CASE")
+        """Env-var names must be ASCII UPPER_SNAKE_CASE starting with a letter."""
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", v):
+            raise ValueError(
+                "Env var name must be ASCII UPPER_SNAKE_CASE starting with "
+                "an uppercase letter (e.g. 'MY_PLUGIN_API_KEY')"
+            )
         return v
 
 

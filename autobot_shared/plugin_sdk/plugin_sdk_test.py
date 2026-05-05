@@ -12,7 +12,13 @@ Issue #3278 - Plugin and extension system for third-party integrations.
 
 import pytest
 
-from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
+from plugin_sdk.base import (
+    BasePlugin,
+    PluginManifest,
+    PluginRegistry,
+    PluginStatus,
+    RequiredEnvVar,
+)
 from plugin_sdk.hooks import Hook, HookRegistry
 from plugin_sdk.plugin_manager import PluginManager
 
@@ -76,8 +82,6 @@ def test_manifest_invalid_name():
 
 
 def test_required_env_var_accepts_valid_name():
-    from plugin_sdk.base import RequiredEnvVar
-
     var = RequiredEnvVar(
         name="MY_PLUGIN_API_KEY",
         description="The API key.",
@@ -90,31 +94,41 @@ def test_required_env_var_accepts_valid_name():
 
 
 def test_required_env_var_rejects_lowercase_name():
-    from plugin_sdk.base import RequiredEnvVar
-
     with pytest.raises(Exception):
         RequiredEnvVar(name="my_plugin_api_key", description="x")
 
 
 def test_required_env_var_rejects_leading_digit():
-    from plugin_sdk.base import RequiredEnvVar
-
     with pytest.raises(Exception):
         RequiredEnvVar(name="1MY_KEY", description="x")
 
 
 def test_required_env_var_rejects_special_chars():
-    from plugin_sdk.base import RequiredEnvVar
-
     with pytest.raises(Exception):
         RequiredEnvVar(name="MY-KEY", description="x")
 
 
 def test_required_env_var_rejects_empty_name():
-    from plugin_sdk.base import RequiredEnvVar
-
     with pytest.raises(Exception):
         RequiredEnvVar(name="", description="x")
+
+
+def test_required_env_var_rejects_unicode_letters():
+    """Unicode uppercase letters (e.g. Ω, Ё) are not legal POSIX env var names."""
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="Ω_KEY", description="x")  # Ω
+
+
+def test_required_env_var_rejects_mixed_case_in_middle():
+    """Lowercase chars anywhere in the name are rejected, not just at the start."""
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="MY_key", description="x")
+
+
+def test_required_env_var_rejects_empty_description():
+    """Description must be non-empty (min_length=1)."""
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="MY_KEY", description="")
 
 
 # ---------------------------------------------------------------------------
