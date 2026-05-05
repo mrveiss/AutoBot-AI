@@ -352,7 +352,7 @@ def _get_ssot_template_vars() -> Dict[str, str]:
     Build a dict of SSOT-derived Jinja variables available to every prompt template.
 
     Issue #6724: lets prompts reference deployment IPs/ports as ``{{ vm_main }}``
-    instead of hardcoding ``172.16.168.20``. Caller kwargs to ``get()`` still win
+    instead of hardcoding the literal IP. Caller kwargs to ``get()`` still win
     over these defaults. Returns an empty dict if SSOT config can't be loaded so
     legacy templates with literal text continue to render.
     """
