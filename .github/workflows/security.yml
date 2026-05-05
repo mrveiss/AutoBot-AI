@@ -35,26 +35,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Set up Python virtual environment
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install Python dependencies
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install pip-audit bandit safety
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
@@ -65,14 +53,12 @@ jobs:
 
     - name: Python Dependency Audit
       run: |
-        source .venv/bin/activate
         echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
         pip-audit --format=json --output=python-audit.json || true
         pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
 
     - name: Safety Check (Alternative Python Security)
       run: |
-        source .venv/bin/activate
         echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
         safety check --json --output safety-report.json || true
         safety check || true
@@ -118,46 +104,31 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Set up Python virtual environment
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install SAST tools
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip
         python -m pip install bandit semgrep flake8 pylint
 
     - name: Bandit Security Linter
       run: |
-        source .venv/bin/activate
         echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
 
     - name: Semgrep SAST Scan
       run: |
-        source .venv/bin/activate
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
         python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Python Code Quality Check
       run: |
-        source .venv/bin/activate
         echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
         python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ --max-line-length=88 --extend-ignore=E203,W503 \
           --output-file=flake8-report.txt || true
@@ -165,7 +136,6 @@ jobs:
 
     - name: Secret Detection
       run: |
-        source .venv/bin/activate
         echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
         # Check for common secret patterns (without Docker)
         echo "Scanning for potential secrets..."

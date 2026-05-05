@@ -30,21 +30,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Install Python 3.12 via deadsnakes PPA
-        run: |
-          if ! command -v python3.12 &> /dev/null; then
-            sudo add-apt-repository -y ppa:deadsnakes/ppa
-            sudo apt-get update -y
-            sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-          fi
-
-      - name: Set up Python virtual environment
-        run: |
-          rm -rf .venv 2>/dev/null || true
-          python3.12 -m venv .venv
-          source .venv/bin/activate
-          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
-          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
       - name: Install backend dependencies
         # #6947: self-hosted-runner default shell is `bash -e` (no pipefail),
@@ -54,14 +44,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          source .venv/bin/activate
           python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
           python -m pip install -r autobot-backend/requirements.txt
 
       - name: Run startup-import smoke test
         run: |
-          source .venv/bin/activate
           python -m pytest autobot-backend/tests/test_startup_imports.py -q --tb=line || {
             echo ""
             echo "Backend startup-import smoke test FAILED."
@@ -71,6 +59,3 @@ jobs:
             exit 1
           }
 
-      - name: Cleanup virtual environment
-        if: always()
-        run: rm -rf .venv || true
