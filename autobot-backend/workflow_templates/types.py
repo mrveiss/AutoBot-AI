@@ -5,6 +5,12 @@
 Workflow Template Types and Data Classes
 
 Issue #381: Extracted from workflow_templates.py god class refactoring.
+Issue #6951: Phase 2A — local WorkflowStep dataclass replaced by an alias to
+the canonical autobot_shared.workflow.WorkflowTask. The legacy ``to_dict()``
+method is preserved as a free function so the public API contract returned
+by ``WorkflowTemplate.to_detail_dict()`` does not change for the frontend
+``TemplateStep`` interface (frontend codegen migrates in Phase 2F).
+
 Contains core data structures for workflow template definitions.
 """
 
@@ -12,7 +18,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.workflow import WorkflowTask
 from autobot_types import TaskComplexity
+
+# Transitional alias — Phase 3 removes this and updates callers to use
+# ``WorkflowTask`` directly. Until then, every ``WorkflowStep(task_id=..., ...)``
+# call site (#6951 Phase 2A) constructs a real ``WorkflowTask``.
+WorkflowStep = WorkflowTask
 
 
 class TemplateCategory(Enum):
@@ -26,50 +38,44 @@ class TemplateCategory(Enum):
     COMMUNITY = "community"
 
 
-@dataclass
-class WorkflowStep:
-    """Individual step in a workflow template."""
+def _legacy_step_dict(step: WorkflowTask) -> Dict[str, Any]:
+    """Emit the historical TemplateStep dict shape for the public API.
 
-    id: str
-    agent_type: str
-    action: str
-    description: str
-    requires_approval: bool = False
-    dependencies: List[str] = None
-    inputs: Dict[str, Any] = None
-    expected_duration_ms: int = 5000
-
-    def __post_init__(self):
-        """Initialize default values for dependencies and inputs fields."""
-        if self.dependencies is None:
-            self.dependencies = []
-        if self.inputs is None:
-            self.inputs = {}
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert step to dictionary for caching/serialization."""
-        return {
-            "id": self.id,
-            "agent_type": self.agent_type,
-            "action": self.action,
-            "description": self.description,
-            "requires_approval": self.requires_approval,
-            "dependencies": self.dependencies,
-            "inputs": self.inputs,
-            "expected_duration_ms": self.expected_duration_ms,
-        }
+    Phase 2F migrates the frontend ``TemplateStep`` interface to consume the
+    canonical ``WorkflowTask`` shape directly; until then this helper preserves
+    the wire format. The ``expected_duration_ms`` round-trip is exact because
+    the migration script set ``estimated_duration_seconds = ms / 1000.0``.
+    """
+    return {
+        "id": step.task_id,
+        "agent_type": step.agent_type or "",
+        "action": step.action or "",
+        "description": step.description,
+        "requires_approval": step.requires_approval,
+        "dependencies": step.dependencies,
+        "inputs": step.inputs,
+        "expected_duration_ms": int(step.estimated_duration_seconds * 1000),
+    }
 
 
 @dataclass
 class WorkflowTemplate:
-    """Complete workflow template definition."""
+    """Complete workflow template definition.
+
+    Note: a ``WorkflowTemplate`` is a static blueprint (category, complexity,
+    variable slots, secret requirements). It produces ``WorkflowTask`` lists
+    at runtime and is *not* a duplicate of ``WorkflowPlan`` — the plan is the
+    runtime execution shape. Phase 2E may relocate this class to
+    ``autobot_shared.workflow`` after the advanced_workflow template module
+    consolidates onto the same shape.
+    """
 
     id: str
     name: str
     description: str
     category: TemplateCategory
     complexity: TaskComplexity
-    steps: List[WorkflowStep]
+    steps: List[WorkflowTask]
     estimated_duration_minutes: int
     agents_involved: List[str]
     tags: List[str]
@@ -113,5 +119,5 @@ class WorkflowTemplate:
             "tags": self.tags,
             "variables": self.variables,
             "required_secrets": self.required_secrets,
-            "steps": [step.to_dict() for step in self.steps],
+            "steps": [_legacy_step_dict(step) for step in self.steps],
         }

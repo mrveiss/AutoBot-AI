@@ -23,28 +23,28 @@ def _create_deployment_setup_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="pipeline_research",
+            task_id="pipeline_research",
             agent_type="research",
             action="Research deployment pipeline best practices",
             description="Research: Pipeline Best Practices",
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="environment_setup",
+            task_id="environment_setup",
             agent_type="system_commands",
             action="Setup and configure deployment environment",
             description="System_Commands: Environment Setup (requires your approval)",
             requires_approval=True,
             dependencies=["pipeline_research"],
-            expected_duration_ms=40000,
+            estimated_duration_seconds=40.0,
         ),
         WorkflowStep(
-            id="pipeline_config",
+            task_id="pipeline_config",
             agent_type="orchestrator",
             action="Configure deployment pipeline and stages",
             description="Orchestrator: Pipeline Configuration",
             dependencies=["environment_setup"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
     ]
 
@@ -57,29 +57,29 @@ def _create_deployment_execution_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="deploy_application",
+            task_id="deploy_application",
             agent_type="system_commands",
             action="Execute deployment pipeline",
             description="System_Commands: Application Deployment (requires your approval)",
             requires_approval=True,
             dependencies=["pipeline_config"],
-            expected_duration_ms=35000,
+            estimated_duration_seconds=35.0,
         ),
         WorkflowStep(
-            id="verify_deployment",
+            task_id="verify_deployment",
             agent_type="system_commands",
             action="Verify deployment success and perform health checks",
             description="System_Commands: Deployment Verification",
             dependencies=["deploy_application"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="document_pipeline",
+            task_id="document_pipeline",
             agent_type="knowledge_manager",
             action="Document deployment pipeline and procedures",
             description="Knowledge_Manager: Document Pipeline",
             dependencies=["verify_deployment"],
-            expected_duration_ms=8000,
+            estimated_duration_seconds=8.0,
         ),
     ]
 
@@ -101,28 +101,28 @@ def _create_analysis_and_scan_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="code_analysis",
+            task_id="code_analysis",
             agent_type="system_commands",
             action="Perform static code analysis and metrics collection",
             description="System_Commands: Static Code Analysis",
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="security_scan",
+            task_id="security_scan",
             agent_type="security_scanner",
             action="Scan code for security vulnerabilities",
             description="Security_Scanner: Code Security Scan",
             dependencies=["code_analysis"],
             inputs={"scan_type": "code_security"},
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="best_practices_research",
+            task_id="best_practices_research",
             agent_type="research",
             action="Research current coding best practices and standards",
             description="Research: Coding Best Practices",
             dependencies=["code_analysis"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
     ]
 
@@ -135,28 +135,28 @@ def _create_assessment_and_report_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="quality_assessment",
+            task_id="quality_assessment",
             agent_type="orchestrator",
             action="Assess code quality against industry standards",
             description="Orchestrator: Quality Assessment",
             dependencies=["security_scan", "best_practices_research"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="review_report",
+            task_id="review_report",
             agent_type="orchestrator",
             action="Generate comprehensive code review report",
             description="Orchestrator: Code Review Report",
             dependencies=["quality_assessment"],
-            expected_duration_ms=12000,
+            estimated_duration_seconds=12.0,
         ),
         WorkflowStep(
-            id="store_review",
+            task_id="store_review",
             agent_type="knowledge_manager",
             action="Store code review findings and recommendations",
             description="Knowledge_Manager: Store Review Results",
             dependencies=["review_report"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -231,28 +231,28 @@ def _create_testing_research_and_setup_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="testing_research",
+            task_id="testing_research",
             agent_type="research",
             action="Research testing frameworks and methodologies",
             description="Research: Testing Methodologies",
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="test_strategy",
+            task_id="test_strategy",
             agent_type="orchestrator",
             action="Design comprehensive testing strategy",
             description="Orchestrator: Testing Strategy",
             dependencies=["testing_research"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="setup_frameworks",
+            task_id="setup_frameworks",
             agent_type="system_commands",
             action="Setup testing frameworks and tools",
             description="System_Commands: Framework Setup (requires your approval)",
             requires_approval=True,
             dependencies=["test_strategy"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
     ]
 
@@ -265,28 +265,28 @@ def _create_testing_execution_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="create_tests",
+            task_id="create_tests",
             agent_type="system_commands",
             action="Create initial test suites and examples",
             description="System_Commands: Create Test Suites",
             dependencies=["setup_frameworks"],
-            expected_duration_ms=40000,
+            estimated_duration_seconds=40.0,
         ),
         WorkflowStep(
-            id="run_tests",
+            task_id="run_tests",
             agent_type="system_commands",
             action="Execute test suites and generate reports",
             description="System_Commands: Execute Tests",
             dependencies=["create_tests"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="document_testing",
+            task_id="document_testing",
             agent_type="knowledge_manager",
             action="Document testing strategy and procedures",
             description="Knowledge_Manager: Document Testing Strategy",
             dependencies=["run_tests"],
-            expected_duration_ms=8000,
+            estimated_duration_seconds=8.0,
         ),
     ]
 
