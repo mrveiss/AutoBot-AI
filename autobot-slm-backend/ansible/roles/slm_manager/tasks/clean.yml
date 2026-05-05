@@ -6,26 +6,25 @@
 # Removes non-SLM directories from .19 (SLM server).
 # The SLM server should only have: autobot-slm-backend, autobot-slm-frontend,
 # autobot-slm-database, autobot-monitoring, autobot_shared, autobot-infrastructure.
+#
+# Wrong-node clean tasks gate on the shared `role_*_active` facts from
+# inventory/group_vars/all.yml (#7031). These facts mirror the provision
+# gates exactly, so the SLM Manager never wipes a co-located role's dir
+# (single-host install where node_roles=['autobot-backend', 'vnc'] would
+# previously trip the legacy 'backend' not in node_roles check).
 
-# Wrong-node clean tasks ONLY run when node_roles is defined (dynamic inventory).
-# When undefined (localhost self-deploy via install.sh), skip ALL cross-role
-# deletions to prevent wiping co-located services on single-host (#2836, #2900).
 - name: "SLM | Clean: wrong-node autobot-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
-  when:
-    - node_roles is defined
-    - "'backend' not in node_roles"
+  when: not (role_backend_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
-  when:
-    - node_roles is defined
-    - "'frontend' not in node_roles"
+  when: not (role_frontend_active | bool)
   tags: ['clean']
 
 # Issue #2857: Add node_roles guards to prevent single-host wipe
@@ -33,61 +32,47 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-user-backend
     state: absent
-  when:
-    - node_roles is defined
-    - "'backend' not in node_roles"
+  when: not (role_backend_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-user-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-user-frontend
     state: absent
-  when:
-    - node_roles is defined
-    - "'frontend' not in node_roles"
+  when: not (role_frontend_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: legacy npu-worker dir"
   ansible.builtin.file:
     path: /opt/autobot/npu-worker
     state: absent
-  when:
-    - node_roles is defined
-    - "'npu-worker' not in node_roles"
+  when: not (role_npu_worker_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: legacy browser-service dir"
   ansible.builtin.file:
     path: /opt/autobot/browser-service
     state: absent
-  when:
-    - node_roles is defined
-    - "'browser' not in node_roles"
+  when: not (role_browser_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: legacy ai-stack dir"
   ansible.builtin.file:
     path: /opt/autobot/ai-stack
     state: absent
-  when:
-    - node_roles is defined
-    - "'ai-stack' not in node_roles"
+  when: not (role_ai_stack_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-npu-worker dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-npu-worker
     state: absent
-  when:
-    - node_roles is defined
-    - "'npu-worker' not in node_roles"
+  when: not (role_npu_worker_active | bool)
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-browser-worker dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-browser-worker
     state: absent
-  when:
-    - node_roles is defined
-    - "'browser' not in node_roles"
+  when: not (role_browser_active | bool)
   tags: ['clean']

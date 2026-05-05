@@ -9,11 +9,8 @@
 # unconditionally because NO current role deploys to those paths — they are
 # pre-rename leftovers.
 #
-# Wrong-node deletions of CURRENT canonical dirs (autobot-backend,
-# autobot-frontend, autobot-slm-backend) ONLY run when node_roles is defined
-# (dynamic inventory). When undefined (localhost self-deploy via install.sh),
-# skip ALL cross-role deletions to prevent wiping co-located services on
-# single-host (#2836).
+# Wrong-node deletions of CURRENT canonical dirs gate on the shared
+# `role_*_active` facts from inventory/group_vars/all.yml (#7031).
 
 - name: "NPU Worker | Clean: legacy npu-worker dir (old name)"
   ansible.builtin.file:
@@ -25,28 +22,21 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
-  when:
-    - node_roles is defined
-    - "'backend' not in node_roles"
+  when: not (role_backend_active | bool)
   tags: ['clean']
 
 - name: "NPU Worker | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
-  when:
-    - node_roles is defined
-    - "'frontend' not in node_roles"
+  when: not (role_frontend_active | bool)
   tags: ['clean']
 
 - name: "NPU Worker | Clean: wrong-node autobot-slm-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
-  when:
-    - node_roles is defined
-    - "'slm-backend' not in node_roles"
-    - inventory_hostname != '00-SLM-Manager'  # #7031: SLM Manager owns SLM dirs
+  when: not (role_slm_active | bool)
   tags: ['clean']
 
 - name: "NPU Worker | Clean: legacy browser-service dir"
