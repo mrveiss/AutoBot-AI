@@ -869,22 +869,22 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    # Add project root for test imports
-    project_root = Path(__file__).parent.parent.parent
-    sys.path.insert(0, str(project_root))
+    # Resolve fixtures from autobot-backend/tests/fixtures (canonical, #6994)
+    backend_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(backend_root))
 
-    # Import mock components from test fixtures (Issue #458)
+    # Import mock components from test fixtures (Issue #458, #6994)
     from tests.fixtures.mocks import (
         MockCommandValidator,
         MockKnowledgeBase,
-        MockLLMInterface,
+        MockLLMService,
         MockWorkerNode,
     )
 
     async def test_agent():
         """Test intelligent agent with mock components."""
-        # Create mock components from tests/fixtures/mocks.py
-        llm = MockLLMInterface()
+        # MockLLMService matches LLMService.chat() surface (#3185 retirement)
+        llm = MockLLMService()
         kb = MockKnowledgeBase()
         wn = MockWorkerNode()
         cv = MockCommandValidator()

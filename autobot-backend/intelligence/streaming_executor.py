@@ -645,17 +645,17 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    # Add project root for test imports
-    project_root = Path(__file__).parent.parent.parent
-    sys.path.insert(0, str(project_root))
+    # Resolve fixtures from autobot-backend/tests/fixtures (canonical, #6994)
+    backend_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(backend_root))
 
-    # Import mock components from test fixtures (Issue #458)
-    from tests.fixtures.mocks import MockCommandValidator, MockLLMInterface
+    # Import mock components from test fixtures (Issue #458, #6994)
+    from tests.fixtures.mocks import MockCommandValidator, MockLLMService
 
     async def test_executor():
         """Test streaming executor with mock components and sample commands."""
-        # Create mock components from tests/fixtures/mocks.py
-        llm = MockLLMInterface()
+        # MockLLMService matches LLMService.chat() surface (#3185 retirement)
+        llm = MockLLMService()
         validator = MockCommandValidator()
 
         # Create executor
