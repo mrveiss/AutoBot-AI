@@ -19,7 +19,7 @@ on:
 jobs:
   notify-issues:
     if: github.event.pull_request.merged == true
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       issues: write
 
