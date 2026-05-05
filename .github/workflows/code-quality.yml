@@ -7,8 +7,28 @@ name: Code Quality
 on:
   push:
     branches: [ main, Dev_new_gui, develop ]
+    paths:
+      - '**/*.py'
+      - 'autobot-backend/requirements*.txt'
+      - 'autobot-slm-backend/requirements*.txt'
+      - 'pyproject.toml'
+      - '.flake8'
+      - '.pre-commit-config.yaml'
+      - 'pipeline-scripts/check-hardcoded-*.sh'
+      - 'tools/lint/check_no_*.py'
+      - '.github/workflows/code-quality.yml'
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
+    paths:
+      - '**/*.py'
+      - 'autobot-backend/requirements*.txt'
+      - 'autobot-slm-backend/requirements*.txt'
+      - 'pyproject.toml'
+      - '.flake8'
+      - '.pre-commit-config.yaml'
+      - 'pipeline-scripts/check-hardcoded-*.sh'
+      - 'tools/lint/check_no_*.py'
+      - '.github/workflows/code-quality.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
