@@ -13,7 +13,7 @@ name: Backend Startup Import Smoke
 on:
   push:
     branches: [main, Dev_new_gui, develop]
-    paths:
+    paths: &smoke_paths
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-slm-backend/**/*.py'
@@ -21,12 +21,7 @@ on:
       - '.github/workflows/startup-import-smoke.yml'
   pull_request:
     branches: [main, Dev_new_gui, develop]
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - 'autobot-slm-backend/**/*.py'
-      - '**/requirements*.txt'
-      - '.github/workflows/startup-import-smoke.yml'
+    paths: *smoke_paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
