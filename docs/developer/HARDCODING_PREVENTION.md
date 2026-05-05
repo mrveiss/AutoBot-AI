@@ -95,6 +95,26 @@ Doesn't trigger on:
 
 Test fixtures live in `autobot-frontend/eslint-tests/` (excluded from production lint by design — see `eslint-tests/README.md`).
 
+### Generic CI wrapper for any pre-commit hook (Issue #6785)
+
+`pipeline-scripts/check-pre-commit-hook-pr.sh <hook-name>` runs any pre-commit hook in argv mode against the PR's changed files. Hooks that support argv mode today:
+
+- `pre-commit-hardcoded-values` (#6725) — wrapped by `check-hardcoded-values-pr.sh`
+- `pre-commit-no-direct-redis` (#1086, argv mode added in #6785)
+- `pre-commit-no-print-console` (#1082, argv mode added in #6785)
+
+To add a new hook to CI:
+
+1. Add argv mode to the hook (positional args = files to scan, no args = `git diff --cached`).
+2. Add a step in `.github/workflows/code-quality.yml`:
+
+   ```yaml
+   - name: Block <thing> regressions (#issue)
+     run: bash pipeline-scripts/check-pre-commit-hook-pr.sh <hook-name>
+   ```
+
+3. Optionally add a test class in `pipeline-scripts/check-pre-commit-hook-pr_test.py` for end-to-end coverage.
+
 ### Manual Scan
 
 Run the detection script manually to audit the entire codebase:

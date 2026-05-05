@@ -113,6 +113,12 @@ jobs:
     - name: Block hardcoded-IP fallback regressions (#6783)
       run: bash pipeline-scripts/check-hardcoded-ip-fallbacks-pr.sh
 
+    - name: Block direct redis client regressions (#1086, #6785)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+
+    - name: Block print/console regressions (#1082, #6785)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
+
     - name: Check for unused imports with autoflake
       run: |
         source .venv/bin/activate

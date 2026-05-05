@@ -32,9 +32,16 @@ NC='\033[0m'
 
 VIOLATIONS=0
 
-# Get staged Python files (production code only)
+# Get Python files to scan (production code only).
+# Issue #6785: when called with file paths as positional args (CI on a PR),
+# use those instead of the staged-files lookup. Lets the same hook run as
+# both a local pre-commit AND a CI gate. Allowlist applies to either source.
 get_staged_python_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+    if [ "$#" -gt 0 ]; then
+        printf '%s\n' "$@"
+    else
+        git diff --cached --name-only --diff-filter=ACM 2>/dev/null
+    fi | \
         grep -E '\.py$' | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
@@ -150,7 +157,7 @@ main() {
     echo ""
 
     local py_files
-    py_files=$(get_staged_python_files)
+    py_files=$(get_staged_python_files "$@")
 
     if [[ -z "$py_files" ]]; then
         echo -e "${GREEN}No production Python files staged for commit.${NC}"

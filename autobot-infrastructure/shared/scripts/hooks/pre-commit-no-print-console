@@ -32,9 +32,15 @@ NC='\033[0m'
 
 VIOLATIONS=0
 
-# Get staged Python files (production code only)
+# Get Python files to scan (production code only).
+# Issue #6785: positional args override the staged-files lookup (CI argv mode).
+# Same allowlist applies regardless of source.
 get_staged_python_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+    if [ "$#" -gt 0 ]; then
+        printf '%s\n' "$@"
+    else
+        git diff --cached --name-only --diff-filter=ACM 2>/dev/null
+    fi | \
         grep -E '\.py$' | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
@@ -44,9 +50,14 @@ get_staged_python_files() {
         grep -v -E '(ansible/)' || true  # code_analysis: CLI output; ansible: deployed copies with doctest examples
 }
 
-# Get staged TypeScript/Vue files (production code only)
+# Get TypeScript/Vue files to scan (production code only).
+# Issue #6785: positional args override the staged-files lookup (CI argv mode).
 get_staged_ts_files() {
-    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+    if [ "$#" -gt 0 ]; then
+        printf '%s\n' "$@"
+    else
+        git diff --cached --name-only --diff-filter=ACM 2>/dev/null
+    fi | \
         grep -E '\.(ts|vue|js)$' | \
         grep -v -E '(node_modules|\.venv|venv|archive|temp|dist)' | \
         grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
@@ -119,8 +130,8 @@ main() {
     echo ""
 
     local py_files ts_files
-    py_files=$(get_staged_python_files)
-    ts_files=$(get_staged_ts_files)
+    py_files=$(get_staged_python_files "$@")
+    ts_files=$(get_staged_ts_files "$@")
 
     if [[ -z "$py_files" ]] && [[ -z "$ts_files" ]]; then
         echo -e "${GREEN}No production files staged for commit.${NC}"
