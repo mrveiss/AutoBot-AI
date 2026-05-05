@@ -63,8 +63,13 @@ from knowledge_factory import get_or_create_knowledge_base
 logger = logging.getLogger(__name__)
 
 
-# Issue #380: Pre-compiled regex for tag prefix validation
-_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]*$")
+# Issue #380: Pre-compiled regex for tag-name + prefix validation.
+# #6672: was r"^[a-z0-9_-]*$" — the `*` quantifier accepted empty/whitespace
+# input (after .strip()) as a "valid" tag name across 7 endpoints, letting
+# blank tags slip past the create/update/delete/get/relations callsites.
+# The `+` quantifier matches schemas_knowledge.py:_LOWERCASE_TAG_RE which is
+# the canonical tag validator (used by TagValidator + 9 other field validators).
+_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]+$")
 
 # Create router for tag management endpoints
 router = APIRouter(tags=["knowledge-tags"])
