@@ -53,12 +53,15 @@ jobs:
         # so prior `pip install ... | tail -5` silently swallowed install failures.
         # Force pipefail explicitly + don't truncate pip output so dependency
         # conflicts surface immediately.
+        # #7001: working-directory: autobot-backend so `-e ../autobot_shared`
+        # in requirements.txt resolves correctly (pip resolves -e relative to CWD).
         shell: bash
+        working-directory: autobot-backend
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r autobot-backend/requirements.txt
+          python -m pip install -r requirements.txt
 
       - name: Run startup-import smoke test
         run: |
