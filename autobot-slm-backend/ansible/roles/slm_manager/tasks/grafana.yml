@@ -21,6 +21,9 @@
     repo: deb https://apt.grafana.com stable main
     state: present
     filename: grafana
+    # #6719: refresh handled by the bounded-shell task below; the apt module's
+    # update_cache aborts on flaky third-party PPAs.
+    update_cache: false
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 

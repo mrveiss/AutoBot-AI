@@ -51,6 +51,9 @@
     repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
     state: present
     filename: grafana
+    # #6719: refresh handled by the bounded-shell task below; the apt module's
+    # update_cache aborts on flaky third-party PPAs.
+    update_cache: false
   when:
     - ansible_os_family == "Debian"
     - _grafana_installed.rc != 0
