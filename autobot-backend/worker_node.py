@@ -36,7 +36,7 @@ from autobot_shared.redis_client import get_redis_client
 from config import config as global_config_manager
 from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from security_layer import SecurityLayer
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
@@ -76,7 +76,8 @@ class WorkerNode:
             logger.info("Worker node configured for local task transport. " "No Redis connection.")
 
         # Initialize modules that worker might need for task execution
-        self.llm_interface = LLMInterface()
+        # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
+        self.llm_service = get_llm_service()
         self.knowledge_base = KnowledgeBase()
         self.gui_controller = GUIController()
         self.system_integration = SystemIntegration()
@@ -232,7 +233,9 @@ class WorkerNode:
         """Detect available LLM backends."""
         backends = ["ollama"]
 
-        if self.llm_interface.openai_api_key:
+        # #6983: post-LLMService migration, openai_api_key is no longer exposed on the
+        # service surface. Read from config directly — same effective check.
+        if global_config_manager.get_nested("llm_config.openai.api_key"):
             backends.append("openai")
         if global_config_manager.get_nested("llm_config.transformers.model_path"):
             backends.append("transformers")
