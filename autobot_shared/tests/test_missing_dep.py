@@ -111,3 +111,71 @@ def test_hashable() -> None:
     """
     s = {_stub(), _stub()}
     assert len(s) == 2  # identity-based hashing is preserved
+
+
+# ---------------------------------------------------------------------------
+# optional_import helper (#6691)
+# ---------------------------------------------------------------------------
+
+
+def test_optional_import_resolves_real_module() -> None:
+    """A real module yields actual symbols, not stubs."""
+    from autobot_shared.missing_dep import optional_import
+
+    result = optional_import("os.path", ["join", "exists"])
+    import os.path
+    assert result["join"] is os.path.join
+    assert result["exists"] is os.path.exists
+
+
+def test_optional_import_returns_stubs_on_missing_module() -> None:
+    """ImportError on the module substitutes MissingDep for every name."""
+    from autobot_shared.missing_dep import MissingDep, optional_import
+
+    result = optional_import(
+        "nonexistent_module_xyz_definitely_not_installed_12345",
+        ["foo", "bar", "baz"],
+    )
+    assert set(result.keys()) == {"foo", "bar", "baz"}
+    for name, value in result.items():
+        assert isinstance(value, MissingDep)
+        # Each stub keeps the symbol's own name for diagnostics
+        assert repr(value) == f"MissingDep({name!r})"
+
+
+def test_optional_import_calling_stub_raises_importerror() -> None:
+    """Calling a returned stub raises ImportError citing the symbol name."""
+    from autobot_shared.missing_dep import optional_import
+
+    result = optional_import("nonexistent_xyz_pkg", ["entry_point"])
+    with pytest.raises(ImportError, match="entry_point is not available"):
+        result["entry_point"]()
+
+
+def test_optional_import_globals_update_pattern() -> None:
+    """Documented pattern: ``globals().update(optional_import(...))`` —
+    verify the dict shape is suitable for that usage.
+    """
+    from autobot_shared.missing_dep import optional_import
+
+    fake_globals: dict[str, object] = {}
+    fake_globals.update(optional_import("os.path", ["sep"]))
+    import os.path
+    assert fake_globals["sep"] == os.path.sep
+
+
+def test_optional_import_attribute_error_propagates_for_real_modules() -> None:
+    """If the module imports successfully but is missing a name, AttributeError
+    propagates (it's a real bug, not an optional-dep gap)."""
+    from autobot_shared.missing_dep import optional_import
+
+    with pytest.raises(AttributeError):
+        optional_import("os.path", ["this_attr_does_not_exist_on_os_path"])
+
+
+def test_optional_import_empty_names_list() -> None:
+    """Empty names list returns empty dict (degenerate but valid)."""
+    from autobot_shared.missing_dep import optional_import
+
+    assert optional_import("os.path", []) == {}
+    assert optional_import("nonexistent_xyz", []) == {}

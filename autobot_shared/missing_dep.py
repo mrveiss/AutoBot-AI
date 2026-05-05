@@ -12,16 +12,26 @@ Issue #6297: Add __bool__ and __eq__ so the sentinel is falsy and compares
 equal to None, allowing `if not dep:` and `dep is None` guards to work
 correctly without per-file workaround flags.
 
+Issue #6691: Add ``optional_import(module, names)`` helper to collapse the
+verbose ``try: from X import a, b, c; except ImportError: ...`` block —
+3-7 lines of repetition per call site — into a single call.
+
 Usage::
 
+    # Single-symbol shape (still supported, sometimes preferable for type
+    # hints since the local name retains its original module's type):
     from autobot_shared.missing_dep import MissingDep as _MissingDep
-
     try:
         import some_optional_lib
     except ImportError as e:
         some_optional_lib = _MissingDep("some_optional_lib", e)
+
+    # Multi-symbol shape (#6691) — expanded into module globals:
+    from autobot_shared.missing_dep import optional_import
+    globals().update(optional_import("log_forwarder", ["start", "stop", "Forwarder"]))
 """
 
+import importlib
 from typing import NoReturn
 
 
@@ -84,3 +94,41 @@ class MissingDep:
         failure stays at runtime call / non-dunder attribute access.
         """
         return self
+
+
+def optional_import(module_name: str, names: list[str]) -> dict[str, object]:
+    """Resolve ``names`` from ``module_name``; return ``MissingDep`` stubs on ImportError.
+
+    Collapses the 5-line ``try: from X import a, b; except: a = MissingDep(...);
+    b = MissingDep(...)`` boilerplate into a single call. Every name is wired
+    consistently so a partial-import failure (e.g. one name missing from a
+    real module) doesn't leave callers with inconsistent ``MissingDep``-vs-real
+    mixing — when ImportError fires for the *module*, **all** names become
+    sentinels.
+
+    Args:
+        module_name: dotted import path, e.g. ``"autobot_backend.log_forwarder"``.
+        names: symbol names to pull from the module.
+
+    Returns:
+        ``{name: real_attribute}`` on success, ``{name: MissingDep(name, err)}``
+        on ImportError. Use with ``globals().update(...)`` at module top-level
+        to expand into local namespace.
+
+    Example:
+        >>> # Equivalent to a 6-line try/except block:
+        >>> globals().update(optional_import(
+        ...     "autobot_backend.log_forwarder",
+        ...     ["start_forwarder", "stop_forwarder", "ForwarderStatus"],
+        ... ))
+
+    Raises:
+        AttributeError: if the module imports successfully but is missing one
+            of ``names``. This is **not** caught — a missing symbol after a
+            successful module import is a real bug, not an optional-dep gap.
+    """
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as e:
+        return {name: MissingDep(name, e) for name in names}
+    return {name: getattr(module, name) for name in names}
