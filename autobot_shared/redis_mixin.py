@@ -19,6 +19,7 @@ Usage::
 
     # The mixin provides _get_redis(); no inline method needed.
 """
+
 import asyncio
 from typing import Any, Optional, Union
 
@@ -57,7 +58,5 @@ class AsyncRedisClientLockedMixin(AsyncRedisClientMixin):
                 self._redis_lock = asyncio.Lock()
             async with self._redis_lock:
                 if self._redis is None:
-                    self._redis = await get_async_redis_client(
-                        database=self._redis_database
-                    )
+                    self._redis = await get_async_redis_client(database=self._redis_database)
         return self._redis

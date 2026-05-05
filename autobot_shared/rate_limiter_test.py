@@ -255,9 +255,7 @@ class TestRecord:
     def test_record_no_op_on_redis_exception(self):
         """record() must swallow Redis errors gracefully."""
         redis = _make_redis()
-        redis.pipeline.return_value.execute = AsyncMock(
-            side_effect=ConnectionError("down")
-        )
+        redis.pipeline.return_value.execute = AsyncMock(side_effect=ConnectionError("down"))
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
             asyncio.run(lim.record("user1"))  # must not raise
@@ -352,9 +350,7 @@ class TestGetRetryAfterSeconds:
         """Over minute limit → retry-after must be > 0."""
         lim = _limiter(rpm=5, rph=20)
         # oldest entry was 10 s ago; minute window = 60 s → ~50 s remaining
-        redis = self._make_redis_for_retry(
-            minute_count=5, hour_count=0, oldest_ts_offset=10.0
-        )
+        redis = self._make_redis_for_retry(minute_count=5, hour_count=0, oldest_ts_offset=10.0)
         with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result > 0
@@ -363,9 +359,7 @@ class TestGetRetryAfterSeconds:
         """Over hour limit → retry-after must be > 0."""
         lim = _limiter(rpm=5, rph=20)
         # oldest entry was 100 s ago; hour window = 3600 s → ~3500 s remaining
-        redis = self._make_redis_for_retry(
-            minute_count=0, hour_count=20, oldest_ts_offset=100.0
-        )
+        redis = self._make_redis_for_retry(minute_count=0, hour_count=20, oldest_ts_offset=100.0)
         with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
             result = asyncio.run(lim.get_retry_after_seconds("user1"))
         assert result > 0

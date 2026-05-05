@@ -78,9 +78,7 @@ class RedisConfig:
         """Auto-load password and TLS settings from environment if not provided."""
         if self.password is None:
             # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
-            self.password = os.getenv("REDIS_PASSWORD") or os.getenv(
-                "AUTOBOT_REDIS_PASSWORD"
-            )
+            self.password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
         # Auto-load TLS settings from SSOT config - Issue #164
         if os.getenv("AUTOBOT_REDIS_TLS_ENABLED", "").lower() == "true":
             self.ssl = True
@@ -98,12 +96,8 @@ class RedisConfig:
                 cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
                 project_root = Path(__file__).parent.parent.parent
                 self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
-                self.ssl_certfile = str(
-                    project_root / cert_dir / "main-host" / "server-cert.pem"
-                )
-                self.ssl_keyfile = str(
-                    project_root / cert_dir / "main-host" / "server-key.pem"
-                )
+                self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
+                self.ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
 
 
 class RedisConfigLoader:
@@ -193,9 +187,7 @@ class RedisConfigLoader:
             with open(resolved_path, "r", encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)
 
-            databases = config_data.get(
-                "redis_databases", config_data.get("databases", {})
-            )
+            databases = config_data.get("redis_databases", config_data.get("databases", {}))
 
             configs = {
                 db_name: RedisConfigLoader._parse_database_config(db_name, db_config)
@@ -235,11 +227,7 @@ class RedisConfigLoader:
                         db=0,
                         host=redis_config.host,
                         port=redis_config.port,
-                        password=(
-                            redis_config.password
-                            if hasattr(redis_config, "password")
-                            else None
-                        ),
+                        password=(redis_config.password if hasattr(redis_config, "password") else None),
                     )
                 }
         except (ImportError, Exception) as e:

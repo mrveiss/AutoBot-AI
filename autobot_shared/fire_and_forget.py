@@ -7,6 +7,7 @@ Fire-and-forget async task utilities.
 For observability/analytics writes that must never block the hot path.
 Errors are swallowed at DEBUG level.
 """
+
 import asyncio
 import logging
 from typing import Any, Coroutine

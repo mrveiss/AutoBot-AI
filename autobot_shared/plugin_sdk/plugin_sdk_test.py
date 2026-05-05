@@ -16,7 +16,6 @@ from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginSt
 from plugin_sdk.hooks import Hook, HookRegistry
 from plugin_sdk.plugin_manager import PluginManager
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------

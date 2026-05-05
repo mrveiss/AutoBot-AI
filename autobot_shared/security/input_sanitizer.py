@@ -155,10 +155,7 @@ def validate_url(
     parsed = urlparse(url)
 
     if parsed.scheme not in schemes:
-        raise ValueError(
-            f"URL scheme '{parsed.scheme}' not allowed "
-            f"(allowed: {', '.join(sorted(schemes))})"
-        )
+        raise ValueError(f"URL scheme '{parsed.scheme}' not allowed " f"(allowed: {', '.join(sorted(schemes))})")
 
     hostname = parsed.hostname or ""
     if not hostname:
@@ -174,11 +171,7 @@ def validate_url(
         for prefix in _PRIVATE_IP_PREFIXES:
             if hostname.startswith(prefix):
                 raise ValueError("Requests to private IP ranges are not allowed")
-        if (
-            hostname == "::1"
-            or hostname.startswith("fd")
-            or hostname.startswith("fe80")
-        ):
+        if hostname == "::1" or hostname.startswith("fd") or hostname.startswith("fe80"):
             raise ValueError("Requests to private IPv6 ranges are not allowed")
 
     return url

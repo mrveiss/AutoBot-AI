@@ -139,8 +139,7 @@ class AlertCooldownManager:
         if redis_client is None:
             # If Redis is unavailable, allow the alert through (fail-open).
             logger.warning(
-                "alert_cooldown: Redis unavailable — allowing alert through (fail-open). "
-                "tier=%s fingerprint=%s",
+                "alert_cooldown: Redis unavailable — allowing alert through (fail-open). " "tier=%s fingerprint=%s",
                 tier.tier_name,
                 fingerprint,
             )
@@ -178,8 +177,7 @@ class AlertCooldownManager:
         redis_client = self._get_client()
         if redis_client is None:
             logger.warning(
-                "alert_cooldown: Redis unavailable — cannot record sent alert. "
-                "tier=%s fingerprint=%s",
+                "alert_cooldown: Redis unavailable — cannot record sent alert. " "tier=%s fingerprint=%s",
                 tier.tier_name,
                 fingerprint,
             )

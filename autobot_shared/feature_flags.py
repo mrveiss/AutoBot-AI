@@ -94,9 +94,7 @@ def is_feature_enabled(feature_name: str) -> bool:
         known = sorted(_SUBSYSTEM_FLAG_MAP)
         raise ValueError(f"Unknown feature flag '{feature_name}'. Known flags: {known}")
     enabled: bool = getattr(_get_feature_config(), attr)
-    logger.debug(
-        "Feature '%s' is %s", feature_name, "enabled" if enabled else "disabled"
-    )
+    logger.debug("Feature '%s' is %s", feature_name, "enabled" if enabled else "disabled")
     return enabled
 
 
@@ -107,9 +105,7 @@ def get_enabled_features() -> List[str]:
         Sorted list of subsystem names that are currently enabled.
     """
     feature_cfg = _get_feature_config()
-    enabled = [
-        name for name, attr in _SUBSYSTEM_FLAG_MAP.items() if getattr(feature_cfg, attr)
-    ]
+    enabled = [name for name, attr in _SUBSYSTEM_FLAG_MAP.items() if getattr(feature_cfg, attr)]
     result = sorted(enabled)
     logger.debug("Enabled subsystem features: %s", result)
     return result

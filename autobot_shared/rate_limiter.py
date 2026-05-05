@@ -129,10 +129,7 @@ class RateLimiter:
         self._db = redis_database
         tier_defaults = _get_tier_defaults()
         if default_tier not in tier_defaults:
-            raise ValueError(
-                f"Unknown tier '{default_tier}'. "
-                f"Valid tiers: {list(tier_defaults)}"
-            )
+            raise ValueError(f"Unknown tier '{default_tier}'. " f"Valid tiers: {list(tier_defaults)}")
         tier_rpm, tier_rph = tier_defaults[default_tier]
         self._rpm = requests_per_minute if requests_per_minute is not None else tier_rpm
         self._rph = requests_per_hour if requests_per_hour is not None else tier_rph

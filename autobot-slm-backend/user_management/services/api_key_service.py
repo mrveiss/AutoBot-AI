@@ -145,16 +145,20 @@ class APIKeyService(BaseService):
         The signing key is read from SLM_HMAC_API_KEY_SECRET (default:
         "autobot-api-key-v1" for backward compatibility with existing hashes).
         """
-        return hmac.new(  # codeql[py/weak-sensitive-data-hashing] HMAC-SHA256 for API token lookup, not password storage
-            key=settings.hmac_api_key_secret.encode("utf-8"),
-            msg=key.encode("utf-8"),
-            digestmod=hashlib.sha256,
-        ).hexdigest()
+        return (
+            hmac.new(  # codeql[py/weak-sensitive-data-hashing] HMAC-SHA256 for API token lookup, not password storage
+                key=settings.hmac_api_key_secret.encode("utf-8"),
+                msg=key.encode("utf-8"),
+                digestmod=hashlib.sha256,
+            ).hexdigest()
+        )
 
     @staticmethod
     def _hash_key_legacy(key: str) -> str:
         """Hash using bare SHA-256 (pre-#1721 format, for migration)."""
-        return hashlib.sha256(key.encode()).hexdigest()  # codeql[py/weak-sensitive-data-hashing] legacy API token lookup hash retained for migration only, not password storage
+        return hashlib.sha256(
+            key.encode()
+        ).hexdigest()  # codeql[py/weak-sensitive-data-hashing] legacy API token lookup hash retained for migration only, not password storage
 
     @staticmethod
     def _calculate_expiration(expires_days: Optional[int]) -> Optional[datetime]:

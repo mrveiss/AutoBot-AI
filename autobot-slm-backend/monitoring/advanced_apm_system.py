@@ -663,12 +663,7 @@ class AdvancedAPMSystem:
             "p95_response_time": (sorted(response_times)[int(len(response_times) * 0.95)] if response_times else 0),
             "error_rate": (error_count / len(api_metrics)) * 100,
             "requests_per_minute": len(
-                [
-                    m
-                    for m in api_metrics
-                    if (datetime.now(timezone.utc) - parse_utc_iso(m.timestamp)).seconds
-                    < 60
-                ]
+                [m for m in api_metrics if (datetime.now(timezone.utc) - parse_utc_iso(m.timestamp)).seconds < 60]
             ),
         }
 

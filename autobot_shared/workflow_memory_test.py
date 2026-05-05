@@ -24,12 +24,8 @@ class TestWorkflowMemory:
 
         await self.memory.write("step1:result", '{"status": "done"}')
 
-        mock_redis.hset.assert_called_once_with(
-            "autobot:workflow:wf-123:memory", "step1:result", '{"status": "done"}'
-        )
-        mock_redis.expire.assert_called_once_with(
-            "autobot:workflow:wf-123:memory", 3600
-        )
+        mock_redis.hset.assert_called_once_with("autobot:workflow:wf-123:memory", "step1:result", '{"status": "done"}')
+        mock_redis.expire.assert_called_once_with("autobot:workflow:wf-123:memory", 3600)
 
     @pytest.mark.asyncio
     @patch("autobot_shared.workflow_memory.get_redis_client")
@@ -41,9 +37,7 @@ class TestWorkflowMemory:
         result = await self.memory.read("step1:result")
 
         assert result == '{"status": "done"}'
-        mock_redis.hget.assert_called_once_with(
-            "autobot:workflow:wf-123:memory", "step1:result"
-        )
+        mock_redis.hget.assert_called_once_with("autobot:workflow:wf-123:memory", "step1:result")
 
     @pytest.mark.asyncio
     @patch("autobot_shared.workflow_memory.get_redis_client")
@@ -64,6 +58,4 @@ class TestWorkflowMemory:
 
         await self.memory.clear()
 
-        mock_redis.delete.assert_called_once_with(
-            "autobot:workflow:wf-123:memory"
-        )
+        mock_redis.delete.assert_called_once_with("autobot:workflow:wf-123:memory")

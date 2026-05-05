@@ -53,8 +53,7 @@ class MissingDep:
 
     def __call__(self, *args: object, **kwargs: object) -> NoReturn:
         raise ImportError(
-            f"{self._name} is not available — install the optional dependencies "
-            f"(original error: {self._error})"
+            f"{self._name} is not available — install the optional dependencies " f"(original error: {self._error})"
         )
 
     def __getattr__(self, item: str) -> object:
@@ -71,8 +70,7 @@ class MissingDep:
         if item.startswith("__") and item.endswith("__"):
             raise AttributeError(item)
         raise ImportError(
-            f"{self._name} is not available — install the optional dependencies "
-            f"(original error: {self._error})"
+            f"{self._name} is not available — install the optional dependencies " f"(original error: {self._error})"
         )
 
     def __getitem__(self, _params: object) -> "MissingDep":

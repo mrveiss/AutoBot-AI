@@ -88,9 +88,7 @@ class LoggingManager:
                     logger.addHandler(console_handler)
 
             # Set log level
-            log_level = getattr(
-                logging, _get_config_manager().get("logging.level", "INFO").upper()
-            )
+            log_level = getattr(logging, _get_config_manager().get("logging.level", "INFO").upper())
             logger.setLevel(log_level)
 
             cls._loggers[logger_key] = logger
@@ -132,14 +130,10 @@ class LoggingManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Use rotating file handler to prevent large log files
-        max_bytes = _get_config_manager().get(
-            "logging.rotation.max_bytes", 10485760
-        )  # 10MB
+        max_bytes = _get_config_manager().get("logging.rotation.max_bytes", 10485760)  # 10MB
         backup_count = _get_config_manager().get("logging.rotation.backup_count", 5)
 
-        handler = logging.handlers.RotatingFileHandler(
-            log_file, maxBytes=max_bytes, backupCount=backup_count
-        )
+        handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
         handler.setFormatter(cls._get_formatter())
 
         return handler
@@ -147,15 +141,11 @@ class LoggingManager:
     @classmethod
     def _get_formatter(cls) -> logging.Formatter:
         """Get log formatter"""
-        log_format = _get_config_manager().get(
-            "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        log_format = _get_config_manager().get("logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         return logging.Formatter(log_format)
 
     @classmethod
-    def setup_component_logging(
-        cls, component_name: str, log_type: str = "backend"
-    ) -> logging.Logger:
+    def setup_component_logging(cls, component_name: str, log_type: str = "backend") -> logging.Logger:
         """
         Setup logging for a specific component
 
@@ -185,9 +175,7 @@ class LoggingManager:
                 # Create backup using environment-configurable paths
                 logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
                 backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
-                backup_path = (
-                    f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
-                )
+                backup_path = f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
                 try:
                     os.rename(log_file, backup_path)
                     _logger.info("Rotated %s to %s", log_file, backup_path)

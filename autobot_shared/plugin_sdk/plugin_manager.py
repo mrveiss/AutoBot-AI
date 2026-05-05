@@ -127,10 +127,7 @@ class PluginManager:
 
     def get_plugin_status(self) -> Dict[str, str]:
         """Return a mapping of plugin name → status string."""
-        return {
-            name: plugin.status.value
-            for name, plugin in self._registry.get_all_plugins().items()
-        }
+        return {name: plugin.status.value for name, plugin in self._registry.get_all_plugins().items()}
 
     def is_enabled(self, plugin_name: str) -> bool:
         """Return True if the named plugin is in ENABLED state."""

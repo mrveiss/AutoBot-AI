@@ -18,7 +18,6 @@ from tool_sdk.registry import (
 )
 from tool_sdk import get_tool_sdk_registry
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -174,9 +173,7 @@ class TestExecute:
     async def test_admin_caller_can_execute_admin_tool(self):
         reg = _fresh_registry()
         reg.register(_AdminResetTool)
-        result = await reg.execute(
-            "admin_reset", {"target": "db"}, ToolPermission.ADMIN
-        )
+        result = await reg.execute("admin_reset", {"target": "db"}, ToolPermission.ADMIN)
         assert result.success is True
         assert "db" in result.data
 
