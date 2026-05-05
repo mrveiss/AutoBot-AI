@@ -49,19 +49,19 @@ jobs:
           cache: 'pip'
 
       - name: Install backend dependencies
-        # #6947: self-hosted-runner default shell is `bash -e` (no pipefail),
-        # so prior `pip install ... | tail -5` silently swallowed install failures.
-        # Force pipefail explicitly + don't truncate pip output so dependency
-        # conflicts surface immediately.
-        # #7001: working-directory: autobot-backend so `-e ../autobot_shared`
-        # in requirements.txt resolves correctly (pip resolves -e relative to CWD).
+        # #6947: pipefail required so pip install failures surface (was masked by `| tail -5`).
+        # #7018: switched from `autobot-backend/requirements.txt` to `requirements-ci.txt`
+        # because the former pulls torch>=2.11.0 + transitive vllm 0.19.x (requires torch==2.10.0),
+        # an unsatisfiable resolver state. `requirements-ci.txt` is purpose-built to exclude
+        # vllm and other GPU-dependent packages — see `security.yml` which has used it for years.
+        # autobot_shared is installed separately (editable, from repo root, no CWD trickery).
         shell: bash
-        working-directory: autobot-backend
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-ci.txt --prefer-binary
+          python -m pip install -e autobot_shared
 
       - name: Run startup-import smoke test
         run: |
