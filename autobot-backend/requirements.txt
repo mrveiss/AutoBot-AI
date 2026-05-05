@@ -1,7 +1,7 @@
 -e ../autobot_shared
 
 # Core
-fastapi>=0.135.2                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn>=0.46.0
 websockets>=16.0           # Issue #3098: required for WebSocket protocol support (desktop_streaming_manager, slm_client)
 python-dotenv>=1.2.2
