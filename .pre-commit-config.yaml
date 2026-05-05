@@ -281,6 +281,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks new @router.get('/health') definitions; modules must call api.system_health.register_health_probe instead"
 
+  # No new top-level WorkflowStep/AgentTask/WorkflowPlan outside canonical (Issue #6951)
+  - repo: local
+    hooks:
+      - id: no-new-workflow-step
+        name: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-workflow-step
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new top-level dataclass declarations of WorkflowStep/AgentTask/WorkflowPlan outside autobot_shared/workflow/types.py; subclasses and aliases are allowed"
+
   # No print()/console.* in production code (Issue #1082)
   - repo: local
     hooks:
