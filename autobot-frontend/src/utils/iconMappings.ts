@@ -5,6 +5,7 @@
  * reducing duplication and ensuring UI consistency.
  */
 
+import { createLogger } from '@/utils/debugUtils'
 import type { IconName } from '@/components/ui/Icon.vue'
 
 // ============================================================================
@@ -136,14 +137,14 @@ export const platformIcons = {
 // #6796: telemetry — log (with stack trace) the first time getFileIcon
 // receives a non-string `filename`, so the upstream serialization bug can
 // be found from a real session. We only warn once per page load to avoid
-// drowning the console.
+// drowning the logger.
+const _logger = createLogger('iconMappings')
 let _nonStringFilenameWarned = false
 function _warnNonStringFilenameOnce(value: unknown): void {
   if (_nonStringFilenameWarned) return
   _nonStringFilenameWarned = true
-  // eslint-disable-next-line no-console
-  console.warn(
-    '[iconMappings #6796] getFileIcon received non-string filename — ' +
+  _logger.warn(
+    '[#6796] getFileIcon received non-string filename — ' +
       'upstream payload (likely TreeNode.name) is not a string. ' +
       `typeof=${typeof value} value=${String(value).slice(0, 80)}`,
     new Error('iconMappings non-string trace'),
