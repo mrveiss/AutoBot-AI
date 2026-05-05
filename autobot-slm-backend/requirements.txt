@@ -10,7 +10,7 @@
 prometheus-client>=0.24.1
 
 # Web framework
-fastapi>=0.135.2                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn[standard]>=0.46.0
 
 # Database - PostgreSQL (Issue #786)
