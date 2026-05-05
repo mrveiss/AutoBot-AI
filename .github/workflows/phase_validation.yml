@@ -33,26 +33,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Set up Python virtual environment
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install Python dependencies
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip
         python -m pip install aiohttp psutil requests pyyaml
 
@@ -91,7 +79,6 @@ jobs:
 
     - name: Run Phase Validation System
       run: |
-        source .venv/bin/activate
         echo "Running AutoBot Phase Validation System..."
 
         # Run the validation system
@@ -103,7 +90,6 @@ jobs:
 
     - name: Generate Validation Dashboard
       run: |
-        source .venv/bin/activate
         echo "Generating validation dashboard..."
         python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 

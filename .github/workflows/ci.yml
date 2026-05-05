@@ -24,26 +24,14 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Free disk space and set up venv
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install Python dependencies
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
 
         echo "Installing CI-safe requirements..."
@@ -92,7 +80,6 @@ jobs:
 
     - name: Run code quality checks
       run: |
-        source .venv/bin/activate
         echo "Running code quality checks..."
 
         # Code formatting check (matches pre-commit black config)
@@ -109,7 +96,6 @@ jobs:
 
     - name: Run security analysis
       run: |
-        source .venv/bin/activate
         echo "🔒 Running security analysis..."
 
         # Security vulnerability scan — fail on medium+ severity/confidence
@@ -123,7 +109,6 @@ jobs:
 
     - name: Run unit tests with coverage gate
       run: |
-        source .venv/bin/activate
         echo "Running unit tests with 70% coverage gate (#3285)..."
         # Run all unit tests excluding slow/integration/distributed/performance markers.
         # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
@@ -140,7 +125,6 @@ jobs:
 
     - name: Run integration tests
       run: |
-        source .venv/bin/activate
         echo "🔄 Running integration tests..."
         # Integration tests remain in shared directory (#734)
         TEST_DIR="infrastructure/shared/tests/integration"
@@ -217,26 +201,14 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Install Python 3.12 via deadsnakes PPA
-      run: |
-        if ! command -v python3.12 &> /dev/null; then
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        fi
-
-    - name: Free disk space and set up venv
-      run: |
-        pip cache purge 2>/dev/null || true
-        rm -rf .venv 2>/dev/null || true
-        python3.12 -m venv .venv
-        source .venv/bin/activate
-        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
-        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
-        source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install -r requirements-ci.txt --prefer-binary
 
@@ -280,7 +252,6 @@ jobs:
 
     - name: Test production configuration
       run: |
-        source .venv/bin/activate
         echo "🚀 Testing production readiness..."
 
         # Check that all required files exist
