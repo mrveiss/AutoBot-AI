@@ -69,7 +69,9 @@ jobs:
           exit 1
 
       - name: Verify services are running
+        shell: bash
         run: |
+          set -euo pipefail
           echo "Verifying services..."
           docker compose --env-file docker/.env.docker ps
 

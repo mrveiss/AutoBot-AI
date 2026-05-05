@@ -63,7 +63,9 @@ jobs:
         id: merged
         env:
           DRY_RUN: ${{ steps.env.outputs.dry_run }}
+        shell: bash
         run: |
+          set -euo pipefail
           BASE_BRANCH="Dev_new_gui"
           DAYS_OLD=7
           CUTOFF_DATE=$(date -d "$DAYS_OLD days ago" +%s)
@@ -112,7 +114,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ steps.env.outputs.dry_run }}
+        shell: bash
         run: |
+          set -euo pipefail
           deleted_count=0
           skipped_count=0
           errors=0

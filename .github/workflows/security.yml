@@ -135,7 +135,9 @@ jobs:
         cat flake8-report.txt || true
 
     - name: Secret Detection
+      shell: bash
       run: |
+        set -euo pipefail
         echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
         # Check for common secret patterns (without Docker)
         echo "Scanning for potential secrets..."
@@ -218,7 +220,9 @@ jobs:
         fi
 
     - name: Security Best Practices Check
+      shell: bash
       run: |
+        set -euo pipefail
         echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
 
         # Check for security-related imports
