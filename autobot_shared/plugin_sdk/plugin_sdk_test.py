@@ -165,6 +165,93 @@ def test_manifest_with_required_env_parses():
 
 
 # ---------------------------------------------------------------------------
+# PluginLoader._check_required_env
+# ---------------------------------------------------------------------------
+
+
+def test_check_required_env_returns_empty_when_no_required_env(monkeypatch):
+    from plugin_sdk.loader import PluginLoader
+
+    loader = PluginLoader([])
+    manifest = _make_manifest()
+    missing_required, missing_optional = loader._check_required_env(manifest)
+    assert missing_required == []
+    assert missing_optional == []
+
+
+def test_check_required_env_finds_missing_required(monkeypatch):
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_REQUIRED_VAR", raising=False)
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        required_env=[
+            {
+                "name": "TEST_REQUIRED_VAR",
+                "description": "Required.",
+                "required": True,
+            }
+        ]
+    )
+    missing_required, missing_optional = loader._check_required_env(manifest)
+    assert missing_required == ["TEST_REQUIRED_VAR"]
+    assert missing_optional == []
+
+
+def test_check_required_env_finds_missing_optional(monkeypatch):
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_OPTIONAL_VAR", raising=False)
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        required_env=[
+            {
+                "name": "TEST_OPTIONAL_VAR",
+                "description": "Optional.",
+                "required": False,
+            }
+        ]
+    )
+    missing_required, missing_optional = loader._check_required_env(manifest)
+    assert missing_required == []
+    assert missing_optional == ["TEST_OPTIONAL_VAR"]
+
+
+def test_check_required_env_separates_required_and_optional(monkeypatch):
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_REQ_A", raising=False)
+    monkeypatch.delenv("TEST_OPT_B", raising=False)
+    monkeypatch.setenv("TEST_REQ_C", "value")
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        required_env=[
+            {"name": "TEST_REQ_A", "description": "x", "required": True},
+            {"name": "TEST_OPT_B", "description": "x", "required": False},
+            {"name": "TEST_REQ_C", "description": "x", "required": True},
+        ]
+    )
+    missing_required, missing_optional = loader._check_required_env(manifest)
+    assert missing_required == ["TEST_REQ_A"]
+    assert missing_optional == ["TEST_OPT_B"]
+
+
+def test_check_required_env_treats_empty_string_as_missing(monkeypatch):
+    """An env var set to empty string is treated as not configured."""
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.setenv("TEST_EMPTY_VAR", "")
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        required_env=[
+            {"name": "TEST_EMPTY_VAR", "description": "x", "required": True}
+        ]
+    )
+    missing_required, _ = loader._check_required_env(manifest)
+    assert missing_required == ["TEST_EMPTY_VAR"]
+
+
+# ---------------------------------------------------------------------------
 # BasePlugin lifecycle
 # ---------------------------------------------------------------------------
 

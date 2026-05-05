@@ -188,6 +188,28 @@ class PluginLoader:
                 missing.append(dep)
         return missing
 
+    def _check_required_env(
+        self, manifest: PluginManifest
+    ) -> tuple[List[str], List[str]]:
+        """
+        Check which env vars declared by the manifest are unset.
+
+        Returns:
+            Tuple of (missing_required, missing_optional) env var names.
+            An env var set to an empty string is treated as missing.
+        """
+        import os
+
+        missing_required: List[str] = []
+        missing_optional: List[str] = []
+        for env in manifest.required_env:
+            if not os.environ.get(env.name):
+                if env.required:
+                    missing_required.append(env.name)
+                else:
+                    missing_optional.append(env.name)
+        return missing_required, missing_optional
+
     def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
         """
         Import plugin class from entry point.
