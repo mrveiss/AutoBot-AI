@@ -16,14 +16,16 @@ on:
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
-      - 'autobot-backend/requirements*.txt'
+      - 'autobot-slm-backend/**/*.py'
+      - '**/requirements*.txt'
       - '.github/workflows/startup-import-smoke.yml'
   pull_request:
     branches: [main, Dev_new_gui, develop]
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
-      - 'autobot-backend/requirements*.txt'
+      - 'autobot-slm-backend/**/*.py'
+      - '**/requirements*.txt'
       - '.github/workflows/startup-import-smoke.yml'
 
 concurrency:
