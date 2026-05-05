@@ -1863,13 +1863,6 @@ class BudgetAlertRequest(BaseModel):
     enabled: bool = Field(default=True)
 
 
-class ModelPricingInfo(BaseModel):
-    model: str
-    input_price_per_1m: float
-    output_price_per_1m: float
-    provider: str
-
-
 class AgentBudgetRequest(BaseModel):
     budget_monthly_usd: float = Field(..., gt=0, description="Monthly budget in USD")
 
