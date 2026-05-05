@@ -1,4 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/vue3';
+import {
+  SEMANTIC_COLORS,
+  SURFACE_COLORS,
+  ELECTRIC_SCALE,
+  BLUE_GRAY_SCALE,
+  TYPOGRAPHY_SCALE,
+  FONT_WEIGHTS,
+  SPACING_SCALE,
+  RADII,
+  SHADOWS,
+} from '@/design-system/tokens';
 
 const meta = {
   title: 'Design System/Design Tokens',
@@ -9,7 +20,8 @@ const meta = {
       description: {
         component:
           'Visual reference for the AutoBot design tokens exposed via Tailwind utilities. ' +
-          'Colors come from the `autobot-*` token namespace defined in `src/assets/tailwind.css` ' +
+          'Token names come from the canonical catalog at `src/design-system/tokens.ts` (#6938); ' +
+          'token values come from the `autobot-*` namespace in `src/assets/tailwind.css` ' +
           '(`@theme` block). Typography, spacing, radius, and shadow scales follow Tailwind defaults.',
       },
     },
@@ -22,85 +34,18 @@ type Story = StoryObj<typeof meta>;
 export const Tokens: Story = {
   render: () => ({
     setup() {
-      const semanticColors = [
-        { name: 'autobot-primary', cls: 'bg-autobot-primary text-white' },
-        { name: 'autobot-secondary', cls: 'bg-autobot-secondary text-white' },
-        { name: 'autobot-success', cls: 'bg-autobot-success text-white' },
-        { name: 'autobot-warning', cls: 'bg-autobot-warning text-white' },
-        { name: 'autobot-error', cls: 'bg-autobot-error text-white' },
-        { name: 'autobot-info', cls: 'bg-autobot-info text-white' },
-      ];
-
-      const surfaceColors = [
-        { name: 'bg-primary', cls: 'bg-autobot-bg-primary' },
-        { name: 'bg-secondary', cls: 'bg-autobot-bg-secondary' },
-        { name: 'bg-tertiary', cls: 'bg-autobot-bg-tertiary' },
-        { name: 'bg-elevated', cls: 'bg-autobot-bg-elevated' },
-        { name: 'bg-card', cls: 'bg-autobot-bg-card' },
-        { name: 'bg-input', cls: 'bg-autobot-bg-input' },
-      ];
-
-      const electricScale = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
-      const blueGrayScale = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
-
-      const typography = [
-        { cls: 'text-xs', label: 'text-xs', sample: 'The quick brown fox' },
-        { cls: 'text-sm', label: 'text-sm', sample: 'The quick brown fox' },
-        { cls: 'text-base', label: 'text-base', sample: 'The quick brown fox' },
-        { cls: 'text-lg', label: 'text-lg', sample: 'The quick brown fox' },
-        { cls: 'text-xl', label: 'text-xl', sample: 'The quick brown fox' },
-        { cls: 'text-2xl', label: 'text-2xl', sample: 'The quick brown fox' },
-        { cls: 'text-3xl', label: 'text-3xl', sample: 'The quick brown fox' },
-        { cls: 'text-4xl', label: 'text-4xl', sample: 'The quick brown fox' },
-      ];
-
-      const fontWeights = [
-        { cls: 'font-light', label: 'font-light' },
-        { cls: 'font-normal', label: 'font-normal' },
-        { cls: 'font-medium', label: 'font-medium' },
-        { cls: 'font-semibold', label: 'font-semibold' },
-        { cls: 'font-bold', label: 'font-bold' },
-        { cls: 'font-extrabold', label: 'font-extrabold' },
-      ];
-
-      const spacings = [
-        { cls: 'p-1', label: 'p-1', size: '0.25rem' },
-        { cls: 'p-2', label: 'p-2', size: '0.5rem' },
-        { cls: 'p-3', label: 'p-3', size: '0.75rem' },
-        { cls: 'p-4', label: 'p-4', size: '1rem' },
-        { cls: 'p-6', label: 'p-6', size: '1.5rem' },
-        { cls: 'p-8', label: 'p-8', size: '2rem' },
-      ];
-
-      const radii = [
-        { cls: 'rounded-none', label: 'rounded-none' },
-        { cls: 'rounded-sm', label: 'rounded-sm' },
-        { cls: 'rounded', label: 'rounded' },
-        { cls: 'rounded-md', label: 'rounded-md' },
-        { cls: 'rounded-lg', label: 'rounded-lg' },
-        { cls: 'rounded-xl', label: 'rounded-xl' },
-        { cls: 'rounded-full', label: 'rounded-full' },
-      ];
-
-      const shadows = [
-        { cls: 'shadow-sm', label: 'shadow-sm' },
-        { cls: 'shadow', label: 'shadow' },
-        { cls: 'shadow-md', label: 'shadow-md' },
-        { cls: 'shadow-lg', label: 'shadow-lg' },
-        { cls: 'shadow-xl', label: 'shadow-xl' },
-        { cls: 'shadow-2xl', label: 'shadow-2xl' },
-      ];
-
+      // Names live in the canonical catalog so this story stays in sync
+      // automatically when tokens are added/removed (#6938).
       return {
-        semanticColors,
-        surfaceColors,
-        electricScale,
-        blueGrayScale,
-        typography,
-        fontWeights,
-        spacings,
-        radii,
-        shadows,
+        semanticColors: SEMANTIC_COLORS,
+        surfaceColors: SURFACE_COLORS,
+        electricScale: ELECTRIC_SCALE,
+        blueGrayScale: BLUE_GRAY_SCALE,
+        typography: TYPOGRAPHY_SCALE,
+        fontWeights: FONT_WEIGHTS,
+        spacings: SPACING_SCALE,
+        radii: RADII,
+        shadows: SHADOWS,
       };
     },
     template: `
