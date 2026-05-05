@@ -622,8 +622,7 @@ async def probe_long_running(
             operation_integration_manager.redis_client is not None
         )
         background_processor_running = (
-            operation_integration_manager.operation_manager._background_processor_task
-            is not None
+            operation_integration_manager.is_background_processor_running()
         )
         return ComponentHealth(
             name="long_running",
@@ -674,8 +673,7 @@ async def operations_health():
             "total_operations": len(all_operations),
             "redis_connected": operation_integration_manager.redis_client is not None,
             "background_processor_running": (
-                operation_integration_manager.operation_manager._background_processor_task
-                is not None
+                operation_integration_manager.is_background_processor_running()
             ),
         }
 

@@ -191,6 +191,18 @@ class OperationIntegrationManager:
             return list(self.operation_manager.operations.values())
         return []
 
+    def is_background_processor_running(self) -> bool:
+        """Public accessor for the underlying background-processor state (#6921).
+
+        Replaces direct reads of ``self.operation_manager._background_processor_task``
+        from health probes / monitoring routes — the private attribute is owned
+        by ``LongRunningOperationManager`` and shouldn't be coupled to other
+        callers.
+        """
+        if self.operation_manager is None:
+            return False
+        return self.operation_manager.is_background_processor_running()
+
     async def list_operation_checkpoints(self, operation_id: str) -> List:
         """List checkpoints for operation, reducing checkpoint_manager.list_checkpoints chain."""
         if self.operation_manager and self.operation_manager.checkpoint_manager:
