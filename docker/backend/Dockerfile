@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install shared module first (backend depends on it)
 COPY autobot_shared/requirements.txt /app/autobot_shared/requirements.txt
-COPY autobot_shared/setup.py /app/autobot_shared/setup.py
+COPY autobot_shared/pyproject.toml /app/autobot_shared/pyproject.toml
 COPY autobot_shared/ /app/autobot_shared/
 RUN python3 -m pip install --no-cache-dir -r /app/autobot_shared/requirements.txt \
     && python3 -m pip install --no-cache-dir /app/autobot_shared
