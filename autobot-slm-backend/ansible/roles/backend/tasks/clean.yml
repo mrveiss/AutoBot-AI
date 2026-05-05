@@ -17,6 +17,12 @@
 # autobot-slm-backend) ONLY run when node_roles is defined (dynamic inventory).
 # When undefined (localhost self-deploy via install.sh), skip ALL cross-role
 # deletions to prevent wiping co-located services on single-host (#2836).
+#
+# #7031: Co-located SLM Manager hosts have node_roles like
+# ['slm-manager', 'backend', ...] — 'slm-frontend'/'slm-backend' are NEVER
+# in that list (they're slm_manager-role-internal subdirs, not standalone
+# fleet roles). The 'slm-manager not in node_roles' guard prevents the
+# backend cleanup from wiping the SLM stack the slm_manager role just built.
 
 - name: "Backend | Clean: legacy npu-worker dir"
   ansible.builtin.file:
@@ -50,6 +56,7 @@
   when:
     - node_roles is defined
     - "'slm-frontend' not in node_roles"
+    - "'slm-manager' not in node_roles"  # #7031: SLM Manager owns this dir
   tags: ['clean']
 
 - name: "Backend | Clean: wrong-node autobot-slm-backend dir"
@@ -59,4 +66,5 @@
   when:
     - node_roles is defined
     - "'slm-backend' not in node_roles"
+    - "'slm-manager' not in node_roles"  # #7031: SLM Manager owns this dir
   tags: ['clean']
