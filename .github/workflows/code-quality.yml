@@ -1,6 +1,5 @@
 # GitHub Actions workflow for code quality enforcement
 # Runs on every push and pull request
-# Uses self-hosted runner to avoid GitHub Actions quota limits
 
 name: Code Quality
 
