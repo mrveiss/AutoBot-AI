@@ -28,6 +28,7 @@
   when:
     - node_roles is defined
     - "'slm-backend' not in node_roles"
+    - "'slm-manager' not in node_roles"  # #7031: SLM Manager owns this dir
   tags: ['clean']
 
 - name: "Frontend | Clean: wrong-node autobot-slm-backend dir"
@@ -37,6 +38,7 @@
   when:
     - node_roles is defined
     - "'slm-backend' not in node_roles"
+    - "'slm-manager' not in node_roles"  # #7031: SLM Manager owns this dir
   tags: ['clean']
 
 - name: "Frontend | Clean: wrong-node autobot-backend dir"
