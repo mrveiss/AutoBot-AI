@@ -75,6 +75,26 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 - Violation report shows file, line number, value, and the SSOT alternative
 - Fix the violation, re-stage, re-commit (or push the fix)
 
+### Frontend ESLint rule (Issue #6784)
+
+`autobot-frontend/eslint.config.ts` includes a `no-restricted-syntax` rule that blocks hardcoded VM IPs in `.ts` / `.mts` / `.tsx` / `.vue` files. Two selectors:
+
+- `Literal[value=/^(https?:\/\/)?172\.16\.168\.\d+/]` — bare IP literals or HTTP(S) URLs containing them
+- `TemplateElement[value.cooked=/172\.16\.168\.\d+/]` — IP inside a template literal
+
+Catches:
+- `const x = '172.16.168.20'`
+- `const x = 'http://172.16.168.21:5173'`
+- `const x = vmHost ?? 'http://172.16.168.20:8001'` (the original `||`/`??` fallback anti-pattern)
+- `` const x = `ws://172.16.168.21:5173/ws` ``
+
+Doesn't trigger on:
+- `127.0.0.1` (loopback — single-host install default)
+- `192.168.x.x` (RFC 1918 example space — used in tests, SSRF guards, i18n placeholders)
+- IPs in `.json` locale files, `.md` docs, generated types (not in lint scope)
+
+Test fixtures live in `autobot-frontend/eslint-tests/` (excluded from production lint by design — see `eslint-tests/README.md`).
+
 ### Manual Scan
 
 Run the detection script manually to audit the entire codebase:
