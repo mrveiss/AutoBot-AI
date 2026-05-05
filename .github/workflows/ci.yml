@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   security-tests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v6
@@ -164,7 +164,7 @@ jobs:
         rm -rf .venv || true
 
   frontend-tests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
 
@@ -210,7 +210,7 @@ jobs:
         rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
 
   deployment-check:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [security-tests, frontend-tests]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
@@ -331,7 +331,7 @@ jobs:
         rm -rf .venv || true
 
   notify:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [security-tests, frontend-tests, deployment-check]
     if: always()
 

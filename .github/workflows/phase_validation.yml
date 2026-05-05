@@ -27,7 +27,7 @@ concurrency:
 jobs:
   phase-validation:
     name: AutoBot Phase Validation
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -199,7 +199,7 @@ jobs:
 
   integration-validation:
     name: Integration Phase Validation
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: phase-validation
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
