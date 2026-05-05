@@ -182,7 +182,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '@/stores/useAppStore'
 
 // Now using wrapper div to avoid fragment root issues
 
@@ -228,7 +227,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const appStore = useAppStore()
 
 // Computed properties for notification data
 const notificationData = computed(() => {
