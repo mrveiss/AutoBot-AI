@@ -57,7 +57,7 @@ export const Preselected: Story = {
     modelValue: {
       id: 'host-1',
       name: 'Backend VM',
-      host: '172.16.168.20',
+      host: '192.0.2.20',
       ssh_port: 22,
       capabilities: ['ssh'],
       os: 'Ubuntu 24.04',

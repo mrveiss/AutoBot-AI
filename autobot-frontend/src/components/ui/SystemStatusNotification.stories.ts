@@ -97,7 +97,7 @@ export const CriticalOverlay: Story = {
       status: 'offline',
       lastCheck: Date.now(),
       consecutiveFailures: 8,
-      error: 'ECONNREFUSED 172.16.168.20:8001',
+      error: 'ECONNREFUSED 192.0.2.20:8001',
     },
   },
 };
