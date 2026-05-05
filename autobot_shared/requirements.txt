@@ -9,4 +9,4 @@ opentelemetry-sdk>=1.40.0
 opentelemetry-exporter-otlp>=1.41.1
 opentelemetry-instrumentation-fastapi>=0.61b0
 opentelemetry-instrumentation-redis>=0.62b1
-opentelemetry-instrumentation-aiohttp-client>=0.61b0
+opentelemetry-instrumentation-aiohttp-client>=0.62b1
