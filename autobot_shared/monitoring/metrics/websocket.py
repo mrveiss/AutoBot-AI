@@ -205,9 +205,7 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
         self.connections_active.labels(namespace=namespace).inc()
         self.connections_total.labels(namespace=namespace).inc()
 
-    def record_disconnection(
-        self, namespace: str, reason: str, duration_seconds: float
-    ) -> None:
+    def record_disconnection(self, namespace: str, reason: str, duration_seconds: float) -> None:
         """Record a WebSocket disconnection."""
         self.connections_active.labels(namespace=namespace).dec()
         self.disconnections_total.labels(namespace=namespace, reason=reason).inc()
@@ -221,26 +219,16 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
     # Message Methods
     # =========================================================================
 
-    def record_message_sent(
-        self, namespace: str, message_type: str, size_bytes: int
-    ) -> None:
+    def record_message_sent(self, namespace: str, message_type: str, size_bytes: int) -> None:
         """Record a message sent to client."""
         self.messages_sent.labels(namespace=namespace, message_type=message_type).inc()
-        self.message_size_bytes.labels(namespace=namespace, direction="sent").observe(
-            size_bytes
-        )
+        self.message_size_bytes.labels(namespace=namespace, direction="sent").observe(size_bytes)
         self.bytes_sent.labels(namespace=namespace).inc(size_bytes)
 
-    def record_message_received(
-        self, namespace: str, message_type: str, size_bytes: int
-    ) -> None:
+    def record_message_received(self, namespace: str, message_type: str, size_bytes: int) -> None:
         """Record a message received from client."""
-        self.messages_received.labels(
-            namespace=namespace, message_type=message_type
-        ).inc()
-        self.message_size_bytes.labels(
-            namespace=namespace, direction="received"
-        ).observe(size_bytes)
+        self.messages_received.labels(namespace=namespace, message_type=message_type).inc()
+        self.message_size_bytes.labels(namespace=namespace, direction="received").observe(size_bytes)
         self.bytes_received.labels(namespace=namespace).inc(size_bytes)
 
     def record_message_dropped(self, namespace: str, reason: str) -> None:
@@ -263,13 +251,9 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
     # Latency Methods
     # =========================================================================
 
-    def record_message_latency(
-        self, namespace: str, message_type: str, latency_seconds: float
-    ) -> None:
+    def record_message_latency(self, namespace: str, message_type: str, latency_seconds: float) -> None:
         """Record message processing latency."""
-        self.message_latency.labels(
-            namespace=namespace, message_type=message_type
-        ).observe(latency_seconds)
+        self.message_latency.labels(namespace=namespace, message_type=message_type).observe(latency_seconds)
 
     def record_ping_latency(self, namespace: str, latency_seconds: float) -> None:
         """Record ping/pong latency."""
@@ -295,13 +279,9 @@ class WebSocketMetricsRecorder(BaseMetricsRecorder):
     # Throughput Methods
     # =========================================================================
 
-    def set_message_throughput(
-        self, namespace: str, direction: str, messages_per_second: float
-    ) -> None:
+    def set_message_throughput(self, namespace: str, direction: str, messages_per_second: float) -> None:
         """Set current message throughput."""
-        self.messages_per_second.labels(namespace=namespace, direction=direction).set(
-            messages_per_second
-        )
+        self.messages_per_second.labels(namespace=namespace, direction=direction).set(messages_per_second)
 
 
 __all__ = ["WebSocketMetricsRecorder"]

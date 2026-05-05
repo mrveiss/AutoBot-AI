@@ -242,9 +242,7 @@ def _parse_env_file(env_path: Path) -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _find_missing_keys(
-    ssot_defaults: Dict[str, str], env_values: Dict[str, str]
-) -> List[DriftItem]:
+def _find_missing_keys(ssot_defaults: Dict[str, str], env_values: Dict[str, str]) -> List[DriftItem]:
     """Return DriftItems for SSOT-defined keys absent from .env."""
     items: List[DriftItem] = []
     for key, default in ssot_defaults.items():
@@ -256,17 +254,14 @@ def _find_missing_keys(
                     expected_default=default,
                     actual_value=None,
                     message=(
-                        f"Key '{key}' defined in SSOT config but absent from .env "
-                        f"(SSOT default: {default!r})"
+                        f"Key '{key}' defined in SSOT config but absent from .env " f"(SSOT default: {default!r})"
                     ),
                 )
             )
     return items
 
 
-def _find_unknown_keys(
-    ssot_defaults: Dict[str, str], env_values: Dict[str, str]
-) -> List[str]:
+def _find_unknown_keys(ssot_defaults: Dict[str, str], env_values: Dict[str, str]) -> List[str]:
     """Return keys present in .env that are not defined in SSOT config.
 
     Only returns keys with the AUTOBOT_ prefix to avoid flagging unrelated

@@ -262,9 +262,7 @@ class ServiceMessageBus:
     def _decode_entry(entry_data: dict) -> dict:
         """Decode bytes keys/values in a stream entry."""
         return {
-            (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                v.decode("utf-8") if isinstance(v, bytes) else v
-            )
+            (k.decode("utf-8") if isinstance(k, bytes) else k): (v.decode("utf-8") if isinstance(v, bytes) else v)
             for k, v in entry_data.items()
         }
 

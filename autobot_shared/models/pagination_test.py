@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 from autobot_shared.models.pagination import PaginationParams, apply_pagination
 
-
 # ---------------------------------------------------------------------------
 # apply_pagination tests
 # ---------------------------------------------------------------------------

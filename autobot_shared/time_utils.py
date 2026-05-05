@@ -40,6 +40,7 @@ Migration plan (#5169 part C)
 6. ⏳ Python 3.11+ upgrade — drops the 9 ``.replace("Z", "+00:00")``
    workaround sites since 3.11 ``fromisoformat`` accepts ``Z`` natively
 """
+
 import time
 from datetime import datetime, timezone
 
@@ -98,11 +99,8 @@ def parse_utc_iso(value: str) -> datetime:
     ``except (ValueError, TypeError)`` adopter pattern.
     """
     if not isinstance(value, str):
-        raise ValueError(
-            f"parse_utc_iso: expected str, got {type(value).__name__}"
-        )
+        raise ValueError(f"parse_utc_iso: expected str, got {type(value).__name__}")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
-

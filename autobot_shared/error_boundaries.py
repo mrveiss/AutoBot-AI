@@ -106,9 +106,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="AutoBot Error Boundary Management")
     parser.add_argument("--stats", action="store_true", help="Show error statistics")
-    parser.add_argument(
-        "--test", action="store_true", help="Test error boundary system"
-    )
+    parser.add_argument("--test", action="store_true", help="Test error boundary system")
 
     args = parser.parse_args()
 

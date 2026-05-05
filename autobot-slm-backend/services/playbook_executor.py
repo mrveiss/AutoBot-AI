@@ -72,7 +72,7 @@ class PlaybookExecutor:
         if task_name.startswith("["):
             end = task_name.find("] ")
             if end != -1:
-                task_name = task_name[end + 2:]
+                task_name = task_name[end + 2 :]
         # Strip trailing "(#4679)" issue refs
         task_name = re.sub(r"\s*\(#\d+\)\s*$", "", task_name)
         return task_name.strip()

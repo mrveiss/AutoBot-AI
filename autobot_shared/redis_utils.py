@@ -1,4 +1,5 @@
 """Shared Redis utility helpers."""
+
 from typing import Any, Optional
 
 

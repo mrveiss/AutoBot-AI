@@ -100,9 +100,7 @@ class HookRegistry:
             plugin_name or "unknown",
         )
 
-    def unregister_hook(
-        self, hook_name: str, plugin_name: Optional[str] = None
-    ) -> None:
+    def unregister_hook(self, hook_name: str, plugin_name: Optional[str] = None) -> None:
         """
         Unregister callbacks for a hook.
 
@@ -115,12 +113,8 @@ class HookRegistry:
 
         if plugin_name:
             # Remove only callbacks from specified plugin
-            self._hooks[hook_name] = [
-                cb for cb in self._hooks[hook_name] if cb["plugin_name"] != plugin_name
-            ]
-            logger.info(
-                "Unregistered hook '%s' for plugin '%s'", hook_name, plugin_name
-            )
+            self._hooks[hook_name] = [cb for cb in self._hooks[hook_name] if cb["plugin_name"] != plugin_name]
+            logger.info("Unregistered hook '%s' for plugin '%s'", hook_name, plugin_name)
         else:
             # Remove all callbacks
             del self._hooks[hook_name]

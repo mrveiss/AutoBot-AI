@@ -50,11 +50,7 @@ class TaskResult:
         overwrite) the standard fields.  The ``extra`` key itself is never
         included in the output.
         """
-        base = {
-            k: v
-            for k, v in asdict(self).items()
-            if k != "extra" and v is not None
-        }
+        base = {k: v for k, v in asdict(self).items() if k != "extra" and v is not None}
         return {**base, **self.extra}
 
 

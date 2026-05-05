@@ -69,9 +69,7 @@ class RedisCache:
             logger.warning("Cache get failed for %s: %s", key, exc)
             return default
 
-    async def set_json(
-        self, key: str, data: Any, ttl: Optional[int] = None
-    ) -> bool:
+    async def set_json(self, key: str, data: Any, ttl: Optional[int] = None) -> bool:
         """JSON-encode *data* and store it at *key* in Redis.
 
         Args:

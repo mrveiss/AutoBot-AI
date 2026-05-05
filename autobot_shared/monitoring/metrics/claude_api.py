@@ -47,9 +47,7 @@ class ClaudeAPIMetricsRecorder(BaseMetricsRecorder):
 
     def record_request(self, tool_name: str, success: bool) -> None:
         """Record a Claude API request."""
-        self.claude_api_requests_total.labels(
-            tool_name=tool_name, success=str(success).lower()
-        ).inc()
+        self.claude_api_requests_total.labels(tool_name=tool_name, success=str(success).lower()).inc()
 
     def record_payload(self, payload_bytes: int) -> None:
         """Record Claude API payload size."""

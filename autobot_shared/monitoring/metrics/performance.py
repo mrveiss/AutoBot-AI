@@ -275,9 +275,7 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Update all GPU metrics at once."""
         self.gpu_utilization.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(utilization)
-        self.gpu_memory_utilization.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(
-            memory_utilization
-        )
+        self.gpu_memory_utilization.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(memory_utilization)
         self.gpu_temperature.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(temperature)
         self.gpu_power_watts.labels(gpu_id=gpu_id, gpu_name=gpu_name).set(power_watts)
 
@@ -325,9 +323,7 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         online: bool,
     ) -> None:
         """Update NPU worker status."""
-        self.npu_worker_status.labels(worker_id=worker_id, platform=platform).set(
-            1 if online else 0
-        )
+        self.npu_worker_status.labels(worker_id=worker_id, platform=platform).set(1 if online else 0)
 
     def update_npu_worker_metrics(
         self,
@@ -347,13 +343,9 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         """Record a failed task on NPU worker."""
         self.npu_worker_tasks_failed.labels(worker_id=worker_id).inc()
 
-    def record_npu_worker_response_time(
-        self, worker_id: str, duration_seconds: float
-    ) -> None:
+    def record_npu_worker_response_time(self, worker_id: str, duration_seconds: float) -> None:
         """Record NPU worker response time."""
-        self.npu_worker_response_time.labels(worker_id=worker_id).observe(
-            duration_seconds
-        )
+        self.npu_worker_response_time.labels(worker_id=worker_id).observe(duration_seconds)
 
     def update_npu_worker_heartbeat(self, worker_id: str, timestamp: float) -> None:
         """Update last heartbeat timestamp for NPU worker."""
@@ -377,9 +369,7 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
 
     def record_optimization_recommendation(self, category: str, priority: str) -> None:
         """Record an optimization recommendation."""
-        self.optimization_recommendations.labels(
-            category=category, priority=priority
-        ).inc()
+        self.optimization_recommendations.labels(category=category, priority=priority).inc()
 
     # =========================================================================
     # Alert Methods
@@ -397,13 +387,9 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
     # Multi-modal Methods
     # =========================================================================
 
-    def record_multimodal_processing(
-        self, modality: str, duration_seconds: float, success: bool
-    ) -> None:
+    def record_multimodal_processing(self, modality: str, duration_seconds: float, success: bool) -> None:
         """Record a multi-modal processing operation."""
-        self.multimodal_processing_time.labels(modality=modality).observe(
-            duration_seconds
-        )
+        self.multimodal_processing_time.labels(modality=modality).observe(duration_seconds)
         status = "success" if success else "failure"
         self.multimodal_operations.labels(modality=modality, status=status).inc()
 

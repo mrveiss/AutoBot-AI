@@ -139,9 +139,7 @@ class ToolSDKRegistry:
         results = []
         for tool_class in self._tools.values():
             meta = tool_class.metadata
-            if permission_filter is not None and not permission_filter.allows(
-                meta.permission
-            ):
+            if permission_filter is not None and not permission_filter.allows(meta.permission):
                 continue
             results.append(meta)
         return sorted(results, key=lambda m: m.name)
@@ -195,8 +193,7 @@ class ToolSDKRegistry:
                 name,
             )
             raise PermissionDeniedError(
-                f"Tool '{name}' requires {required.value} permission; "
-                f"caller has {caller_permission.value}"
+                f"Tool '{name}' requires {required.value} permission; " f"caller has {caller_permission.value}"
             )
 
         tool = tool_class()
@@ -242,9 +239,7 @@ class ToolSDKRegistry:
         tools = []
         for tool_class in sorted(self._tools.values(), key=lambda c: c.metadata.name):
             meta = tool_class.metadata
-            if permission_filter is not None and not permission_filter.allows(
-                meta.permission
-            ):
+            if permission_filter is not None and not permission_filter.allows(meta.permission):
                 continue
             instance = tool_class()
             tools.append(instance.to_openapi_schema())
