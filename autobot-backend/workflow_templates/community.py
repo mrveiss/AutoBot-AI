@@ -20,7 +20,7 @@ def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
     """Build search and draft steps for Reddit Monitor & Reply. Issue #1161."""
     return [
         WorkflowStep(
-            id="reddit_search",
+            task_id="reddit_search",
             agent_type="community_growth",
             action="reddit_search",
             description=(
@@ -34,10 +34,10 @@ def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
                 "limit": 25,
                 "min_score": 5,
             },
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="draft_replies",
+            task_id="draft_replies",
             agent_type="community_growth",
             action="llm_draft_content",
             description=(
@@ -53,7 +53,7 @@ def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
                     "Mention AutoBot at {autobot_url} where relevant."
                 ),
             },
-            expected_duration_ms=45000,
+            estimated_duration_seconds=45.0,
         ),
     ]
 
@@ -62,7 +62,7 @@ def _build_reddit_monitor_post_steps() -> List[WorkflowStep]:
     """Build approval and post steps for Reddit Monitor & Reply. Issue #1161."""
     return [
         WorkflowStep(
-            id="review_drafts",
+            task_id="review_drafts",
             agent_type="orchestrator",
             action="human_review",
             description=(
@@ -72,10 +72,10 @@ def _build_reddit_monitor_post_steps() -> List[WorkflowStep]:
             ),
             requires_approval=True,
             dependencies=["draft_replies"],
-            expected_duration_ms=0,
+            estimated_duration_seconds=0.0,
         ),
         WorkflowStep(
-            id="reddit_reply",
+            task_id="reddit_reply",
             agent_type="community_growth",
             action="reddit_reply",
             description=(
@@ -86,7 +86,7 @@ def _build_reddit_monitor_post_steps() -> List[WorkflowStep]:
             ),
             dependencies=["review_drafts"],
             inputs={"dry_run": False},
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
     ]
 
@@ -145,7 +145,7 @@ def _build_blast_fetch_draft_steps() -> List[WorkflowStep]:
     """Build fetch and draft steps for Release Announcement Blast. Issue #1161."""
     return [
         WorkflowStep(
-            id="fetch_release",
+            task_id="fetch_release",
             agent_type="community_growth",
             action="github_get_releases",
             description=(
@@ -155,10 +155,10 @@ def _build_blast_fetch_draft_steps() -> List[WorkflowStep]:
                 "repos require a GITHUB_TOKEN)."
             ),
             inputs={"repo": "{repo}", "limit": 1},
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="draft_content",
+            task_id="draft_content",
             agent_type="community_growth",
             action="llm_draft_content",
             description=(
@@ -175,7 +175,7 @@ def _build_blast_fetch_draft_steps() -> List[WorkflowStep]:
                     "Include the release tag, key highlights, and a link."
                 ),
             },
-            expected_duration_ms=60000,
+            estimated_duration_seconds=60.0,
         ),
     ]
 
@@ -184,7 +184,7 @@ def _build_blast_review_step() -> List[WorkflowStep]:
     """Build human review step for Release Announcement Blast. Issue #1161."""
     return [
         WorkflowStep(
-            id="review_content",
+            task_id="review_content",
             agent_type="orchestrator",
             action="human_review",
             description=(
@@ -195,7 +195,7 @@ def _build_blast_review_step() -> List[WorkflowStep]:
             ),
             requires_approval=True,
             dependencies=["draft_content"],
-            expected_duration_ms=0,
+            estimated_duration_seconds=0.0,
         ),
     ]
 
@@ -204,7 +204,7 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
     """Build parallel posting steps for Release Announcement Blast. Issue #1161."""
     return [
         WorkflowStep(
-            id="reddit_post",
+            task_id="reddit_post",
             agent_type="community_growth",
             action="reddit_post",
             description=(
@@ -214,10 +214,10 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             ),
             dependencies=["review_content"],
             inputs={"subreddit": "{target_subreddits}", "dry_run": False},
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="twitter_post",
+            task_id="twitter_post",
             agent_type="community_growth",
             action="twitter_post",
             description=(
@@ -225,10 +225,10 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             ),
             dependencies=["review_content"],
             inputs={"dry_run": False},
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="discord_notify",
+            task_id="discord_notify",
             agent_type="community_growth",
             action="discord_notify",
             description=(
@@ -238,7 +238,7 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             ),
             dependencies=["review_content"],
             inputs={"dry_run": False},
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -313,7 +313,7 @@ def _build_digest_gather_steps() -> List[WorkflowStep]:
     """Build parallel gather steps for Community Digest Post. Issue #1161."""
     return [
         WorkflowStep(
-            id="fetch_releases",
+            task_id="fetch_releases",
             agent_type="community_growth",
             action="github_get_releases",
             description=(
@@ -322,10 +322,10 @@ def _build_digest_gather_steps() -> List[WorkflowStep]:
                 "step. Public repos need no token."
             ),
             inputs={"repo": "{repo}", "limit": 5},
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="search_mentions",
+            task_id="search_mentions",
             agent_type="community_growth",
             action="reddit_search",
             description=(
@@ -339,7 +339,7 @@ def _build_digest_gather_steps() -> List[WorkflowStep]:
                 "limit": 10,
                 "min_score": 1,
             },
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
     ]
 
@@ -348,7 +348,7 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
     """Build draft, review, and post steps for Community Digest Post. Issue #1161."""
     return [
         WorkflowStep(
-            id="draft_digest",
+            task_id="draft_digest",
             agent_type="community_growth",
             action="llm_draft_content",
             description=(
@@ -365,10 +365,10 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
                     "and notable Reddit mentions from the past {lookback_days} days."
                 ),
             },
-            expected_duration_ms=60000,
+            estimated_duration_seconds=60.0,
         ),
         WorkflowStep(
-            id="review_digest",
+            task_id="review_digest",
             agent_type="orchestrator",
             action="human_review",
             description=(
@@ -378,10 +378,10 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
             ),
             requires_approval=True,
             dependencies=["draft_digest"],
-            expected_duration_ms=0,
+            estimated_duration_seconds=0.0,
         ),
         WorkflowStep(
-            id="post_digest",
+            task_id="post_digest",
             agent_type="community_growth",
             action="reddit_post",
             description=(
@@ -391,7 +391,7 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
             ),
             dependencies=["review_digest"],
             inputs={"subreddit": "{target_subreddits}", "dry_run": False},
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
     ]
 

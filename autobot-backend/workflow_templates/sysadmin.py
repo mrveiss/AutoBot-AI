@@ -24,35 +24,35 @@ def _create_health_check_collection_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="system_overview",
+            task_id="system_overview",
             agent_type="system_commands",
             action="Collect basic system information and status",
             description="System_Commands: System Overview",
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="resource_check",
+            task_id="resource_check",
             agent_type="system_commands",
             action="Check CPU, memory, disk, and network utilization",
             description="System_Commands: Resource Utilization",
             dependencies=["system_overview"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="service_status",
+            task_id="service_status",
             agent_type="system_commands",
             action="Check status of critical services and processes",
             description="System_Commands: Service Status Check",
             dependencies=["resource_check"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="security_status",
+            task_id="security_status",
             agent_type="system_commands",
             action="Check system security status and updates",
             description="System_Commands: Security Status",
             dependencies=["service_status"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
     ]
 
@@ -66,29 +66,29 @@ def _create_health_check_reporting_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="health_report",
+            task_id="health_report",
             agent_type="orchestrator",
             action="Generate comprehensive system health report",
             description="Orchestrator: Generate Health Report",
             dependencies=["security_status"],
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
         WorkflowStep(
-            id="recommendations",
+            task_id="recommendations",
             agent_type="orchestrator",
             action="Provide system optimization recommendations",
             description="Orchestrator: Optimization Recommendations (requires your approval)",
             requires_approval=True,
             dependencies=["health_report"],
-            expected_duration_ms=8000,
+            estimated_duration_seconds=8.0,
         ),
         WorkflowStep(
-            id="store_results",
+            task_id="store_results",
             agent_type="knowledge_manager",
             action="Store health check results and recommendations",
             description="Knowledge_Manager: Store Health Check",
             dependencies=["recommendations"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -130,27 +130,27 @@ def _create_perf_analysis_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="baseline_metrics",
+            task_id="baseline_metrics",
             agent_type="system_commands",
             action="Collect baseline performance metrics",
             description="System_Commands: Baseline Metrics Collection",
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="bottleneck_analysis",
+            task_id="bottleneck_analysis",
             agent_type="system_commands",
             action="Analyze system for performance bottlenecks",
             description="System_Commands: Bottleneck Analysis",
             dependencies=["baseline_metrics"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="optimization_research",
+            task_id="optimization_research",
             agent_type="research",
             action="Research performance optimization techniques",
             description="Research: Optimization Techniques",
             dependencies=["bottleneck_analysis"],
-            expected_duration_ms=35000,
+            estimated_duration_seconds=35.0,
         ),
     ]
 
@@ -164,38 +164,38 @@ def _create_perf_implementation_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="optimization_plan",
+            task_id="optimization_plan",
             agent_type="orchestrator",
             action="Create detailed optimization implementation plan",
             description="Orchestrator: Optimization Plan (requires your approval)",
             requires_approval=True,
             dependencies=["optimization_research"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="implement_optimizations",
+            task_id="implement_optimizations",
             agent_type="system_commands",
             action="Implement approved performance optimizations",
             description="System_Commands: Apply Optimizations (requires your approval)",
             requires_approval=True,
             dependencies=["optimization_plan"],
-            expected_duration_ms=45000,
+            estimated_duration_seconds=45.0,
         ),
         WorkflowStep(
-            id="verify_improvements",
+            task_id="verify_improvements",
             agent_type="system_commands",
             action="Verify performance improvements and measure impact",
             description="System_Commands: Performance Verification",
             dependencies=["implement_optimizations"],
-            expected_duration_ms=20000,
+            estimated_duration_seconds=20.0,
         ),
         WorkflowStep(
-            id="store_optimization",
+            task_id="store_optimization",
             agent_type="knowledge_manager",
             action="Store optimization results and procedures",
             description="Knowledge_Manager: Store Optimization Results",
             dependencies=["verify_improvements"],
-            expected_duration_ms=5000,
+            estimated_duration_seconds=5.0,
         ),
     ]
 
@@ -243,28 +243,28 @@ def _create_backup_planning_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="assess_data",
+            task_id="assess_data",
             agent_type="system_commands",
             action="Assess critical data and system components",
             description="System_Commands: Data Assessment",
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
         WorkflowStep(
-            id="backup_research",
+            task_id="backup_research",
             agent_type="research",
             action="Research backup solutions and best practices",
             description="Research: Backup Solutions",
             dependencies=["assess_data"],
-            expected_duration_ms=25000,
+            estimated_duration_seconds=25.0,
         ),
         WorkflowStep(
-            id="backup_strategy",
+            task_id="backup_strategy",
             agent_type="orchestrator",
             action="Design comprehensive backup strategy",
             description="Orchestrator: Backup Strategy (requires your approval)",
             requires_approval=True,
             dependencies=["backup_research"],
-            expected_duration_ms=15000,
+            estimated_duration_seconds=15.0,
         ),
     ]
 
@@ -278,29 +278,29 @@ def _create_backup_implementation_steps() -> List[WorkflowStep]:
     """
     return [
         WorkflowStep(
-            id="implement_backup",
+            task_id="implement_backup",
             agent_type="system_commands",
             action="Implement backup solution and schedule",
             description="System_Commands: Backup Implementation (requires your approval)",
             requires_approval=True,
             dependencies=["backup_strategy"],
-            expected_duration_ms=40000,
+            estimated_duration_seconds=40.0,
         ),
         WorkflowStep(
-            id="test_recovery",
+            task_id="test_recovery",
             agent_type="system_commands",
             action="Test backup and recovery procedures",
             description="System_Commands: Recovery Testing",
             dependencies=["implement_backup"],
-            expected_duration_ms=30000,
+            estimated_duration_seconds=30.0,
         ),
         WorkflowStep(
-            id="document_procedures",
+            task_id="document_procedures",
             agent_type="knowledge_manager",
             action="Document backup and recovery procedures",
             description="Knowledge_Manager: Document Procedures",
             dependencies=["test_recovery"],
-            expected_duration_ms=10000,
+            estimated_duration_seconds=10.0,
         ),
     ]
 
