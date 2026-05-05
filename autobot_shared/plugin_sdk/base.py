@@ -94,6 +94,10 @@ class PluginManifest(BaseModel):
     dependencies: List[str] = Field(default_factory=list, description="Required plugin names")
     config_schema: Dict[str, Any] = Field(default_factory=dict, description="JSON schema for plugin configuration")
     hooks: List[str] = Field(default_factory=list, description="Hook names this plugin provides")
+    required_env: List[RequiredEnvVar] = Field(
+        default_factory=list,
+        description="Environment variables this plugin needs at runtime",
+    )
 
     @field_validator("version")
     @classmethod

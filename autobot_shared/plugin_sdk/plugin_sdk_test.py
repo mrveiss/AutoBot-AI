@@ -132,6 +132,39 @@ def test_required_env_var_rejects_empty_description():
 
 
 # ---------------------------------------------------------------------------
+# PluginManifest.required_env field
+# ---------------------------------------------------------------------------
+
+
+def test_manifest_default_required_env_is_empty_list():
+    """Backward compat: existing plugin.json without the field still parses."""
+    m = _make_manifest()
+    assert m.required_env == []
+
+
+def test_manifest_with_required_env_parses():
+    m = _make_manifest(
+        required_env=[
+            {
+                "name": "MY_API_KEY",
+                "description": "API key for service.",
+                "secret": True,
+                "required": False,
+                "docs_url": "https://example.com/keys",
+                "obtain_steps": ["Sign in", "Generate key"],
+            }
+        ]
+    )
+    assert len(m.required_env) == 1
+    var = m.required_env[0]
+    assert isinstance(var, RequiredEnvVar)
+    assert var.name == "MY_API_KEY"
+    assert var.secret is True
+    assert var.docs_url == "https://example.com/keys"
+    assert var.obtain_steps == ["Sign in", "Generate key"]
+
+
+# ---------------------------------------------------------------------------
 # BasePlugin lifecycle
 # ---------------------------------------------------------------------------
 
