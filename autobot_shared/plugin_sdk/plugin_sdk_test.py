@@ -71,6 +71,53 @@ def test_manifest_invalid_name():
 
 
 # ---------------------------------------------------------------------------
+# RequiredEnvVar validation
+# ---------------------------------------------------------------------------
+
+
+def test_required_env_var_accepts_valid_name():
+    from plugin_sdk.base import RequiredEnvVar
+
+    var = RequiredEnvVar(
+        name="MY_PLUGIN_API_KEY",
+        description="The API key.",
+    )
+    assert var.name == "MY_PLUGIN_API_KEY"
+    assert var.secret is False
+    assert var.required is False
+    assert var.docs_url is None
+    assert var.obtain_steps == []
+
+
+def test_required_env_var_rejects_lowercase_name():
+    from plugin_sdk.base import RequiredEnvVar
+
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="my_plugin_api_key", description="x")
+
+
+def test_required_env_var_rejects_leading_digit():
+    from plugin_sdk.base import RequiredEnvVar
+
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="1MY_KEY", description="x")
+
+
+def test_required_env_var_rejects_special_chars():
+    from plugin_sdk.base import RequiredEnvVar
+
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="MY-KEY", description="x")
+
+
+def test_required_env_var_rejects_empty_name():
+    from plugin_sdk.base import RequiredEnvVar
+
+    with pytest.raises(Exception):
+        RequiredEnvVar(name="", description="x")
+
+
+# ---------------------------------------------------------------------------
 # BasePlugin lifecycle
 # ---------------------------------------------------------------------------
 

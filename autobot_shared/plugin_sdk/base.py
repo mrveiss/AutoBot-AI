@@ -20,6 +20,53 @@ from pydantic import BaseModel, Field, field_validator
 logger = logging.getLogger(__name__)
 
 
+class RequiredEnvVar(BaseModel):
+    """
+    Declares an environment variable a plugin needs at runtime.
+
+    Used in PluginManifest.required_env to surface configuration requirements
+    to operators and host UIs. Values are NEVER returned through the API —
+    only the configured/missing state is reported.
+    """
+
+    name: str = Field(
+        ...,
+        description="Env var name, e.g. 'MY_PLUGIN_API_KEY'",
+    )
+    secret: bool = Field(
+        False,
+        description="If true, host UI hides the value from any preview surface",
+    )
+    required: bool = Field(
+        False,
+        description="If true, the plugin refuses to load when the var is missing",
+    )
+    description: str = Field(
+        ...,
+        description="One-line purpose of the variable",
+    )
+    docs_url: Optional[str] = Field(
+        None,
+        description="URL where the credential is obtained",
+    )
+    obtain_steps: List[str] = Field(
+        default_factory=list,
+        description="Bullet list shown by the host settings UI",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Env-var names must be UPPER_SNAKE_CASE starting with a letter."""
+        if not v:
+            raise ValueError("Env var name cannot be empty")
+        if not v[0].isalpha() or not v[0].isupper():
+            raise ValueError("Env var name must start with an uppercase letter")
+        if not all(c.isupper() or c.isdigit() or c == "_" for c in v):
+            raise ValueError("Env var name must be UPPER_SNAKE_CASE")
+        return v
+
+
 class PluginStatus(str, Enum):
     """Plugin lifecycle status."""
 
