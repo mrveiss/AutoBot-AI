@@ -9,25 +9,31 @@ on:
     branches: [ main, Dev_new_gui, develop ]
     paths:
       - '**/*.py'
-      - 'autobot-backend/requirements*.txt'
-      - 'autobot-slm-backend/requirements*.txt'
+      - '**/requirements*.txt'
       - 'pyproject.toml'
       - '.flake8'
+      - '.bandit'
       - '.pre-commit-config.yaml'
-      - 'pipeline-scripts/check-hardcoded-*.sh'
-      - 'tools/lint/check_no_*.py'
+      - 'pipeline-scripts/**'
+      - 'tools/lint/**'
+      - 'autobot-infrastructure/shared/scripts/hooks/**'
+      - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+      - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
     paths:
       - '**/*.py'
-      - 'autobot-backend/requirements*.txt'
-      - 'autobot-slm-backend/requirements*.txt'
+      - '**/requirements*.txt'
       - 'pyproject.toml'
       - '.flake8'
+      - '.bandit'
       - '.pre-commit-config.yaml'
-      - 'pipeline-scripts/check-hardcoded-*.sh'
-      - 'tools/lint/check_no_*.py'
+      - 'pipeline-scripts/**'
+      - 'tools/lint/**'
+      - 'autobot-infrastructure/shared/scripts/hooks/**'
+      - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+      - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
 
 concurrency:

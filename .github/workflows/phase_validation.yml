@@ -8,15 +8,21 @@ on:
     branches: [ main, Dev_new_gui ]
     paths:
       - 'autobot-backend/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '**/requirements*.txt'
       - 'pipeline-scripts/**'
+      - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'autobot-backend/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '**/requirements*.txt'
       - 'pipeline-scripts/**'
+      - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
   workflow_dispatch:
     inputs:
