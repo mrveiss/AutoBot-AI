@@ -20,7 +20,7 @@ on:
 
 jobs:
   detect-stale:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
