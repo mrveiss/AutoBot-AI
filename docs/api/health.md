@@ -222,6 +222,31 @@ When all five gates clear, the route-deletion PR can:
 - Verify `git grep "@router.get.*['\"]/health['\"]" autobot-backend/api/ | wc -l` == 1
 - Remove the middleware (no legacy paths left to decorate)
 
+## Parallel surface — `/api/monitoring/services/health` (#6922)
+
+`/api/monitoring/services/health` lives on a different router (`api/monitoring.py`) and returns a `ServicesSummaryResponse` shape — a per-service rollup of npu / browser / ollama / redis pings — that two frontend composables (`usePrometheusMetrics.ts:368,583`) consume directly.
+
+It is **deliberately not** registered as a probe under `/api/system/health` because:
+
+1. **Shape mismatch** — `ServicesSummaryResponse.services[]` is a flat list of `{name, status, last_check, response_time, ...}` records; `ComponentHealth` is a single component with `data: dict[str, Any]`. Forcing the rollup through `ComponentHealth.data` flattens semantically distinct per-service entries into one opaque dict, losing typed access for the frontend.
+2. **Different SLA** — `ComponentHealth` is bounded at the registry's ~2s per-probe timeout; `ServicesSummaryResponse` aggregates HTTP pings to remote VMs (npu / browser / ollama) which can legitimately take 5–10s without indicating system-level failure. The two endpoints have different latency envelopes by design.
+3. **Auth posture** — both currently require no auth (allowlisted in `service_auth_enforcement.py`), but `services/health` is intended for ops-dashboard scraping (Prometheus/Grafana via `usePrometheusMetrics`) while `system/health` is the user-facing reachability probe. Mixing them blurs the audit trail.
+
+**The two endpoints answer different questions:**
+
+| Endpoint | Question | Caller |
+|---|---|---|
+| `GET /api/system/health` | "Is the AutoBot backend itself healthy?" | Frontend health monitor before login + post-login banners |
+| `GET /api/monitoring/services/health` | "What's the status of the constellation of remote services I depend on?" | Ops dashboard scraping (`usePrometheusMetrics`) |
+
+If the rollup ever needs to fold into the canonical aggregator, the migration path is:
+
+- Add a `monitoring_services` probe whose `data: {services: [...]}` mirrors `ServicesSummaryResponse`
+- Migrate the two `usePrometheusMetrics` callers to read `probes[name=monitoring_services].data.services`
+- Add `/api/monitoring/services/health` to the deletion list in #6902
+
+Until that migration has explicit ops/frontend buy-in, both endpoints stay as-is. This document records the architectural decision so future contributors don't accidentally fork further.
+
 ## Testing a probe
 
 `api.system_health` exposes `_reset_probes_for_testing()` to clear the
