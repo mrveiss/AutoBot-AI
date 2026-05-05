@@ -47,11 +47,17 @@ jobs:
           echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
 
       - name: Install backend dependencies
+        # #6947: self-hosted-runner default shell is `bash -e` (no pipefail),
+        # so prior `pip install ... | tail -5` silently swallowed install failures.
+        # Force pipefail explicitly + don't truncate pip output so dependency
+        # conflicts surface immediately.
+        shell: bash
         run: |
+          set -euo pipefail
           source .venv/bin/activate
           python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r autobot-backend/requirements.txt 2>&1 | tail -5
+          python -m pip install -r autobot-backend/requirements.txt
 
       - name: Run startup-import smoke test
         run: |
