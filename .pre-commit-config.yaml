@@ -94,6 +94,22 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #6940. PR #6881 found 7 files
+  # calling response.get("content") on LLMResponse (a Pydantic BaseModel)
+  # — masked by MockLLMInterface in tests but raised AttributeError in prod.
+  # AST-aware: only flags `.get(...)` / `[...]` access on variables assigned
+  # from llm_service.chat() / chat_optimized() / etc. in files that import
+  # LLMResponse. Allowlists judges/__init__.py (intentional triple-fallback).
+  - repo: local
+    hooks:
+      - id: no-llm-response-dict-access
+        name: Block dict-style access on LLMResponse (#6940)
+        entry: tools/lint/check_no_llm_response_dict_access.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Use response.content (attribute), not response.get('content') — LLMResponse is a Pydantic BaseModel"
+
   # AutoBot custom: regression-prevention for #5225 KB redis accessor migration.
   # Blocks any reference to the old public ``aioredis_client`` attribute
   # (renamed to ``_aioredis_client`` in #5225) and any reference to the new
