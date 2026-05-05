@@ -16,7 +16,7 @@ uvicorn[standard]>=0.46.0
 # Database - PostgreSQL (Issue #786)
 sqlalchemy>=2.0.48
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
-psycopg2-binary>=2.9.11  # Sync PostgreSQL driver for migrations
+psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.12.5
