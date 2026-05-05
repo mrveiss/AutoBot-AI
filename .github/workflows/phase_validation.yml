@@ -1,5 +1,4 @@
 # Phase Validation Integration workflow
-# Uses self-hosted runner to avoid GitHub Actions quota limits
 
 name: Phase Validation Integration
 

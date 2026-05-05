@@ -1,5 +1,4 @@
 # Security Scanning workflow
-# Uses self-hosted runner to avoid GitHub Actions quota limits
 #
 # Security checks are blocking — failures prevent merge (Issue #2874).
 

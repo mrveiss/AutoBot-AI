@@ -1,5 +1,4 @@
 # AutoBot CI/CD Pipeline
-# Uses self-hosted runner to avoid GitHub Actions quota limits
 
 name: AutoBot CI/CD Pipeline
 
