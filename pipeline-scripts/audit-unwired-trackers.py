@@ -38,7 +38,18 @@ from pathlib import Path
 from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCAN_DIRS = ["autobot-backend", "autobot-frontend", "autobot_shared"]
+# #6927: include slm-backend, infrastructure, npu-worker. Original list missed
+# 731 issue refs in autobot-slm-backend and 556 in autobot-infrastructure —
+# the audit silently skipped half the codebase. autobot-ai-stack is excluded
+# because it currently has zero source files (READMEs only).
+SCAN_DIRS = [
+    "autobot-backend",
+    "autobot-frontend",
+    "autobot_shared",
+    "autobot-slm-backend",
+    "autobot-infrastructure",
+    "autobot-npu-worker",
+]
 SOURCE_GLOBS = ("*.py", "*.ts", "*.vue")
 
 # Module stems too common to grep reliably. Skip — false-positive risk too high.
@@ -69,13 +80,23 @@ SKIP_PATH_FRAGMENTS = (
 TEST_PATH_FRAGMENTS = ("_test.", ".test.", "/tests/", "/__tests__/")
 
 DOCSTRING_HEAD_LINES = 40  # how many lines from top of file to scan for tracker refs
-# Match common docstring tracker-reference shapes:
-#   Issue #N        — formal prose
-#   #N:             — heading-style
-#   (#N)            — parenthesized inline citation, e.g. "Topology-Aware Router (#2138)"
-#   issues/N        — direct URL-style reference
+# Match common docstring tracker-reference shapes (#6928 widened the set).
+# Single regex with multiple alternations — each branch captures into its own
+# numbered group; extract_tracker_refs() picks whichever matched.
+#
+#   Issue #N                 — formal prose ("Issue #1234")
+#   Closes/Fixes/Resolves #N — git/GitHub conventional close-keywords
+#   See/Related/Tracking #N  — soft references in docstrings
+#   #N: at start of line     — heading-style (\b alone fails because # is non-word)
+#   (#N)                     — parenthesized inline citation
+#   [#N]                     — markdown reference shape ("[#1234](url)")
+#   /issues/N                — direct URL form
 ISSUE_REF_RE = re.compile(
-    r"\bIssue #(\d+)\b|\b#(\d+):|\(#(\d+)\)|/issues/(\d+)\b",
+    r"(?:^|\W)(?:Issue|Closes|Fixes|Resolves|See|Related|Tracking)\s+#(\d+)\b"
+    r"|(?:^|\s)#(\d+):"
+    r"|\(#(\d+)\)"
+    r"|\[#(\d+)\]"
+    r"|/issues/(\d+)\b",
     re.MULTILINE,
 )
 
@@ -107,7 +128,8 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
         return []
     refs: list[int] = []
     for m in ISSUE_REF_RE.finditer(head):
-        n = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+        # 5 alternation branches → 5 capture groups; pick whichever matched.
+        n = m.group(1) or m.group(2) or m.group(3) or m.group(4) or m.group(5)
         if n:
             refs.append(int(n))
     return list(dict.fromkeys(refs))  # dedupe, preserve order
