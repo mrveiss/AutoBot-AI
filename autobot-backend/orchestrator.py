@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Set
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from llm_interface import LLMInterface
+from services.llm_service import get_llm_service
 from memory import LongTermMemoryManager
 
 # Issue #381: shared orchestration types
@@ -184,7 +184,8 @@ class Orchestrator:
     def _init_core_components(self, config_mgr) -> None:
         self.config_manager = config_mgr or _get_config_manager()
         self.config = OrchestratorConfig(self.config_manager)
-        self.llm_interface = LLMInterface()
+        # #6983: migrated from LLMInterface to LLMService (#3185 missed this caller)
+        self.llm_service = get_llm_service()
         self.memory_manager = LongTermMemoryManager()
         self.agent_manager = AgentManager()
 
@@ -349,10 +350,13 @@ class Orchestrator:
 
     async def _validate_llm_model(self, model_name: str) -> bool:
         try:
-            test_response = await self.llm_interface.generate_response(
-                "Test connection", model=model_name, max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS
+            # #6983: migrated to LLMService.chat() — returns LLMResponse with .content/.error attrs
+            response = await self.llm_service.chat(
+                [{"role": "user", "content": "Test connection"}],
+                model_name=model_name,
+                max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS,
             )
-            return bool(test_response)
+            return not response.error and bool(response.content)
         except Exception as e:
             logger.debug("Model test failed for %s: %s", model_name, e)
             return False
@@ -377,7 +381,8 @@ class Orchestrator:
                 self.memory_manager.initialize(),
                 self.agent_manager.initialize(),
             )
-            ollama_connected = await self.llm_interface.check_ollama_connection()
+            # #6983: migrated from llm_interface.check_ollama_connection() to LLMService.is_provider_healthy()
+            ollama_connected = await self.llm_service.is_provider_healthy(provider_name="ollama")
             if not ollama_connected:
                 raise Exception("Failed to connect to Ollama or configured models not found.")
             logger.info("✅ Ollama connection established")
@@ -396,8 +401,8 @@ class Orchestrator:
             logger.info("Waiting for %d active tasks to complete...", len(self.active_tasks))
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         try:
+            # #6983: LLMService has no cleanup() (provider lifecycle managed elsewhere); drop the call
             await asyncio.gather(
-                self.llm_interface.cleanup(),
                 self.memory_manager.cleanup(),
                 self.agent_manager.cleanup(),
                 return_exceptions=True,
@@ -502,18 +507,27 @@ class Orchestrator:
     async def _process_simple_request(
         self, user_message: str, task_id: str, model: str, context: Optional[Dict]
     ) -> Dict[str, Any]:
-        response = await self.llm_interface.generate_response(
-            user_message, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS, context=context
+        # #6983: migrated to LLMService.chat() — context is forwarded as additional kwargs
+        # since LLMService.chat() has no positional `context` parameter (was specific to LLMInterface)
+        response = await self.llm_service.chat(
+            [{"role": "user", "content": user_message}],
+            model_name=model,
+            max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS,
+            context=context,
         )
-        return {"type": "simple_response", "content": response, "sources": [{"type": "llm", "model": model}]}
+        return {"type": "simple_response", "content": response.content, "sources": [{"type": "llm", "model": model}]}
 
     # ------------------------------------------------- execute_enhanced_workflow
 
     def _get_enhanced_documenter(self) -> WorkflowDocumenter:
         if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
+            # #6983: WorkflowDocumenter still names its dep `llm_interface` (legacy slot,
+            # typed Optional[Any]). Pass the LLMService instance — the rename is tracked
+            # separately. WorkflowDocumenter's internal call to .chat_completion() is
+            # broken-on-LLMService (different method name) — see follow-up tracker.
             self._enh_documenter = WorkflowDocumenter(
                 knowledge_base=self.knowledge_base,
-                llm_interface=self.llm_interface,
+                llm_interface=self.llm_service,
             )
         return self._enh_documenter
 
