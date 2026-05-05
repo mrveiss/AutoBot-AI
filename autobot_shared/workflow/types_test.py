@@ -12,7 +12,7 @@ from autobot_shared.workflow import (
 
 
 def test_workflow_task_minimal_construction():
-    """Only task_id and description are required."""
+    """Only task_id is required; description defaults to empty string."""
     t = WorkflowTask(task_id="t1", description="do the thing")
     assert t.task_id == "t1"
     assert t.description == "do the thing"
@@ -23,6 +23,16 @@ def test_workflow_task_minimal_construction():
     assert t.inputs == {}
     assert t.dependencies == []
     assert t.metadata == {}
+
+
+def test_workflow_task_task_id_only_construction():
+    """Phase 2B (#6951) — legacy enhanced_orchestration.AgentTask had no
+    description field. Subclassing the canonical type required dropping the
+    `description` requirement so subclass call sites that do not pass
+    description still work."""
+    t = WorkflowTask(task_id="legacy-style")
+    assert t.task_id == "legacy-style"
+    assert t.description == ""
 
 
 def test_workflow_task_first_class_prompt():

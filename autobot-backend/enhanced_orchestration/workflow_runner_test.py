@@ -38,7 +38,7 @@ def _plan(tasks=None, strategy=ExecutionStrategy.SEQUENTIAL) -> WorkflowPlan:
         strategy=strategy,
         tasks=tasks,
         dependencies_graph={},
-        estimated_duration=1.0,
+        estimated_total_duration_seconds=1.0,
         resource_requirements={},
         success_criteria=[],
     )

@@ -37,7 +37,7 @@ def _plan(tasks, strategy=ExecutionStrategy.SEQUENTIAL, deps_graph=None) -> Work
         strategy=strategy,
         tasks=tasks,
         dependencies_graph=deps_graph or {},
-        estimated_duration=1.0,
+        estimated_total_duration_seconds=1.0,
         resource_requirements={},
         success_criteria=[],
     )

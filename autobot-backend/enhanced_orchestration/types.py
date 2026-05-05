@@ -5,88 +5,72 @@
 Enhanced Orchestration Types Module
 
 Issue #381: Extracted from enhanced_multi_agent_orchestrator.py god class refactoring.
-Contains enums and dataclasses for the enhanced orchestration system.
+Issue #6951 Phase 2B: ``AgentTask`` and ``WorkflowPlan`` are now thin subclasses
+of the canonical ``autobot_shared.workflow.WorkflowTask`` / ``WorkflowPlan``.
+The local definitions only add behaviour the canonical shapes intentionally
+omit (task lifecycle methods + structured success criteria), keeping fields
+in one place.
 """
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List
 
 if TYPE_CHECKING:
     from .success_criteria import SuccessCriteria
 
+from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy
+from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
+from autobot_shared.workflow import WorkflowTask
 from constants.status_enums import TaskStatus
-from constants.threshold_constants import RetryConfig, TimingConstants
 from orchestration.types import AgentCapability  # single canonical definition (#6192)
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
 
 
-class ExecutionStrategy(Enum):
-    """Task execution strategies"""
+class AgentTask(WorkflowTask):
+    """Workflow task with execution lifecycle methods.
 
-    SEQUENTIAL = "sequential"  # One after another
-    PARALLEL = "parallel"  # All at once
-    PIPELINE = "pipeline"  # Output feeds next input
-    COLLABORATIVE = "collaborative"  # Agents work together
-    ADAPTIVE = "adaptive"  # Strategy changes based on progress
-
-
-@dataclass
-class AgentTask:
-    """Enhanced task definition for agents"""
-
-    task_id: str
-    agent_type: str
-    action: str
-    inputs: Dict[str, Any]
-    dependencies: List[str] = field(default_factory=list)
-    priority: int = 5  # 1-10, higher is more important
-    timeout: float = float(TimingConstants.STANDARD_TIMEOUT)
-    retry_count: int = 0
-    max_retries: int = RetryConfig.DEFAULT_RETRIES
-    capabilities_required: Set[AgentCapability] = field(default_factory=set)
-    outputs: Optional[Dict[str, Any]] = None
-    status: str = TaskStatus.PENDING.value  # Issue #670: Use centralized enum
-    error: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    Inherits every field from ``autobot_shared.workflow.WorkflowTask`` (#6951
+    Phase 1b). The methods below were extracted under Issue #372 to reduce
+    feature envy in the runner; they live in this subclass — not on the
+    canonical type — because they encode an execution-runtime concern that
+    the shared shape intentionally avoids.
+    """
 
     def start_execution(self) -> None:
-        """Mark task as started (Issue #372 - reduces feature envy)."""
+        """Mark task as started (Issue #372)."""
         self.start_time = time.time()
         self.status = TaskStatus.RUNNING.value
 
     def complete_execution(self, result: Dict[str, Any]) -> None:
-        """Mark task as completed with result (Issue #372 - reduces feature envy)."""
+        """Mark task as completed with result (Issue #372)."""
         self.end_time = time.time()
         self.status = TaskStatus.COMPLETED.value
         self.outputs = result
 
     def fail_execution(self, error_msg: str) -> None:
-        """Mark task as failed with error (Issue #372 - reduces feature envy)."""
+        """Mark task as failed with error (Issue #372)."""
         self.status = TaskStatus.FAILED.value
         self.error = error_msg
 
     def get_execution_time(self) -> float:
-        """Get execution time in seconds (Issue #372 - reduces feature envy)."""
+        """Get execution time in seconds (Issue #372)."""
         if self.start_time and self.end_time:
             return self.end_time - self.start_time
         return 0.0
 
     def can_retry(self) -> bool:
-        """Check if task can be retried (Issue #372 - reduces feature envy)."""
+        """Check if task can be retried (Issue #372)."""
         return self.retry_count < self.max_retries
 
     def increment_retry(self) -> None:
-        """Increment retry counter (Issue #372 - reduces feature envy)."""
+        """Increment retry counter (Issue #372)."""
         self.retry_count += 1
 
     def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Get inputs enhanced with context (Issue #372 - reduces feature envy)."""
+        """Get inputs enhanced with context (Issue #372)."""
         return {
             **self.inputs,
             "context": context,
@@ -95,7 +79,7 @@ class AgentTask:
         }
 
     def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Build completed result dict (Issue #372 - reduces feature envy)."""
+        """Build completed result dict (Issue #372)."""
         return {
             "status": "completed",
             "output": result,
@@ -104,7 +88,7 @@ class AgentTask:
         }
 
     def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
-        """Build failed result dict (Issue #372 - reduces feature envy)."""
+        """Build failed result dict (Issue #372)."""
         return {
             "status": "failed",
             "error": error_msg,
@@ -113,21 +97,16 @@ class AgentTask:
 
 
 @dataclass
-class WorkflowPlan:
-    """Enhanced workflow execution plan"""
+class WorkflowPlan(_SharedWorkflowPlan):
+    """Enhanced workflow plan with structured success criteria.
 
-    plan_id: str
-    goal: str
-    strategy: ExecutionStrategy
-    tasks: List[AgentTask]
-    dependencies_graph: Dict[str, List[str]]  # task_id -> [dependency_ids]
-    estimated_duration: float
-    resource_requirements: Dict[str, Any]
-    success_criteria: List[str]
-    # Issue #3293: structured success criteria for partial/full/failed evaluation
+    Inherits every field from ``autobot_shared.workflow.WorkflowPlan`` (#6951
+    Phase 1b). ``structured_criteria`` (#3293) lives here, not on the canonical
+    shape, because it depends on backend-only ``SuccessCriteria`` semantics for
+    partial/full/failed evaluation.
+    """
+
     structured_criteria: List["SuccessCriteria"] = field(default_factory=list)
-    fallback_plans: List["WorkflowPlan"] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

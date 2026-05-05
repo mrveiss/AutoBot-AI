@@ -189,7 +189,7 @@ class WorkflowRunner:
                 enhanced_inputs = task.get_enhanced_inputs(context)
                 result = await asyncio.wait_for(
                     agent.process_request({"action": task.action, "payload": enhanced_inputs}),
-                    timeout=task.timeout,
+                    timeout=task.timeout_seconds,
                 )
                 task.complete_execution(result)
                 self._perf.update(task.agent_type, True, task.get_execution_time())

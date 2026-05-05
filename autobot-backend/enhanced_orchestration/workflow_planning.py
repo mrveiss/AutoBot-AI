@@ -82,7 +82,7 @@ class StrategyPlanner:
             strategy=strategy,
             tasks=tasks,
             dependencies_graph=dependencies_graph,
-            estimated_duration=plan_data.get("estimated_duration", 60.0),
+            estimated_total_duration_seconds=plan_data.get("estimated_duration", 60.0),
             resource_requirements=plan_data.get("resource_requirements", {}),
             success_criteria=plan_data.get("success_criteria", ["All tasks completed"]),
         )
@@ -130,7 +130,7 @@ class StrategyPlanner:
                 )
             ],
             dependencies_graph={},
-            estimated_duration=30.0,
+            estimated_total_duration_seconds=30.0,
             resource_requirements={},
             success_criteria=["Task completed"],
         )
