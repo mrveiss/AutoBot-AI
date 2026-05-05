@@ -38,7 +38,9 @@ jobs:
 
       - name: Collect metrics
         id: metrics
+        shell: bash
         run: |
+          set -euo pipefail
           # Count branches
           total_local=$(git branch | wc -l)
           total_remote=$(git branch -r | wc -l)

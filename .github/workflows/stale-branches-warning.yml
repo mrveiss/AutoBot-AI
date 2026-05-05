@@ -37,7 +37,9 @@ jobs:
 
       - name: Find stale branches
         id: stale
+        shell: bash
         run: |
+          set -euo pipefail
           DAYS_STALE=30
           CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
           stale_branches=""

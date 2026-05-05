@@ -181,7 +181,9 @@ jobs:
 
       - name: Analyze bundle size
         working-directory: autobot-frontend
+        shell: bash
         run: |
+          set -euo pipefail
           du -sh dist/
           find dist/ -name "*.js" -exec du -h {} \; | sort -hr
 
