@@ -136,7 +136,7 @@
       shell: >-
         git -C {{ git_repo_root }} diff --name-only
         {{ prev_commit.stdout | default('HEAD') }} HEAD
-        -- '*/requirements.txt' 'autobot_shared/setup.py' 'autobot_shared/pyproject.toml'
+        -- '*/requirements.txt' 'autobot_shared/pyproject.toml'
       register: python_deps_diff
       changed_when: false
       failed_when: false
