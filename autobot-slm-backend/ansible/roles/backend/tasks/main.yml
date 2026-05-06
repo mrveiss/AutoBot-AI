@@ -358,6 +358,27 @@
     state: absent
   when: venv_check.stat.exists and venv_check.stat.islnk
 
+# #7052: Detect partially-corrupted venv from a prior failed install.
+# A venv with a working python3.12 binary but stale .pth files (e.g. from
+# an editable install whose finder module was removed during venv rebuild)
+# breaks pip on first import. The `Create venv` task below skips when
+# bin/activate exists, so without this check the corruption survives reinstall.
+- name: "Backend | Check venv health (pip importable, #7052)"
+  ansible.builtin.command:
+    cmd: "{{ backend_code_dir }}/venv/bin/python3.12 -c 'import pip'"
+  register: _venv_health
+  changed_when: false
+  failed_when: false
+  when: venv_check.stat.exists and venv_check.stat.isdir
+
+- name: "Backend | Remove broken venv when health check failed (#7052)"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: absent
+  when:
+    - venv_check.stat.exists and venv_check.stat.isdir
+    - (_venv_health.rc | default(0)) != 0
+
 - name: Create Python 3.12 virtual environment via deadsnakes
   ansible.builtin.command:
     cmd: "python3.12 -m venv {{ backend_code_dir }}/venv"
