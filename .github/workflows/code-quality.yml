@@ -9,6 +9,7 @@ on:
     paths: &cq_paths
       - '**/*.py'
       - '**/requirements*.txt'
+      - 'requirements-ci/**'
       - 'pyproject.toml'
       - '.flake8'
       - '.bandit'
