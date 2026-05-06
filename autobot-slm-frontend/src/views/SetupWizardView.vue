@@ -466,11 +466,11 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useProvisionStore } from '@/stores/provision'
 import type { NodeRole } from '@/types/slm'
-import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SetupWizard')
@@ -489,9 +489,13 @@ const {
   completeWizardStep,
   skipWizardSetup,
   provisionWizardFleet,
-  getProvisionStatus,
   validateWizardFleet,
 } = useSlmApi()
+
+// #7096: provision state lives in a Pinia store so it survives component
+// unmount (user navigates to another page during provisioning), browser
+// refresh (state recovers via getProvisionStatus), and WS disconnect.
+const provisionStore = useProvisionStore()
 
 // ── Wizard state ──────────────────────────────────────────────────────────
 
@@ -714,22 +718,18 @@ async function saveSecrets() {
 
 // ── Provisioning ──────────────────────────────────────────────────────────
 
-const provisioning = ref(false)
-const provisionComplete = ref(false)
-
-interface ProvisionLogEntry {
-  type: 'info' | 'task' | 'success' | 'error' | 'warning' | 'phase'
-  message: string
-}
-
-const provisionLogs = ref<ProvisionLogEntry[]>([])
-const provisionStage = ref('')
-const provisionElapsed = ref(0)
-const currentTask = ref('')
-const currentPhase = ref('')
-const completedPhases = ref<Set<string>>(new Set())
+// #7096: provision state proxied from store (survives component unmount).
+// Names preserved to minimize template churn; the underlying refs live in
+// useProvisionStore() and persist across navigation.
+const provisioning = computed(() => provisionStore.isRunning)
+const provisionComplete = computed(() => provisionStore.isComplete)
+const provisionLogs = computed(() => provisionStore.logs)
+const provisionStage = computed(() => formatStage(provisionStore.stage))
+const provisionElapsed = computed(() => provisionStore.elapsedSeconds)
+const currentTask = computed(() => provisionStore.currentTask)
+const currentPhase = computed(() => provisionStore.currentPhase)
+const completedPhases = computed(() => provisionStore.completedPhases)
 const logContainerRef = ref<HTMLElement | null>(null)
-let provisionWs: WebSocket | null = null
 
 const knownPhases = [
   { id: '0', label: 'Shared Deps' },
@@ -951,142 +951,9 @@ async function saveAndContinueRoles() {
   await completeStep('assign_roles')
 }
 
-let provisionPollTimer: ReturnType<typeof setInterval> | null = null
-
-function connectProvisionWs() {
-  // Use SSOT config for WS URL (Issue #2489: Docker prefix support)
-  const cfg = getConfig()
-  const apiPrefix = cfg.apiBaseUrl.startsWith('/') ? cfg.apiBaseUrl : ''
-  const url = `${cfg.wsBaseUrl}${apiPrefix}/api/ws/provision`
-
-  provisionWs = new WebSocket(url)
-
-  provisionWs.onopen = () => {
-    logger.info('Provision WebSocket connected')
-  }
-
-  provisionWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-
-      if (msg.type === 'log') {
-        if (msg.log_type === 'heartbeat') {
-          // Update in-place — never flood the log with repeated heartbeat lines
-          currentTask.value = msg.message
-        } else if (msg.log_type === 'phase') {
-          // Track phase progress
-          const m = msg.message.match(/Provision Phase\s+(\S+):/)
-          if (m) {
-            if (currentPhase.value) completedPhases.value.add(currentPhase.value)
-            currentPhase.value = m[1]
-          }
-          currentTask.value = ''
-          provisionLogs.value.push({ type: 'phase', message: msg.message })
-          scrollProvisionLog()
-        } else {
-          // A new real task arrived — clear the heartbeat indicator
-          if (msg.log_type === 'task') currentTask.value = ''
-          provisionLogs.value.push({
-            type: msg.log_type || 'info',
-            message: msg.message,
-          })
-          scrollProvisionLog()
-        }
-      } else if (msg.type === 'status') {
-        provisionStage.value = formatStage(msg.stage || '')
-        provisionElapsed.value = Math.round(msg.elapsed_seconds || 0)
-
-        if (msg.status === 'completed') {
-          if (currentPhase.value) completedPhases.value.add(currentPhase.value)
-          currentTask.value = ''
-          provisionComplete.value = true
-          provisioning.value = false
-          disconnectProvisionWs()
-        } else if (msg.status === 'failed') {
-          provisionLogs.value.push({
-            type: 'error',
-            message: msg.error || 'Provisioning failed',
-          })
-          provisioning.value = false
-          scrollProvisionLog()
-          disconnectProvisionWs()
-        }
-      } else if (msg.type === 'ping') {
-        provisionWs?.send('pong')
-      }
-    } catch {
-      // Ignore non-JSON messages (pong, etc.)
-    }
-  }
-
-  provisionWs.onclose = () => {
-    logger.debug('Provision WebSocket closed')
-    // If still provisioning, fall back to polling
-    if (provisioning.value) {
-      logger.info('WebSocket closed during provisioning, falling back to polling')
-      startProvisionPolling()
-    }
-  }
-
-  provisionWs.onerror = (err) => {
-    logger.error('Provision WebSocket error:', err)
-  }
-}
-
-function disconnectProvisionWs() {
-  if (provisionWs) {
-    provisionWs.onclose = null // Prevent fallback trigger
-    provisionWs.close()
-    provisionWs = null
-  }
-  stopProvisionPolling()
-}
-
-function startProvisionPolling() {
-  let linesSeen = provisionLogs.value.length
-  provisionPollTimer = setInterval(async () => {
-    try {
-      const status = await getProvisionStatus(linesSeen)
-      if (status.lines.length > 0) {
-        for (const line of status.lines) {
-          provisionLogs.value.push({ type: 'info', message: line })
-        }
-        linesSeen = status.total_lines
-        scrollProvisionLog()
-      }
-      if (status.elapsed_seconds) {
-        provisionElapsed.value = Math.round(status.elapsed_seconds)
-      }
-      if (status.status === 'completed') {
-        stopProvisionPolling()
-        provisionLogs.value.push({
-          type: 'success',
-          message: 'Provisioning completed successfully.',
-        })
-        provisionComplete.value = true
-        provisioning.value = false
-        scrollProvisionLog()
-      } else if (status.status === 'failed') {
-        stopProvisionPolling()
-        provisionLogs.value.push({
-          type: 'error',
-          message: status.error || 'Provisioning failed',
-        })
-        provisioning.value = false
-        scrollProvisionLog()
-      }
-    } catch {
-      // Poll failure is transient - keep trying
-    }
-  }, 2000)
-}
-
-function stopProvisionPolling() {
-  if (provisionPollTimer) {
-    clearInterval(provisionPollTimer)
-    provisionPollTimer = null
-  }
-}
+// #7096: WebSocket + polling moved to useProvisionStore() so connection
+// survives component unmount (user navigates away mid-provision). The view
+// only consumes the store's reactive state via the computed proxies above.
 
 function formatElapsed(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -1124,19 +991,13 @@ function scrollProvisionLog() {
   })
 }
 
+// #7096: log appends now happen in the store; watch + auto-scroll here
+watch(() => provisionStore.logs.length, () => scrollProvisionLog())
+
 async function provisionFleet() {
-  provisioning.value = true
-  provisionLogs.value = []
-  provisionStage.value = 'Starting...'
-  provisionElapsed.value = 0
-  currentTask.value = ''
-  currentPhase.value = ''
-  completedPhases.value = new Set()
-
-  provisionLogs.value.push({ type: 'info', message: 'Starting fleet provisioning...' })
-
-  // Connect WebSocket first
-  connectProvisionWs()
+  // #7096: store handles state reset, WS connection, and survives unmount
+  provisionStore.start()
+  provisionStore.logs.push({ type: 'info', message: 'Starting fleet provisioning...' })
 
   try {
     await provisionWizardFleet(nodes.value.map(n => n.node_id))
@@ -1144,15 +1005,14 @@ async function provisionFleet() {
     const detail =
       (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
       'Unknown error'
-    provisionLogs.value.push({ type: 'error', message: `ERROR: ${detail}` })
-    provisioning.value = false
-    disconnectProvisionWs()
+    provisionStore.logs.push({ type: 'error', message: `ERROR: ${detail}` })
+    provisionStore.disconnectWs()
   }
 }
 
-onUnmounted(() => {
-  disconnectProvisionWs()
-})
+// #7096: NO disconnectProvisionWs() on unmount — store keeps the WebSocket
+// alive across navigation so users can leave the wizard and return without
+// losing provision visibility.
 
 async function checkFleetHealth() {
   checkingHealth.value = true
@@ -1180,6 +1040,9 @@ onMounted(async () => {
   await loadNodes()
   await loadRoles()
   await loadExistingSecrets()
+  // #7096: pick up any in-flight or recently-finished provision state
+  // so the user sees live progress even after navigating away and back.
+  await provisionStore.restoreFromBackend()
 })
 </script>
 
