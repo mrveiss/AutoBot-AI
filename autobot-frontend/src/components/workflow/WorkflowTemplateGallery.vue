@@ -91,9 +91,10 @@
               <div class="step-content">
                 <span class="step-desc">{{ step.description }}</span>
                 <code v-if="step.command">{{ step.command }}</code>
+                <code v-else-if="step.action">{{ step.action }}</code>
                 <div class="step-meta">
-                  <span v-if="step.risk_level" class="risk" :class="step.risk_level">{{ step.risk_level }}</span>
-                  <span v-if="step.requires_confirmation"><i class="fas fa-shield-alt"></i> {{ $t('workflow.templates.requiresConfirmation') }}</span>
+                  <span v-if="step.agent_type" class="agent">{{ step.agent_type }}</span>
+                  <span v-if="step.requires_approval"><i class="fas fa-shield-alt"></i> {{ $t('workflow.templates.requiresConfirmation') }}</span>
                 </div>
               </div>
             </div>
@@ -261,18 +262,28 @@ const getStepsCount = (template: AnyTemplate): number => {
   return 0
 }
 
-// Get template steps for preview
+// Get template steps for preview — backend emits canonical fields after #6951 Phase 2F.
+// Tolerates both ``WorkflowTemplate`` (canonical task_id / requires_approval) and
+// ``WorkflowTemplateSummary`` shapes via partial-cast fallbacks for in-flight data.
 const getTemplateSteps = (template: AnyTemplate): TemplateStep[] => {
   if ('steps' in template && Array.isArray(template.steps)) {
-    return template.steps.map((step, index): TemplateStep => ({
-      step_id: (step as Partial<TemplateStep>).step_id ?? `step-${index}`,
-      description: step.description,
-      command: step.command,
-      requires_confirmation: step.requires_confirmation,
-      risk_level: step.risk_level as TemplateStep['risk_level'],
-      estimated_duration_seconds: (step as Partial<TemplateStep>).estimated_duration_seconds ?? 0,
-      agent_type: (step as Partial<TemplateStep>).agent_type,
-    }))
+    return template.steps.map((step, index): TemplateStep => {
+      const s = step as Partial<TemplateStep>
+      return {
+        task_id: s.task_id ?? `step-${index}`,
+        agent_type: s.agent_type ?? '',
+        action: s.action ?? '',
+        command: s.command ?? null,
+        description: step.description,
+        requires_approval: s.requires_approval ?? false,
+        dependencies: s.dependencies ?? [],
+        inputs: s.inputs ?? {},
+        estimated_duration_seconds: s.estimated_duration_seconds ?? 0,
+        prompt: s.prompt ?? null,
+        tools_allowed: s.tools_allowed ?? null,
+        tools_denied: s.tools_denied ?? [],
+      }
+    })
   }
   return []
 }
