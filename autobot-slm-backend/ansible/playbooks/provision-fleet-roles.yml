@@ -185,6 +185,12 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "Deps | Install nginx"
       ansible.builtin.include_role:
@@ -277,6 +283,12 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "Data | Deploy Redis role"
       ansible.builtin.import_role:
@@ -292,6 +304,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "App | Deploy backend role"
@@ -319,6 +337,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "App | Deploy frontend role"
@@ -457,6 +481,12 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "AI | Deploy AI stack role"
       ansible.builtin.include_role:
@@ -484,6 +514,12 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "AI | Deploy NPU worker role"
       ansible.builtin.include_role:
@@ -501,6 +537,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "AI | Deploy TTS worker role"
@@ -520,6 +562,12 @@
   become: true
   gather_facts: true
 
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
+
   tasks:
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
       ansible.builtin.include_role:
@@ -537,6 +585,12 @@
   hosts: all
   become: true
   gather_facts: true
+
+  # #7050/#7051 shared role-active facts — see vars/role_active_facts.yml
+  # for why this is needed (SLM-triggered provision uses temp inventory
+  # without sibling group_vars/, so this loads the facts directly).
+  vars_files:
+    - vars/role_active_facts.yml
 
   tasks:
     - name: "Auto | Deploy browser role"
