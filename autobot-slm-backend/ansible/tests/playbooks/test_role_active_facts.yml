@@ -1,0 +1,110 @@
+# AutoBot - Test playbook: assert role_*_active facts (#7056)
+#
+# For each synthetic test host (defined in tests/inventory/test_role_facts.yml),
+# evaluate every role_*_active fact and assert it matches the expected value.
+#
+# Catches regressions like #7031 where cleanup gates and provision gates
+# diverged because the role-name match was incomplete.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i tests/inventory/test_role_facts.yml \
+#                    tests/playbooks/test_role_active_facts.yml
+#
+# Exit non-zero on the first assertion failure.
+---
+- name: "Test: shared role_*_active facts (#7056)"
+  hosts: all
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: "role_backend_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_backend_active | bool) == (expected_role_backend_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_backend_active={{ role_backend_active }},
+          expected={{ expected_role_backend_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_backend_active is defined
+
+    - name: "role_frontend_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_frontend_active | bool) == (expected_role_frontend_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_frontend_active={{ role_frontend_active }},
+          expected={{ expected_role_frontend_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_frontend_active is defined
+
+    - name: "role_slm_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_slm_active | bool) == (expected_role_slm_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_slm_active={{ role_slm_active }},
+          expected={{ expected_role_slm_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_slm_active is defined
+
+    - name: "role_ai_stack_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_ai_stack_active | bool) == (expected_role_ai_stack_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_ai_stack_active={{ role_ai_stack_active }},
+          expected={{ expected_role_ai_stack_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_ai_stack_active is defined
+
+    - name: "role_npu_worker_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_npu_worker_active | bool) == (expected_role_npu_worker_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_npu_worker_active={{ role_npu_worker_active }},
+          expected={{ expected_role_npu_worker_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_npu_worker_active is defined
+
+    - name: "role_browser_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_browser_active | bool) == (expected_role_browser_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_browser_active={{ role_browser_active }},
+          expected={{ expected_role_browser_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_browser_active is defined
+
+    - name: "role_redis_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_redis_active | bool) == (expected_role_redis_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_redis_active={{ role_redis_active }},
+          expected={{ expected_role_redis_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_redis_active is defined
+
+    - name: "role_vnc_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_vnc_active | bool) == (expected_role_vnc_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_vnc_active={{ role_vnc_active }},
+          expected={{ expected_role_vnc_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_vnc_active is defined
+
+    - name: "role_llm_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_llm_active | bool) == (expected_role_llm_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_llm_active={{ role_llm_active }},
+          expected={{ expected_role_llm_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_llm_active is defined
+
+    - name: "role_tts_worker_active matches expected"
+      ansible.builtin.assert:
+        that:
+          - (role_tts_worker_active | bool) == (expected_role_tts_worker_active | bool)
+        fail_msg: >-
+          {{ inventory_hostname }}: role_tts_worker_active={{ role_tts_worker_active }},
+          expected={{ expected_role_tts_worker_active }} (node_roles={{ node_roles | default([]) }})
+      when: expected_role_tts_worker_active is defined
