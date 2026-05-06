@@ -397,8 +397,10 @@ async def _delete_source_documents(collection, task_id: str, source_id: str):
     Deletes in batches to avoid SQLite C-extension limits.
     """
     try:
-        existing = await asyncio.to_thread(
-            collection.get,
+        # #6695: collection is an AsyncChromaDBCollection — its .get/.delete are
+        # async def and must be awaited directly. Wrapping in asyncio.to_thread
+        # produced an unawaited coroutine, silently masking source-doc deletion.
+        existing = await collection.get(
             where={"source_id": source_id},
             include=[],
         )
@@ -407,7 +409,7 @@ async def _delete_source_documents(collection, task_id: str, source_id: str):
             batch_size = 5000
             for i in range(0, len(ids_to_delete), batch_size):
                 batch = ids_to_delete[i : i + batch_size]
-                await asyncio.to_thread(collection.delete, ids=batch)
+                await collection.delete(ids=batch)
             logger.info(
                 "[Task %s] Deleted %d documents for source %s",
                 task_id,
