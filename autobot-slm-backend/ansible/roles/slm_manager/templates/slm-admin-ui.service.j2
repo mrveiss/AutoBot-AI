@@ -7,8 +7,10 @@ PartOf=nginx.service
 
 [Service]
 Type=oneshot
-User=root
-Group=root
+# #7054: autobot owns the cert (0600 autobot:autobot) so it can read --cacert;
+# this service is a one-shot probe and doesn't need root capability.
+User=autobot
+Group=autobot
 
 # Health check: verify SLM frontend is built and nginx can serve it.
 # --cacert pins the self-signed cert installed at TLS bootstrap (#7024).
