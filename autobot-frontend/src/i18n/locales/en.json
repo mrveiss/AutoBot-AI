@@ -664,7 +664,18 @@
     },
     "connection": {
       "title": "Connection",
-      "desc": "Configure backend connection settings"
+      "desc": "Configure backend connection settings",
+      "backendCheck": {
+        "title": "Backend reachability",
+        "description": "Run a one-shot ping to verify that the AutoBot backend is reachable from this browser. No periodic polling — manual only.",
+        "button": "Test backend connection",
+        "checking": "Checking…",
+        "reachable": "Reachable",
+        "unreachable": "Unreachable",
+        "latency": "Latency",
+        "lastTested": "Last tested",
+        "neverTested": "Not yet tested"
+      }
     }
   },
   "voice": {
