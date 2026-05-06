@@ -275,7 +275,8 @@ role_npu_worker_active: >-
   {{ ('npu-worker' in (node_roles | default([]))) or
      ('autobot-npu-worker' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('npu_worker', []) | default([]))) or
-     (inventory_hostname in (groups.get('npu_workers', []) | default([]))) }}
+     (inventory_hostname in (groups.get('npu_workers', []) | default([]))) or
+     (inventory_hostname in (groups.get('npu', []) | default([]))) }}
 
 role_browser_active: >-
   {{ ('browser' in (node_roles | default([]))) or
@@ -288,3 +289,26 @@ role_slm_active: >-
   {{ (inventory_hostname == '00-SLM-Manager') or
      (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
      (inventory_hostname in (groups.get('slm', []) | default([]))) }}
+
+# #7051: facts for the remaining provision gates so provision-fleet-roles.yml
+# can be refactored to use the shared facts uniformly (matches the cleanup-side
+# refactor from #7050).
+role_redis_active: >-
+  {{ ('redis' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('redis', []) | default([]))) or
+     (inventory_hostname in (groups.get('database', []) | default([]))) }}
+
+role_vnc_active: >-
+  {{ ('vnc' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('main', []) | default([]))) or
+     (inventory_hostname in (groups.get('backend', []) | default([]))) or
+     (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
+
+role_llm_active: >-
+  {{ ('llm' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('ai_stack', []) | default([]))) or
+     (inventory_hostname in (groups.get('llm_nodes', []) | default([]))) }}
+
+role_tts_worker_active: >-
+  {{ ('tts-worker' in (node_roles | default([]))) or
+     ('autobot-tts-worker' in (node_roles | default([]))) }}

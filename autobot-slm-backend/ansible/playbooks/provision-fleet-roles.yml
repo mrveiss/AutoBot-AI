@@ -281,10 +281,8 @@
     - name: "Data | Deploy Redis role"
       ansible.builtin.import_role:
         name: redis
-      when: >-
-        'redis' in (node_roles | default([])) or
-        inventory_hostname in groups.get('redis', []) or
-        inventory_hostname in groups.get('database', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_redis_active | bool
       tags: ['redis', 'provision']
 
 # -------------------------------------------------------------------
@@ -301,11 +299,8 @@
         name: backend
         apply:
           tags: ['backend', 'provision']
-      when: >-
-        'backend' in (node_roles | default([])) or
-        'autobot-backend' in (node_roles | default([])) or
-        inventory_hostname in groups.get('main', []) or
-        inventory_hostname in groups.get('backend', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_backend_active | bool
       tags: ['backend', 'provision']
 
     - name: "App | Deploy VNC role"
@@ -313,11 +308,8 @@
         name: vnc
         apply:
           tags: ['vnc', 'provision']
-      when: >-
-        'vnc' in (node_roles | default([])) or
-        inventory_hostname in groups.get('main', []) or
-        inventory_hostname in groups.get('backend', []) or
-        inventory_hostname in groups.get('vnc_nodes', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_vnc_active | bool
       tags: ['vnc', 'provision']
 
 # -------------------------------------------------------------------
@@ -334,10 +326,8 @@
         name: frontend
         apply:
           tags: ['frontend', 'provision']
-      when: >-
-        'frontend' in (node_roles | default([])) or
-        'autobot-frontend' in (node_roles | default([])) or
-        inventory_hostname in groups.get('frontend', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_frontend_active | bool
       tags: ['frontend', 'provision']
 
 # -------------------------------------------------------------------
@@ -473,11 +463,8 @@
         name: ai-stack
         apply:
           tags: ['ai-stack', 'provision']
-      when: >-
-        'ai-stack' in (node_roles | default([])) or
-        'autobot-ai-stack' in (node_roles | default([])) or
-        inventory_hostname in groups.get('ai_stack', []) or
-        inventory_hostname in groups.get('aiml', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_ai_stack_active | bool
       tags: ['ai-stack', 'provision']
 
     - name: "AI | Deploy LLM role"
@@ -485,10 +472,8 @@
         name: llm
         apply:
           tags: ['llm', 'provision']
-      when: >-
-        'llm' in (node_roles | default([])) or
-        inventory_hostname in groups.get('ai_stack', []) or
-        inventory_hostname in groups.get('llm_nodes', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_llm_active | bool
       tags: ['llm', 'provision']
 
 # -------------------------------------------------------------------
@@ -505,11 +490,8 @@
         name: npu-worker
         apply:
           tags: ['npu-worker', 'provision']
-      when: >-
-        'npu-worker' in (node_roles | default([])) or
-        'autobot-npu-worker' in (node_roles | default([])) or
-        inventory_hostname in groups.get('npu_worker', []) or
-        inventory_hostname in groups.get('npu', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_npu_worker_active | bool
       tags: ['npu-worker', 'provision']
 
 # -------------------------------------------------------------------
@@ -526,9 +508,8 @@
         name: tts-worker
         apply:
           tags: ['tts-worker', 'provision']
-      when: >-
-        'tts-worker' in (node_roles | default([])) or
-        'autobot-tts-worker' in (node_roles | default([]))
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_tts_worker_active | bool
       tags: ['tts-worker', 'provision']
 
 # -------------------------------------------------------------------
@@ -563,12 +544,8 @@
         name: browser
         apply:
           tags: ['browser', 'provision']
-      when: >-
-        'browser' in (node_roles | default([])) or
-        'autobot-browser-worker' in (node_roles | default([])) or
-        'browser-service' in (node_roles | default([])) or
-        inventory_hostname in groups.get('browser_worker', []) or
-        inventory_hostname in groups.get('browser', [])
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_browser_active | bool
       tags: ['browser', 'provision']
 
 # -------------------------------------------------------------------
