@@ -270,7 +270,7 @@
       - "Heartbeat Interval: {{ slm_heartbeat_interval }}s"
       - "Agent Directory: {{ slm_agent_dir }}"
       - "Data Directory: {{ slm_agent_data_dir }}"
-      - "Version: {{ slm_agent_version | default(git_commit) }}"
+      - "Version: {{ slm_agent_version | default(git_commit, true) | default('unknown', true) }}"
       - "Services Monitored: {{ slm_services_to_monitor | join(', ') | default('None') }}"
       - "Service Status: {{ slm_agent_status.status.ActiveState }}"
   tags: ['slm_agent', 'report']
