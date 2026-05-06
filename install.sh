@@ -142,6 +142,19 @@ detect_local_ip() {
         fatal "No network interfaces with IPv4 addresses found"
     elif [[ ${#ips[@]} -eq 1 ]]; then
         detected_ip="${ips[0]}"
+    elif [[ -n "${AUTOBOT_INSTALL_INTERFACE:-}" ]]; then
+        # #7057: env-var override picks the interface by name (e.g. eth2)
+        # so the script runs without an interactive prompt
+        for i in "${!ifaces[@]}"; do
+            if [[ "${ifaces[$i]}" == "${AUTOBOT_INSTALL_INTERFACE}" ]]; then
+                detected_ip="${ips[$i]}"
+                success "Using ${ifaces[$i]}: ${detected_ip} (AUTOBOT_INSTALL_INTERFACE)" >&2
+                break
+            fi
+        done
+        if [[ -z "${detected_ip}" ]]; then
+            fatal "AUTOBOT_INSTALL_INTERFACE='${AUTOBOT_INSTALL_INTERFACE}' not found among detected interfaces: ${ifaces[*]}"
+        fi
     else
         # Multiple interfaces — ask user to select
         echo -e "\n${YELLOW}  Multiple network interfaces detected:${NC}" >&2
@@ -213,6 +226,13 @@ Options:
   --ip=IP               Override auto-detected IP address (#2832)
   --help                Show this help message
 
+Environment overrides (skip the corresponding interactive prompt; #7057):
+  AUTOBOT_INSTALL_BRANCH=<branch>     same as --branch=
+  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   same as --admin-pass=
+  AUTOBOT_INSTALL_INTERFACE=<iface>   pick an interface by name (eth2, eth0, ...)
+                                      instead of the menu prompt
+  OVERRIDE_IP=<ip>                    skip detection entirely and use this IP
+
 Examples:
   sudo $0                                    # Interactive install
   sudo $0 --unattended                       # Default unattended install
@@ -220,6 +240,10 @@ Examples:
   sudo $0 --reinstall                        # Reinstall over existing
   sudo $0 --uninstall                        # Full uninstall (with confirmation)
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
+  sudo AUTOBOT_INSTALL_INTERFACE=eth2 \\
+       AUTOBOT_INSTALL_BRANCH=Dev_new_gui \\
+       AUTOBOT_SLM_ADMIN_PASSWORD=secret \\
+       $0 --reinstall                        # Fully scripted reinstall (#7057)
 
 Post-Install:
   1. Open https://<server-ip> in a browser
@@ -808,7 +832,20 @@ EOF
 # =============================================================================
 
 prompt_config() {
+    # #7057: env-var overrides skip the corresponding interactive prompt
+    # so the script can run from CI / cron / runbooks without a TTY.
+    #   AUTOBOT_INSTALL_BRANCH=<branch>     skips the branch prompt
+    #   AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   skips the password prompt
+    #   (interface override is in detect_local_ip via AUTOBOT_INSTALL_INTERFACE)
+    if [[ -n "${AUTOBOT_INSTALL_BRANCH:-}" ]]; then
+        GIT_BRANCH="${AUTOBOT_INSTALL_BRANCH}"
+    fi
+    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" ]]; then
+        ADMIN_PASSWORD="${AUTOBOT_SLM_ADMIN_PASSWORD}"
+    fi
+
     if ${UNATTENDED}; then
+        GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
             ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
         fi
@@ -818,19 +855,23 @@ prompt_config() {
     echo -e "${YELLOW}Configuration:${NC}"
     echo
 
-    echo -e "  ${CYAN}[1/2]${NC} Git branch to install:"
-    read -rp "  [${DEFAULT_BRANCH}] > " input
-    GIT_BRANCH="${input:-${DEFAULT_BRANCH}}"
+    if [[ -z "${GIT_BRANCH}" ]]; then
+        echo -e "  ${CYAN}[1/2]${NC} Git branch to install:"
+        read -rp "  [${DEFAULT_BRANCH}] > " input
+        GIT_BRANCH="${input:-${DEFAULT_BRANCH}}"
+    fi
 
-    echo
-    echo -e "  ${CYAN}[2/2]${NC} SLM admin password:"
-    read -rsp "  (leave blank to auto-generate) > " input
-    echo
-    if [[ -n "${input}" ]]; then
-        ADMIN_PASSWORD="${input}"
-    else
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
-        info "  Password will be auto-generated"
+    if [[ -z "${ADMIN_PASSWORD}" ]]; then
+        echo
+        echo -e "  ${CYAN}[2/2]${NC} SLM admin password:"
+        read -rsp "  (leave blank to auto-generate) > " input
+        echo
+        if [[ -n "${input}" ]]; then
+            ADMIN_PASSWORD="${input}"
+        else
+            ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+            info "  Password will be auto-generated"
+        fi
     fi
     echo
 }
