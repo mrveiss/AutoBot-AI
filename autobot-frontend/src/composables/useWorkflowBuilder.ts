@@ -676,11 +676,14 @@ export function useWorkflowBuilder() {
         icon: apiTemplate.icon || getDefaultIconForCategory(apiTemplate.category),
         steps: 'steps' in apiTemplate
           ? (apiTemplate as WorkflowTemplateDetail).steps.map(step => ({
-              command: step.command,
+              // #6951 Phase 2F + #7044: TemplateStep is the canonical static-template
+              // shape; the runtime workflow_automation fields below need synthesis.
+              command: step.command ?? step.action ?? '',
               description: step.description,
-              risk_level: step.risk_level,
-              requires_confirmation: step.requires_confirmation,
-              estimated_duration: step.estimated_duration_seconds
+              risk_level: 'low' as RiskLevel,             // templates carry no risk classification
+              requires_confirmation: step.requires_approval,
+              estimated_duration: step.estimated_duration_seconds,
+              dependencies: step.dependencies,
             }))
           : []
       }));

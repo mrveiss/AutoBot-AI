@@ -5,20 +5,62 @@
 /**
  * Workflow Templates TypeScript interfaces
  * Issue #778 - Workflow Templates Enhancement
+ * Issue #6951 Phase 2F + #7044: TemplateStep regenerated from canonical
+ *   autobot_shared.workflow.WorkflowTask shape. Old fields step_id /
+ *   requires_confirmation / risk_level removed — those belonged to the
+ *   runtime workflow_automation path, NOT the static template path.
+ *   See AutomationWorkflowStep below for the runtime shape.
  */
 
 export type TemplateCategory = 'security' | 'research' | 'development' | 'system_admin' | 'analysis' | 'community'
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'research' | 'security_scan' | 'install'
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
+/** Structured prompt spec — mirrors backend autobot_shared.workflow.PromptSpec (#6951 Phase 1b). */
+export interface PromptSpec {
+  user_prompt: string
+  system_prompt: string | null
+  template_vars: Record<string, unknown>
+  version: string
+}
+
+/**
+ * Static template step — matches backend `_template_step_dict()` from
+ * `workflow_templates/types.py`. Field names align with canonical
+ * `autobot_shared.workflow.WorkflowTask`. Runtime-state fields
+ * (status / start_time / end_time / error / outputs) are intentionally
+ * absent — a template step has no execution state.
+ */
 export interface TemplateStep {
-  step_id: string
+  task_id: string
+  agent_type: string
+  action: string
+  command: string | null
   description: string
-  command: string
-  requires_confirmation: boolean
-  risk_level: RiskLevel
+  requires_approval: boolean
+  dependencies: string[]
+  inputs: Record<string, unknown>
   estimated_duration_seconds: number
-  agent_type?: string
+  prompt: PromptSpec | null
+  tools_allowed: string[] | null
+  tools_denied: string[]
+}
+
+/**
+ * Runtime workflow step — matches backend
+ * `services/workflow_automation/WorkflowStep.to_status_dict()`. Used by the
+ * shell+vision execution path with risk levels and confirmation gating.
+ * Distinct from `TemplateStep` per #7044 split.
+ */
+export interface AutomationWorkflowStep {
+  step_id: string
+  command: string
+  description: string
+  status: string
+  requires_confirmation: boolean
+  risk_level?: RiskLevel
+  started_at: string | null
+  completed_at: string | null
 }
 
 export interface SecretRequirement {
