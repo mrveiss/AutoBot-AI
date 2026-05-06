@@ -46,15 +46,28 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ansible-core
 
-      - name: Run role_*_active facts test playbook
+      - name: Run role_*_active facts test (group_vars codepath)
         working-directory: autobot-slm-backend/ansible
         run: |
-          ansible-playbook \
-            -i tests/inventory/test_role_facts.yml \
-            tests/playbooks/test_role_active_facts.yml
+          ansible-playbook -i tests/inventory/test_role_facts.yml tests/playbooks/test_role_active_facts.yml
+
+      - name: Run role_*_active facts test (vars_files codepath, #7094)
+        working-directory: autobot-slm-backend/ansible
+        # #7094: tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT
+        # the group_vars/all.yml symlink. Mimics the SLM-triggered provision
+        # path where the temp inventory in /tmp/ has no sibling group_vars/.
+        # The playbook MUST succeed loading facts via vars_files alone.
+        run: |
+          ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
+
+      - name: "Diff guard: ensure both fact-file copies stay byte-equal (#7095)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_role_facts_synced.py
 
       - name: Lint test playbook + inventory YAML
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
