@@ -381,10 +381,17 @@ class Orchestrator:
                 self.memory_manager.initialize(),
                 self.agent_manager.initialize(),
             )
-            # #6983: migrated from llm_interface.check_ollama_connection() to LLMService.is_provider_healthy()
-            ollama_connected = await self.llm_service.is_provider_healthy(provider_name="ollama")
+            # is_provider_healthy returns (is_healthy, error_message_or_None);
+            # tuple is always truthy, so the prior `if not <tuple>:` guard
+            # never fired and ollama-down failures fell through to the
+            # less-specific model validation step.
+            ollama_connected, ollama_error = await self.llm_service.is_provider_healthy(
+                provider_name="ollama"
+            )
             if not ollama_connected:
-                raise Exception("Failed to connect to Ollama or configured models not found.")
+                raise Exception(
+                    f"Failed to connect to Ollama: {ollama_error or 'unknown error'}"
+                )
             logger.info("✅ Ollama connection established")
             await self._ensure_working_llm_model()
             self.is_running = True
