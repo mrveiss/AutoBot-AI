@@ -103,7 +103,7 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
-    from llm_service import LLMService
+    from services.llm_service import LLMService
 
     from utils.lazy_singleton import lazy_init_singleton
 
@@ -540,15 +540,21 @@ async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id
         AI response dict with content and role
     """
     try:
-        if hasattr(llm_service, "generate_response"):
-            return await llm_service.generate_response(
-                messages=llm_context, session_id=session_id, request_id=request_id
-            )
-        else:
+        # LLMService.chat() accepts OpenAI-format messages and uses
+        # conversation_id for per-conversation provider/model overrides.
+        # request_id flows through via **kwargs for tracing.
+        response = await llm_service.chat(
+            messages=llm_context,
+            conversation_id=session_id,
+            request_id=request_id,
+        )
+        if response.error:
+            logger.warning("LLM returned error for request %s: %s", request_id, response.error)
             return {
-                "content": "I'm currently unable to generate a response. Please try again.",
+                "content": "I encountered an error processing your message. Please try again.",
                 "role": "assistant",
             }
+        return {"content": response.content, "role": "assistant"}
     except Exception as e:
         logger.error("LLM generation failed: %s", e)
         return {
