@@ -79,17 +79,21 @@ jobs:
           echo "Verifying services..."
           docker compose --env-file docker/.env.docker ps
 
+          # #7066: || true to swallow SIGPIPE from curl when head exits early.
+          # These pipelines are informational only — the actual smoke gate is
+          # the docker-compose healthchecks above. With set -o pipefail (added
+          # by #7019), curl receives SIGPIPE → exit 23 → step fails.
           echo ""
           echo "=== Frontend Health Check ==="
-          curl -v http://localhost 2>&1 | head -20
+          curl -v http://localhost 2>&1 | head -20 || true
 
           echo ""
           echo "=== Backend Health Check ==="
-          curl -v http://localhost/api/system/health 2>&1 | head -20
+          curl -v http://localhost/api/system/health 2>&1 | head -20 || true
 
           echo ""
           echo "=== SLM Health Check ==="
-          curl -v http://localhost/slm/api/health 2>&1 | head -20
+          curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
       - name: Collect logs on failure
         if: failure()
