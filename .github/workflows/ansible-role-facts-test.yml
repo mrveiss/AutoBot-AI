@@ -1,0 +1,60 @@
+# #7056: regression guard for the shared role_*_active facts.
+#
+# Runs the test playbook (autobot-slm-backend/ansible/tests/playbooks/
+# test_role_active_facts.yml) against synthetic inventories that exercise
+# every code path in inventory/group_vars/all.yml.
+#
+# Catches:
+#   - Forgotten `autobot-X` variant when adding a new role
+#   - Forgotten group-membership check
+#   - Drift between provision-fleet-roles.yml gates and group_vars facts
+#   - Cleanup-gate regressions of the #7031 class
+#
+# Security note: this workflow does NOT interpolate any untrusted GitHub
+# event data (no issue titles, PR bodies, commit messages, head_ref, etc.)
+# into run: commands. All inputs are static file paths under the repo.
+---
+name: ansible-role-facts-test
+
+on:
+  pull_request:
+    paths:
+      - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
+      - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
+      - 'autobot-slm-backend/ansible/tests/**'
+      - '.github/workflows/ansible-role-facts-test.yml'
+  push:
+    branches:
+      - Dev_new_gui
+      - main
+    paths:
+      - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
+      - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
+      - 'autobot-slm-backend/ansible/tests/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible (system Python is fine for this test)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible-core
+
+      - name: Run role_*_active facts test playbook
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          ansible-playbook \
+            -i tests/inventory/test_role_facts.yml \
+            tests/playbooks/test_role_active_facts.yml
+
+      - name: Lint test playbook + inventory YAML
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
