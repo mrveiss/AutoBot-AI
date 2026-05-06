@@ -6,7 +6,7 @@ name: Code Quality
 on:
   push:
     branches: [ main, Dev_new_gui, develop ]
-    paths:
+    paths: &cq_paths
       - '**/*.py'
       - '**/requirements*.txt'
       - 'pyproject.toml'
@@ -21,19 +21,7 @@ on:
       - '.github/workflows/code-quality.yml'
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
-    paths:
-      - '**/*.py'
-      - '**/requirements*.txt'
-      - 'pyproject.toml'
-      - '.flake8'
-      - '.bandit'
-      - '.pre-commit-config.yaml'
-      - 'pipeline-scripts/**'
-      - 'tools/lint/**'
-      - 'autobot-infrastructure/shared/scripts/hooks/**'
-      - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
-      - 'docs/developer/**'
-      - '.github/workflows/code-quality.yml'
+    paths: *cq_paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

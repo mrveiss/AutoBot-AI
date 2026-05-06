@@ -5,7 +5,7 @@ name: Phase Validation Integration
 on:
   push:
     branches: [ main, Dev_new_gui ]
-    paths:
+    paths: &phase_paths
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
@@ -15,14 +15,7 @@ on:
       - '.github/workflows/phase_validation.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot-slm-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - '**/requirements*.txt'
-      - 'pipeline-scripts/**'
-      - 'tools/lint/**'
-      - '.github/workflows/phase_validation.yml'
+    paths: *phase_paths
   workflow_dispatch:
     inputs:
       phase_filter:
