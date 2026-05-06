@@ -93,11 +93,22 @@ class ResponseQualityEvaluator:
             raw = await self._call_llm(prompt)
             return self._parse(raw, iteration)
         except Exception as exc:
-            logger.warning("RLM evaluator failed: %s — accepting response", exc)
+            # #6697: previous log claimed "accepting response" while returning
+            # verdict=FAIL with empty exception text when exc.__str__ was
+            # empty (e.g. ConnectionError()). Now log type+repr+traceback and
+            # use INDETERMINATE so callers can tell evaluator-broke from a
+            # genuine FAIL. Routing semantics unchanged (graph only branches
+            # on REFINE; INDETERMINATE falls through to accept like ACCEPT).
+            logger.warning(
+                "RLM evaluator failed (%s: %r) — passing through with INDETERMINATE verdict",
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
             return ReflectionResult(
-                verdict=ReflectionVerdict.FAIL,
+                verdict=ReflectionVerdict.INDETERMINATE,
                 quality_score=0.7,
-                critique=f"Evaluation error: {exc}",
+                critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
                 iteration=iteration,
             )
 
