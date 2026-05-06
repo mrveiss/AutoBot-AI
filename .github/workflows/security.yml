@@ -34,7 +34,7 @@ jobs:
       deps: ${{ steps.filter.outputs.deps }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
         id: filter
         with:
           filters: |
