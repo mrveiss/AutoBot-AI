@@ -45,6 +45,7 @@ jobs:
               - '.github/workflows/security.yml'
             deps:
               - '**/requirements*.txt'
+              - 'requirements-ci/**'
               - 'pyproject.toml'
               - 'autobot_shared/pyproject.toml'
               - 'autobot-frontend/package*.json'

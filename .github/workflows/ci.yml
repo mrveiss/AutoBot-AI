@@ -32,6 +32,7 @@ jobs:
             python:
               - '**/*.py'
               - '**/requirements*.txt'
+              - 'requirements-ci/**'
               - 'pyproject.toml'
               - 'autobot_shared/pyproject.toml'
               - '.github/workflows/ci.yml'

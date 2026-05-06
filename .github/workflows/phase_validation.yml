@@ -10,6 +10,7 @@ on:
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - '**/requirements*.txt'
+      - 'requirements-ci/**'
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
