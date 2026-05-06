@@ -38,6 +38,7 @@ REINSTALL=false
 UNINSTALL=false
 VALIDATE=false
 CONFIRM_YES=false
+ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
@@ -224,6 +225,9 @@ Options:
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
   --admin-pass=PASS     SLM admin password (auto-generated if not set)
   --ip=IP               Override auto-detected IP address (#2832)
+  --rotate-secrets      Replace existing SLM_ADMIN_PASSWORD on reinstall (#7075).
+                        By default reinstall PRESERVES the wizard-set password
+                        and ignores --admin-pass= / AUTOBOT_SLM_ADMIN_PASSWORD.
   --help                Show this help message
 
 Environment overrides (skip the corresponding interactive prompt; #7057):
@@ -844,6 +848,26 @@ prompt_config() {
         ADMIN_PASSWORD="${AUTOBOT_SLM_ADMIN_PASSWORD}"
     fi
 
+    # #7075: preserve existing admin password on reinstall.
+    # The install wizard is the source of truth for SLM_ADMIN_PASSWORD;
+    # silently rotating it on every reinstall is a footgun (operator
+    # discovers locked-out admins after the fact). Only rotate if:
+    #   - secrets file does not exist yet (truly first install), OR
+    #   - --rotate-secrets flag explicitly passed by user
+    local secrets_file="/etc/autobot/slm-secrets.env"
+    if [[ -f "${secrets_file}" ]] && [[ "${ROTATE_SECRETS:-false}" != true ]]; then
+        local existing_pass
+        existing_pass=$(grep -E '^SLM_ADMIN_PASSWORD=' "${secrets_file}" 2>/dev/null | cut -d'=' -f2- || true)
+        if [[ -n "${existing_pass}" ]]; then
+            if [[ -n "${ADMIN_PASSWORD}" && "${ADMIN_PASSWORD}" != "${existing_pass}" ]]; then
+                warn "AUTOBOT_SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
+                warn "  To rotate: rerun with --rotate-secrets (warns + replaces) or edit ${secrets_file} manually."
+            fi
+            ADMIN_PASSWORD="${existing_pass}"
+            info "Preserving existing SLM_ADMIN_PASSWORD from ${secrets_file}"
+        fi
+    fi
+
     if ${UNATTENDED}; then
         GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
@@ -915,6 +939,7 @@ parse_args() {
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
+            --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
             *)                fatal "Unknown option: $1 (use --help for usage)" ;;
         esac
