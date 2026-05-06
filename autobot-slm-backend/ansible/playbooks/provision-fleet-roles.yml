@@ -603,6 +603,76 @@
       tags: ['browser', 'provision']
 
 # -------------------------------------------------------------------
+# Phase 6.5: Mark each provisioned node as synced (#7103)
+# -------------------------------------------------------------------
+# Without this, wizard-provisioned nodes stay code_status=unknown forever
+# (the heartbeat handler intentionally ignores heartbeat.code_version per
+# #889; node.code_version is only set by /mark-synced). The SLM Code Sync
+# UI then misleadingly shows "All nodes are up to date" instead of real
+# drift. Mirrors the pattern used by update-all-nodes.yml lines 365-379.
+- name: "Provision Phase 6.5: Mark provisioned nodes as synced"
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: "Mark-synced | Get deployed commit (once on controller)"
+      ansible.builtin.command:
+        cmd: git rev-parse HEAD
+        chdir: "{{ playbook_dir }}/../../.."
+      register: _provision_commit
+      changed_when: false
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      become: false
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Login to SLM API"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default(lookup('env', 'SLM_ADMIN_PASSWORD')) | default('admin', true) }}"
+        validate_certs: false
+        status_code: [200, 401, 403]
+        timeout: 10
+      register: _slm_login
+      no_log: true
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | Warn if login failed (skip mark-synced gracefully)"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: SLM login returned status {{ _slm_login.status }} —
+          mark-synced skipped. Code Sync UI will show this node as 'unknown'
+          until next 'Update' run. (#7103)
+      when: _slm_login.status != 200
+      run_once: true
+      tags: ['mark-synced']
+
+    - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]
+        timeout: 10
+      delegate_to: localhost
+      ignore_errors: true
+      when: _slm_login.status == 200
+      tags: ['mark-synced']
+
+# -------------------------------------------------------------------
 # Phase 7: Summary
 # -------------------------------------------------------------------
 - name: "Provision Summary"
