@@ -13,8 +13,9 @@ import importlib
 import importlib.util
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
 
@@ -190,7 +191,7 @@ class PluginLoader:
 
     def _check_required_env(
         self, manifest: PluginManifest
-    ) -> tuple[List[str], List[str]]:
+    ) -> Tuple[List[str], List[str]]:
         """
         Check which env vars declared by the manifest are unset.
 
@@ -198,8 +199,6 @@ class PluginLoader:
             Tuple of (missing_required, missing_optional) env var names.
             An env var set to an empty string is treated as missing.
         """
-        import os
-
         missing_required: List[str] = []
         missing_optional: List[str] = []
         for env in manifest.required_env:
