@@ -16,6 +16,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -86,9 +87,17 @@ def test_extract_tracker_refs_unreadable_file(tmp_path: Path) -> None:
         (Path("autobot-backend/foo.test.ts"), True),
         (Path("autobot-backend/tests/test_foo.py"), True),
         (Path("autobot-frontend/src/__tests__/Foo.spec.ts"), True),
+        # #7128: pytest test_*.py PREFIX style — these are pytest modules in
+        # production directories, not unwired production code. Previously
+        # leaked into the audit's findings (7 of 252 in the 2026-05-06 run).
+        (Path("autobot-backend/agent_loop/test_loop_repetition.py"), True),
+        (Path("autobot-backend/knowledge/test_rag_benchmarks.py"), True),
+        (Path("autobot-backend/knowledge/backends/test_async_base.py"), True),
         (Path("autobot-backend/foo.py"), False),
         # Edge: 'test' in a non-test segment shouldn't match
         (Path("autobot-backend/contestant.py"), False),
+        # Edge: 'testfile.py' without underscore shouldn't match
+        (Path("autobot-backend/testfile.py"), False),
     ],
 )
 def test_is_test_path(path: Path, is_test: bool) -> None:
@@ -262,3 +271,108 @@ def test_render_json_round_trips() -> None:
     ]
     parsed = json.loads(audit.render_json(findings))
     assert parsed == [{"file": "x.py", "tracker": 1, "tracker_state": "CLOSED", "production_callers": 0}]
+
+
+# ---------------------------------------------------------------------------
+# derive_module_path / load_router_registry_modules — #7109 registry detection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "rel,expected",
+    [
+        ("autobot-backend/api/captcha.py", "api.captcha"),
+        ("autobot-backend/intelligence/streaming_executor.py", "intelligence.streaming_executor"),
+        ("autobot-frontend/src/composables/useApi.ts", None),  # not .py
+        ("README.md", None),  # not .py and no scan-dir layout
+        ("autobot-backend/conftest.py", "conftest"),  # ends up empty inner
+    ],
+)
+def test_derive_module_path(rel: str, expected: Optional[str]) -> None:
+    p = audit.REPO_ROOT / rel
+    assert audit.derive_module_path(p) == expected
+
+
+def test_load_router_registry_modules_extracts_dotted_paths(tmp_path: Path) -> None:
+    """Parses ('module.path', ...) tuples from any router_registry/*.py."""
+    fake_registry = tmp_path / "router_registry"
+    fake_registry.mkdir()
+    (fake_registry / "feature_routers.py").write_text(
+        '''FEATURE_ROUTERS = [
+    ("api.captcha", "", ["captcha"], "captcha"),
+    ("api.vision", "/vision", ["vision"], "vision"),
+]
+''',
+        encoding="utf-8",
+    )
+    (fake_registry / "core_routers.py").write_text(
+        '''CORE_ROUTERS = [
+    ("api.health", "/health", ["health"], "health"),
+]
+''',
+        encoding="utf-8",
+    )
+    (fake_registry / "__init__.py").write_text("# excluded by name", encoding="utf-8")
+
+    with patch.object(audit, "ROUTER_REGISTRY_DIR", fake_registry):
+        modules = audit.load_router_registry_modules()
+    assert modules == {"api.captcha", "api.vision", "api.health"}
+
+
+def test_load_router_registry_modules_missing_dir() -> None:
+    """No registry dir → empty set, no crash."""
+    with patch.object(audit, "ROUTER_REGISTRY_DIR", Path("/nonexistent/path")):
+        assert audit.load_router_registry_modules() == set()
+
+
+def test_scan_skips_router_registry_modules(tmp_path: Path) -> None:
+    """End-to-end: a file registered in router_registry must not be flagged.
+
+    Reproduces the #7109 false-positive: api/captcha.py looks unwired to
+    the import-grep heuristic but is actually a live router.
+    """
+    fake_root = tmp_path
+    backend = fake_root / "autobot-backend"
+    api = backend / "api"
+    api.mkdir(parents=True)
+    (api / "captcha.py").write_text('"""Issue #206 — captcha API."""\n', encoding="utf-8")
+
+    registry_dir = backend / "initialization" / "router_registry"
+    registry_dir.mkdir(parents=True)
+    (registry_dir / "feature_routers.py").write_text(
+        'X = [("api.captcha", "", ["captcha"], "captcha")]\n',
+        encoding="utf-8",
+    )
+
+    with patch.object(audit, "REPO_ROOT", fake_root), \
+         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
+         patch.object(audit, "fetch_closed_tracker_set", return_value={206}), \
+         patch.object(audit, "grep_count_production_callers", return_value=0):
+        findings = audit.scan()
+
+    assert findings == [], f"api/captcha.py should be filtered as registry-wired, got {findings}"
+
+
+def test_scan_still_flags_truly_orphaned_module(tmp_path: Path) -> None:
+    """Sanity check: real orphans (not in registry, 0 callers) still get flagged."""
+    fake_root = tmp_path
+    backend = fake_root / "autobot-backend"
+    orphan_dir = backend / "orchestration"
+    orphan_dir.mkdir(parents=True)
+    (orphan_dir / "ghost_module.py").write_text(
+        '"""Issue #4242 — never wired anywhere."""\n',
+        encoding="utf-8",
+    )
+    registry_dir = backend / "initialization" / "router_registry"
+    registry_dir.mkdir(parents=True)
+    (registry_dir / "feature_routers.py").write_text("X = []\n", encoding="utf-8")
+
+    with patch.object(audit, "REPO_ROOT", fake_root), \
+         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
+         patch.object(audit, "fetch_closed_tracker_set", return_value={4242}), \
+         patch.object(audit, "grep_count_production_callers", return_value=0):
+        findings = audit.scan()
+
+    assert len(findings) == 1
+    assert findings[0].tracker == 4242
+    assert findings[0].file.endswith("ghost_module.py")
