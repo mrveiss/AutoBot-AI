@@ -57,7 +57,9 @@
     - name: Add local bin to PATH in bashrc
       lineinfile:
         path: "{{ ansible_facts['env'].HOME }}/.bashrc"
-        line: 'export PATH="{{ ansible_facts['env'].HOME }}/.local/bin:$PATH"'
+        # #7180: dot notation here so the surrounding single quotes don't collide
+        # with the dict-key quotes from ansible_facts['env'].
+        line: 'export PATH="{{ ansible_facts.env.HOME }}/.local/bin:$PATH"'
         state: present
         create: yes
 
