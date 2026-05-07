@@ -15,6 +15,7 @@ from .mocks import (
     MockLLMInterface,
     MockLLMService,
     MockWorkerNode,
+    make_llm_response,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "MockLLMInterface",
     "MockLLMService",
     "MockWorkerNode",
+    "make_llm_response",
 ]

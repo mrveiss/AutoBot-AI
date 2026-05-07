@@ -85,14 +85,52 @@ class _MockLLMResponseShim:
     error: Optional[str] = None
 
 
-def _build_mock_response(content: str):
-    """Return the real `LLMResponse` if importable, else a duck-typed shim."""
+def make_llm_response(
+    *,
+    content: str = "",
+    error: Optional[str] = None,
+    model: str = "mock",
+    provider: str = "mock",
+):
+    """Build an LLMResponse-shaped value for tests (canonical, #7134).
+
+    Returns the real ``LLMResponse`` from ``llm_interface_pkg.models`` when
+    importable — that pins the field contract, so a future field rename or
+    type change breaks the fixture (and every test that uses it) at import
+    time rather than silently producing wrong-shape mocks. Falls back to a
+    duck-typed shim when the real module isn't available (e.g. during
+    `tests/fixtures/` collection in a stripped-down environment).
+
+    All arguments are keyword-only — positional args would invite the same
+    field-shape drift the lesson in
+    ``feedback_verify_return_shape_in_method_migration.md`` is about.
+
+    Replaces the 7+ ad-hoc patterns surfaced in #7134:
+      - ``_StubResponse`` / ``_MockLLMResponseShim`` private classes
+      - ``MagicMock(content=..., error=None)`` inline forms
+      - ``_make_llm_response(content)`` factories
+      - ``MagicMock(content=...)`` without explicit error= field
+
+    Args:
+        content: ``LLMResponse.content`` value.
+        error: ``LLMResponse.error`` value (None for healthy responses).
+        model: provider model name; defaults to ``"mock"``.
+        provider: provider name; defaults to ``"mock"``.
+    """
     try:
         from llm_interface_pkg.models import LLMResponse
 
-        return LLMResponse(content=content, model="mock", provider="mock")
+        return LLMResponse(content=content, error=error, model=model, provider=provider)
     except Exception:
-        return _MockLLMResponseShim(content=content)
+        return _MockLLMResponseShim(
+            content=content, error=error, model=model, provider=provider
+        )
+
+
+# Back-compat alias — internal callers still reference the underscore name.
+# New code should use `make_llm_response` directly.
+def _build_mock_response(content: str):
+    return make_llm_response(content=content)
 
 
 class MockLLMService:
@@ -285,4 +323,5 @@ __all__ = [
     "MockCommandValidator",
     "MockKnowledgeBase",
     "MockWorkerNode",
+    "make_llm_response",
 ]

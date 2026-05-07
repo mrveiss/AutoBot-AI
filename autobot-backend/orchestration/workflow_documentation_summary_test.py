@@ -28,18 +28,16 @@ import pytest
 
 from orchestration.types import DocumentationType, WorkflowDocumentation
 from orchestration.workflow_documentation import WorkflowDocumenter
+from tests.fixtures import make_llm_response as _make_llm_response_factory
 
 
 @pytest.fixture
 def make_llm_response():
-    """Return a factory that builds a stub ``LLMResponse``-shaped object."""
-
-    class _StubResponse:
-        def __init__(self, *, content: str = "", error: str | None = None):
-            self.content = content
-            self.error = error
-
-    return _StubResponse
+    """Canonical LLMResponse factory (#7134) — wraps the shared
+    ``tests.fixtures.make_llm_response`` so the test sees the real
+    LLMResponse field shape, not a hand-rolled stub that could drift.
+    """
+    return _make_llm_response_factory
 
 
 def _make_workflow_doc(workflow_id: str = "wf-1") -> WorkflowDocumentation:

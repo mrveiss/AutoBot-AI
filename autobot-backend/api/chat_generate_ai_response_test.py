@@ -26,17 +26,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from tests.fixtures import make_llm_response as _make_llm_response_factory
+
 
 @pytest.fixture
 def make_llm_response():
-    """Return a factory that builds a stub ``LLMResponse``-shaped object."""
-
-    class _StubResponse:
-        def __init__(self, *, content: str = "", error: str | None = None):
-            self.content = content
-            self.error = error
-
-    return _StubResponse
+    """Canonical LLMResponse factory (#7134) — wraps the shared
+    ``tests.fixtures.make_llm_response`` so each test reads the same shape.
+    """
+    return _make_llm_response_factory
 
 
 @pytest.mark.asyncio
