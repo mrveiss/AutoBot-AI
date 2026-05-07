@@ -46,7 +46,7 @@ async def test_add_token_to_blacklist(mock_redis):
     token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
 
     with patch(
-        "src.user_management.services.session_service.get_redis_client",
+        "autobot_shared.redis_client.get_async_redis_client",
         return_value=mock_redis,
     ):
         service = SessionService()
@@ -69,7 +69,7 @@ async def test_is_token_blacklisted(mock_redis):
     mock_redis.sismember = AsyncMock(return_value=True)
 
     with patch(
-        "src.user_management.services.session_service.get_redis_client",
+        "autobot_shared.redis_client.get_async_redis_client",
         return_value=mock_redis,
     ):
         service = SessionService()
@@ -95,7 +95,7 @@ async def test_invalidate_user_sessions_except_current(mock_redis):
     mock_redis.expire = AsyncMock()
 
     with patch(
-        "src.user_management.services.session_service.get_redis_client",
+        "autobot_shared.redis_client.get_async_redis_client",
         return_value=mock_redis,
     ):
         service = SessionService()
