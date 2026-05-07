@@ -89,8 +89,8 @@ class PluginEnvStatusEntry(BaseModel):
     secret: bool
     required: bool
     description: str
-    docs_url: Optional[str]
-    obtain_steps: List[str]
+    docs_url: Optional[str] = None
+    obtain_steps: List[str] = []
 
 
 class PluginEnvStatusResponse(BaseModel):
