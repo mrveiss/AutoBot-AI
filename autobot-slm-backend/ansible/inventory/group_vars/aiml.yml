@@ -151,7 +151,7 @@ openvino:
   # Package repositories
   repository:
     key_url: "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB"
-    repo_url: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_distribution_release }} main"
+    repo_url: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_facts['distribution_release'] }} main"
 
   # Packages to install
   packages:

@@ -162,4 +162,4 @@
       service_restarted: "{{ service_restart_rollback.changed | default(false) }}"
       health_check_passed: "{{ (rollback_health_check.status | default(0)) == 200 }}"
       dpkg_backup: "{{ latest_dpkg_backup | default('none') }}"
-      timestamp: "{{ ansible_date_time.iso8601 }}"
+      timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

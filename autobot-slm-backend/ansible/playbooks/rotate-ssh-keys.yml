@@ -83,7 +83,7 @@
       ansible.builtin.command:
         cmd: >-
           ssh-keygen -t ed25519 -N ""
-          -C "autobot-rotation-temp-{{ ansible_date_time.iso8601 }}"
+          -C "autobot-rotation-temp-{{ ansible_facts['date_time'].iso8601 }}"
           -f {{ _temp_key_path }}
         creates: "{{ _temp_key_path }}"
 
@@ -138,7 +138,7 @@
       ansible.builtin.command:
         cmd: >-
           ssh-keygen -t ed25519 -N ""
-          -C "autobot-key-{{ ansible_date_time.date }}"
+          -C "autobot-key-{{ ansible_facts['date_time'].date }}"
           -f {{ _new_key_path }}
         creates: "{{ _new_key_path }}"
 

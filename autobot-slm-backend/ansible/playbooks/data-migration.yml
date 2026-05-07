@@ -6,7 +6,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    migration_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    migration_timestamp: "{{ ansible_facts['date_time'].iso8601_basic_short }}"
     migration_backup_dir: "/tmp/autobot-migration-{{ migration_timestamp }}"
     docker_compose_file: "{{ playbook_dir }}/../docker-compose.yml"
 
@@ -213,7 +213,7 @@
 
     - name: Backup existing Redis data
       command: >
-        mv /var/lib/redis-stack/dump.rdb /var/lib/redis-stack/dump.rdb.backup-{{ ansible_date_time.epoch }}
+        mv /var/lib/redis-stack/dump.rdb /var/lib/redis-stack/dump.rdb.backup-{{ ansible_facts['date_time'].epoch }}
       failed_when: false
 
     - name: Import Redis dump
@@ -377,7 +377,7 @@
 
   tasks:
     - name: Check migrated data on database VM
-      command: redis-cli -h {{ ansible_default_ipv4.address }} -p 6379 info keyspace
+      command: redis-cli -h {{ ansible_facts['default_ipv4'].address }} -p 6379 info keyspace
       register: redis_keyspace
       changed_when: false
       when: inventory_hostname in groups['database']
@@ -430,7 +430,7 @@
           AutoBot Data Migration Summary
           =============================
           Migration ID: {{ migration_timestamp }}
-          Date: {{ ansible_date_time.iso8601 }}
+          Date: {{ ansible_facts['date_time'].iso8601 }}
 
           Source: Docker Containers
           Target: 5 Hyper-V VMs

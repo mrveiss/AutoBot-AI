@@ -30,7 +30,7 @@
 
 - name: Ensure .ssh directory exists on fleet nodes
   file:
-    path: "{{ ansible_env.HOME }}/.ssh"
+    path: "{{ ansible_facts['env'].HOME }}/.ssh"
     state: directory
     mode: '0700'
     owner: "{{ service_user }}"
@@ -45,7 +45,7 @@
 - name: Configure SSH client config for fleet access
   template:
     src: ssh_config.j2
-    dest: "{{ ansible_env.HOME }}/.ssh/config"
+    dest: "{{ ansible_facts['env'].HOME }}/.ssh/config"
     mode: '0600'
   delegate_to: localhost
   run_once: true

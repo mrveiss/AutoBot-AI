@@ -19,4 +19,4 @@
 
 - name: Configure firewall rules
   ansible.builtin.include_tasks: firewall.yml
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"

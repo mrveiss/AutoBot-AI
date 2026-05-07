@@ -51,11 +51,11 @@
   pre_tasks:
     - name: "Verify target is a Debian/Ubuntu system"
       ansible.builtin.assert:
-        that: ansible_os_family == 'Debian'
+        that: ansible_facts['os_family'] == 'Debian'
         fail_msg: >-
-          Unsupported OS family: {{ ansible_os_family }}.
+          Unsupported OS family: {{ ansible_facts['os_family'] }}.
           AutoBot requires Ubuntu or Debian.
-        success_msg: "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+        success_msg: "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
 
     - name: "Display bootstrap info"
       ansible.builtin.debug:
@@ -63,8 +63,8 @@
           - "========================================"
           - "AutoBot Node Bootstrap - Issue #1525"
           - "========================================"
-          - "Target: {{ inventory_hostname }} ({{ ansible_default_ipv4.address | default('N/A') }})"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Target: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address | default('N/A') }})"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
           - "Initial user: {{ ansible_user }}"
           - "Will create: {{ autobot_user }}"
 
@@ -206,7 +206,7 @@
           -o BatchMode=yes
           -o ConnectTimeout=5
           -i {{ ssh_pubkey_path | replace('.pub', '') }}
-          {{ autobot_user }}@{{ ansible_default_ipv4.address }}
+          {{ autobot_user }}@{{ ansible_facts['default_ipv4'].address }}
           whoami
       delegate_to: localhost
       become: false
@@ -221,12 +221,12 @@
           - "========================================"
           - "Bootstrap Complete"
           - "========================================"
-          - "Host: {{ inventory_hostname }} ({{ ansible_default_ipv4.address | default('N/A') }})"
+          - "Host: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address | default('N/A') }})"
           - "User: {{ autobot_user }} created with passwordless sudo"
           - "SSH Key: {{ 'VERIFIED' if ssh_key_test.rc | default(1) == 0 else 'DEPLOY MANUALLY — see below' }}"
           - "Firewall: SSH + VNC + websockify allowed"
           - ""
           - "Next steps:"
-          - "  1. Verify: ssh -i /etc/autobot/ssh/autobot_key {{ autobot_user }}@{{ ansible_default_ipv4.address }}"
+          - "  1. Verify: ssh -i /etc/autobot/ssh/autobot_key {{ autobot_user }}@{{ ansible_facts['default_ipv4'].address }}"
           - "  2. Enroll:  ansible-playbook -i inventory/slm-nodes.yml playbooks/enroll-node.yml --limit {{ inventory_hostname }} -e node_role=vnc"
           - "  3. VNC:     ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml --limit {{ inventory_hostname }} --tags vnc"

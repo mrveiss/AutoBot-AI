@@ -8,7 +8,7 @@
   become: yes
 
   vars:
-    recovery_timestamp: "{{ ansible_date_time.iso8601 }}"
+    recovery_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     backup_config: true
 
   pre_tasks:
@@ -27,7 +27,7 @@
           - "========================================"
           - "Target Host: {{ inventory_hostname }}"
           - "Host Role: {{ vm_role | default('undefined') }}"
-          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
           - "Timestamp: {{ recovery_timestamp }}"
           - ""
           - "⚠️  WARNING: This will reinstall all services"
@@ -128,7 +128,7 @@
           - "Host Recovery Complete"
           - "========================================"
           - "Host: {{ inventory_hostname }}"
-          - "Roles Recovered: {{ ansible_play_role_names | join(', ') }}"
+          - "Roles Recovered: {{ ansible_facts['play_role_names'] | join(', ') }}"
           - "Status: Ready for code sync and service startup"
           - ""
           - "Next Steps:"

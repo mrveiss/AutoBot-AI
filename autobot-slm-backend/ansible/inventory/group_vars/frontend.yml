@@ -95,7 +95,7 @@ nginx:
   # Virtual host configuration
   vhosts:
     - listen: "80 default_server"
-      server_name: "autobot.internal {{ ansible_fqdn }} {{ ansible_default_ipv4.address }}"
+      server_name: "autobot.internal {{ ansible_facts['fqdn'] }} {{ ansible_facts['default_ipv4'].address }}"
       root: "{{ autobot.base_dir }}/frontend/dist"
       index: "index.html"
 

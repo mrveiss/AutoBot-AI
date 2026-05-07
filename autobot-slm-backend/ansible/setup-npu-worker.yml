@@ -94,7 +94,7 @@
 
         - name: Backup old npu-worker directory
           command:
-            cmd: "mv {{ npu_worker_old_code_dir }} {{ npu_worker_install_dir }}/backups/npu-worker.backup.{{ ansible_date_time.epoch }}"
+            cmd: "mv {{ npu_worker_old_code_dir }} {{ npu_worker_install_dir }}/backups/npu-worker.backup.{{ ansible_facts['date_time'].epoch }}"
           args:
             creates: "{{ npu_worker_install_dir }}/backups/npu-worker.backup.*"
           when: needs_migration | bool

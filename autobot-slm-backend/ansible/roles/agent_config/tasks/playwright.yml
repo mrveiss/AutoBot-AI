@@ -34,7 +34,7 @@
 
 - name: Check if Playwright browsers are installed
   stat:
-    path: "{{ ansible_env.HOME }}/.cache/ms-playwright"
+    path: "{{ ansible_facts['env'].HOME }}/.cache/ms-playwright"
   register: playwright_browsers
   become_user: "{{ service_user }}"
 

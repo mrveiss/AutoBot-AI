@@ -27,8 +27,8 @@
 - name: "Redis | Determine Redis Stack repo suite (#7178: noble fallback)"
   ansible.builtin.set_fact:
     redis_stack_suite: >-
-      {{ ansible_distribution_release
-         if ansible_distribution_release in ['jammy', 'bullseye', 'focal']
+      {{ ansible_facts['distribution_release']
+         if ansible_facts['distribution_release'] in ['jammy', 'bullseye', 'focal']
          else 'jammy' }}
   tags: ['redis', 'packages']
 
@@ -264,7 +264,7 @@
   debug:
     msg:
       - "=== Redis Stack Configuration Complete ==="
-      - "Redis Host: {{ ansible_default_ipv4.address }}"
+      - "Redis Host: {{ ansible_facts['default_ipv4'].address }}"
       - "Redis Port: {{ redis_port }}"
       - "RedisInsight Port: {{ redis_insight_port }}"
       - "Memory Limit: {{ redis_memory_limit }}"

@@ -56,7 +56,7 @@
         dest: "/etc/sudoers.d/{{ backup_admin_user }}"
         content: |
           # AutoBot Backup Admin - Emergency Access
-          # Created: {{ ansible_date_time.iso8601 }}
+          # Created: {{ ansible_facts['date_time'].iso8601 }}
           # WARNING: This user has full root access
           {{ backup_admin_user }} ALL=(ALL) NOPASSWD: ALL
         mode: "0440"

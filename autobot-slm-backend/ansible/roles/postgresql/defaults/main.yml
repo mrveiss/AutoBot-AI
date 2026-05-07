@@ -9,9 +9,9 @@
 postgresql_version: "16"
 
 # APT repository release codename override
-# Set this if ansible_distribution_release is not supported by pgdg
+# Set this if ansible_facts['distribution_release'] is not supported by pgdg
 # (e.g. focal EOL, kali-rolling). Use the nearest Debian/Ubuntu LTS codename.
-# Leave empty to auto-detect from ansible_distribution_release.
+# Leave empty to auto-detect from ansible_facts['distribution_release'].
 postgresql_apt_release: ""
 
 # Service configuration
@@ -47,7 +47,7 @@ postgresql_log_rotation_age: "1d"
 postgresql_log_rotation_size: "100MB"
 
 # Locale (auto-detect: prefer en_US.UTF-8, fall back to C.UTF-8)
-postgresql_locale: "{{ 'en_US.UTF-8' if ansible_env.LANG is defined and 'en_US' in ansible_env.LANG else 'C.UTF-8' }}"
+postgresql_locale: "{{ 'en_US.UTF-8' if ansible_facts['env'].LANG is defined and 'en_US' in ansible_facts['env'].LANG else 'C.UTF-8' }}"
 
 # Authentication
 postgresql_password_encryption: "scram-sha-256"

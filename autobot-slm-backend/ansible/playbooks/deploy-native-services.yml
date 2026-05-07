@@ -62,7 +62,7 @@
 
         - name: Add Redis repository
           apt_repository:
-            repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+            repo: "deb https://packages.redis.io/deb {{ ansible_facts['distribution_release'] }} main"
             state: present
 
         - name: Install Redis Stack
@@ -190,7 +190,7 @@
 
         - name: Add NodeSource repository
           apt_repository:
-            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main"
+            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
             state: present
 
         - name: Install Node.js
@@ -801,6 +801,6 @@
     - name: Display deployment summary
       debug:
         msg: |
-          VM: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address }})
           Services deployed natively (no containers)
           Status: Ready for production use

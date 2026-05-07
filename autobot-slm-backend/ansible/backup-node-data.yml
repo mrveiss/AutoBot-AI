@@ -13,7 +13,7 @@
 
   vars:
     backup_dir: "{{ backup_dir | default('/opt/autobot/backups') }}"
-    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     backup_name: "{{ target_host }}-{{ backup_timestamp }}"
     backup_path: "{{ backup_dir }}/{{ backup_name }}"
     include_models: "{{ include_models | default(true) }}"
@@ -34,11 +34,11 @@
         dest: "{{ backup_path }}/manifest.yml"
         content: |
           # Backup Manifest
-          hostname: {{ ansible_hostname }}
-          ip_address: {{ ansible_default_ipv4.address }}
-          timestamp: {{ ansible_date_time.iso8601 }}
+          hostname: {{ ansible_facts['hostname'] }}
+          ip_address: {{ ansible_facts['default_ipv4'].address }}
+          timestamp: {{ ansible_facts['date_time'].iso8601 }}
           backup_name: {{ backup_name }}
-          os: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          os: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
           components: []
         mode: '0640'
 
@@ -300,7 +300,7 @@
           ╔════════════════════════════════════════════════════════════╗
           ║          BACKUP COMPLETE                                   ║
           ╠════════════════════════════════════════════════════════════╣
-          ║ Hostname:     {{ ansible_hostname }}                       ║
+          ║ Hostname:     {{ ansible_facts['hostname'] }}                       ║
           ║ Backup Name:  {{ backup_name }}                            ║
           ║ Location:     {{ backup_path }}                            ║
           ║ Total Size:   {{ backup_size.stdout }}                     ║
