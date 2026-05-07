@@ -32,7 +32,7 @@ Design choices
   (services/workflow_automation, overseer); the union accommodates both.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -64,6 +64,17 @@ class PromptSpec:
     system_prompt: Optional[str] = None
     template_vars: Dict[str, Any] = field(default_factory=dict)
     version: str = "1"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-compatible dict (#7124)."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PromptSpec":
+        """Inverse of ``to_dict()``. Tolerates extra/missing keys for
+        forward-compat: unknown keys are dropped, missing keys use defaults."""
+        known = {"user_prompt", "system_prompt", "template_vars", "version"}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
@@ -110,6 +121,40 @@ class WorkflowTask:
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-compatible dict (#7124).
+
+        ``prompt`` (a ``PromptSpec``) is recursively serialized via its own
+        ``to_dict()`` to keep the wire format consistent with #6951 Phase 2F's
+        ``_template_step_dict()`` and to avoid ``asdict()``'s shallow-copy of
+        nested dataclasses (which would emit a flat dict losing the
+        PromptSpec → JSON contract guarantees).
+        """
+        d = asdict(self)
+        # asdict already recurses into PromptSpec; this re-routes through
+        # the canonical PromptSpec.to_dict() so any future format hooks
+        # (e.g., omitting None values) live in one place.
+        if self.prompt is not None:
+            d["prompt"] = self.prompt.to_dict()
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkflowTask":
+        """Inverse of ``to_dict()``. Reconstructs nested ``PromptSpec``.
+
+        Forward-compat: unknown top-level keys are dropped (logged at debug
+        if a logger is configured by the caller), missing keys use defaults.
+        Required field ``task_id`` raises ``KeyError`` if absent.
+        """
+        if "task_id" not in data:
+            raise KeyError("WorkflowTask.from_dict requires 'task_id'")
+        prompt_data = data.get("prompt")
+        prompt = PromptSpec.from_dict(prompt_data) if isinstance(prompt_data, dict) else None
+        known = {f.name for f in cls.__dataclass_fields__.values()}
+        kwargs = {k: v for k, v in data.items() if k in known and k != "prompt"}
+        kwargs["prompt"] = prompt
+        return cls(**kwargs)
+
 
 @dataclass
 class WorkflowPlan:
@@ -139,3 +184,59 @@ class WorkflowPlan:
 
     created_at_epoch: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-compatible dict (#7124).
+
+        Recursively serializes nested ``WorkflowTask`` and ``WorkflowPlan``
+        (fallback) instances via their own ``to_dict()`` methods. The
+        ``ExecutionStrategy`` enum is downgraded to its string value so the
+        result is plain JSON (no enum instances remain).
+        """
+        return {
+            "plan_id": self.plan_id,
+            "goal": self.goal,
+            "tasks": [t.to_dict() for t in self.tasks],
+            "description": self.description,
+            "strategy": self.strategy.value,
+            "dependencies_graph": self.dependencies_graph,
+            "estimated_total_duration_seconds": self.estimated_total_duration_seconds,
+            "resource_requirements": self.resource_requirements,
+            "success_criteria": self.success_criteria,
+            "fallback_plans": [p.to_dict() for p in self.fallback_plans],
+            "approval_required": self.approval_required,
+            "approved": self.approved,
+            "status": self.status,
+            "created_at_epoch": self.created_at_epoch,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkflowPlan":
+        """Inverse of ``to_dict()``. Reconstructs nested tasks + fallback plans
+        + ``ExecutionStrategy`` enum.
+
+        Required fields ``plan_id``, ``goal``, ``tasks`` raise ``KeyError`` if
+        absent. Unknown keys are dropped for forward-compat.
+        """
+        for required in ("plan_id", "goal", "tasks"):
+            if required not in data:
+                raise KeyError(f"WorkflowPlan.from_dict requires '{required}'")
+        tasks = [WorkflowTask.from_dict(t) for t in data["tasks"]]
+        fallback_plans_raw = data.get("fallback_plans", [])
+        fallback_plans = [cls.from_dict(p) for p in fallback_plans_raw]
+        strategy_raw = data.get("strategy", ExecutionStrategy.SEQUENTIAL.value)
+        strategy = (
+            strategy_raw if isinstance(strategy_raw, ExecutionStrategy)
+            else ExecutionStrategy(strategy_raw)
+        )
+        known = {f.name for f in cls.__dataclass_fields__.values()}
+        nested_keys = {"tasks", "fallback_plans", "strategy"}
+        kwargs = {
+            k: v for k, v in data.items()
+            if k in known and k not in nested_keys
+        }
+        kwargs["tasks"] = tasks
+        kwargs["fallback_plans"] = fallback_plans
+        kwargs["strategy"] = strategy
+        return cls(**kwargs)

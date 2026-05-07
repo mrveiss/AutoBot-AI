@@ -148,3 +148,126 @@ def test_workflow_plan_supports_nested_fallback_plans():
         fallback_plans=[fallback],
     )
     assert primary.fallback_plans[0].plan_id == "p1-fb"
+
+
+# ---------------------------------------------------------------------------
+# #7124 — to_dict() / from_dict() round-trip tests
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_spec_round_trip():
+    """PromptSpec.to_dict() → from_dict() must yield an equal instance."""
+    spec = PromptSpec(
+        user_prompt="hello {name}",
+        system_prompt="you are helpful",
+        template_vars={"name": "world"},
+        version="3",
+    )
+    restored = PromptSpec.from_dict(spec.to_dict())
+    assert restored == spec
+
+
+def test_prompt_spec_from_dict_drops_unknown_keys():
+    """Forward-compat: unknown keys (added by future server versions) don't
+    break older clients deserializing the payload."""
+    spec = PromptSpec.from_dict({
+        "user_prompt": "hi",
+        "version": "1",
+        "future_field_we_dont_know_yet": "ignore me",
+    })
+    assert spec.user_prompt == "hi"
+    assert spec.version == "1"
+
+
+def test_workflow_task_round_trip_minimal():
+    """WorkflowTask with only required field round-trips."""
+    t = WorkflowTask(task_id="t1")
+    restored = WorkflowTask.from_dict(t.to_dict())
+    assert restored.task_id == "t1"
+    assert restored.description == ""
+    assert restored.prompt is None
+
+
+def test_workflow_task_round_trip_with_prompt():
+    """Nested PromptSpec survives round-trip."""
+    t = WorkflowTask(
+        task_id="t1",
+        description="run audit",
+        agent_type="security",
+        action="run_audit",
+        prompt=PromptSpec(user_prompt="audit {target}", version="2"),
+        tools_allowed=["read_file", "grep"],
+        tools_denied=["shell_exec"],
+        estimated_duration_seconds=42.5,
+    )
+    restored = WorkflowTask.from_dict(t.to_dict())
+    assert restored == t
+    # Specifically verify the prompt is a PromptSpec, not a dict.
+    assert isinstance(restored.prompt, PromptSpec)
+    assert restored.prompt.version == "2"
+
+
+def test_workflow_task_from_dict_requires_task_id():
+    """Missing task_id (the only required field) raises KeyError."""
+    import pytest
+    with pytest.raises(KeyError, match="task_id"):
+        WorkflowTask.from_dict({"description": "no task_id"})
+
+
+def test_workflow_plan_round_trip_with_nested_tasks():
+    """Plan with tasks + fallback + strategy enum all survive round-trip."""
+    fallback = WorkflowPlan(plan_id="p1-fb", goal="fallback", tasks=[])
+    plan = WorkflowPlan(
+        plan_id="p1",
+        goal="ship feature X",
+        tasks=[
+            WorkflowTask(task_id="t1", description="design"),
+            WorkflowTask(task_id="t2", description="implement", dependencies=["t1"]),
+        ],
+        strategy=ExecutionStrategy.PIPELINE,
+        dependencies_graph={"t2": ["t1"]},
+        success_criteria=["all tasks pass"],
+        fallback_plans=[fallback],
+    )
+    restored = WorkflowPlan.from_dict(plan.to_dict())
+    assert restored == plan
+    # Strategy must be the enum, not the raw string.
+    assert restored.strategy is ExecutionStrategy.PIPELINE
+    # Nested tasks must be WorkflowTask instances.
+    assert isinstance(restored.tasks[0], WorkflowTask)
+    # Nested fallback must be a WorkflowPlan.
+    assert isinstance(restored.fallback_plans[0], WorkflowPlan)
+
+
+def test_workflow_plan_to_dict_emits_plain_json():
+    """to_dict() output must contain no Enum instances (only string values)
+    so the result is plain JSON."""
+    plan = WorkflowPlan(
+        plan_id="p1",
+        goal="g",
+        tasks=[],
+        strategy=ExecutionStrategy.PARALLEL,
+    )
+    d = plan.to_dict()
+    assert d["strategy"] == "parallel"
+    assert not isinstance(d["strategy"], ExecutionStrategy)
+
+
+def test_workflow_plan_from_dict_accepts_enum_or_string():
+    """Tolerate both enum-typed and string-typed strategy in input — useful
+    when round-tripping in-memory plans without serialization."""
+    base = {"plan_id": "p1", "goal": "g", "tasks": []}
+    via_string = WorkflowPlan.from_dict({**base, "strategy": "adaptive"})
+    via_enum = WorkflowPlan.from_dict({**base, "strategy": ExecutionStrategy.ADAPTIVE})
+    assert via_string.strategy is ExecutionStrategy.ADAPTIVE
+    assert via_enum.strategy is ExecutionStrategy.ADAPTIVE
+
+
+def test_workflow_plan_from_dict_requires_plan_id_goal_tasks():
+    """All three required fields validated."""
+    import pytest
+    for missing in ("plan_id", "goal", "tasks"):
+        data = {"plan_id": "p1", "goal": "g", "tasks": []}
+        del data[missing]
+        with pytest.raises(KeyError, match=missing):
+            WorkflowPlan.from_dict(data)
