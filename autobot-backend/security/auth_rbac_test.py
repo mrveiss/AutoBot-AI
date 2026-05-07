@@ -190,7 +190,7 @@ class TestRequirePermissionDecorator:
         request.url.path = "/api/test"
         return request
 
-    @patch("src.user_management.config.get_deployment_config")
+    @patch("user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass permission check in single-user mode."""
         from user_management.config import DeploymentMode
@@ -220,7 +220,7 @@ class TestRequireRoleDecorator:
         request.url.path = "/api/test"
         return request
 
-    @patch("src.user_management.config.get_deployment_config")
+    @patch("user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass role check in single-user mode."""
         from user_management.config import DeploymentMode
@@ -250,7 +250,7 @@ class TestRequireAnyPermission:
         request.url.path = "/api/test"
         return request
 
-    @patch("src.user_management.config.get_deployment_config")
+    @patch("user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass permission check in single-user mode."""
         from user_management.config import DeploymentMode

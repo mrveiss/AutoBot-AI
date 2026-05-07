@@ -74,7 +74,7 @@ async def test_change_password_invalidates_sessions(user_service, sample_user):
             mock_audit.return_value = None
 
             # Mock SessionService
-            with patch("src.user_management.services.user_service.SessionService") as MockSession:
+            with patch("user_management.services.user_service.SessionService") as MockSession:
                 mock_session_service = MockSession.return_value
                 mock_session_service.invalidate_user_sessions = AsyncMock(return_value=2)
 
@@ -103,7 +103,7 @@ async def test_change_password_without_token_invalidates_all_sessions(user_servi
             mock_audit.return_value = None
 
             # Mock SessionService
-            with patch("src.user_management.services.user_service.SessionService") as MockSession:
+            with patch("user_management.services.user_service.SessionService") as MockSession:
                 mock_session_service = MockSession.return_value
                 mock_session_service.invalidate_user_sessions = AsyncMock(return_value=3)
 
