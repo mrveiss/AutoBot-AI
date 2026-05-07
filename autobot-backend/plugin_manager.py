@@ -82,6 +82,24 @@ class PluginInstallResponse(BaseModel):
     message: str = Field(..., description="Human-readable status message")
 
 
+class PluginEnvStatusEntry(BaseModel):
+    """Per-env-var status (never contains the actual value)."""
+
+    configured: bool
+    secret: bool
+    required: bool
+    description: str
+    docs_url: Optional[str]
+    obtain_steps: List[str]
+
+
+class PluginEnvStatusResponse(BaseModel):
+    """Response for GET /plugins/{plugin_name}/env-status."""
+
+    plugin_name: str
+    env_vars: Dict[str, PluginEnvStatusEntry]
+
+
 @router.post(
     "/plugins/install/upload",
     status_code=status.HTTP_201_CREATED,
@@ -427,6 +445,36 @@ async def update_plugin_config(
         "status": "success",
         "message": f"Configuration updated for plugin: {plugin_name}",
     }
+
+
+@router.get("/plugins/{plugin_name}/env-status")
+@with_error_handling(error_code_prefix="PLUGIN_ENV_STATUS")
+async def get_plugin_env_status(
+    plugin_name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> PluginEnvStatusResponse:
+    """
+    Return per-env-var configuration status for a loaded plugin.
+
+    The response never contains env-var values, only the configured/missing
+    state and manifest metadata. Designed for host UIs to surface install
+    requirements without leaking secrets.
+
+    Issue #6971.
+    """
+    loader = get_plugin_loader()
+    status_data = loader.get_env_status(plugin_name)
+    if status_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin not found: {plugin_name}",
+        )
+    return PluginEnvStatusResponse(
+        plugin_name=plugin_name,
+        env_vars={
+            k: PluginEnvStatusEntry(**v) for k, v in status_data.items()
+        },
+    )
 
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:
