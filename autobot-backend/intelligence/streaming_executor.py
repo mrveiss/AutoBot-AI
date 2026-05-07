@@ -18,6 +18,21 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
+# #7127: running this file directly cannot work — top-level project imports
+# below need sys.path entries that an inline `__main__` block cannot install
+# in time. Guard before the project imports so users get a useful pointer
+# instead of a cryptic ModuleNotFoundError.
+if __name__ == "__main__":
+    import sys as _sys
+
+    print(  # noqa: print
+        "intelligence.streaming_executor has no runnable __main__ block.\n"
+        "Run the demo via:\n"
+        "  python3 autobot-backend/intelligence/demos/run_streaming_executor.py",
+        file=_sys.stderr,
+    )
+    raise SystemExit(2)
+
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
 from services.llm_service import get_llm_service  # Phase 2D #3185
@@ -639,65 +654,6 @@ class StreamingCommandExecutor:
         }
 
 
-if __name__ == "__main__":
-    """Test the streaming executor functionality."""
-    import asyncio
-    import sys
-    from pathlib import Path
-
-    # Resolve fixtures from autobot-backend/tests/fixtures (canonical, #6994)
-    backend_root = Path(__file__).parent.parent
-    sys.path.insert(0, str(backend_root))
-
-    # Import mock components from test fixtures (Issue #458, #6994)
-    from tests.fixtures.mocks import MockCommandValidator, MockLLMService
-
-    async def test_executor():
-        """Test streaming executor with mock components and sample commands."""
-        # MockLLMService matches LLMService.chat() surface (#3185 retirement)
-        llm = MockLLMService()
-        validator = MockCommandValidator()
-
-        # Create executor
-        executor = StreamingCommandExecutor(llm, validator)
-
-        logger.info("=== Streaming Executor Test ===")
-
-        # Test commands
-        test_commands = [
-            ("echo 'Hello, World!'", "test echo command"),
-            ("ls -la", "list current directory"),
-            (
-                f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
-                "test network connectivity",
-            ),
-            ("sleep 5", "test long-running command"),
-        ]
-
-        for command, goal in test_commands:
-            logger.info("\nTesting: {command}")
-            logger.info("Goal: {goal}")
-            logger.info("-" * 50)
-
-            chunk_count = 0
-            async for chunk in executor.execute_with_streaming(
-                command, goal, timeout=10
-            ):
-                timestamp = chunk.timestamp.split("T")[1][:8]
-                chunk_type = chunk.chunk_type.value.upper()
-                content = chunk.content
-
-                logger.info("[%s] %s: %s", timestamp, chunk_type, content)
-
-                chunk_count += 1
-                if chunk.chunk_type == ChunkType.COMPLETE:
-                    break
-
-                # Limit output for test
-                if chunk_count > 20:
-                    logger.info("... (limiting output for test)")
-                    break
-
-            print()  # noqa: print
-
-    asyncio.run(test_executor())
+# Note (#7127): early `__main__` guard at the top of this file handles the
+# "run as script" case before any project import runs. The standalone demo
+# lives at intelligence/demos/run_streaming_executor.py.
