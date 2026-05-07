@@ -82,6 +82,10 @@ updates:
 
   # Docker base images (Issue #7157 — supply-chain hardening, sister of #7091/#7120)
   # Dependabot auto-PRs digest updates when new versions publish.
+  #
+  # Major version bumps are explicitly ignored — `python:3.12` should NOT auto-PR
+  # to `python:3.13` until autobot_shared/pyproject.toml's `requires-python` is
+  # bumped first. Same logic for node-major and ubuntu-major.
   - package-ecosystem: "docker"
     directory: "/docker/backend"
     target-branch: "Dev_new_gui"
@@ -93,6 +97,9 @@ updates:
       - "dependencies"
       - "devops"
       - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/docker/slm"
@@ -105,6 +112,9 @@ updates:
       - "dependencies"
       - "devops"
       - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/docker/frontend"
@@ -117,3 +127,39 @@ updates:
       - "dependencies"
       - "devops"
       - "security"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ubuntu"
+        update-types: ["version-update:semver-major"]
+
+  # Self-review during #7157 implementation surfaced 2 missed Dockerfiles:
+  - package-ecosystem: "docker"
+    directory: "/autobot-backend/services/autoresearch"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "docker"
+    directory: "/autobot-infrastructure/shared/mcp/tools/context7"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
