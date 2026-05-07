@@ -25,7 +25,11 @@ class ReflectionVerdict(Enum):
 
     ACCEPT = auto()  # Response is good enough — proceed
     REFINE = auto()  # Response needs improvement — recurse
-    FAIL = auto()  # Unable to evaluate — fall through
+    FAIL = auto()  # Hard failure (unused; retained for backwards-compat).
+    # #6697: evaluator infrastructure error (LLM down, parse error, etc.).
+    # Routing treats this like ACCEPT (graph branches only on REFINE), but
+    # callers can distinguish "evaluator broke" from "response was bad."
+    INDETERMINATE = auto()
 
 
 @dataclass
