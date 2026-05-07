@@ -2849,7 +2849,9 @@
         "sourcesCount": "{count} sources"
       },
       "noEntities3D": "No entities to display",
-      "loading3dVisualization": "Loading3d visualization"
+      "loading3dVisualization": "Loading3d visualization",
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "connectors": {
       "title": "Source Connectors",
@@ -4502,7 +4504,9 @@
         "showingOf": "Showing {showing} of {total} functions (scroll for more)",
         "noMatch": "No orphaned functions match your filter",
         "allConnected": "No orphaned functions detected - all functions are connected!"
-      }
+      },
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "importTree": {
       "title": "File Import Tree",
