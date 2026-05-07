@@ -1,5 +1,5 @@
 # HTTP clients and async I/O
 requests==2.33.1
-aiohttp==3.13.4
+aiohttp==3.13.5
 httpx==0.28.1
 aiofiles==24.1.0
