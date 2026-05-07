@@ -95,6 +95,22 @@ class PluginLoader:
                 )
                 return None
 
+            # Check required environment variables
+            missing_required, missing_optional = self._check_required_env(manifest)
+            if missing_required:
+                logger.error(
+                    "Cannot load plugin %s: required env vars not set: %s",
+                    manifest.name,
+                    missing_required,
+                )
+                return None
+            if missing_optional:
+                logger.info(
+                    "Plugin %s loaded with optional env vars unset: %s",
+                    manifest.name,
+                    missing_optional,
+                )
+
             # Import plugin module
             plugin_class = self._import_plugin_class(manifest.entry_point)
             if not plugin_class:

@@ -442,3 +442,103 @@ async def test_plugin_manager_is_enabled_false_for_unknown():
     pm = PluginManager([])
     assert pm.is_enabled("nonexistent") is False
     await pm.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# PluginLoader.load_plugin integration with required_env
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, caplog):
+    """Plugin with a missing required env var fails to load with an error log."""
+    from plugin_sdk.loader import PluginLoader
+
+    monkeypatch.delenv("TEST_REQ_LOAD_FAIL", raising=False)
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        required_env=[
+            {
+                "name": "TEST_REQ_LOAD_FAIL",
+                "description": "x",
+                "required": True,
+            }
+        ]
+    )
+
+    monkeypatch.setattr(
+        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
+    )
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest)
+
+    assert result is None
+    assert any(
+        "TEST_REQ_LOAD_FAIL" in record.message
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_succeeds_with_optional_env_missing(monkeypatch, caplog):
+    """Plugin with missing optional env var loads, with info log."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    monkeypatch.delenv("TEST_OPT_LOAD_OK", raising=False)
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="opt-test-plugin",
+        required_env=[
+            {
+                "name": "TEST_OPT_LOAD_OK",
+                "description": "x",
+                "required": False,
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
+    )
+
+    with caplog.at_level("INFO"):
+        plugin = await loader.load_plugin(manifest)
+
+    assert plugin is not None
+    assert any(
+        "TEST_OPT_LOAD_OK" in record.message
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_succeeds_when_all_required_env_set(monkeypatch):
+    """Plugin loads normally when all required env vars are configured."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    monkeypatch.setenv("TEST_REQ_LOAD_PRESENT", "value")
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="all-set-plugin",
+        required_env=[
+            {
+                "name": "TEST_REQ_LOAD_PRESENT",
+                "description": "x",
+                "required": True,
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
+    )
+
+    plugin = await loader.load_plugin(manifest)
+    assert plugin is not None
+    assert plugin.manifest.name == "all-set-plugin"
