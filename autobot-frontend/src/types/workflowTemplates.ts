@@ -16,13 +16,15 @@ export type TemplateCategory = 'security' | 'research' | 'development' | 'system
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'research' | 'security_scan' | 'install'
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
-/** Structured prompt spec — mirrors backend autobot_shared.workflow.PromptSpec (#6951 Phase 1b). */
-export interface PromptSpec {
-  user_prompt: string
-  system_prompt: string | null
-  template_vars: Record<string, unknown>
-  version: string
-}
+/**
+ * Structured prompt spec — mirrors backend autobot_shared.workflow.PromptSpec (#6951 Phase 1b).
+ *
+ * #7122: re-exports the auto-generated definition from `_generated/workflow.ts`
+ * so this hand-written file and the codegen output stay in lockstep. The
+ * `frontend-codegen-drift` CI check fails if the generated file goes stale.
+ */
+import type { PromptSpec, WorkflowTask, WorkflowPlan } from './_generated/workflow'
+export type { PromptSpec, WorkflowTask, WorkflowPlan }
 
 /**
  * Static template step — matches backend `_template_step_dict()` from
