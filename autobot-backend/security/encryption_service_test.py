@@ -191,14 +191,14 @@ class TestConvenienceFunctions(unittest.TestCase):
 class TestConfigurationIntegration(unittest.TestCase):
     """Test integration with configuration system."""
 
-    @patch("src.config.config")
+    @patch("config.config")
     def test_is_encryption_enabled_true(self, mock_config):
         """Test encryption enabled check returns True."""
         mock_config.get_nested.return_value = True
         self.assertTrue(is_encryption_enabled())
         mock_config.get_nested.assert_called_with("security.enable_encryption", False)
 
-    @patch("src.config.config")
+    @patch("config.config")
     def test_is_encryption_enabled_false(self, mock_config):
         """Test encryption enabled check returns False."""
         mock_config.get_nested.return_value = False

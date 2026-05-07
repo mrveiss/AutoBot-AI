@@ -55,7 +55,7 @@ class TestSecurityEdgeCases:
             },
         }
 
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.security_config
             self.security = EnhancedSecurityLayer()
 
@@ -504,7 +504,7 @@ class TestSecurityBoundaryConditions:
             "audit_log_file": self.temp_audit_file.name,
         }
 
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.minimal_config
             self.security = EnhancedSecurityLayer()
 

@@ -328,7 +328,7 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_run_shell_command_timeout(self):
         """Test command execution timeout"""
-        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
+        with patch("secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.side_effect = asyncio.TimeoutError()
 
             # Use safe command that doesn't need approval
@@ -342,7 +342,7 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_run_shell_command_execution_error(self):
         """Test command execution error handling"""
-        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
+        with patch("secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.side_effect = Exception("Execution failed")
 
             # Use safe command that doesn't need approval
@@ -362,7 +362,7 @@ class TestSecureCommandExecutor:
         approve_callback = AsyncMock(return_value=True)
         executor.require_approval_callback = approve_callback
 
-        with patch("src.secure_command_executor.execute_shell_command") as mock_execute:
+        with patch("secure_command_executor.execute_shell_command") as mock_execute:
             mock_execute.return_value = {
                 "stdout": "sandboxed output",
                 "stderr": "",

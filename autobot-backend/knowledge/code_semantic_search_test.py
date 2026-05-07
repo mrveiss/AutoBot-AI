@@ -35,8 +35,8 @@ class TestCodeEmbeddingGenerator(unittest.TestCase):
         """Clean up."""
         self.loop.close()
 
-    @patch("src.code_embedding_generator.get_embedding_cache")
-    @patch("src.code_embedding_generator.WorkerNode")
+    @patch("code_embedding_generator.get_embedding_cache")
+    @patch("code_embedding_generator.WorkerNode")
     def test_generator_initialization(self, mock_worker, mock_cache):
         """Test CodeEmbeddingGenerator initializes correctly."""
         from code_embedding_generator import CodeEmbeddingGenerator
@@ -55,8 +55,8 @@ class TestCodeEmbeddingGenerator(unittest.TestCase):
         self.assertEqual(generator.embedding_dim, 768)
         self.assertFalse(generator.initialized)
 
-    @patch("src.code_embedding_generator.get_embedding_cache")
-    @patch("src.code_embedding_generator.WorkerNode")
+    @patch("code_embedding_generator.get_embedding_cache")
+    @patch("code_embedding_generator.WorkerNode")
     def test_embedding_dimension(self, mock_worker, mock_cache):
         """Test embedding dimension is correct."""
         from code_embedding_generator import (
@@ -71,8 +71,8 @@ class TestCodeEmbeddingGenerator(unittest.TestCase):
         self.assertEqual(generator.get_embedding_dim(), CODEBERT_EMBEDDING_DIM)
         self.assertEqual(generator.get_embedding_dim(), 768)
 
-    @patch("src.code_embedding_generator.get_embedding_cache")
-    @patch("src.code_embedding_generator.WorkerNode")
+    @patch("code_embedding_generator.get_embedding_cache")
+    @patch("code_embedding_generator.WorkerNode")
     def test_cache_key_generation(self, mock_worker, mock_cache):
         """Test cache key generation is deterministic."""
         from code_embedding_generator import CodeEmbeddingGenerator

@@ -67,7 +67,7 @@ class TestWebsocketsNPUEventsLocking:
 
         # Mock the event_manager to avoid actual subscriptions
         with patch.object(websockets, "broadcast_npu_worker_event", MagicMock()):
-            with patch("src.event_manager.event_manager") as mock_em:
+            with patch("event_manager.event_manager") as mock_em:
                 mock_em.subscribe = MagicMock()
 
                 def init_websocket():

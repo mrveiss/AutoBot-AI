@@ -336,7 +336,7 @@ class TestCrossEncoderReranking:
         assert reranked[0].rerank_score is not None
 
     @pytest.mark.asyncio
-    @patch("src.advanced_rag_optimizer.CrossEncoder")
+    @patch("advanced_rag_optimizer.CrossEncoder")
     async def test_cross_encoder_integration(self, mock_cross_encoder_class):
         """Test cross-encoder model integration."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer

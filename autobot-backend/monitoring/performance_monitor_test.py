@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 class TestPerformanceMonitorInitialization(unittest.TestCase):
     """Test PerformanceMonitor initialization with required attributes."""
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_gpu_metrics_buffer_initialized(self, mock_redis):
         """Test that gpu_metrics_buffer is initialized as empty list."""
         mock_redis.return_value = MagicMock()
@@ -25,7 +25,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.gpu_metrics_buffer, list)
         self.assertEqual(len(monitor.gpu_metrics_buffer), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_npu_metrics_buffer_initialized(self, mock_redis):
         """Test that npu_metrics_buffer is initialized as empty list."""
         mock_redis.return_value = MagicMock()
@@ -35,7 +35,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.npu_metrics_buffer, list)
         self.assertEqual(len(monitor.npu_metrics_buffer), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_multimodal_metrics_buffer_initialized(self, mock_redis):
         """Test that multimodal_metrics_buffer is initialized as empty list."""
         mock_redis.return_value = MagicMock()
@@ -45,7 +45,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.multimodal_metrics_buffer, list)
         self.assertEqual(len(monitor.multimodal_metrics_buffer), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_system_metrics_buffer_initialized(self, mock_redis):
         """Test that system_metrics_buffer is initialized as empty list."""
         mock_redis.return_value = MagicMock()
@@ -55,7 +55,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.system_metrics_buffer, list)
         self.assertEqual(len(monitor.system_metrics_buffer), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_performance_alerts_initialized(self, mock_redis):
         """Test that performance_alerts is initialized as empty list."""
         mock_redis.return_value = MagicMock()
@@ -65,7 +65,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.performance_alerts, list)
         self.assertEqual(len(monitor.performance_alerts), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_service_metrics_buffer_initialized(self, mock_redis):
         """Test that service_metrics_buffer is initialized as empty dict."""
         mock_redis.return_value = MagicMock()
@@ -75,7 +75,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
         self.assertIsInstance(monitor.service_metrics_buffer, dict)
         self.assertEqual(len(monitor.service_metrics_buffer), 0)
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_all_monitoring_api_required_attributes(self, mock_redis):
         """Test all attributes required by /api/monitoring/status endpoint."""
         mock_redis.return_value = MagicMock()
@@ -101,7 +101,7 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
                 f"PerformanceMonitor missing required attribute: {attr}",
             )
 
-    @patch("src.utils.redis_client.get_redis_client")
+    @patch("utils.redis_client.get_redis_client")
     def test_performance_monitor_singleton_has_attributes(self, mock_redis):
         """Test that performance_monitor singleton has all required attributes."""
         mock_redis.return_value = MagicMock()

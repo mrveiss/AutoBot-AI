@@ -33,7 +33,7 @@ class TestConfigurationMigration:
             {"CUDA_DEVICE_ORDER": "PCI_BUS_ID", "OMP_NUM_THREADS": "8"},
         )
 
-        with patch("src.hardware_acceleration.config_manager", test_config):
+        with patch("hardware_acceleration.config_manager", test_config):
             hw_manager = HardwareAccelerationManager()
 
             # Configure environment - should store in config
@@ -55,7 +55,7 @@ class TestConfigurationMigration:
             "system.environment", {"CUSTOM_VAR": "test_value", "DISPLAY": ":99"}
         )
 
-        with patch("src.desktop_streaming_manager.config_manager", test_config):
+        with patch("desktop_streaming_manager.config_manager", test_config):
             DesktopStreamingManager()
 
             # This would normally use os.environ, but now uses config
@@ -75,7 +75,7 @@ class TestConfigurationMigration:
         test_config.set("redis.password", "test-password")
 
         # Mock the global config manager used by redis_client
-        with patch("src.utils.redis_client.config_manager", test_config):
+        with patch("utils.redis_client.config_manager", test_config):
             # The redis client should now use centralized config
             # Note: We can't easily test get_redis_client() without Redis running
             # But we can test that config values are accessible
