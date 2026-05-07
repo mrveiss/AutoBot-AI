@@ -528,13 +528,9 @@ class Orchestrator:
 
     def _get_enhanced_documenter(self) -> WorkflowDocumenter:
         if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
-            # #6983: WorkflowDocumenter still names its dep `llm_interface` (legacy slot,
-            # typed Optional[Any]). Pass the LLMService instance — the rename is tracked
-            # separately. WorkflowDocumenter's internal call to .chat_completion() is
-            # broken-on-LLMService (different method name) — see follow-up tracker.
             self._enh_documenter = WorkflowDocumenter(
                 knowledge_base=self.knowledge_base,
-                llm_interface=self.llm_service,
+                llm_service=self.llm_service,
             )
         return self._enh_documenter
 

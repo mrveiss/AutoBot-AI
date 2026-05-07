@@ -29,17 +29,17 @@ class WorkflowDocumenter:
     def __init__(
         self,
         knowledge_base: Optional[Any] = None,
-        llm_interface: Optional[Any] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize the workflow documenter.
 
         Args:
             knowledge_base: Knowledge base for storing documentation
-            llm_interface: LLM interface for generating summaries
+            llm_service: LLM service used to generate workflow summaries
         """
         self.knowledge_base = knowledge_base
-        self.llm_interface = llm_interface
+        self.llm_service = llm_service
         self._documentation: Dict[str, WorkflowDocumentation] = {}
         self._metrics = {
             "documentation_generated": 0,
@@ -157,7 +157,7 @@ class WorkflowDocumenter:
             workflow_doc: The workflow documentation to update
             execution_result: Results from workflow execution
         """
-        if not self.llm_interface:
+        if not self.llm_service:
             return
 
         try:
@@ -172,15 +172,12 @@ class WorkflowDocumenter:
             Provide a brief summary of what was accomplished and any key insights.
             """
 
-            summary_result = await self.llm_interface.chat_completion(
-                model="default",
+            response = await self.llm_service.chat(
                 messages=[{"role": "user", "content": summary_prompt}],
             )
 
-            if summary_result:
-                workflow_doc.content["generated_summary"] = summary_result.get(
-                    "content", ""
-                )
+            if response and not response.error:
+                workflow_doc.content["generated_summary"] = response.content
 
         except Exception as e:
             logger.warning("Failed to generate workflow summary: %s", e)
