@@ -23,6 +23,7 @@ import type {
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
 import { getApiBase } from '@/config/ssot-config'
+import { findProbeByName } from '@/composables/useHealthProbeRegistry'
 
 const logger = createLogger('useOperationsApi')
 
@@ -121,8 +122,9 @@ export function useOperationsApi() {
         async () => {
           const response = await api.get(`${getApiBase()}/system/health`)
           const payload = await response.json()
-          const probe = (payload?.probes ?? []).find(
-            (p: { name: string }) => p.name === 'long_running'
+          const probe = await findProbeByName<{ name: string; status?: string; data?: Record<string, unknown>; detail?: string }>(
+            payload?.probes,
+            'long_running'
           )
           if (!probe) {
             return {
