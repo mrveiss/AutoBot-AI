@@ -26,7 +26,7 @@ class TestEnhancedSecurityLayer:
         self.temp_audit_file.close()
 
         # Mock config to use temporary file
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
@@ -63,7 +63,7 @@ class TestEnhancedSecurityLayer:
     def test_create_security_policy(self):
         """Test security policy creation from configuration"""
         # Test with custom policies in config
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_command_security": True,
                 "command_policies": {
@@ -454,7 +454,7 @@ class TestEnhancedSecurityLayerIntegration:
 
     def setup_method(self):
         """Set up test fixtures"""
-        with patch("src.enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
