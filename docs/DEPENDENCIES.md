@@ -326,7 +326,7 @@ python3 -m playwright install webkit
 
 ### Backend Common (autobot_shared)
 ```python
-# See autobot_shared/requirements.txt
+# See autobot_shared/pyproject.toml (canonical since #7022 / #7113)
 redis>=5.0.0
 pydantic>=2.5.0
 PyJWT[crypto]>=2.8.0
