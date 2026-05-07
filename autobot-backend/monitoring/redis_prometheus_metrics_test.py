@@ -21,7 +21,7 @@ def pool_manager():
 @pytest.fixture
 def mock_metrics():
     """Mock the Prometheus metrics manager"""
-    with patch("utils.redis_client.get_metrics_manager") as mock_get:
+    with patch("autobot_shared.monitoring.prometheus_metrics.get_metrics_manager") as mock_get:
         mock_manager = MagicMock()
         mock_get.return_value = mock_manager
         yield mock_manager
@@ -91,7 +91,7 @@ class TestRedisPrometheusIntegration:
 
     def test_prometheus_failure_does_not_affect_redis(self, pool_manager):
         """Test that Prometheus recording failure doesn't break Redis operations"""
-        with patch("utils.redis_client.get_metrics_manager") as mock_get:
+        with patch("autobot_shared.monitoring.prometheus_metrics.get_metrics_manager") as mock_get:
             # Make prometheus throw an exception
             mock_get.side_effect = Exception("Prometheus unavailable")
 

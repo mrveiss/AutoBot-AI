@@ -126,7 +126,7 @@ class TestIdleCleanupThreadSafety:
 
         # Mock time to make connection appear idle (>300s)
         _old_time = datetime.now()
-        with patch("utils.redis_client.datetime") as mock_datetime:
+        with patch("autobot_shared.redis_management.connection_manager.datetime") as mock_datetime:
             # First call: get current time for idle check
             # Second call: return time 400s in the future
             mock_datetime.now.side_effect = [
@@ -179,7 +179,7 @@ class TestIdleCleanupThreadSafety:
         manager._max_idle_time_seconds = 300  # 5 minutes
 
         # Mock current time to be 10 minutes after old_time
-        with patch("utils.redis_client.datetime") as mock_datetime:
+        with patch("autobot_shared.redis_management.connection_manager.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
 
             # Run cleanup
@@ -225,7 +225,7 @@ class TestIdleCleanupThreadSafety:
         manager._max_idle_time_seconds = 300
 
         # Mock current time
-        with patch("utils.redis_client.datetime") as mock_datetime:
+        with patch("autobot_shared.redis_management.connection_manager.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
 
             # Run cleanup - should not raise exception
@@ -389,7 +389,7 @@ class TestRaceConditionPrevention:
         async def run_cleanup():
             """Run cleanup once"""
             nonlocal cleanup_done
-            with patch("utils.redis_client.datetime") as mock_datetime:
+            with patch("autobot_shared.redis_management.connection_manager.datetime") as mock_datetime:
                 mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
                 await manager.cleanup_idle_connections()
             cleanup_done = True

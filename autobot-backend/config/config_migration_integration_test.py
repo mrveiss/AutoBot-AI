@@ -74,14 +74,15 @@ class TestConfigurationMigration:
         test_config.set("redis.port", 9999)
         test_config.set("redis.password", "test-password")
 
-        # Mock the global config manager used by redis_client
-        with patch("utils.redis_client.config_manager", test_config):
-            # The redis client should now use centralized config
-            # Note: We can't easily test get_redis_client() without Redis running
-            # But we can test that config values are accessible
-            assert test_config.get("redis.host") == "test-redis-host"
-            assert test_config.get("redis.port") == 9999
-            assert test_config.get("redis.password") == "test-password"
+        # The redis client patch target `utils.redis_client.config_manager`
+        # never existed (canonical module is autobot_shared.redis_client, and
+        # `config_manager` was never a module-level attribute there). The
+        # original `with patch(...)` wrapper raised ModuleNotFoundError; the
+        # assertions below don't depend on the patch — they just verify
+        # ConfigManager.get/set round-trip. Wrapper removed; behavior preserved.
+        assert test_config.get("redis.host") == "test-redis-host"
+        assert test_config.get("redis.port") == 9999
+        assert test_config.get("redis.password") == "test-password"
 
     def test_secrets_service_config_migration(self):
         """Test that secrets service uses centralized configuration"""
