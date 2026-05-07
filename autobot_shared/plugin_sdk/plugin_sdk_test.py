@@ -601,6 +601,7 @@ async def test_get_env_status_returns_correct_shape(monkeypatch):
 def test_get_env_status_returns_none_for_unknown_plugin():
     from plugin_sdk.loader import PluginLoader
 
+    PluginRegistry().clear()
     loader = PluginLoader([])
     assert loader.get_env_status("does-not-exist") is None
 
@@ -632,5 +633,10 @@ async def test_get_env_status_never_returns_value(monkeypatch):
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("leak-check-plugin")
-    serialized = repr(status)
-    assert secret_value not in serialized
+    # Belt-and-braces: check both repr (any Python serialization) AND
+    # JSON (the actual API serialization path). Today repr catches everything
+    # because all leaf types are primitives; this future-proofs against a
+    # maintainer adding a SecretStr-style wrapper whose __repr__ masks values.
+    import json
+    assert secret_value not in repr(status)
+    assert secret_value not in json.dumps(status, default=str)
