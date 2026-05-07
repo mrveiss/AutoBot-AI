@@ -163,3 +163,17 @@ updates:
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
+
+  # context7 MCP tool has its own npm deps — Dockerfile FROM is tracked above
+  # but the package.json runtime deps need their own ecosystem.
+  # (#7170 self-review found this — surfaced after #7163 + #7170 merged)
+  - package-ecosystem: "npm"
+    directory: "/autobot-infrastructure/shared/mcp/tools/context7"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
