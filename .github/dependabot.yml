@@ -214,6 +214,11 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-tts-worker"
@@ -225,6 +230,11 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-infrastructure/shared/docker/ai-stack"
@@ -236,6 +246,15 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    ignore:
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/autobot-infrastructure/autobot-npu-worker/docker"
@@ -247,6 +266,11 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
 
   # === #7182 P2: Root-level manifests ===
   # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
