@@ -19,9 +19,22 @@
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
+# #7178: Redis only publishes redis-stack-server for jammy/bullseye/focal.
+# Noble (Ubuntu 24.04) has no redis-stack-server package — repo dist exists
+# but ships only redis-server/redis-sentinel. Pin to jammy when the host
+# distribution release isn't one of the supported suites; jammy packages
+# work fine on noble (same glibc family, statically-linked redis modules).
+- name: "Redis | Determine Redis Stack repo suite (#7178: noble fallback)"
+  ansible.builtin.set_fact:
+    redis_stack_suite: >-
+      {{ ansible_distribution_release
+         if ansible_distribution_release in ['jammy', 'bullseye', 'focal']
+         else 'jammy' }}
+  tags: ['redis', 'packages']
+
 - name: "Redis | Add Redis Stack repository"
   apt_repository:
-    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    repo: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
     state: present
     filename: redis
   become: yes
