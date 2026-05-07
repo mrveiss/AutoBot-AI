@@ -225,6 +225,37 @@ class PluginLoader:
                     missing_optional.append(env.name)
         return missing_required, missing_optional
 
+    def get_env_status(
+        self, plugin_name: str
+    ) -> Optional[Dict[str, Dict[str, object]]]:
+        """
+        Return per-env-var configuration status for a loaded plugin.
+
+        SECURITY: response NEVER contains env var values, only the
+        configured/missing boolean and the manifest metadata.
+
+        Args:
+            plugin_name: Name of a loaded plugin
+
+        Returns:
+            Dict mapping env-var name to status dict, or None if the
+            plugin is not loaded.
+        """
+        plugin = self.registry.get_plugin(plugin_name)
+        if plugin is None:
+            return None
+        return {
+            env.name: {
+                "configured": bool(os.environ.get(env.name)),
+                "secret": env.secret,
+                "required": env.required,
+                "description": env.description,
+                "docs_url": env.docs_url,
+                "obtain_steps": list(env.obtain_steps),
+            }
+            for env in plugin.manifest.required_env
+        }
+
     def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
         """
         Import plugin class from entry point.

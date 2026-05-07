@@ -537,3 +537,100 @@ async def test_load_plugin_succeeds_when_all_required_env_set(monkeypatch):
     plugin = await loader.load_plugin(manifest)
     assert plugin is not None
     assert plugin.manifest.name == "all-set-plugin"
+
+
+# ---------------------------------------------------------------------------
+# PluginLoader.get_env_status
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_env_status_returns_correct_shape(monkeypatch):
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    monkeypatch.setenv("TEST_STATUS_PRESENT", "actual_secret_value")
+    monkeypatch.delenv("TEST_STATUS_MISSING", raising=False)
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="status-shape-plugin",
+        required_env=[
+            {
+                "name": "TEST_STATUS_PRESENT",
+                "description": "Set var.",
+                "secret": True,
+                "required": False,
+                "docs_url": "https://example.com",
+                "obtain_steps": ["one", "two"],
+            },
+            {
+                "name": "TEST_STATUS_MISSING",
+                "description": "Unset var.",
+                "secret": False,
+                "required": False,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
+    )
+    await loader.load_plugin(manifest)
+
+    status = loader.get_env_status("status-shape-plugin")
+    assert status is not None
+    assert set(status.keys()) == {"TEST_STATUS_PRESENT", "TEST_STATUS_MISSING"}
+
+    present = status["TEST_STATUS_PRESENT"]
+    assert present == {
+        "configured": True,
+        "secret": True,
+        "required": False,
+        "description": "Set var.",
+        "docs_url": "https://example.com",
+        "obtain_steps": ["one", "two"],
+    }
+
+    missing = status["TEST_STATUS_MISSING"]
+    assert missing["configured"] is False
+    assert missing["secret"] is False
+    assert missing["docs_url"] is None
+    assert missing["obtain_steps"] == []
+
+
+def test_get_env_status_returns_none_for_unknown_plugin():
+    from plugin_sdk.loader import PluginLoader
+
+    loader = PluginLoader([])
+    assert loader.get_env_status("does-not-exist") is None
+
+
+@pytest.mark.asyncio
+async def test_get_env_status_never_returns_value(monkeypatch):
+    """Critical privacy test: env-var values must NEVER be in the response."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    secret_value = "sk-supersecret-do-not-leak-1234"
+    monkeypatch.setenv("TEST_SECRET_LEAK_CHECK", secret_value)
+
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="leak-check-plugin",
+        required_env=[
+            {
+                "name": "TEST_SECRET_LEAK_CHECK",
+                "description": "Sensitive.",
+                "secret": True,
+                "required": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
+    )
+    await loader.load_plugin(manifest)
+
+    status = loader.get_env_status("leak-check-plugin")
+    serialized = repr(status)
+    assert secret_value not in serialized
