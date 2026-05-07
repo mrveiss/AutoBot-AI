@@ -177,3 +177,89 @@ updates:
     labels:
       - "dependencies"
       - "devops"
+
+  # === #7182 P1: Production worker dirs ===
+  # Comprehensive audit of all manifest files vs Dependabot coverage caught
+  # 8+ uncovered dirs. Workers below all deploy via autobot-infrastructure
+  # (per autobot-infrastructure/README.md): browser→.25, npu→.22, ai-stack→.24.
+  - package-ecosystem: "pip"
+    directory: "/autobot-browser-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  - package-ecosystem: "npm"
+    directory: "/autobot-browser-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-npu-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-tts-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/shared/docker/ai-stack"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/autobot-npu-worker/docker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+
+  # === #7182 P2: Root-level manifests ===
+  # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
+  # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.
+  # Risk of stale CI tooling without this entry.
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+      - "devops"
