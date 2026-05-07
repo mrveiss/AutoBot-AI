@@ -45,7 +45,7 @@
       delay: 5
       changed_when: false
       failed_when: false
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
   tasks:
     # =========================================================================
@@ -60,20 +60,20 @@
 
     - name: Backup current package list
       ansible.builtin.shell: |
-        dpkg --get-selections > /opt/autobot/backups/system-updates/package-list-{{ ansible_date_time.epoch }}.txt
+        dpkg --get-selections > /opt/autobot/backups/system-updates/package-list-{{ ansible_facts['date_time'].epoch }}.txt
       changed_when: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - backup_before_update | bool
 
     - name: Backup apt sources
       ansible.builtin.copy:
         src: /etc/apt/sources.list
-        dest: "/opt/autobot/backups/system-updates/sources.list-{{ ansible_date_time.epoch }}"
+        dest: "/opt/autobot/backups/system-updates/sources.list-{{ ansible_facts['date_time'].epoch }}"
         remote_src: true
         mode: '0640'
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - backup_before_update | bool
 
     # =========================================================================
@@ -83,7 +83,7 @@
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 0
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
     # =========================================================================
     # APPLY UPDATES (DRY RUN MODE)
@@ -96,7 +96,7 @@
       check_mode: true
       register: dry_run_result
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - dry_run | bool
 
     - name: Display dry run results
@@ -120,7 +120,7 @@
         dpkg_options: 'force-confold,force-confdef'
       register: security_update_result
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - update_type == "security"
         - not dry_run | bool
 
@@ -134,7 +134,7 @@
         autoclean: true
       register: full_update_result
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - update_type == "all"
         - not dry_run | bool
 
@@ -146,7 +146,7 @@
         force_apt_get: true
       register: specific_update_result
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - update_type == "specific"
         - specific_packages | length > 0
         - not dry_run | bool
@@ -223,13 +223,13 @@
     - name: Generate update report
       ansible.builtin.set_fact:
         update_report:
-          hostname: "{{ ansible_hostname }}"
-          ip_address: "{{ ansible_default_ipv4.address }}"
+          hostname: "{{ ansible_facts['hostname'] }}"
+          ip_address: "{{ ansible_facts['default_ipv4'].address }}"
           update_type: "{{ update_type }}"
           packages_updated: "{{ (full_update_result.changed | default(false)) or (security_update_result.changed | default(false)) or (specific_update_result.changed | default(false)) }}"
           reboot_required: "{{ reboot_needed.stat.exists }}"
           reboot_performed: "{{ (reboot_needed.stat.exists and auto_reboot) | bool }}"
-          timestamp: "{{ ansible_date_time.iso8601 }}"
+          timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
 
     - name: Display update summary
       ansible.builtin.debug:
@@ -237,7 +237,7 @@
           ╔════════════════════════════════════════════════════════════╗
           ║          SYSTEM UPDATE COMPLETE                            ║
           ╠════════════════════════════════════════════════════════════╣
-          ║ Host:            {{ ansible_hostname }}                    ║
+          ║ Host:            {{ ansible_facts['hostname'] }}                    ║
           ║ Update Type:     {{ update_type }}                         ║
           ║ Packages Updated: {{ 'Yes' if update_report.packages_updated else 'No' }} ║
           ║ Reboot Required: {{ 'Yes' if reboot_needed.stat.exists else 'No' }} ║
@@ -249,5 +249,5 @@
     - name: Save update report
       ansible.builtin.copy:
         content: "{{ update_report | to_json }}"
-        dest: "/tmp/update-report-{{ ansible_hostname }}.json"
+        dest: "/tmp/update-report-{{ ansible_facts['hostname'] }}.json"
         mode: '0644'

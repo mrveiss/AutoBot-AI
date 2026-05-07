@@ -5,7 +5,7 @@ Host autobot-fleet-*
     User {{ service_user }}
     IdentityFile {{ ssh_key_path }}
     StrictHostKeyChecking accept-new
-    UserKnownHostsFile {{ ansible_env.HOME }}/.ssh/known_hosts_fleet
+    UserKnownHostsFile {{ ansible_facts['env'].HOME }}/.ssh/known_hosts_fleet
     ServerAliveInterval 60
     ServerAliveCountMax 3
     ConnectTimeout 10

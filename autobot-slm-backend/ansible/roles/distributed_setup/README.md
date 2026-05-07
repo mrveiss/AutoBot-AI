@@ -30,7 +30,7 @@ service_user: autobot          # Service account
 service_group: autobot         # Service group
 project_root: /opt/autobot     # Installation directory
 distributed_mode: true         # Enable distributed mode
-coordinator_host: "{{ ansible_default_ipv4.address }}"  # Coordinator IP
+coordinator_host: "{{ ansible_facts['default_ipv4'].address }}"  # Coordinator IP
 ```
 
 ### Fleet Configuration

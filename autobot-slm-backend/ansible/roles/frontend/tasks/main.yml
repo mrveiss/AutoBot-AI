@@ -253,7 +253,7 @@
     msg:
       - "=== Frontend Configuration Complete ==="
       - "Node.js: {{ node_version.stdout }}"
-      - "Frontend URL: https://{{ ansible_default_ipv4.address }}"
+      - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
       - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"
       - "Nginx: Enabled (production build)"

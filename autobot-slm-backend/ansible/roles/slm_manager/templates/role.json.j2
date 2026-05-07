@@ -11,5 +11,5 @@
   "depends_on": [],
   "required": true,
   "degraded_without": [],
-  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+  "deployed_at": "{{ ansible_facts['date_time'].iso8601 }}"
 }

@@ -24,7 +24,7 @@
   hosts: all
   become: true
   vars:
-    deployment_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    deployment_timestamp: "{{ ansible_facts['date_time'].iso8601_basic_short }}"
 
   pre_tasks:
     - name: Display deployment information
@@ -33,7 +33,7 @@
           - "AutoBot Service Authentication Deployment"
           - "Enforcement: {{ service_auth_enforcement_mode | default(true) }}"
           - "Circuit Breaker: {{ service_auth_circuit_breaker_percentage | default(100) }}%"
-          - "Target Hosts: {{ ansible_play_hosts | length }} VMs"
+          - "Target Hosts: {{ ansible_facts['play_hosts'] | length }} VMs"
           - "Timestamp: {{ deployment_timestamp }}"
       run_once: true
       delegate_to: localhost

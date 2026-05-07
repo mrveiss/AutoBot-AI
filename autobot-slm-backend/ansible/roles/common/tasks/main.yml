@@ -190,12 +190,12 @@
 - name: "Common | Update /etc/hosts"
   lineinfile:
     path: /etc/hosts
-    line: "{{ ansible_default_ipv4.address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
-    regexp: "^{{ ansible_default_ipv4.address }}"
+    line: "{{ ansible_facts['default_ipv4'].address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    regexp: "^{{ ansible_facts['default_ipv4'].address }}"
     state: present
   become: yes
   when:
-    - ansible_default_ipv4.address is defined
+    - ansible_facts['default_ipv4'].address is defined
     - inventory_hostname != '00-SLM-Manager'
   tags: ['common', 'hostname']
 
@@ -249,7 +249,7 @@
     msg:
       - "=== Common Role Configuration Complete ==="
       - "Hostname: {{ inventory_hostname }}"
-      - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+      - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
       - "AutoBot User: autobot"
       - "Base Packages: Installed"
       - "Firewall: Enabled (SSH allowed)"

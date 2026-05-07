@@ -19,7 +19,7 @@
   become: yes
 
   vars:
-    provision_timestamp: "{{ ansible_date_time.iso8601 }}"
+    provision_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
 
   pre_tasks:
     - name: "Display provisioning information"
@@ -30,7 +30,7 @@
           - "========================================"
           - "Target Host: {{ inventory_hostname }}"
           - "Host Role: {{ vm_role | default('undefined') }}"
-          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
           - "Timestamp: {{ provision_timestamp }}"
       tags: ['always']
 
@@ -66,7 +66,7 @@
           - "Provisioning Complete"
           - "========================================"
           - "Host: {{ inventory_hostname }}"
-          - "Roles Applied: {{ ansible_play_role_names | join(', ') }}"
+          - "Roles Applied: {{ ansible_facts['play_role_names'] | join(', ') }}"
           - "Status: Ready for deployment"
           - ""
           - "Next Steps:"

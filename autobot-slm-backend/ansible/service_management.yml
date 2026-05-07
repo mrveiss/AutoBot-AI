@@ -44,6 +44,6 @@
 
     - name: Report health status
       debug:
-        msg: "{{ ansible_hostname }} - {{ item.item.name }}: {{ 'HEALTHY' if item.status == 200 else 'UNHEALTHY' }}"
+        msg: "{{ ansible_facts['hostname'] }} - {{ item.item.name }}: {{ 'HEALTHY' if item.status == 200 else 'UNHEALTHY' }}"
       loop: "{{ health_checks.results }}"
       when: health_checks is defined

@@ -10,8 +10,8 @@
 # ============================================================
 - name: "Docker | Detect OS family"
   ansible.builtin.set_fact:
-    _docker_is_debian: "{{ ansible_os_family == 'Debian' }}"
-    _docker_is_redhat: "{{ ansible_os_family == 'RedHat' }}"
+    _docker_is_debian: "{{ ansible_facts['os_family'] == 'Debian' }}"
+    _docker_is_redhat: "{{ ansible_facts['os_family'] == 'RedHat' }}"
   tags: ['docker', 'packages']
 
 # ============================================================
@@ -73,8 +73,8 @@
   ansible.builtin.apt_repository:
     repo: >-
       deb [arch={{ docker_apt_repo_arch }} signed-by={{ docker_apt_gpg_key_path }}]
-      https://download.docker.com/linux/{{ ansible_distribution | lower }}
-      {{ ansible_distribution_release }} {{ docker_apt_repo_channel }}
+      https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+      {{ ansible_facts['distribution_release'] }} {{ docker_apt_repo_channel }}
     state: present
     filename: docker
     # #6719: refresh handled by the bounded-shell task below; the apt module's

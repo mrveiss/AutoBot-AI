@@ -31,4 +31,4 @@ rollback:
   auto_enabled: {{ enable_auto_rollback | lower }}
   error_rate_threshold: {{ rollback_on_error_rate }}
 
-generated_at: "{{ ansible_date_time.iso8601 }}"
+generated_at: "{{ ansible_facts['date_time'].iso8601 }}"

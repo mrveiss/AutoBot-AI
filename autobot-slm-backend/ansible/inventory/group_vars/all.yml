@@ -224,17 +224,17 @@ repositories:
   # Add NodeSource for Node.js
   nodejs:
     key_url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
-    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main"
+    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
 
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"
-    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    repo: "deb https://packages.redis.io/deb {{ ansible_facts['distribution_release'] }} main"
 
   # Add Intel OpenVINO repository (for AI/ML VMs)
   openvino:
     key_url: "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB"
-    repo: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_distribution_release }} main"
+    repo: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_facts['distribution_release'] }} main"
 
 # ==========================================
 # SHARED ROLE-ACTIVE FACTS (#7031)

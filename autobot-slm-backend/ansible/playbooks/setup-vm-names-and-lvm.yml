@@ -22,7 +22,7 @@
           Target hostname: {{ vm_hostname | default(inventory_hostname) }}
           Target IP: {{ ansible_host }}
           Target disk size: {{ vm_resources.disk_gb | default('N/A') }}GB
-          Current disk usage: {{ ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}GB
+          Current disk usage: {{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}GB
 
     - name: Set hostname
       hostname:
@@ -75,9 +75,9 @@
 
     - name: Check if LVM expansion is needed
       set_fact:
-        current_disk_size: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}"
+        current_disk_size: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024) }}"
         target_disk_size: "{{ vm_resources.disk_gb | default(50) }}"
-        expansion_needed: "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024)) < (vm_resources.disk_gb | default(50)) }}"
+        expansion_needed: "{{ (ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | list | first | default({'size_total': 0}) | attr('size_total') | default(0) | int // (1024*1024*1024)) < (vm_resources.disk_gb | default(50)) }}"
       when: vm_resources is defined
 
     - name: Display expansion analysis

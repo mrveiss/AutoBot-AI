@@ -122,9 +122,9 @@
           - "Pre-Deployment Validation Starting"
           - "=========================================="
           - "Target Host: {{ inventory_hostname }}"
-          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "Kernel: {{ ansible_kernel }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default('N/A') }}"
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "Kernel: {{ ansible_facts['kernel'] }}"
       tags: [validation, always]
 
   tasks:
@@ -513,10 +513,10 @@
       copy:
         content: |
           Validation Checkpoint
-          Timestamp: {{ ansible_date_time.iso8601 }}
+          Timestamp: {{ ansible_facts['date_time'].iso8601 }}
           Host: {{ inventory_hostname }}
           Status: PASSED
-        dest: "/tmp/validation-{{ inventory_hostname }}-{{ ansible_date_time.date }}.checkpoint"
+        dest: "/tmp/validation-{{ inventory_hostname }}-{{ ansible_facts['date_time'].date }}.checkpoint"
         mode: '0644'
       changed_when: false
       ignore_errors: yes

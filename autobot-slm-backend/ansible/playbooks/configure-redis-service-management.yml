@@ -17,7 +17,7 @@
       debug:
         msg:
           - "🔧 Configuring Redis Service Management"
-          - "Host: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "Host: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address }})"
           - "User: {{ autobot_user }}"
           - "Service: {{ redis_service_name }}"
           - "Sudoers file: {{ sudoers_file }}"
@@ -56,7 +56,7 @@
           # AutoBot Redis Service Management
           # Allows autobot user to manage Redis Stack service without password
           # Created by: Ansible playbook configure-redis-service-management.yml
-          # Date: {{ ansible_date_time.iso8601 }}
+          # Date: {{ ansible_facts['date_time'].iso8601 }}
 
           # Allow autobot user to manage redis-stack-server service
           {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl start {{ redis_service_name }}

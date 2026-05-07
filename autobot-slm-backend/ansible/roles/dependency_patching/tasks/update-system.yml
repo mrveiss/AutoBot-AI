@@ -47,7 +47,7 @@
     - name: Write dpkg selections to backup file
       ansible.builtin.copy:
         content: "{{ dpkg_selections.stdout }}"
-        dest: "{{ backup_base_path }}/system/dpkg-selections-{{ ansible_date_time.iso8601_basic }}.txt"
+        dest: "{{ backup_base_path }}/system/dpkg-selections-{{ ansible_facts['date_time'].iso8601_basic }}.txt"
         mode: "0600"
       when: backup_enabled
       register: dpkg_backup
@@ -55,7 +55,7 @@
     - name: Backup apt sources list
       ansible.builtin.copy:
         src: /etc/apt/sources.list
-        dest: "{{ backup_base_path }}/system/sources.list-{{ ansible_date_time.iso8601_basic }}"
+        dest: "{{ backup_base_path }}/system/sources.list-{{ ansible_facts['date_time'].iso8601_basic }}"
         remote_src: yes
       when: backup_enabled
 
@@ -64,9 +64,9 @@
         pre_system_update_state:
           host: "{{ inventory_hostname }}"
           backup_created: "{{ dpkg_backup.changed | default(false) }}"
-          backup_path: "{{ backup_base_path }}/system/dpkg-selections-{{ ansible_date_time.iso8601_basic }}.txt"
+          backup_path: "{{ backup_base_path }}/system/dpkg-selections-{{ ansible_facts['date_time'].iso8601_basic }}.txt"
           upgradable_count: "{{ (upgradable_packages.stdout_lines | length) - 1 }}"
-          timestamp: "{{ ansible_date_time.iso8601 }}"
+          timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
 
     - name: Stop service before system update
       ansible.builtin.systemd:
@@ -103,7 +103,7 @@
     - name: Perform security updates only
       ansible.builtin.apt:
         upgrade: safe
-        default_release: "{{ ansible_distribution_release }}-security"
+        default_release: "{{ ansible_facts['distribution_release'] }}-security"
       when: security_only | default(false)
       register: security_update_result
       timeout: "{{ system_update_timeout }}"
@@ -234,4 +234,4 @@
       reboot_performed: "{{ reboot_result.changed | default(false) }}"
       service_running: "{{ service_restart.changed | default(false) }}"
       health_check_passed: "{{ not (health_check.failed | default(false)) }}"
-      timestamp: "{{ ansible_date_time.iso8601 }}"
+      timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

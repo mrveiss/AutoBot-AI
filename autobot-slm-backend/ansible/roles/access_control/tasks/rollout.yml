@@ -8,7 +8,7 @@
   copy:
     content: |
       # Rollout Phase {{ rollout_phase }}
-      # Generated: {{ ansible_date_time.iso8601 }}
+      # Generated: {{ ansible_facts['date_time'].iso8601 }}
       ROLLOUT_PHASE={{ rollout_phase }}
       ACCESS_CONTROL_MODE={{ access_control_mode }}
       AUTO_PROCEED={{ 'true' if auto_proceed_phases else 'false' }}

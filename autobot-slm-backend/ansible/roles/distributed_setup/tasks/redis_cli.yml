@@ -43,21 +43,23 @@
 
     - name: Create local bin directory
       file:
-        path: "{{ ansible_env.HOME }}/.local/bin"
+        path: "{{ ansible_facts['env'].HOME }}/.local/bin"
         state: directory
         mode: '0755'
 
     - name: Install redis-cli to local bin
       copy:
         src: "/tmp/redis-{{ redis_cli_version }}/src/redis-cli"
-        dest: "{{ ansible_env.HOME }}/.local/bin/redis-cli"
+        dest: "{{ ansible_facts['env'].HOME }}/.local/bin/redis-cli"
         mode: '0755'
         remote_src: yes
 
     - name: Add local bin to PATH in bashrc
       lineinfile:
-        path: "{{ ansible_env.HOME }}/.bashrc"
-        line: 'export PATH="{{ ansible_env.HOME }}/.local/bin:$PATH"'
+        path: "{{ ansible_facts['env'].HOME }}/.bashrc"
+        # #7180: dot notation here so the surrounding single quotes don't collide
+        # with the dict-key quotes from ansible_facts['env'].
+        line: 'export PATH="{{ ansible_facts.env.HOME }}/.local/bin:$PATH"'
         state: present
         create: yes
 
