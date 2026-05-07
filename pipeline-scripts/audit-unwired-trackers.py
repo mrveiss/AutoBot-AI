@@ -78,6 +78,21 @@ SKIP_PATH_FRAGMENTS = (
     "/migrations/",
 )
 TEST_PATH_FRAGMENTS = ("_test.", ".test.", "/tests/", "/__tests__/")
+# #7128: pytest TEST_*.PY prefix style is checked separately on the basename.
+# We don't add "/test_" to TEST_PATH_FRAGMENTS because pytest's own tmp_path
+# directories embed `test_<name>/` and would short-circuit the audit's walker.
+
+# Router-registry directories — modules registered here are wired at runtime
+# via dotted-path string lookup (e.g. ("api.captcha", ...) in feature_routers.py),
+# which the import-grep below cannot detect. We parse these files at script
+# startup and treat any file whose dotted module path appears in a registry
+# tuple as already wired (#7109).
+ROUTER_REGISTRY_DIR = (
+    Path(__file__).resolve().parent.parent / "autobot-backend" / "initialization" / "router_registry"
+)
+REGISTRY_TUPLE_RE = re.compile(
+    r'\(\s*"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)"'
+)
 
 DOCSTRING_HEAD_LINES = 40  # how many lines from top of file to scan for tracker refs
 # Match common docstring tracker-reference shapes (#6928 widened the set).
@@ -111,12 +126,58 @@ class Finding:
 
 def is_test_path(path: Path) -> bool:
     s = str(path)
-    return any(frag in s for frag in TEST_PATH_FRAGMENTS)
+    if any(frag in s for frag in TEST_PATH_FRAGMENTS):
+        return True
+    # #7128: catch pytest's `test_<name>.py` prefix-style modules. We check
+    # the basename rather than the full path to avoid false-positives from
+    # directories upstream (e.g. pytest tmp_path lives under `test_<id>/`).
+    return path.name.startswith("test_") and path.suffix == ".py"
 
 
 def should_skip_path(path: Path) -> bool:
     s = str(path)
     return any(frag in s for frag in SKIP_PATH_FRAGMENTS)
+
+
+def load_router_registry_modules() -> set[str]:
+    """Return dotted module paths registered in any router_registry/*.py file.
+
+    Registry tuples look like ``("api.captcha", "", ["captcha"], "captcha")`` —
+    the first element is the dotted import path. Modules registered this way
+    are wired at runtime, so the import-grep heuristic falsely reports them as
+    having zero callers (#7109). Parsing the registry once at script startup
+    lets us treat them as wired.
+    """
+    modules: set[str] = set()
+    if not ROUTER_REGISTRY_DIR.exists():
+        return modules
+    for f in ROUTER_REGISTRY_DIR.glob("*.py"):
+        if f.name == "__init__.py":
+            continue
+        try:
+            content = f.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for m in REGISTRY_TUPLE_RE.finditer(content):
+            modules.add(m.group(1))
+    return modules
+
+
+def derive_module_path(file_path: Path) -> Optional[str]:
+    """Convert ``autobot-backend/api/captcha.py`` to ``api.captcha``.
+
+    Strips the top-level scan-directory and the file extension. Returns None
+    for files that don't fit the expected layout (top-level scripts, etc.).
+    """
+    try:
+        rel = file_path.relative_to(REPO_ROOT)
+    except ValueError:
+        return None
+    parts = rel.parts
+    if len(parts) < 2 or not parts[-1].endswith(".py"):
+        return None
+    inner = parts[1:-1] + (parts[-1][:-3],)
+    return ".".join(inner)
 
 
 def extract_tracker_refs(file_path: Path) -> list[int]:
@@ -240,6 +301,7 @@ def existing_audit_issues_by_tracker() -> set[int]:
 
 def scan() -> list[Finding]:
     closed_set = fetch_closed_tracker_set()
+    registry_modules = load_router_registry_modules()
     findings: list[Finding] = []
     for sd in SCAN_DIRS:
         base = REPO_ROOT / sd
@@ -248,6 +310,12 @@ def scan() -> list[Finding]:
         for pattern in SOURCE_GLOBS:
             for f in base.rglob(pattern):
                 if should_skip_path(f) or is_test_path(f):
+                    continue
+                # #7109: skip files registered via router_registry tuples;
+                # they're wired at runtime via dotted-path lookup which the
+                # import-grep below cannot detect.
+                module_path = derive_module_path(f)
+                if module_path and module_path in registry_modules:
                     continue
                 refs = extract_tracker_refs(f)
                 if not refs:
