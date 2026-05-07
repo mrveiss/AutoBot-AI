@@ -22,7 +22,7 @@ class TestWorkerNodeRefactored:
     @pytest.fixture
     def worker_node(self):
         """Create a WorkerNode instance for testing"""
-        with patch("src.worker_node.get_redis_client", return_value=None):
+        with patch("worker_node.get_redis_client", return_value=None):
             worker = WorkerNode()
             # Mock the modules to avoid dependencies
             worker.llm_interface = MagicMock()
