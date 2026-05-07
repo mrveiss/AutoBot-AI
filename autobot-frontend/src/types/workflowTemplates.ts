@@ -47,18 +47,50 @@ export interface TemplateStep {
 }
 
 /**
+ * Runtime workflow step status — string union mirroring
+ * `services/workflow_automation/models.py:WorkflowStepStatus`.
+ *
+ * #7123: declared here as the canonical types module. The previous local
+ * declaration in `composables/useWorkflowBuilder.ts` is now a re-export
+ * pointing at this definition (single source of truth).
+ */
+export type WorkflowStepStatus =
+  | 'pending'
+  | 'waiting_approval'
+  | 'approved'
+  | 'executing'
+  | 'completed'
+  | 'skipped'
+  | 'failed'
+  | 'paused'
+
+/**
  * Runtime workflow step — matches backend
  * `services/workflow_automation/WorkflowStep.to_status_dict()`. Used by the
  * shell+vision execution path with risk levels and confirmation gating.
  * Distinct from `TemplateStep` per #7044 split.
+ *
+ * #7123: extended to be the canonical runtime shape consumed across the
+ * frontend. The previous local `WorkflowStep` interface in
+ * `composables/useWorkflowBuilder.ts` is now `type WorkflowStep = AutomationWorkflowStep`.
+ *
+ * Field nullability matches backend payload exactly:
+ * - `started_at` / `completed_at` are `string | null` (backend always sends
+ *   the key, with ISO-8601 string when set, null otherwise).
+ * - `risk_level` is required (backend always emits it; the previous
+ *   optional ? was a guess that masked the bug #7044 documented).
  */
 export interface AutomationWorkflowStep {
   step_id: string
   command: string
   description: string
-  status: string
+  explanation?: string
+  status: WorkflowStepStatus
   requires_confirmation: boolean
-  risk_level?: RiskLevel
+  risk_level: RiskLevel
+  estimated_duration: number
+  dependencies?: string[]
+  execution_result?: Record<string, unknown>
   started_at: string | null
   completed_at: string | null
 }

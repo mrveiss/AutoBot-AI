@@ -28,16 +28,16 @@ const logger = createLogger('useWorkflowBuilder');
 // TYPE DEFINITIONS
 // ==================================================================================
 
-/** Workflow step status */
-export type WorkflowStepStatus =
-  | 'pending'
-  | 'waiting_approval'
-  | 'approved'
-  | 'executing'
-  | 'completed'
-  | 'skipped'
-  | 'failed'
-  | 'paused';
+// #7123: WorkflowStepStatus, RiskLevel, and the runtime step shape are
+// now defined canonically in @/types/workflowTemplates. Imported here for
+// in-file use AND re-exported so existing import paths
+// (`useWorkflowBuilder.WorkflowStepStatus`, etc.) keep working.
+import type {
+  WorkflowStepStatus,
+  RiskLevel,
+  AutomationWorkflowStep,
+} from '@/types/workflowTemplates'
+export type { WorkflowStepStatus, RiskLevel, AutomationWorkflowStep }
 
 /** Automation execution modes */
 export type AutomationMode = 'manual' | 'semi_automatic' | 'automatic';
@@ -63,24 +63,18 @@ export type ExecutionStrategy =
   | 'collaborative'
   | 'adaptive';
 
-/** Risk level */
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
-
-/** Workflow step definition */
-export interface WorkflowStep {
-  step_id: string;
-  command: string;
-  description: string;
-  explanation?: string;
-  requires_confirmation: boolean;
-  risk_level: RiskLevel;
-  estimated_duration: number;
-  dependencies?: string[];
-  status: WorkflowStepStatus;
-  execution_result?: Record<string, unknown>;
-  started_at?: string;
-  completed_at?: string;
-}
+/**
+ * Workflow step definition (#7123).
+ *
+ * Alias to the canonical `AutomationWorkflowStep` from
+ * `@/types/workflowTemplates`. The 6+ consumers (`WorkflowRunner.vue`,
+ * `WorkflowLiveDashboard.vue`, `OrchestrationVisualizer.vue`,
+ * `WorkflowCanvas.vue`, `WorkflowBuilderView.vue`, this composable's
+ * helpers) keep their `import { WorkflowStep }` path but now resolve to
+ * a single source of truth that mirrors backend
+ * `services/workflow_automation/WorkflowStep.to_status_dict()`.
+ */
+export type WorkflowStep = AutomationWorkflowStep;
 
 /** Workflow phase from state machine (#1380) */
 export type WorkflowPhase =
@@ -652,7 +646,7 @@ export function useWorkflowBuilder() {
       description: 'Update and upgrade system packages',
       category: 'System',
       icon: 'fas fa-sync-alt',
-      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120 }],
+      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120, started_at: null, completed_at: null }],
     },
     {
       id: 'security_scan',
@@ -660,7 +654,7 @@ export function useWorkflowBuilder() {
       description: 'Run security scanning workflow',
       category: 'Security',
       icon: 'fas fa-shield-alt',
-      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300 }],
+      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300, started_at: null, completed_at: null }],
     },
   ];
 
