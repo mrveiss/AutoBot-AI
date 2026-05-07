@@ -1,0 +1,84 @@
+# #7227: vue-tsc regression guard.
+#
+# Runs `vue-tsc --noEmit -p tsconfig.app.json` on every PR that touches
+# the frontend. Fails if the error count exceeds the documented baseline
+# of 248 (real type-debt as of 2026-05-09; see #7227 for the breakdown).
+#
+# This is a *count-based* gate rather than a strict "0 errors required"
+# gate because the existing 248 errors are a known long-tail of unknown
+# / type-incompatibility issues that need per-cluster cleanup PRs (see
+# top-files breakdown in #7227 issue body). Each cleanup PR can reduce
+# the baseline; this gate ensures no PR introduces new ones.
+#
+# When fixing a cluster:
+#   1. Reduce errors → re-run gate locally, count drops below 248
+#   2. Update the BASELINE constant below to the new count
+#   3. Commit the workflow update with the cleanup PR
+#
+# Security: this workflow does NOT interpolate any untrusted GitHub
+# event data into run: commands. All inputs are static repo paths.
+
+name: frontend-typecheck-regression
+
+on:
+  pull_request:
+    paths:
+      - 'autobot-frontend/src/**/*.ts'
+      - 'autobot-frontend/src/**/*.vue'
+      - 'autobot-frontend/tsconfig*.json'
+      - 'autobot-frontend/package*.json'
+      - '.github/workflows/frontend-typecheck-regression.yml'
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - 'autobot-frontend/src/**/*.ts'
+      - 'autobot-frontend/src/**/*.vue'
+
+permissions:
+  contents: read
+
+jobs:
+  vue-tsc-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8  # v4.0.1
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: autobot-frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Run vue-tsc and check error count
+        working-directory: autobot-frontend
+        env:
+          BASELINE: 248
+        run: |
+          set +e
+          # Use a pipeline-safe pattern so vue-tsc's exit code doesn't break the count
+          ERRORS=$(npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -cE "error TS")
+          echo "BASELINE: $BASELINE errors (see #7227 for breakdown)"
+          echo "CURRENT:  $ERRORS errors"
+          if [ "$ERRORS" -gt "$BASELINE" ]; then
+            echo ""
+            echo "❌ Regression: $ERRORS > $BASELINE errors"
+            echo "This PR introduced $((ERRORS - BASELINE)) new TypeScript errors."
+            echo "Run \`npx vue-tsc --noEmit -p tsconfig.app.json\` locally to inspect."
+            exit 1
+          fi
+          if [ "$ERRORS" -lt "$BASELINE" ]; then
+            echo ""
+            echo "✅ Improvement: $ERRORS < $BASELINE errors"
+            echo "Reduce BASELINE in .github/workflows/frontend-typecheck-regression.yml to $ERRORS to lock in the gain."
+          else
+            echo ""
+            echo "✅ No regression: $ERRORS == $BASELINE"
+          fi
+          exit 0
