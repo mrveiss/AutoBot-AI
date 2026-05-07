@@ -187,7 +187,7 @@
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
               <i class="fas fa-paperclip" aria-hidden="true"></i>
-              <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }) }}</span>
+              <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }, message.attachments.length) }}</span>
             </div>
             <div class="attachment-list">
               <div
