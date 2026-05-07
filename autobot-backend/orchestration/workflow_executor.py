@@ -670,6 +670,27 @@ class WorkflowExecutor:
                 **report.to_dict(),
             }
 
+        # #7206: DEBUG mode wiring (Issue #2148 finalisation).
+        # When the caller requests DEBUG without a controller, log a warning
+        # and fall through to the NORMAL execution path. With a controller,
+        # delegate to the debug-aware loop that consults the controller
+        # before each step.
+        if mode == ExecutionMode.DEBUG:
+            if debug_controller is None:
+                logger.warning(
+                    "ExecutionMode.DEBUG requested but debug_controller is "
+                    "None — falling back to NORMAL execution"
+                )
+                # Fall through — execute the rest of the function as NORMAL.
+            else:
+                return await self._execute_debug_workflow(
+                    workflow_id,
+                    steps,
+                    context,
+                    debug_controller,
+                    notification_config,
+                )
+
         effective_edges = edges or []
         if workflow_has_condition_nodes(steps, effective_edges):
             logger.info(
@@ -808,6 +829,94 @@ class WorkflowExecutor:
             execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
                 cp.output
             )
+
+    async def _execute_debug_workflow(
+        self,
+        workflow_id: str,
+        steps: List[Dict[str, Any]],
+        context: Dict[str, Any],
+        controller: DebugController,
+        notification_config: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Step-by-step execution gated by an external DebugController.
+
+        Before each step, blocks on ``controller.wait_for_resume(step_id)``
+        and reacts to the returned signal:
+
+        - ``RESUME``: execute the step normally via ``_execute_coordinated_step``.
+        - ``SKIP``:   record the step as skipped and advance.
+        - ``RETRY``:  re-execute the most recent step (one rewind).
+
+        Returns the same execution_context shape as the NORMAL path so
+        downstream callers (notification helpers, caller assertions) need
+        no special handling.
+
+        #7206 / Issue #2148.
+        """
+        execution_context: Dict[str, Any] = {
+            "workflow_id": workflow_id,
+            "mode": "debug",
+            "step_results": {},
+            "agents_involved": set(),
+            "interactions": [],
+            "status": TaskStatus.RUNNING.value,
+            "notification_config": notification_config,
+        }
+
+        i = 0
+        while i < len(steps):
+            step = steps[i]
+            step_id = step["id"]
+            signal = await controller.wait_for_resume(step_id)
+
+            if signal == DebugController.Signal.SKIP:
+                execution_context["step_results"][step_id] = {
+                    "skipped": True,
+                    "step_id": step_id,
+                    "reason": "debug_skip",
+                }
+                i += 1
+                continue
+
+            if signal == DebugController.Signal.RETRY and i > 0:
+                # Rewind to the previous step. Clear its prior result so
+                # the re-execution overwrites cleanly.
+                i -= 1
+                prior = steps[i]["id"]
+                execution_context["step_results"].pop(prior, None)
+                continue
+
+            # RESUME (or RETRY at i=0) — execute normally.
+            try:
+                result = await self._execute_coordinated_step(
+                    step, execution_context, context
+                )
+                execution_context["step_results"][step_id] = result
+            except Exception as exc:
+                logger.error(
+                    "Debug step %s failed: %s", step_id, exc, exc_info=True
+                )
+                execution_context["step_results"][step_id] = {
+                    "success": False,
+                    "error": str(exc),
+                    "step_id": step_id,
+                }
+            i += 1
+
+        # Determine final status from individual step results
+        any_failed = any(
+            r.get("success") is False
+            for r in execution_context["step_results"].values()
+            if isinstance(r, dict)
+        )
+        execution_context["status"] = (
+            TaskStatus.FAILED.value if any_failed else TaskStatus.COMPLETED.value
+        )
+
+        # #3172 parity: notify on terminal status from DEBUG path too.
+        await self._send_workflow_notification(workflow_id, execution_context)
+
+        return execution_context
 
     async def _execute_dag_workflow(
         self,
