@@ -360,7 +360,7 @@ class TestShareWorkflow:
     @pytest.mark.asyncio
     async def test_returns_none_when_redis_unavailable(self):
         sharing, _ = self._make_sharing()
-        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             share_id = await sharing.share_workflow(workflow_id="wf-test", owner_id="owner-1", public=True)
         assert share_id is None
 
@@ -416,7 +416,7 @@ class TestUnshareWorkflow:
     @pytest.mark.asyncio
     async def test_returns_false_when_redis_unavailable(self):
         sharing = WorkflowSharingService(MagicMock())
-        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             result = await sharing.unshare_workflow("any-share")
         assert result is False
 
@@ -505,7 +505,7 @@ class TestListShared:
     @pytest.mark.asyncio
     async def test_returns_empty_when_redis_unavailable(self):
         sharing = WorkflowSharingService(MagicMock())
-        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             shares = await sharing.list_shared(user_id="anyone")
         assert shares == []
 
@@ -587,7 +587,7 @@ class TestCloneWorkflow:
     @pytest.mark.asyncio
     async def test_returns_none_when_redis_unavailable(self):
         sharing = self._make_sharing_with_export({})
-        with patch("services.workflow_sharing_service.get_async_redis_client", return_value=None):
+        with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             result = await sharing.clone_workflow("any-share", new_owner_id="u")
         assert result is None
 
