@@ -322,7 +322,7 @@ class TestSecurityEdgeCases:
 
         for bypass_config in bypass_attempts:
             with patch(
-                "src.enhanced_security_layer.global_config_manager"
+                "enhanced_security_layer.global_config_manager"
             ) as mock_config:
                 # Simulate config change during runtime
                 modified_config = original_config.copy()
