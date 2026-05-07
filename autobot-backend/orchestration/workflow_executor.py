@@ -1088,6 +1088,14 @@ class WorkflowExecutor:
                 interaction.message["result"] = result
             return self._build_step_success_result(result, agent_id, step_id)
 
+        except NotImplementedError:
+            # #7010 cluster 5: NotImplementedError marks a stub / unwired
+            # codepath (e.g., #2869 agent dispatcher not implemented yet).
+            # Propagate to the caller so the workflow halts loudly instead
+            # of silently treating the unwired step as "failed". Test
+            # fixtures rely on this propagation to verify intermediate
+            # state was updated before the unimplemented call ran.
+            raise
         except Exception as e:
             logger.error("Step %s execution failed: %s", step_id, e)
             if interaction:
