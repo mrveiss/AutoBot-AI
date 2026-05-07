@@ -46,6 +46,22 @@
 # ==========================================================
 # Ansible PPA (for latest Ansible 2.17+)
 # ==========================================================
+- name: "SLM | Remove stale Ansible PPA source files (#7140)"
+  # On re-install, prior runs can leave both `*.list` (legacy) and
+  # `*.sources` (deb822) describing the same PPA with mismatched
+  # Signed-By values, causing APT to abort with:
+  #   E:Conflicting values set for option Signed-By regarding source
+  # Sweep them before re-adding so apt_repository can write a single
+  # consistent file.
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      rm -f /etc/apt/sources.list.d/ansible-ubuntu-ansible-*.list
+      rm -f /etc/apt/sources.list.d/ansible-ubuntu-ansible-*.sources
+  become: true
+  changed_when: false
+  tags: ['slm', 'packages', 'ansible']
+
 - name: "SLM | Add Ansible PPA repository"
   ansible.builtin.apt_repository:
     repo: ppa:ansible/ansible
