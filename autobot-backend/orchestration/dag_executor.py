@@ -773,5 +773,40 @@ def workflow_has_condition_nodes(
 
 
 def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> WorkflowDAG:
-    """Construct a WorkflowDAG from workflow API payloads."""
-    return WorkflowDAG(steps, edges)
+    """Construct a WorkflowDAG from workflow API payloads.
+
+    #7010 cluster 3: tolerates both edge shapes —
+      - Canonical: ``{"source": ..., "target": ..., "label": ...}``
+      - API-facing: ``{"from": ..., "to": ..., "condition": "true"|"false"|None}``
+
+    The API shape is what reaches /api/workflow-automation/execute via the
+    #3172 payload contract; translating here lets callers pass the raw
+    payload without an explicit adapter.
+    """
+
+    def _condition_to_label(value: Any) -> Optional[bool]:
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower in ("true", "yes"):
+                return True
+            if lower in ("false", "no"):
+                return False
+        return None
+
+    normalized: List[Dict[str, Any]] = []
+    for raw in edges:
+        if "source" in raw and "target" in raw:
+            normalized.append(raw)
+            continue
+        if "from" in raw and "to" in raw:
+            label = _condition_to_label(raw.get("condition"))
+            normalized.append(
+                {"source": raw["from"], "target": raw["to"], "label": label}
+            )
+            continue
+        # Malformed entry — let WorkflowDAG's warn-and-skip handle it.
+        normalized.append(raw)
+
+    return WorkflowDAG(steps, normalized)
