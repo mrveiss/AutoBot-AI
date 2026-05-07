@@ -94,6 +94,24 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #7180. ansible-core 2.24 will
+  # remove INJECT_FACTS_AS_VARS, breaking any `{{ ansible_X }}` reference
+  # to an auto-injected fact (date_time, default_ipv4, hostname,
+  # distribution_release, os_family, env, kernel, etc.). The migration
+  # landed 84 files; this guard prevents reintroduction.
+  # Inventory/connection vars (ansible_user, ansible_host, ansible_become_*,
+  # ansible_ssh_*, ansible_python_interpreter, ansible_connection) are
+  # explicitly NOT facts and remain valid.
+  - repo: local
+    hooks:
+      - id: no-deprecated-ansible-facts
+        name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
+        entry: tools/lint/check_no_deprecated_ansible_facts.py
+        language: python
+        files: \.(yml|yaml|j2)$
+        stages: [pre-commit]
+        description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"
+
   # AutoBot custom: regression-prevention for #6940. PR #6881 found 7 files
   # calling response.get("content") on LLMResponse (a Pydantic BaseModel)
   # — masked by MockLLMInterface in tests but raised AttributeError in prod.
