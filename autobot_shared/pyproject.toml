@@ -18,10 +18,14 @@ dependencies = [
     "redis>=7.4.0",
     "pyyaml>=6.0.3",
     "pydantic>=2.13.3",
+    "pydantic-settings>=2.0.0",   # ssot_config.py
     "python-dotenv>=1.2.2",
-    "requests>=2.31.0",
     "aiohttp>=3.9.0",
     "prometheus-client>=0.20.0",
+    "fastapi>=0.100.0",            # models/pagination.py (Query, Depends)
+    "starlette>=0.27.0",           # proxy_utils.py (starlette.requests.Request)
+    "PyJWT[crypto]>=2.8.0",        # auth/jwt_core.py
+    "bcrypt>=4.0.0",               # auth/jwt_core.py
     # OpenTelemetry distributed tracing (Issue #697)
     "opentelemetry-api>=1.41.1",
     "opentelemetry-sdk>=1.40.0",
