@@ -79,3 +79,41 @@ updates:
     labels:
       - "dependencies"
       - "devops"
+
+  # Docker base images (Issue #7157 — supply-chain hardening, sister of #7091/#7120)
+  # Dependabot auto-PRs digest updates when new versions publish.
+  - package-ecosystem: "docker"
+    directory: "/docker/backend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/slm"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
+
+  - package-ecosystem: "docker"
+    directory: "/docker/frontend"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "devops"
+      - "security"
