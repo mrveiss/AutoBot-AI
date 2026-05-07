@@ -111,8 +111,7 @@ async def _handle_session_file_action(
             copy=False,
         )
         logger.info(
-            f"Transferred {transfer_result.get('total_transferred', 0)} files "
-            f"to KB for session {session_id}"
+            f"Transferred {transfer_result.get('total_transferred', 0)} files " f"to KB for session {session_id}"
         )
         return {
             "files_handled": True,
@@ -142,9 +141,7 @@ async def _handle_session_file_action(
 
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
-    logger.info(
-        "[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path
-    )
+    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
 
 
 # ====================================================================
@@ -206,9 +203,7 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(
-    chat_history_manager, session_id: str, limit: int
-) -> List:
+async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int) -> List:
     """
     Fetch session messages and raise ResourceNotFoundError if session not found.
 
@@ -237,9 +232,7 @@ async def _fetch_session_messages_or_raise(
     ) = get_exceptions_lazy()
 
     try:
-        messages = await chat_history_manager.get_session_messages(
-            session_id, limit=limit
-        )
+        messages = await chat_history_manager.get_session_messages(session_id, limit=limit)
     except FileNotFoundError:
         logger.warning("Session file not found for session %s", session_id)
         raise ResourceNotFoundError(f"Session {session_id} not found")
@@ -279,9 +272,7 @@ def _validate_export_format_or_raise(export_format: str) -> None:
         raise ValidationError("Invalid export format. Supported: json, txt, csv")
 
 
-async def _export_session_data_or_raise(
-    chat_history_manager, session_id: str, export_format: str
-) -> str:
+async def _export_session_data_or_raise(chat_history_manager, session_id: str, export_format: str) -> str:
     """
     Export session data and raise ResourceNotFoundError if session not found.
 
@@ -335,9 +326,7 @@ _EXPORT_CONTENT_TYPES = {
 async def get_session_messages(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     page: int = 1,
     per_page: int = 50,
 ):
@@ -355,9 +344,7 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(
-        chat_history_manager, session_id, per_page
-    )
+    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
     return create_chat_response(
@@ -415,9 +402,7 @@ async def list_sessions(
 
     # Issue #684: Scoped session listing
     if scope in ("org", "team"):
-        return await _list_scoped_sessions(
-            request, request_id, chat_history_manager, scope, team_id
-        )
+        return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
     # Default: list all sessions (fast mode, no decryption)
     sessions = await chat_history_manager.list_sessions_fast()
@@ -500,9 +485,7 @@ async def _list_scoped_sessions(
     validator = _build_ownership_validator(redis)
 
     if scope == "org":
-        return await _list_org_sessions(
-            user_data, validator, chat_history_manager, request_id
-        )
+        return await _list_org_sessions(user_data, validator, chat_history_manager, request_id)
 
     # scope == "team"
     if not team_id:
@@ -515,9 +498,7 @@ async def _list_scoped_sessions(
         ) = get_exceptions_lazy()
         raise ValidationError("team_id required for team scope")
 
-    return await _list_team_sessions(
-        team_id, validator, chat_history_manager, request_id
-    )
+    return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 
 
 async def _list_org_sessions(
@@ -688,9 +669,7 @@ async def _track_session_in_memory_graph(
         user_data: Authenticated user data
         request_id: Request tracking ID
     """
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
     if not memory_graph or not user_data:
         return
 
@@ -791,9 +770,7 @@ async def create_session(session_data: SessionCreate, request: Request):
     await _register_session_ownership(user_data, session_id, session_data.team_id)
 
     # Issue #665: Use helper for memory graph tracking
-    await _track_session_in_memory_graph(
-        request, session_id, session_title, user_data, request_id
-    )
+    await _track_session_in_memory_graph(request, session_id, session_title, user_data, request_id)
 
     # Issue #4260: Wire SESSION_CREATE hook for extensions
     context = getattr(request.app.state, "context", {})
@@ -833,9 +810,7 @@ async def update_session(
     session_id: str,
     session_data: SessionUpdate,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -890,9 +865,7 @@ async def update_session(
 # =============================================================================
 
 
-def _validate_delete_session_params(
-    session_id: str, file_action: str, file_options: Optional[str]
-) -> dict:
+def _validate_delete_session_params(session_id: str, file_action: str, file_options: Optional[str]) -> dict:
     """Validate and parse delete_session parameters.
 
     Issue #281: Extracted from delete_session for better organization.
@@ -928,9 +901,7 @@ def _validate_delete_session_params(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}"
-        )
+        raise ValidationError(f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}")
 
     # Parse file_options if provided
     parsed_file_options = {}
@@ -967,9 +938,7 @@ async def _handle_conversation_files(
         Dict with file handling results including success status and counts
     """
     file_deletion_result = {"files_handled": False, "action_taken": file_action}
-    conversation_file_manager = getattr(
-        request.app.state, "conversation_file_manager", None
-    )
+    conversation_file_manager = getattr(request.app.state, "conversation_file_manager", None)
 
     if conversation_file_manager:
         try:
@@ -977,19 +946,14 @@ async def _handle_conversation_files(
                 conversation_file_manager, session_id, file_action, parsed_file_options
             )
         except Exception as file_error:
-            logger.error(
-                "Error handling files for session %s: %s", session_id, file_error
-            )
+            logger.error("Error handling files for session %s: %s", session_id, file_error)
             file_deletion_result = {
                 "files_handled": False,
                 "action_taken": file_action,
                 "error": str(file_error),
             }
     else:
-        logger.warning(
-            f"ConversationFileManager not available, "
-            f"skipping file handling for session {session_id}"
-        )
+        logger.warning(f"ConversationFileManager not available, " f"skipping file handling for session {session_id}")
 
     return file_deletion_result
 
@@ -1014,15 +978,12 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
     agent_terminal_service = getattr(request.app.state, "agent_terminal_service", None)
     if not agent_terminal_service:
         logger.warning(
-            f"AgentTerminalService not available, "
-            f"skipping terminal session cleanup for session {session_id}"
+            f"AgentTerminalService not available, " f"skipping terminal session cleanup for session {session_id}"
         )
         return terminal_cleanup_result
 
     try:
-        terminal_sessions = await agent_terminal_service.list_sessions(
-            conversation_id=session_id
-        )
+        terminal_sessions = await agent_terminal_service.list_sessions(conversation_id=session_id)
 
         for terminal_session in terminal_sessions:
             if terminal_session.pending_approval is not None:
@@ -1045,8 +1006,7 @@ async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
             )
     except Exception as terminal_cleanup_error:
         logger.error(
-            f"Failed to cleanup terminal sessions for chat {session_id}: "
-            f"{terminal_cleanup_error}",
+            f"Failed to cleanup terminal sessions for chat {session_id}: " f"{terminal_cleanup_error}",
             exc_info=True,
         )
         terminal_cleanup_result["error"] = str(terminal_cleanup_error)
@@ -1090,14 +1050,10 @@ def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
     kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
 
     if result.get("errors"):
-        kb_cleanup_result["cleanup_error"] = (
-            f"{len(result['errors'])} errors during cleanup"
-        )
+        kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
 
 
-def _log_kb_cleanup_result(
-    session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None
-) -> None:
+def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None) -> None:
     """
     Log KB cleanup results appropriately based on outcome.
 
@@ -1115,10 +1071,7 @@ def _log_kb_cleanup_result(
             errors,
         )
 
-    if (
-        kb_cleanup_result["facts_deleted"] > 0
-        or kb_cleanup_result["facts_preserved"] > 0
-    ):
+    if kb_cleanup_result["facts_deleted"] > 0 or kb_cleanup_result["facts_preserved"] > 0:
         logger.info(
             "KB cleanup for session %s: deleted=%d, preserved=%d",
             session_id,
@@ -1240,9 +1193,7 @@ async def _perform_all_session_cleanup(
         Tuple of (file_result, terminal_result, kb_result, transcript_result)
     """
     # Handle conversation files
-    file_deletion_result = await _handle_conversation_files(
-        request, session_id, file_action, parsed_file_options
-    )
+    file_deletion_result = await _handle_conversation_files(request, session_id, file_action, parsed_file_options)
 
     # Clean up terminal sessions
     terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
@@ -1333,9 +1284,7 @@ def _build_delete_session_response(
 async def delete_session(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: Optional[str] = None,
 ):
@@ -1347,9 +1296,7 @@ async def delete_session(
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
 
-    parsed_file_options = _validate_delete_session_params(
-        session_id, file_action, file_options
-    )
+    parsed_file_options = _validate_delete_session_params(session_id, file_action, file_options)
 
     chat_history_manager = get_chat_history_manager(request)
 
@@ -1361,9 +1308,7 @@ async def delete_session(
         terminal_result,
         kb_result,
         transcript_result,
-    ) = await _perform_all_session_cleanup(
-        request, session_id, file_action, parsed_file_options
-    )
+    ) = await _perform_all_session_cleanup(request, session_id, file_action, parsed_file_options)
 
     await _delete_session_and_verify(chat_history_manager, session_id)
 
@@ -1425,13 +1370,9 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 
     chat_history_manager = get_chat_history_manager(request)
 
-    session_data = await _export_session_data_or_raise(
-        chat_history_manager, session_id, format
-    )
+    session_data = await _export_session_data_or_raise(chat_history_manager, session_id, format)
 
-    log_chat_event(
-        "session_exported", session_id, {"format": format, "request_id": request_id}
-    )
+    log_chat_event("session_exported", session_id, {"format": format, "request_id": request_id})
 
     # Issue #6559: Audit session export
     user_data = get_auth_middleware().get_user_from_request(request)
@@ -1452,11 +1393,7 @@ async def export_session(session_id: str, request: Request, format: str = "json"
     return Response(
         content=session_data,
         media_type=_EXPORT_CONTENT_TYPES[format],
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=chat_session_{session_id}.{format}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=chat_session_{session_id}.{format}")},
     )
 
 
@@ -1480,18 +1417,47 @@ def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
     return []
 
 
-def _clear_and_restore_session(
-    chat_manager, session_id: str, messages_to_restore: List[Dict]
-) -> int:
+def _to_persisted_system_message(msg: Dict) -> Dict:
+    """Translate api-shape (role/content) to disk-shape (sender/content/type).
+
+    #7025: ``_preserve_system_messages`` returns messages with ``role`` keys
+    (filtered by ``role == "system"``). The disk schema (used by
+    ``add_messages_batch`` and the JSON files in ``data/chats/``) expects
+    ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
+    ``api/chat.py:_to_persisted_message`` for the system-message subset.
+    """
+    return {
+        "id": msg.get("id", ""),
+        "sender": msg.get("role") or msg.get("sender") or "system",
+        "content": msg.get("content", ""),
+        "timestamp": msg.get("timestamp"),
+        "type": msg.get("type", "message"),
+        "metadata": msg.get("metadata") or {},
+        "sources": msg.get("sources", []),
+    }
+
+
+async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_restore: List[Dict]) -> int:
     """
     Clear session and restore specified messages.
 
     Issue #665: Extracted helper for session clearing with message restoration.
+    Issue #7025: previously called ``add_message(session_id, dict)`` — the
+    same wrong-signature pattern that #6744 fixed in api/chat.py. Python
+    silently accepted UUID as ``sender`` and dict as ``text``, leaving
+    ``session_id=None`` so messages landed in the default in-memory
+    bucket — restored messages were never written to disk. Now uses
+    ``add_messages_batch(session_id, [...])`` (correct signature) with
+    disk-shape conversion.
+
     Returns number of messages restored.
     """
     chat_manager.clear_session(session_id)
-    for msg in messages_to_restore:
-        chat_manager.add_message(session_id, msg)
+    if not messages_to_restore:
+        return 0
+    if hasattr(chat_manager, "add_messages_batch"):
+        persisted = [_to_persisted_system_message(m) for m in messages_to_restore]
+        await chat_manager.add_messages_batch(session_id, persisted)
     return len(messages_to_restore)
 
 
@@ -1501,9 +1467,7 @@ def _clear_and_restore_session(
     operation="reset_chat",
     error_code_prefix="CHAT_SESSIONS",
 )
-async def reset_chat(
-    request: Request, reset_request: Optional[ChatResetRequest] = None
-):
+async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
     """
     Reset the current chat session.
 
@@ -1527,17 +1491,9 @@ async def reset_chat(
         _validate_session_id_or_raise(session_id)
 
         if clear_context:
-            messages_to_keep = (
-                _preserve_system_messages(chat_history_manager, session_id)
-                if keep_system_prompt
-                else []
-            )
-            restored = _clear_and_restore_session(
-                chat_history_manager, session_id, messages_to_keep
-            )
-            logger.info(
-                "Reset chat session: %s, kept %d system messages", session_id, restored
-            )
+            messages_to_keep = _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
+            restored = await _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
+            logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
 
     log_chat_event(
         "session_reset",
@@ -1697,9 +1653,7 @@ async def add_session_activity(
         return _create_activity_unavailable_response(1, request_id, is_batch=False)
 
     try:
-        activity_entity = await _store_single_activity(
-            memory_graph, session_id, activity_data
-        )
+        activity_entity = await _store_single_activity(memory_graph, session_id, activity_data)
 
         log_chat_event(
             "activity_created",
@@ -1764,14 +1718,10 @@ async def add_session_activities_batch(
             request_id,
             total_activities,
         )
-        return _create_activity_unavailable_response(
-            total_activities, request_id, is_batch=True
-        )
+        return _create_activity_unavailable_response(total_activities, request_id, is_batch=True)
 
     # Process batch using extracted helper (Issue #620)
-    result = await _process_activity_batch(
-        memory_graph, session_id, batch_data.activities, request_id
-    )
+    result = await _process_activity_batch(memory_graph, session_id, batch_data.activities, request_id)
 
     log_chat_event(
         "activities_batch_created",
@@ -1870,9 +1820,7 @@ async def get_session_activities(
         raise ValidationError("Invalid session ID format")
 
     # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(
-        request.app.state, "memory_graph", None
-    )
+    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
 
     if not memory_graph:
         return create_chat_response(
@@ -1881,9 +1829,7 @@ async def get_session_activities(
             request_id=request_id,
         )
 
-    return await _fetch_activities_from_graph(
-        memory_graph, session_id, activity_type, user_id, limit, request_id
-    )
+    return await _fetch_activities_from_graph(memory_graph, session_id, activity_type, user_id, limit, request_id)
 
 
 # ====================================================================
