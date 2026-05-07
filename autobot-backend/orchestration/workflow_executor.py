@@ -217,7 +217,12 @@ class WorkflowExecutor:
         if isinstance(raw, NotificationConfig):
             return raw
         if isinstance(raw, dict):
-            return NotificationConfig(workflow_id=workflow_id, **raw)
+            # #7010 cluster 3: caller-provided dict may itself contain a
+            # `workflow_id` key (e.g., chat_workflow snapshots the config
+            # before passing it down). Drop it before spreading so we don't
+            # raise "got multiple values for keyword argument 'workflow_id'".
+            kwargs = {k: v for k, v in raw.items() if k != "workflow_id"}
+            return NotificationConfig(workflow_id=workflow_id, **kwargs)
         return None
 
     async def _send_workflow_notification(
@@ -652,13 +657,17 @@ class WorkflowExecutor:
             Execution context with results.
         """
         # Issue #2148: dry-run returns a validation report without executing.
+        # #7010 cluster 3: tests expect report fields (valid / issues /
+        # warnings / execution_plan) at the top level alongside workflow_id
+        # and mode — flatten the report dict so result["valid"] etc. work.
         if mode == ExecutionMode.DRY_RUN:
             validator = DryRunValidator()
             report = validator.validate(workflow_id, steps, edges)
             return {
                 "status": "dry_run_complete",
                 "mode": "dry_run",
-                "dry_run_report": report.to_dict(),
+                "workflow_id": workflow_id,
+                **report.to_dict(),
             }
 
         effective_edges = edges or []
