@@ -37,11 +37,12 @@
 
 set -uo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+# Source shared library (#7185 — colors + get_staged_files).
+# This hook reads `git diff --cached -U0` (line-level diff) rather than a file
+# list, so get_staged_files isn't applicable; only colors are reused.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
 
 EXEMPT_PATHS=(
     "autobot_shared/workflow/types.py"
