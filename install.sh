@@ -100,6 +100,46 @@ run_ok() {
     fi
 }
 
+# add_ppa_if_missing: prefer device-shipped PPA; only add if not already configured (#7144)
+#   $1 = ppa spec for apt-add-repository, e.g. "ppa:ansible/ansible"
+#   $2 = match string to grep across /etc/apt/sources.list.d/ — typically
+#        "<owner>/<name>" (matches both ppa.launchpadcontent.net and the
+#        deb822 URIs field). E.g. "ansible/ansible".
+#   $3 = friendly description for log lines, e.g. "Ansible".
+#
+# DGX Spark and similar AI workstation images ship with several PPAs already
+# configured (deb822 .sources format with inline GPG key). Re-adding via
+# apt-add-repository creates a legacy .list duplicate with mismatched
+# Signed-By → apt-get update aborts with E:Conflicting values set for option
+# Signed-By. This helper preserves the device-shipped repo and removes any
+# stale legacy duplicate left from prior install attempts.
+add_ppa_if_missing() {
+    local ppa="$1"
+    local match="$2"
+    local desc="$3"
+
+    if grep -rqsE "${match}" /etc/apt/sources.list.d/ 2>/dev/null; then
+        success "  ${desc} PPA already configured (preserving device-shipped repo)"
+        # Sweep stale legacy .list duplicates left by prior apt-add-repository runs
+        local owner_repo="${ppa#ppa:}"             # ansible/ansible
+        local owner="${owner_repo%/*}"             # ansible
+        local repo="${owner_repo#*/}"              # ansible
+        local stale_list="/etc/apt/sources.list.d/ppa_${owner}_${repo}_*.list"
+        # shellcheck disable=SC2086
+        for f in ${stale_list}; do
+            if [[ -f "${f}" ]] && [[ -f "${f%.list}.sources" ]] || \
+               compgen -G "/etc/apt/sources.list.d/${owner}-*-${repo}-*.sources" >/dev/null; then
+                rm -f "${f}"
+                log "  Removed stale duplicate ${f}"
+            fi
+        done
+        return 0
+    fi
+
+    run_ok "Adding ${desc} PPA" \
+        apt-add-repository -y "${ppa}"
+}
+
 # =============================================================================
 # Network Interface Detection (#2832)
 # =============================================================================
@@ -349,8 +389,7 @@ system_setup() {
 
     # Issue #2705: Python 3.12 required by autobot_shared
     if ! command -v python3.12 &>/dev/null; then
-        run_ok "Adding deadsnakes PPA for Python 3.12" \
-            apt-add-repository -y ppa:deadsnakes/ppa
+        add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.12)"
         run_ok "Updating package lists (Python 3.12)" \
             apt-get update -qq
         run_ok "Installing Python 3.12" \
@@ -361,8 +400,7 @@ system_setup() {
     fi
 
     if ! command -v ansible-playbook &>/dev/null; then
-        run_ok "Adding Ansible PPA" \
-            apt-add-repository -y ppa:ansible/ansible
+        add_ppa_if_missing "ppa:ansible/ansible" "ansible/ansible" "Ansible"
         run_ok "Updating package lists (Ansible)" \
             apt-get update -qq
         run_ok "Installing Ansible" \
