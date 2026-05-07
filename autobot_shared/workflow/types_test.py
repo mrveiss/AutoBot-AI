@@ -271,3 +271,111 @@ def test_workflow_plan_from_dict_requires_plan_id_goal_tasks():
         del data[missing]
         with pytest.raises(KeyError, match=missing):
             WorkflowPlan.from_dict(data)
+
+
+# ---------------------------------------------------------------------------
+# #7121 — Lifecycle methods on canonical WorkflowTask
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_task_start_execution_marks_running():
+    """start_execution() sets start_time and status='running'."""
+    t = WorkflowTask(task_id="t1")
+    assert t.start_time is None
+    assert t.status == "pending"
+    t.start_execution()
+    assert t.start_time is not None
+    assert t.status == "running"
+
+
+def test_workflow_task_complete_execution_records_result():
+    """complete_execution() sets end_time, status='completed', and outputs."""
+    t = WorkflowTask(task_id="t1")
+    t.start_execution()
+    t.complete_execution({"answer": 42})
+    assert t.end_time is not None
+    assert t.status == "completed"
+    assert t.outputs == {"answer": 42}
+
+
+def test_workflow_task_fail_execution_records_error():
+    """fail_execution() sets status='failed' and error message."""
+    t = WorkflowTask(task_id="t1")
+    t.fail_execution("network down")
+    assert t.status == "failed"
+    assert t.error == "network down"
+
+
+def test_workflow_task_get_execution_time_zero_until_complete():
+    """get_execution_time() returns 0.0 until both start and end are set."""
+    t = WorkflowTask(task_id="t1")
+    assert t.get_execution_time() == 0.0
+    t.start_execution()
+    assert t.get_execution_time() == 0.0  # no end yet
+    import time as _time
+    _time.sleep(0.001)
+    t.complete_execution({})
+    assert t.get_execution_time() > 0.0
+
+
+def test_workflow_task_retry_methods():
+    """can_retry() respects max_retries; increment_retry() advances the counter."""
+    t = WorkflowTask(task_id="t1", max_retries=2)
+    assert t.can_retry()                # 0 < 2
+    t.increment_retry()
+    assert t.retry_count == 1
+    assert t.can_retry()                # 1 < 2
+    t.increment_retry()
+    assert t.retry_count == 2
+    assert not t.can_retry()            # 2 == 2
+
+
+def test_workflow_task_get_enhanced_inputs_merges_context():
+    """get_enhanced_inputs() returns inputs + context + task_id + workflow_metadata."""
+    t = WorkflowTask(
+        task_id="t1",
+        inputs={"x": 1},
+        metadata={"workflow_id": "wf1"},
+    )
+    enhanced = t.get_enhanced_inputs({"runtime_key": "v"})
+    assert enhanced["x"] == 1
+    assert enhanced["context"] == {"runtime_key": "v"}
+    assert enhanced["task_id"] == "t1"
+    assert enhanced["workflow_metadata"] == {"workflow_id": "wf1"}
+
+
+def test_workflow_task_to_completed_result_shape():
+    """to_completed_result() builds the runner's success-result dict."""
+    t = WorkflowTask(task_id="t1", agent_type="researcher")
+    t.start_execution()
+    import time as _time
+    _time.sleep(0.001)
+    t.complete_execution({"answer": "yes"})
+    res = t.to_completed_result({"answer": "yes"})
+    assert res["status"] == "completed"
+    assert res["output"] == {"answer": "yes"}
+    assert res["execution_time"] > 0.0
+    assert res["agent"] == "researcher"
+
+
+def test_workflow_task_to_failed_result_shape():
+    """to_failed_result() builds the runner's failure-result dict."""
+    t = WorkflowTask(task_id="t1", agent_type="researcher")
+    res = t.to_failed_result("timeout after 30s")
+    assert res["status"] == "failed"
+    assert res["error"] == "timeout after 30s"
+    assert res["agent"] == "researcher"
+
+
+def test_lifecycle_methods_inherited_by_subclasses_and_aliases():
+    """#7121 closes the variance gap: all aliases/subclasses now have the methods."""
+    # Plain canonical
+    plain = WorkflowTask(task_id="plain")
+    plain.start_execution()
+    assert plain.status == "running"
+
+    # Alias path: workflow_templates.WorkflowStep is `WorkflowStep = WorkflowTask`
+    # (#6951 Phase 2A). It must inherit lifecycle methods automatically.
+    # Smoke-checked by importer; can't run from autobot_shared without deps.
+
+    # Subclass would also work — covered by enhanced_orchestration tests.

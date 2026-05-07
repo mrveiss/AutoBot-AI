@@ -22,78 +22,21 @@ if TYPE_CHECKING:
 from autobot_shared.workflow import ExecutionStrategy as ExecutionStrategy
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask
-from constants.status_enums import TaskStatus
 from orchestration.types import AgentCapability  # single canonical definition (#6192)
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
 
 
-class AgentTask(WorkflowTask):
-    """Workflow task with execution lifecycle methods.
-
-    Inherits every field from ``autobot_shared.workflow.WorkflowTask`` (#6951
-    Phase 1b). The methods below were extracted under Issue #372 to reduce
-    feature envy in the runner; they live in this subclass — not on the
-    canonical type — because they encode an execution-runtime concern that
-    the shared shape intentionally avoids.
-    """
-
-    def start_execution(self) -> None:
-        """Mark task as started (Issue #372)."""
-        self.start_time = time.time()
-        self.status = TaskStatus.RUNNING.value
-
-    def complete_execution(self, result: Dict[str, Any]) -> None:
-        """Mark task as completed with result (Issue #372)."""
-        self.end_time = time.time()
-        self.status = TaskStatus.COMPLETED.value
-        self.outputs = result
-
-    def fail_execution(self, error_msg: str) -> None:
-        """Mark task as failed with error (Issue #372)."""
-        self.status = TaskStatus.FAILED.value
-        self.error = error_msg
-
-    def get_execution_time(self) -> float:
-        """Get execution time in seconds (Issue #372)."""
-        if self.start_time and self.end_time:
-            return self.end_time - self.start_time
-        return 0.0
-
-    def can_retry(self) -> bool:
-        """Check if task can be retried (Issue #372)."""
-        return self.retry_count < self.max_retries
-
-    def increment_retry(self) -> None:
-        """Increment retry counter (Issue #372)."""
-        self.retry_count += 1
-
-    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Get inputs enhanced with context (Issue #372)."""
-        return {
-            **self.inputs,
-            "context": context,
-            "task_id": self.task_id,
-            "workflow_metadata": self.metadata,
-        }
-
-    def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Build completed result dict (Issue #372)."""
-        return {
-            "status": "completed",
-            "output": result,
-            "execution_time": self.get_execution_time(),
-            "agent": self.agent_type,
-        }
-
-    def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
-        """Build failed result dict (Issue #372)."""
-        return {
-            "status": "failed",
-            "error": error_msg,
-            "agent": self.agent_type,
-        }
+# #7121: lifecycle methods (start_execution, complete_execution,
+# fail_execution, get_execution_time, can_retry, increment_retry,
+# get_enhanced_inputs, to_completed_result, to_failed_result) moved
+# to canonical WorkflowTask in autobot_shared/workflow/types.py.
+# AgentTask is now a pure alias preserving the historical name —
+# every consumer of `enhanced_orchestration.types.AgentTask` gets the
+# canonical type with all 9 lifecycle methods inherited automatically.
+# Original extraction: Issue #372 (feature-envy reduction).
+AgentTask = WorkflowTask
 
 
 @dataclass

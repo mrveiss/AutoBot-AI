@@ -32,9 +32,12 @@ Design choices
   (services/workflow_automation, overseer); the union accommodates both.
 """
 
+import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.status_enums import TaskStatus
 
 
 class ExecutionStrategy(Enum):
@@ -120,6 +123,70 @@ class WorkflowTask:
     end_time: Optional[float] = None
 
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Execution lifecycle (#7121, originally #372 → moved to canonical so
+    # all subclasses + aliases get the same behavior without duplication.
+    # Previously lived on enhanced_orchestration.types.AgentTask only —
+    # the variance gap on `WorkflowPlan.tasks: List[WorkflowTask]` allowed
+    # plain WorkflowTasks in the list to silently lack these methods.)
+    # ------------------------------------------------------------------
+
+    def start_execution(self) -> None:
+        """Mark task as started."""
+        self.start_time = time.time()
+        self.status = TaskStatus.RUNNING.value
+
+    def complete_execution(self, result: Dict[str, Any]) -> None:
+        """Mark task as completed with result."""
+        self.end_time = time.time()
+        self.status = TaskStatus.COMPLETED.value
+        self.outputs = result
+
+    def fail_execution(self, error_msg: str) -> None:
+        """Mark task as failed with error."""
+        self.status = TaskStatus.FAILED.value
+        self.error = error_msg
+
+    def get_execution_time(self) -> float:
+        """Get execution time in seconds (0.0 when not yet finished)."""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return 0.0
+
+    def can_retry(self) -> bool:
+        """Check if task can be retried."""
+        return self.retry_count < self.max_retries
+
+    def increment_retry(self) -> None:
+        """Increment retry counter."""
+        self.retry_count += 1
+
+    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Get inputs enhanced with context (forwarded into agent dispatch)."""
+        return {
+            **self.inputs,
+            "context": context,
+            "task_id": self.task_id,
+            "workflow_metadata": self.metadata,
+        }
+
+    def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a completed-result dict for the workflow runner."""
+        return {
+            "status": "completed",
+            "output": result,
+            "execution_time": self.get_execution_time(),
+            "agent": self.agent_type,
+        }
+
+    def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
+        """Build a failed-result dict for the workflow runner."""
+        return {
+            "status": "failed",
+            "error": error_msg,
+            "agent": self.agent_type,
+        }
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dict (#7124).
