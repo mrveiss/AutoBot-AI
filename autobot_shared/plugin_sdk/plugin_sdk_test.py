@@ -456,6 +456,7 @@ async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, c
 
     monkeypatch.delenv("TEST_REQ_LOAD_FAIL", raising=False)
 
+    PluginRegistry().clear()
     loader = PluginLoader([])
     manifest = _make_manifest(
         required_env=[
@@ -475,10 +476,7 @@ async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, c
         result = await loader.load_plugin(manifest)
 
     assert result is None
-    assert any(
-        "TEST_REQ_LOAD_FAIL" in record.message
-        for record in caplog.records
-    )
+    assert "TEST_REQ_LOAD_FAIL" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -509,10 +507,7 @@ async def test_load_plugin_succeeds_with_optional_env_missing(monkeypatch, caplo
         plugin = await loader.load_plugin(manifest)
 
     assert plugin is not None
-    assert any(
-        "TEST_OPT_LOAD_OK" in record.message
-        for record in caplog.records
-    )
+    assert "TEST_OPT_LOAD_OK" in caplog.text
 
 
 @pytest.mark.asyncio
