@@ -104,7 +104,7 @@
       <header class="content-header">
         <div class="header-left">
           <h2>{{ currentCategoryLabel }}</h2>
-          <span class="subtitle">{{ t('security.secretsManager.credentialCount', { count: filteredSecrets.length }) }}</span>
+          <span class="subtitle">{{ t('security.secretsManager.credentialCount', { count: filteredSecrets.length }, filteredSecrets.length) }}</span>
         </div>
         <div class="header-actions">
           <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')">
