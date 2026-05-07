@@ -30,6 +30,7 @@ import type {
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
+import { findProbeByName } from '@/composables/useHealthProbeRegistry'
 
 const logger = createLogger('useBatchProcessing')
 
@@ -268,8 +269,9 @@ export function useBatchProcessingApi() {
         async () => {
           const response = await api.get(`${getApiBase()}/system/health`)
           const payload = await response.json()
-          const probe = (payload?.probes ?? []).find(
-            (p: { name: string }) => p.name === 'batch_jobs'
+          const probe = await findProbeByName<{ name: string; status?: string; data?: Record<string, unknown>; detail?: string }>(
+            payload?.probes,
+            'batch_jobs'
           )
           if (!probe) {
             return {
