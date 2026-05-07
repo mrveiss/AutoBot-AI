@@ -102,22 +102,20 @@
 # ============================================================
 - name: "Browser | Install Playwright system dependencies"
   apt:
-    name:
-      - python3
-      - python3-pip
-      - python3-venv
-      - libnss3
-      - libatk1.0-0
-      - libatk-bridge2.0-0
-      - libcups2
-      - libdrm2
-      - libxkbcommon0
-      - libxcomposite1
-      - libxdamage1
-      - libxfixes3
-      - libxrandr2
-      - libgbm1
-      - libasound2
+    # #7207: Ubuntu 24.04 (noble) renamed several libs with `t64` suffix as
+    # part of the time_t 64-bit transition. libasound2 → libasound2t64 (the
+    # transitional virtual package is missing on arm64 noble). Other libs
+    # in this list kept their original names — only libasound2 needs the
+    # conditional rename for now.
+    name: >-
+      {{ ['python3', 'python3-pip', 'python3-venv',
+          'libnss3', 'libatk1.0-0', 'libatk-bridge2.0-0',
+          'libcups2', 'libdrm2', 'libxkbcommon0',
+          'libxcomposite1', 'libxdamage1', 'libxfixes3',
+          'libxrandr2', 'libgbm1']
+          + (['libasound2t64']
+             if ansible_facts['distribution_release'] == 'noble'
+             else ['libasound2']) }}
     state: present
   become: yes
   tags: ['browser', 'packages']
