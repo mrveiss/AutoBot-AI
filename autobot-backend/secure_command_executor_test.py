@@ -29,12 +29,17 @@ class TestSecurityPolicy:
         assert "shutdown" in policy.forbidden_commands
         assert "reboot" in policy.forbidden_commands
 
-        # Check that dangerous patterns are populated
-        assert len(policy.dangerous_patterns) > 0
-
         # Check that allowed paths include common directories
         assert Path.home() in policy.allowed_paths
         assert Path("/tmp") in policy.allowed_paths
+
+        # #7147: dangerous_patterns moved off SecurityPolicy in #765 — they
+        # now live in security.command_patterns.DANGEROUS_PATTERNS (the
+        # canonical location used by check_dangerous_patterns()). Validate
+        # them at the canonical location instead of the deleted attribute.
+        from security.command_patterns import DANGEROUS_PATTERNS
+
+        assert len(DANGEROUS_PATTERNS) > 0
 
 
 class TestSecureCommandExecutor:
@@ -44,9 +49,7 @@ class TestSecureCommandExecutor:
         """Set up test fixtures"""
         self.executor = SecureCommandExecutor()
         self.mock_approval_callback = AsyncMock()
-        self.executor_with_callback = SecureCommandExecutor(
-            require_approval_callback=self.mock_approval_callback
-        )
+        self.executor_with_callback = SecureCommandExecutor(require_approval_callback=self.mock_approval_callback)
 
     def test_executor_initialization(self):
         """Test SecureCommandExecutor initializes correctly"""
@@ -61,9 +64,7 @@ class TestSecureCommandExecutor:
         policy = SecurityPolicy()
         callback = AsyncMock()
 
-        executor = SecureCommandExecutor(
-            policy=policy, require_approval_callback=callback, use_docker_sandbox=True
-        )
+        executor = SecureCommandExecutor(policy=policy, require_approval_callback=callback, use_docker_sandbox=True)
 
         assert executor.policy is policy
         assert executor.require_approval_callback is callback
@@ -90,27 +91,35 @@ class TestSecureCommandExecutor:
         assert self.executor._extract_command_name("'unclosed quote") == "'unclosed"
 
     def test_check_dangerous_patterns(self):
-        """Test dangerous pattern detection"""
+        """Test dangerous pattern detection.
+
+        #7147: post-#765 refactor, _check_dangerous_patterns returns the
+        list of human-readable pattern *descriptions* (not regex strings)
+        from the centralized DANGEROUS_REGEX_PATTERNS table. Updated
+        assertions match the descriptions emitted by command_patterns.py.
+        """
         # Safe command should have no dangerous patterns
         assert self.executor._check_dangerous_patterns("echo hello") == []
 
         # Dangerous rm command
         patterns = self.executor._check_dangerous_patterns("rm -rf /")
         assert len(patterns) > 0
-        assert any("rm\\s+-rf\\s+/" in pattern for pattern in patterns)
+        assert any("rm -rf /" in p or "Recursive delete" in p for p in patterns)
 
         # Command with /etc/passwd access
         patterns = self.executor._check_dangerous_patterns("cat /etc/passwd")
         assert len(patterns) > 0
-        assert any("/etc/passwd" in pattern for pattern in patterns)
+        assert any("Password file access" in p or "/etc/passwd" in p for p in patterns)
 
         # Fork bomb
         patterns = self.executor._check_dangerous_patterns(":(){ :|:& };:")
         assert len(patterns) > 0
+        assert any("Fork bomb" in p for p in patterns)
 
         # Command substitution
         patterns = self.executor._check_dangerous_patterns("echo $(rm -rf /)")
         assert len(patterns) > 0
+        assert any("Command substitution" in p or "Recursive delete" in p for p in patterns)
 
     def test_assess_command_risk_safe(self):
         """Test risk assessment for safe commands"""
@@ -223,9 +232,7 @@ class TestSecureCommandExecutor:
     @pytest.mark.asyncio
     async def test_request_approval_no_callback(self):
         """Test approval request without callback"""
-        result = await self.executor._request_approval(
-            "rm file.txt", CommandRisk.HIGH, ["High-risk command: rm"]
-        )
+        result = await self.executor._request_approval("rm file.txt", CommandRisk.HIGH, ["High-risk command: rm"])
 
         # Should deny by default when no callback is set
         assert result is False
@@ -317,9 +324,7 @@ class TestSecureCommandExecutor:
             mock_subprocess.return_value = mock_process
 
             # Force approval for safe command
-            result = await self.executor_with_callback.run_shell_command(
-                "echo hello", force_approval=True
-            )
+            result = await self.executor_with_callback.run_shell_command("echo hello", force_approval=True)
 
             assert result["status"] == "success"
             assert result["security"]["approved"] is True
