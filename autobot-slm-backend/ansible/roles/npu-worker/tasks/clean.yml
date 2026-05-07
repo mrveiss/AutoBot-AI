@@ -10,43 +10,31 @@
 # pre-rename leftovers.
 #
 # Wrong-node deletions of CURRENT canonical dirs gate on the shared
-# `role_*_active` facts from inventory/group_vars/all.yml (#7031).
+# `role_*_active` facts from inventory/group_vars/all.yml (#7050).
+#
+# #7058: legacy/wrong-node tasks delegated to _shared/tasks/.
 
-- name: "NPU Worker | Clean: legacy npu-worker dir (old name)"
-  ansible.builtin.file:
-    path: /opt/autobot/npu-worker
-    state: absent
-  tags: ['clean']
+- name: "NPU Worker | Clean: legacy dirs (unconditional)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_legacy_dir.yml
+  loop:
+    - npu-worker
+    - browser-service
+    - ai-stack
+  loop_control:
+    loop_var: _legacy_dir
+  vars:
+    caller_role: "NPU Worker"
+    dir_name: "{{ _legacy_dir }}"
 
-- name: "NPU Worker | Clean: wrong-node autobot-backend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-backend
-    state: absent
-  when: not (role_backend_active | bool)
-  tags: ['clean']
-
-- name: "NPU Worker | Clean: wrong-node autobot-frontend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-frontend
-    state: absent
-  when: not (role_frontend_active | bool)
-  tags: ['clean']
-
-- name: "NPU Worker | Clean: wrong-node autobot-slm-backend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-slm-backend
-    state: absent
-  when: not (role_slm_active | bool)
-  tags: ['clean']
-
-- name: "NPU Worker | Clean: legacy browser-service dir"
-  ansible.builtin.file:
-    path: /opt/autobot/browser-service
-    state: absent
-  tags: ['clean']
-
-- name: "NPU Worker | Clean: legacy ai-stack dir"
-  ansible.builtin.file:
-    path: /opt/autobot/ai-stack
-    state: absent
-  tags: ['clean']
+- name: "NPU Worker | Clean: wrong-node dirs (gated on role-active facts)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_wrong_node_dir.yml
+  loop:
+    - { dir_name: "autobot-backend",     role_check_fact: "role_backend_active" }
+    - { dir_name: "autobot-frontend",    role_check_fact: "role_frontend_active" }
+    - { dir_name: "autobot-slm-backend", role_check_fact: "role_slm_active" }
+  loop_control:
+    loop_var: _wrong_node
+  vars:
+    caller_role: "NPU Worker"
+    dir_name: "{{ _wrong_node.dir_name }}"
+    role_check_fact: "{{ _wrong_node.role_check_fact }}"

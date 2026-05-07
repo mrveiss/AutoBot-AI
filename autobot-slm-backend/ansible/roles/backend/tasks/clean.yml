@@ -14,46 +14,34 @@
 # permission_rules.yaml which permission_matcher.py reads at runtime.
 #
 # Wrong-node deletions of CURRENT canonical dirs gate on the shared
-# `role_*_active` facts from inventory/group_vars/all.yml (#7031). These
+# `role_*_active` facts from inventory/group_vars/all.yml (#7050). These
 # facts mirror the provision gates' role-detection logic exactly, so
 # cleanup never wipes a role's dir on a host where that role is also
 # deployed (single-host or co-located).
+#
+# #7058: legacy/wrong-node tasks delegated to _shared/tasks/.
 
-- name: "Backend | Clean: legacy npu-worker dir"
-  ansible.builtin.file:
-    path: /opt/autobot/npu-worker
-    state: absent
-  tags: ['clean']
+- name: "Backend | Clean: legacy dirs (unconditional)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_legacy_dir.yml
+  loop:
+    - npu-worker
+    - browser-service
+    - ai-stack
+    - autobot-user-backend
+  loop_control:
+    loop_var: _legacy_dir
+  vars:
+    caller_role: "Backend"
+    dir_name: "{{ _legacy_dir }}"
 
-- name: "Backend | Clean: legacy browser-service dir"
-  ansible.builtin.file:
-    path: /opt/autobot/browser-service
-    state: absent
-  tags: ['clean']
-
-- name: "Backend | Clean: legacy ai-stack dir"
-  ansible.builtin.file:
-    path: /opt/autobot/ai-stack
-    state: absent
-  tags: ['clean']
-
-- name: "Backend | Clean: legacy autobot-user-backend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-user-backend
-    state: absent
-  tags: ['clean']
-
-
-- name: "Backend | Clean: wrong-node autobot-slm-frontend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-slm-frontend
-    state: absent
-  when: not (role_slm_active | bool)
-  tags: ['clean']
-
-- name: "Backend | Clean: wrong-node autobot-slm-backend dir"
-  ansible.builtin.file:
-    path: /opt/autobot/autobot-slm-backend
-    state: absent
-  when: not (role_slm_active | bool)
-  tags: ['clean']
+- name: "Backend | Clean: wrong-node SLM dirs (gated on role_slm_active)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/clean_wrong_node_dir.yml
+  loop:
+    - autobot-slm-frontend
+    - autobot-slm-backend
+  loop_control:
+    loop_var: _wrong_node_dir
+  vars:
+    caller_role: "Backend"
+    dir_name: "{{ _wrong_node_dir }}"
+    role_check_fact: "role_slm_active"

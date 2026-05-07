@@ -65,9 +65,18 @@ jobs:
         run: |
           python3 tests/check_role_facts_synced.py
 
+      - name: "Run clean.yml include_tasks loops test (#7058)"
+        working-directory: autobot-slm-backend/ansible
+        # #7058: each role's clean.yml is now a thin include_tasks loop over
+        # roles/_shared/tasks/clean_*_dir.yml. Test in --check mode to catch
+        # typos in loop_var/vars wiring before they reach a real host.
+        run: |
+          ansible-playbook --check --connection=local -i 'localhost,' tests/playbooks/test_clean_yml_loops.yml
+
       - name: Lint test playbook + inventory YAML
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
