@@ -117,8 +117,11 @@ class TestWorkerNodeRefactored:
 
         result = await worker_node.execute_task(task_payload)
 
+        # #7154: worker_node now wraps every response in a {status, message,
+        # data} envelope. The actual response sits at result["data"]["response"].
         assert result["status"] == "success"
-        assert "response" in result
+        assert "data" in result
+        assert "response" in result["data"]
         worker_node.llm_interface.chat_completion.assert_called_once()
         worker_node.security_layer.audit_log.assert_called()
 
@@ -137,8 +140,10 @@ class TestWorkerNodeRefactored:
 
         result = await worker_node.execute_task(task_payload)
 
+        # #7154: worker_node envelope — actual results at result["data"]["results"].
         assert result["status"] == "success"
-        assert "results" in result
+        assert "data" in result
+        assert "results" in result["data"]
         worker_node.knowledge_base.search.assert_called_once_with("test query", 5)
 
     @pytest.mark.asyncio
