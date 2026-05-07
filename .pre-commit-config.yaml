@@ -293,6 +293,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks new top-level dataclass declarations of WorkflowStep/AgentTask/WorkflowPlan outside autobot_shared/workflow/types.py; subclasses and aliases are allowed"
 
+  # No tag-pinned 3rd-party GitHub Actions (Issue #7120, preventive for #7091)
+  - repo: local
+    hooks:
+      - id: no-tag-pinned-action
+        name: No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action
+        language: script
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+        pass_filenames: true
+        stages: [pre-commit]
+        description: "Blocks tag-pinned `uses: <org>/<repo>@vN` for non-actions/* orgs in workflows/composite actions; SHA pins required for supply-chain immutability"
+
   # No print()/console.* in production code (Issue #1082)
   - repo: local
     hooks:
