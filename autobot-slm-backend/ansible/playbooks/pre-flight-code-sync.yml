@@ -43,7 +43,7 @@
 
     - name: "[PRE-FLIGHT] Get code_source commit before sync"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
       register: pre_sync_commit
       changed_when: false
       tags: [always]
@@ -83,7 +83,7 @@
 
     - name: "[PRE-FLIGHT] Show code_source age when sync skipped"
       ansible.builtin.command:
-        cmd: "git -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
+        cmd: "git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
       register: code_source_age
       changed_when: false
       when: github_sync is failed
@@ -97,14 +97,14 @@
 
     - name: "[PRE-FLIGHT] Get current deploy commit"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%h %s'
       register: deploy_info
       changed_when: false
       tags: [always]
 
     - name: "[PRE-FLIGHT] Count commits advanced during sync"
       ansible.builtin.command:
-        cmd: git -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
+        cmd: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
       register: sync_commit_count
       changed_when: false
       when: github_sync is not failed
