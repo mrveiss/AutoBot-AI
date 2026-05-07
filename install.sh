@@ -522,8 +522,15 @@ ansible_deployment() {
     # is the variable consulted by provision-fleet-roles.yml's role gates;
     # node_role (singular) is preserved for backward compat.
     cat > "${inventory}" << 'INVENTORY'
-# AutoBot localhost inventory for self-deploy (Issue #1294, #6600)
+# AutoBot localhost inventory for self-deploy (Issue #1294, #6600, #7162)
 all:
+  vars:
+    # #7162: network_subnet/network_gateway/slm_host MUST be defined here so
+    # firewall rules in group_vars/slm.yml resolve. Match slm-nodes.yml's
+    # lookup-with-fallback pattern: env first, then secrets file, then default.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
+    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
   hosts:
     00-SLM-Manager:
       ansible_connection: local
