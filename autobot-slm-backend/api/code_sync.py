@@ -34,6 +34,8 @@ from models.schemas import (
     CodeSyncStatusResponse,
     CodeVersionNotification,
     CodeVersionNotificationResponse,
+    DriftResolveRequest,
+    DriftResolveResponse,
     FileDriftReport,
     FleetSyncJobStatus,
     FleetSyncNodeStatus,
@@ -426,6 +428,74 @@ async def get_file_drift(
     )
 
     return FileDriftReport(**report)
+
+
+@router.post("/drift/resolve", response_model=DriftResolveResponse)
+async def resolve_drift(
+    request: DriftResolveRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+) -> DriftResolveResponse:
+    """
+    Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
+
+    Drives the same `_rsync_component_local()` used by SLM self-sync — pulls
+    files from the local code_source checkout and overwrites the deployed copy.
+    Used by the CodeSyncView "Resync from Source" button to clear drift in one
+    click (instead of forcing the user to find the SLM self-node and trigger a
+    full /nodes/{id}/sync).
+
+    Body:
+        component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
+
+    Returns DriftResolveResponse with success flag + rsync output snippet.
+    """
+    if request.component not in ALLOWED_COMPONENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid component '{request.component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
+        )
+
+    try:
+        source_dir = get_default_source_dir(request.component)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Failed to determine source path") from exc
+    deployed_dir = get_default_deployed_dir(request.component)
+
+    # source_dir = /opt/autobot/code_source/<component>; _rsync_component_local
+    # constructs `{source_path}/{component}/` so pass the parent.
+    source_root = str(Path(source_dir).parent)
+
+    excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
+    excludes = excludes_map.get(
+        request.component,
+        ["__pycache__", "*.pyc", ".git", "node_modules", "dist", "venv", "*.log"],
+    )
+
+    logger.info(
+        "drift resolve: rsync source=%s/%s deployed=%s",
+        source_root,
+        request.component,
+        deployed_dir,
+    )
+
+    ok, msg = await _rsync_component_local(source_root, request.component, excludes)
+
+    if not ok:
+        return DriftResolveResponse(
+            success=False,
+            component=request.component,
+            message=msg or "rsync failed",
+            source_dir=source_dir,
+            deployed_dir=deployed_dir,
+        )
+
+    return DriftResolveResponse(
+        success=True,
+        component=request.component,
+        message=f"Resynced {request.component} from code_source",
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+    )
 
 
 @router.post("/refresh", response_model=CodeSyncRefreshResponse)

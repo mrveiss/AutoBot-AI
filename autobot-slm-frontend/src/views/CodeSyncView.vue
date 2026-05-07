@@ -65,6 +65,7 @@ const showCodeSourceModal = ref(false)
 // Drift detection state (Issue #2834)
 const driftReport = ref<FileDriftReport | null>(null)
 const isDriftLoading = ref(false)
+const isResolvingDrift = ref(false) // #7149: separate from drift-check spinner
 const showDriftDetails = ref(false)
 const selectedDriftComponent = ref('autobot-slm-backend')
 
@@ -377,6 +378,23 @@ async function handleCheckDrift(): Promise<void> {
   }
 }
 
+// #7149: Resync the selected component from code_source/, then re-check drift.
+async function handleResolveDrift(): Promise<void> {
+  if (!driftReport.value?.drift_detected) return
+  isResolvingDrift.value = true
+  try {
+    const result = await codeSync.resolveDrift(selectedDriftComponent.value)
+    if (result?.success) {
+      successMessage.value = `Resynced ${result.component} from code_source`
+      // Re-run drift check to confirm resolution
+      await handleCheckDrift()
+    }
+    // Errors are surfaced via codeSync.error already
+  } finally {
+    isResolvingDrift.value = false
+  }
+}
+
 // =============================================================================
 // Lifecycle
 // =============================================================================
@@ -670,14 +688,36 @@ onUnmounted(() => {
           Deployed: <code class="font-mono">{{ driftReport.deployed_dir }}</code>
         </div>
 
-        <!-- Toggle details button -->
-        <button
-          v-if="driftReport.drift_detected"
-          @click="showDriftDetails = !showDriftDetails"
-          class="text-sm text-primary-600 hover:text-primary-800 font-medium mb-3"
-        >
-          {{ showDriftDetails ? 'Hide details' : 'Show details' }}
-        </button>
+        <!-- Action row: Resync (#7149) + Toggle details -->
+        <div v-if="driftReport.drift_detected" class="flex items-center gap-3 mb-3">
+          <button
+            @click="handleResolveDrift"
+            :disabled="isResolvingDrift || isDriftLoading"
+            class="btn btn-primary flex items-center gap-2 text-sm"
+            :title="`Run rsync from ${driftReport.source_dir} to ${driftReport.deployed_dir}`"
+          >
+            <svg
+              :class="['w-4 h-4', isResolvingDrift ? 'animate-spin' : '']"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {{ isResolvingDrift ? 'Resyncing...' : 'Resync from Source' }}
+          </button>
+          <button
+            @click="showDriftDetails = !showDriftDetails"
+            class="text-sm text-primary-600 hover:text-primary-800 font-medium"
+          >
+            {{ showDriftDetails ? 'Hide details' : 'Show details' }}
+          </button>
+        </div>
 
         <!-- Drifted files table -->
         <div v-if="showDriftDetails && driftReport.drifted_files.length > 0" class="overflow-x-auto">
