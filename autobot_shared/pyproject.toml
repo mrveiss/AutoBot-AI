@@ -35,6 +35,14 @@ dependencies = [
     "opentelemetry-instrumentation-aiohttp-client>=0.62b1",
 ]
 
+[project.optional-dependencies]
+# Test deps (pytest, pytest-asyncio) used by autobot_shared/**/*_test.py.
+# Install with: pip install autobot_shared[test]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*", "*_test*"]
