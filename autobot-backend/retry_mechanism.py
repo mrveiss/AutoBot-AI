@@ -81,6 +81,11 @@ class RetryConfig:
         SyntaxError,
         TypeError,
         ValueError,  # Usually indicates bad input, not transient failure
+        # #7010 cluster 5: NotImplementedError marks a code stub or unwired
+        # path (e.g., #2869 agent dispatcher). Retrying just delays the
+        # inevitable — and obscures intermediate state for tests that use
+        # NotImplementedError as a halt-after-side-effects marker.
+        NotImplementedError,
     )
 
 
