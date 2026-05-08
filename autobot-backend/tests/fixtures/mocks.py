@@ -19,6 +19,7 @@ Provides mock implementations of core components for tests and the
 - MockWorkerNode       - Mock NPU/worker node for distributed-flow tests.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -131,6 +132,163 @@ def make_llm_response(
 # New code should use `make_llm_response` directly.
 def _build_mock_response(content: str):
     return make_llm_response(content=content)
+
+
+def make_async_redis(
+    *,
+    get_returns: Any = None,
+    set_returns: Any = True,
+    setex_returns: Any = True,
+    delete_returns: int = 1,
+    expire_returns: bool = True,
+    exists_returns: int = 0,
+    incr_returns: int = 1,
+    decr_returns: int = 0,
+    keys_returns: Optional[List[bytes]] = None,
+    ttl_returns: int = -1,
+    # Hash ops
+    hget_returns: Any = None,
+    hset_returns: int = 1,
+    hgetall_returns: Optional[Dict[bytes, bytes]] = None,
+    hkeys_returns: Optional[List[bytes]] = None,
+    hvals_returns: Optional[List[bytes]] = None,
+    hdel_returns: int = 1,
+    hexists_returns: int = 0,
+    # Set ops
+    sadd_returns: int = 1,
+    srem_returns: int = 1,
+    smembers_returns: Optional[set] = None,
+    sismember_returns: bool = False,
+    # List ops
+    lrange_returns: Optional[List[bytes]] = None,
+    lpush_returns: int = 1,
+    rpush_returns: int = 1,
+    llen_returns: int = 0,
+    # Sorted-set ops
+    zadd_returns: int = 1,
+    zcard_returns: int = 0,
+    zrange_returns: Optional[List[bytes]] = None,
+    zrangebyscore_returns: Optional[List[bytes]] = None,
+    zrevrange_returns: Optional[List[bytes]] = None,
+    zremrangebyrank_returns: int = 0,
+    # Pub/sub
+    publish_returns: int = 0,
+    **extra_methods: Any,
+) -> "AsyncMock":
+    """Build an async-redis-shaped ``AsyncMock`` for tests (canonical, #7264).
+
+    Replaces the 11+ ad-hoc ``_make_redis*()`` helpers across the test
+    tree. All redis methods are pre-configured as ``AsyncMock`` so
+    ``await redis.X(...)`` works correctly — the same lesson as #7216
+    (``return_value=`` alone isn't awaitable).
+
+    Defaults pick the common "empty/healthy" shape:
+
+      - get/hget/hgetall/keys/smembers/lrange/zrange → empty/None
+      - set/setex/expire → True
+      - sadd/srem/zadd/lpush/rpush/incr/hset/delete → ``1`` (one element changed)
+      - sismember/hexists/exists → ``0/False`` (not present)
+
+    Override per call via the corresponding ``X_returns`` kwarg. For methods
+    not pre-configured (e.g. project-specific Redis modules), pass via
+    ``**extra_methods`` — each becomes ``AsyncMock(return_value=value)``::
+
+        redis = make_async_redis(get_returns=b"hello", xadd=("stream", "1-0"))
+
+    Args:
+        \\*_returns: per-method return value overrides (see method names above).
+        \\**extra_methods: arbitrary additional method names → return values.
+
+    Returns:
+        An ``AsyncMock`` matching the redis-py async client surface.
+    """
+    from unittest.mock import AsyncMock
+
+    redis = AsyncMock()
+
+    # Defaults — picks the empty/healthy shape callers usually want.
+    redis.get = AsyncMock(return_value=get_returns)
+    redis.set = AsyncMock(return_value=set_returns)
+    redis.setex = AsyncMock(return_value=setex_returns)
+    redis.delete = AsyncMock(return_value=delete_returns)
+    redis.expire = AsyncMock(return_value=expire_returns)
+    redis.exists = AsyncMock(return_value=exists_returns)
+    redis.incr = AsyncMock(return_value=incr_returns)
+    redis.decr = AsyncMock(return_value=decr_returns)
+    redis.keys = AsyncMock(return_value=keys_returns or [])
+    redis.ttl = AsyncMock(return_value=ttl_returns)
+
+    redis.hget = AsyncMock(return_value=hget_returns)
+    redis.hset = AsyncMock(return_value=hset_returns)
+    redis.hgetall = AsyncMock(return_value=hgetall_returns or {})
+    redis.hkeys = AsyncMock(return_value=hkeys_returns or [])
+    redis.hvals = AsyncMock(return_value=hvals_returns or [])
+    redis.hdel = AsyncMock(return_value=hdel_returns)
+    redis.hexists = AsyncMock(return_value=hexists_returns)
+
+    redis.sadd = AsyncMock(return_value=sadd_returns)
+    redis.srem = AsyncMock(return_value=srem_returns)
+    redis.smembers = AsyncMock(return_value=smembers_returns or set())
+    redis.sismember = AsyncMock(return_value=sismember_returns)
+
+    redis.lrange = AsyncMock(return_value=lrange_returns or [])
+    redis.lpush = AsyncMock(return_value=lpush_returns)
+    redis.rpush = AsyncMock(return_value=rpush_returns)
+    redis.llen = AsyncMock(return_value=llen_returns)
+
+    redis.zadd = AsyncMock(return_value=zadd_returns)
+    redis.zcard = AsyncMock(return_value=zcard_returns)
+    redis.zrange = AsyncMock(return_value=zrange_returns or [])
+    redis.zrangebyscore = AsyncMock(return_value=zrangebyscore_returns or [])
+    redis.zrevrange = AsyncMock(return_value=zrevrange_returns or [])
+    redis.zremrangebyrank = AsyncMock(return_value=zremrangebyrank_returns)
+
+    redis.publish = AsyncMock(return_value=publish_returns)
+
+    for method_name, value in extra_methods.items():
+        setattr(redis, method_name, AsyncMock(return_value=value))
+
+    return redis
+
+
+@contextmanager
+def patch_async_redis(target: str, redis: Optional["AsyncMock"] = None):
+    """Context manager: patch ``get_async_redis_client`` at ``target`` with
+    correct ``AsyncMock`` wrapping (canonical, #7264).
+
+    Production code does ``await get_async_redis_client(database="...")``,
+    so the patched callable must itself be an ``AsyncMock`` whose call
+    returns the redis mock when awaited. Bare ``patch(target,
+    return_value=redis)`` returns the default AsyncMock when awaited —
+    that's the #7216 bug. This helper applies the correct shape and
+    yields the **inner redis mock** so callers can configure per-call
+    behavior::
+
+        with patch_async_redis("api.foo.get_async_redis_client") as redis:
+            redis.get = AsyncMock(return_value=b"hit")
+            result = await foo()
+            redis.get.assert_awaited_once_with("key")
+
+    Or pass a pre-configured redis::
+
+        redis = make_async_redis(get_returns=b"value")
+        with patch_async_redis("api.foo.get_async_redis_client", redis=redis):
+            ...
+
+    Args:
+        target: dotted path to ``get_async_redis_client`` on the module
+            that production code imports it from.
+        redis: pre-configured ``AsyncMock`` (default: ``make_async_redis()``).
+
+    Yields:
+        The redis mock — production's ``await get_async_redis_client(...)``
+        receives this same object.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    redis = redis if redis is not None else make_async_redis()
+    with patch(target, new=AsyncMock(return_value=redis)):
+        yield redis
 
 
 class MockLLMService:
@@ -324,4 +482,6 @@ __all__ = [
     "MockKnowledgeBase",
     "MockWorkerNode",
     "make_llm_response",
+    "make_async_redis",
+    "patch_async_redis",
 ]
