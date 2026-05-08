@@ -134,8 +134,43 @@ def is_test_path(path: Path) -> bool:
     return path.name.startswith("test_") and path.suffix == ".py"
 
 
+# Entry-point script conventions — these are designed to be invoked from
+# the command line, not imported, so 0 callers is correct-by-design.
+ENTRY_POINT_NAME_PREFIXES = ("run_",)
+ENTRY_POINT_DIR_NAMES = frozenset({"demos", "scripts", "bin"})
+
+
+def is_entry_point_script(path: Path) -> bool:
+    """True for command-line runner scripts that don't expect callers (#7128b).
+
+    Examples flagged:
+    - autobot-backend/intelligence/demos/run_intelligent_agent.py (run_*.py prefix)
+    - any *.py whose path includes a `demos/`, `scripts/`, or `bin/` segment.
+
+    Match rule: ``path.parts`` must contain one of `ENTRY_POINT_DIR_NAMES`,
+    OR `path.name` must start with one of `ENTRY_POINT_NAME_PREFIXES`. We
+    use parts-based matching so relative paths starting with the convention
+    (e.g. ``bin/server.py``) are caught alongside nested ones.
+    """
+    if path.suffix != ".py":
+        return False
+    if path.name.startswith(ENTRY_POINT_NAME_PREFIXES):
+        return True
+    return any(part in ENTRY_POINT_DIR_NAMES for part in path.parts)
+
+
 def should_skip_path(path: Path) -> bool:
-    s = str(path)
+    """Skip caches/build dirs/worktrees/migrations.
+
+    Match against the *relative* path under REPO_ROOT so that running the
+    audit from inside a worktree doesn't cause every file to false-positive
+    on the `.worktrees/` fragment in the absolute path (#7128b).
+    """
+    try:
+        rel = path.relative_to(REPO_ROOT)
+        s = "/" + str(rel)
+    except ValueError:
+        s = str(path)
     return any(frag in s for frag in SKIP_PATH_FRAGMENTS)
 
 
@@ -310,6 +345,11 @@ def scan() -> list[Finding]:
         for pattern in SOURCE_GLOBS:
             for f in base.rglob(pattern):
                 if should_skip_path(f) or is_test_path(f):
+                    continue
+                # #7128b: entry-point scripts (run_*.py, /demos/, /scripts/,
+                # /bin/) are designed to be invoked from CLI; 0 callers is
+                # by-design, not unwired.
+                if is_entry_point_script(f):
                     continue
                 # #7109: skip files registered via router_registry tuples;
                 # they're wired at runtime via dotted-path lookup which the
