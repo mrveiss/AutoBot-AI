@@ -57,19 +57,56 @@ OUTPUT_PATH = REPO_ROOT / "autobot-frontend" / "src" / "types" / "_generated" / 
 # ---------------------------------------------------------------------------
 
 # Each entry: (module path, attr name)
+#
+# How to extend (#7226 cookbook):
+#
+#   1. Identify the canonical Python source. For dataclasses this is a
+#      `@dataclass`; for enums this is a `class X(Enum):` or
+#      `class X(str, Enum):`. Pydantic models are NOT supported — convert
+#      to a dataclass first or wait for OpenAPI-based codegen (deferred).
+#
+#   2. Append `(module_path, ClassName)` to MANIFEST below. The module
+#      must be importable from the repo root with `autobot_shared/` and
+#      `autobot-backend/` on sys.path.
+#
+#   3. Re-run codegen and commit the regenerated TS:
+#        python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py
+#
+#   4. Update frontend imports to consume from `@/types/_generated/workflow`
+#      (re-export from `@/types/workflowTemplates` if a stable public path
+#      is preferred).
+#
+#   5. CI's `frontend-codegen-drift` job will fail if the committed file
+#      drifts from the source.
 MANIFEST: List[Tuple[str, str]] = [
     ("autobot_shared.workflow.types", "PromptSpec"),
     ("autobot_shared.workflow.types", "ExecutionStrategy"),
     ("autobot_shared.workflow.types", "WorkflowTask"),
     ("autobot_shared.workflow.types", "WorkflowPlan"),
+    # #7226: extend MANIFEST to cover hand-written types prone to drift
+    ("services.workflow_automation.models", "WorkflowStepStatus"),
+    ("autobot_shared.status_enums", "Severity"),  # exported as RiskLevel via alias below
 ]
 
 
+# Aliases emitted alongside their backing class — TypeScript can't have
+# two type names point at the same union literal without a duplication,
+# so we emit `export type RiskLevel = Severity;` after the source class.
+# Map: source class name → list of alias names to emit.
+ALIASES: Dict[str, List[str]] = {
+    "Severity": ["RiskLevel"],
+}
+
+
 def _ensure_autobot_shared_on_path() -> None:
-    """Add ``autobot_shared`` to sys.path so the script can import it standalone."""
+    """Add ``autobot_shared`` and ``autobot-backend`` to sys.path so the script
+    can import canonical and (#7226) backend modules standalone."""
     shared = REPO_ROOT / "autobot_shared"
     if str(shared.parent) not in sys.path:
         sys.path.insert(0, str(shared.parent))
+    backend = REPO_ROOT / "autobot-backend"
+    if backend.is_dir() and str(backend) not in sys.path:
+        sys.path.insert(0, str(backend))
 
 
 # ---------------------------------------------------------------------------
@@ -154,21 +191,29 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _render_enum(cls: type) -> str:
+def _render_enum(cls: type, source: str) -> str:
     """Emit a TypeScript string union for a Python Enum."""
     members = [f"  | '{m.value}'" for m in cls]
     body = "\n".join(members)
     return (
-        f"/** Generated from `autobot_shared.workflow.types.{cls.__name__}` */\n"
+        f"/** Generated from `{source}.{cls.__name__}` */\n"
         f"export type {cls.__name__} =\n{body};\n"
     )
 
 
-def _render_dataclass(cls: type, known_names: Set[str]) -> str:
+def _render_alias(name: str, target: str, source_cls: str) -> str:
+    """Emit a TypeScript type alias re-exporting an existing union."""
+    return (
+        f"/** Generated alias — same union as `{source_cls}` (#6689 / #7226) */\n"
+        f"export type {name} = {target};\n"
+    )
+
+
+def _render_dataclass(cls: type, known_names: Set[str], source: str) -> str:
     """Emit a TypeScript interface for a Python dataclass."""
     type_hints = typing.get_type_hints(cls, include_extras=False)
     lines = [
-        f"/** Generated from `autobot_shared.workflow.types.{cls.__name__}` */",
+        f"/** Generated from `{source}.{cls.__name__}` */",
         f"export interface {cls.__name__} {{",
     ]
     for f in dataclasses.fields(cls):
@@ -204,7 +249,7 @@ HEADER = """// AutoBot - AI-Powered Automation Platform
 def generate() -> str:
     """Run the manifest and produce the full TS output as a string."""
     _ensure_autobot_shared_on_path()
-    classes: List[type] = []
+    entries: List[Tuple[str, type]] = []
     for module_path, attr in MANIFEST:
         spec = importlib.util.find_spec(module_path)
         if spec is None:
@@ -213,18 +258,24 @@ def generate() -> str:
         cls = getattr(module, attr, None)
         if cls is None:
             raise SystemExit(f"{module_path}.{attr} not found")
-        classes.append(cls)
+        entries.append((module_path, cls))
 
-    known_names = {c.__name__ for c in classes}
+    known_names = {c.__name__ for _, c in entries}
+    # Aliases are also valid known names so dataclasses referencing them resolve.
+    for source, alias_list in ALIASES.items():
+        known_names.update(alias_list)
 
     parts: List[str] = [HEADER]
-    for cls in classes:
+    for module_path, cls in entries:
         if isinstance(cls, type) and issubclass(cls, Enum):
-            parts.append(_render_enum(cls))
+            parts.append(_render_enum(cls, module_path))
         elif dataclasses.is_dataclass(cls):
-            parts.append(_render_dataclass(cls, known_names))
+            parts.append(_render_dataclass(cls, known_names, module_path))
         else:
             raise SystemExit(f"Unsupported class kind: {cls!r}")
+        # Emit any aliases declared for this class
+        for alias_name in ALIASES.get(cls.__name__, []):
+            parts.append(_render_alias(alias_name, cls.__name__, cls.__name__))
     return "\n".join(parts)
 
 

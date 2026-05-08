@@ -12,6 +12,9 @@
 # months). Codegen + this guard makes the drift impossible to introduce
 # silently.
 #
+# #7226: extended path filter to cover all MANIFEST sources
+# (status_enums + workflow_automation models).
+#
 # Security: this workflow does NOT interpolate any untrusted GitHub
 # event data (no issue titles, PR bodies, commit messages, head_ref,
 # etc.) into run: commands. All inputs are static repo paths.
@@ -21,7 +24,11 @@ name: frontend-codegen-drift
 on:
   pull_request:
     paths:
+      # Canonical sources covered by MANIFEST (#7122 / #7226)
       - 'autobot_shared/workflow/types.py'
+      - 'autobot_shared/status_enums.py'
+      - 'autobot-backend/services/workflow_automation/models.py'
+      # Codegen output + tooling
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       - '.github/workflows/frontend-codegen-drift.yml'
@@ -29,6 +36,8 @@ on:
     branches: [Dev_new_gui]
     paths:
       - 'autobot_shared/workflow/types.py'
+      - 'autobot_shared/status_enums.py'
+      - 'autobot-backend/services/workflow_automation/models.py'
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
 

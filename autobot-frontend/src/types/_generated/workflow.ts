@@ -73,3 +73,26 @@ export interface WorkflowPlan {
   created_at_epoch: number | null;
   metadata: Record<string, unknown>;
 }
+
+/** Generated from `services.workflow_automation.models.WorkflowStepStatus` */
+export type WorkflowStepStatus =
+  | 'pending'
+  | 'waiting_approval'
+  | 'approved'
+  | 'executing'
+  | 'completed'
+  | 'skipped'
+  | 'failed'
+  | 'paused';
+
+/** Generated from `autobot_shared.status_enums.Severity` */
+export type Severity =
+  | 'unknown'
+  | 'info'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'critical';
+
+/** Generated alias — same union as `Severity` (#6689 / #7226) */
+export type RiskLevel = Severity;

@@ -14,17 +14,23 @@
 
 export type TemplateCategory = 'security' | 'research' | 'development' | 'system_admin' | 'analysis' | 'community'
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'research' | 'security_scan' | 'install'
-export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 /**
- * Structured prompt spec — mirrors backend autobot_shared.workflow.PromptSpec (#6951 Phase 1b).
+ * Generated unions/types — single source of truth is the canonical Python
+ * (#7122 / #7226). Re-exported here so consumers keep a stable import path
+ * (`@/types/workflowTemplates`) regardless of how the backing classes are
+ * sourced (shared dataclasses, backend enums, etc.).
  *
- * #7122: re-exports the auto-generated definition from `_generated/workflow.ts`
- * so this hand-written file and the codegen output stay in lockstep. The
- * `frontend-codegen-drift` CI check fails if the generated file goes stale.
+ * The `frontend-codegen-drift` CI check fails if the generated file goes stale.
  */
-import type { PromptSpec, WorkflowTask, WorkflowPlan } from './_generated/workflow'
-export type { PromptSpec, WorkflowTask, WorkflowPlan }
+import type {
+  PromptSpec,
+  WorkflowTask,
+  WorkflowPlan,
+  WorkflowStepStatus,
+  RiskLevel,
+} from './_generated/workflow'
+export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
 
 /**
  * Static template step — matches backend `_template_step_dict()` from
@@ -47,24 +53,6 @@ export interface TemplateStep {
   tools_allowed: string[] | null
   tools_denied: string[]
 }
-
-/**
- * Runtime workflow step status — string union mirroring
- * `services/workflow_automation/models.py:WorkflowStepStatus`.
- *
- * #7123: declared here as the canonical types module. The previous local
- * declaration in `composables/useWorkflowBuilder.ts` is now a re-export
- * pointing at this definition (single source of truth).
- */
-export type WorkflowStepStatus =
-  | 'pending'
-  | 'waiting_approval'
-  | 'approved'
-  | 'executing'
-  | 'completed'
-  | 'skipped'
-  | 'failed'
-  | 'paused'
 
 /**
  * Runtime workflow step — matches backend
