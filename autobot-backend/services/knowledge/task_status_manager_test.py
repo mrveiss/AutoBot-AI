@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.knowledge.task_status_manager import (
-    TaskStatus,
+    TaskStatusRecord,
     TaskStatusManager,
 )
 
@@ -157,8 +157,8 @@ class TestTaskStatusManager:
 
     @pytest.mark.asyncio
     async def test_task_status_dataclass(self):
-        """Test TaskStatus dataclass."""
-        status = TaskStatus(
+        """Test TaskStatusRecord dataclass."""
+        status = TaskStatusRecord(
             task_id="test-123",
             status="running",
             message="Processing",
@@ -177,7 +177,7 @@ class TestTaskStatusManager:
         mock_redis_client.setex.side_effect = Exception("Redis connection failed")
 
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
-            status = TaskStatus(
+            status = TaskStatusRecord(
                 task_id=sample_task_id,
                 status="running",
                 message="Test",

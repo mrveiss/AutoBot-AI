@@ -119,8 +119,13 @@ class TaskArtifact:
 
 
 @dataclass
-class TaskStatus:
-    """Represents the current status of a task."""
+class A2ATaskStatus:
+    """A2A protocol task status (state + message + timestamp).
+
+    Renamed from TaskStatus for #6520 to disambiguate from the canonical
+    `autobot_shared.status_enums.TaskStatus` enum, which is a different
+    concept (lifecycle state enum vs. this dataclass tracking record).
+    """
 
     state: TaskState
     message: Optional[str] = None
@@ -146,7 +151,7 @@ class Task:
     """
 
     id: str
-    status: TaskStatus
+    status: A2ATaskStatus
     input: str
     context: Optional[Dict[str, Any]] = None
     artifacts: List[TaskArtifact] = field(default_factory=list)

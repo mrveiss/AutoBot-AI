@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import parse_utc_iso
 
 try:
@@ -46,17 +47,6 @@ ErrorCategory = None
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""
-
-
-class TaskStatus(Enum):
-    """Task execution status."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    RETRY = "retry"
 
 
 class TaskPriority(Enum):
