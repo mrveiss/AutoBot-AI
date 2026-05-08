@@ -31,6 +31,7 @@ from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
 from api.schemas_common import DataResponse
 from api.schemas_analytics import (
+    DateRangeParams,
     EvolutionAnalysisRequest,
     EvolutionAnalysisResponse,
     EvolutionQualitySnapshot,
@@ -333,8 +334,7 @@ def _build_timeline_response(
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_evolution_timeline(
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    date_range: DateRangeParams = Depends(),
     granularity: str = Query(
         "daily", description="Data granularity: hourly, daily, weekly, monthly"
     ),
@@ -351,6 +351,10 @@ async def get_evolution_timeline(
     Issue #3441: When source_id is provided, timeline snapshots are read from
     the ``evolution:{source_id}:`` key namespace so only that project's
     history is returned.
+
+    Issue #7110: ``start_date`` / ``end_date`` query params consolidated into
+    ``DateRangeParams`` ``Depends()``. The two query params are unchanged at
+    the HTTP boundary — only the Python signature shifts.
     """
     await _resolve_source_or_404(source_id)
     evolution_prefix, _snap, _pat = _build_evolution_prefixes(source_id)
@@ -368,7 +372,7 @@ async def get_evolution_timeline(
         )
 
     try:
-        start_ts, end_ts = _parse_date_range(start_date, end_date)
+        start_ts, end_ts = _parse_date_range(date_range.start_date, date_range.end_date)
         timeline_data = await asyncio.to_thread(
             _fetch_timeline_snapshots, redis_client, start_ts, end_ts, evolution_prefix
         )
@@ -381,7 +385,11 @@ async def get_evolution_timeline(
         )
         return JSONResponse(
             _build_timeline_response(
-                filtered_timeline, start_date, end_date, granularity, requested_metrics
+                filtered_timeline,
+                date_range.start_date,
+                date_range.end_date,
+                granularity,
+                requested_metrics,
             )
         )
 
