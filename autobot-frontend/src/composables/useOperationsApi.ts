@@ -23,7 +23,7 @@ import type {
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
 import { getApiBase } from '@/config/ssot-config'
-import { findProbeByName } from '@/composables/useHealthProbeRegistry'
+import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useOperationsApi')
 
@@ -117,53 +117,26 @@ export function useOperationsApi() {
      * `long_running` probe populates `data` with the four diagnostic fields
      * the UI consumes.
      */
-    async getHealth(): Promise<OperationsHealthResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const response = await api.get(`${getApiBase()}/system/health`)
-          const payload = await response.json()
-          const probe = await findProbeByName<{ name: string; status?: string; data?: Record<string, unknown>; detail?: string }>(
-            payload?.probes,
-            'long_running'
-          )
-          if (!probe) {
-            return {
-              status: 'unavailable' as const,
-              active_operations: 0,
-              total_operations: 0,
-              redis_connected: false,
-              background_processor_running: false,
-              message: 'long_running probe not registered'
-            }
-          }
-          const data = probe.data ?? {}
-          const status: OperationsHealthResponse['status'] =
-            probe.status === 'ok' ? 'healthy' : 'unavailable'
-          return {
-            status,
-            active_operations: Number(data.active_operations ?? 0),
-            total_operations: Number(data.total_operations ?? 0),
-            redis_connected: Boolean(data.redis_connected),
-            background_processor_running: Boolean(
-              data.background_processor_running
-            ),
-            message: probe.detail
-          }
-        },
-        {
-          errorMessage: 'Failed to check operations health',
-          fallbackValue: {
-            status: 'unavailable',
-            active_operations: 0,
-            total_operations: 0,
-            redis_connected: false,
-            background_processor_running: false,
-            message: 'Service unavailable'
-          },
-          silent: true
-        }
-      )
-    }
+    getHealth: useProbeBackedHealth<OperationsHealthResponse>({
+      probeName: 'long_running',
+      buildHealthy: (probe, data) => ({
+        status: 'healthy',
+        active_operations: Number(data.active_operations ?? 0),
+        total_operations: Number(data.total_operations ?? 0),
+        redis_connected: Boolean(data.redis_connected),
+        background_processor_running: Boolean(data.background_processor_running),
+        message: probe.detail,
+      }),
+      buildUnavailable: (message) => ({
+        status: 'unavailable',
+        active_operations: 0,
+        total_operations: 0,
+        redis_connected: false,
+        background_processor_running: false,
+        message,
+      }),
+      errorMessage: 'Failed to check operations health',
+    }),
   }
 }
 

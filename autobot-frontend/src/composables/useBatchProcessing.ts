@@ -30,7 +30,7 @@ import type {
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
 import { getApiBase } from '@/config/ssot-config'
-import { findProbeByName } from '@/composables/useHealthProbeRegistry'
+import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useBatchProcessing')
 
@@ -264,48 +264,24 @@ export function useBatchProcessingApi() {
      * `total_jobs` were never returned by the legacy backend response, so
      * the fallback values match the prior behaviour.
      */
-    async getHealth(): Promise<BatchHealthResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const response = await api.get(`${getApiBase()}/system/health`)
-          const payload = await response.json()
-          const probe = await findProbeByName<{ name: string; status?: string; data?: Record<string, unknown>; detail?: string }>(
-            payload?.probes,
-            'batch_jobs'
-          )
-          if (!probe) {
-            return {
-              status: 'unavailable' as const,
-              active_jobs: 0,
-              total_jobs: 0,
-              redis_connected: false,
-              message: 'batch_jobs probe not registered'
-            }
-          }
-          const data = probe.data ?? {}
-          const status: BatchHealthResponse['status'] =
-            probe.status === 'ok' ? 'healthy' : 'unavailable'
-          return {
-            status,
-            active_jobs: 0,
-            total_jobs: 0,
-            redis_connected: Boolean(data.redis_connected),
-            message: probe.detail
-          }
-        },
-        {
-          errorMessage: 'Failed to check batch service health',
-          fallbackValue: {
-            status: 'unavailable',
-            active_jobs: 0,
-            total_jobs: 0,
-            redis_connected: false,
-            message: 'Service unavailable'
-          },
-          silent: true
-        }
-      )
-    }
+    getHealth: useProbeBackedHealth<BatchHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: (probe, data) => ({
+        status: 'healthy',
+        active_jobs: 0,
+        total_jobs: 0,
+        redis_connected: Boolean(data.redis_connected),
+        message: probe.detail,
+      }),
+      buildUnavailable: (message) => ({
+        status: 'unavailable',
+        active_jobs: 0,
+        total_jobs: 0,
+        redis_connected: false,
+        message,
+      }),
+      errorMessage: 'Failed to check batch service health',
+    }),
   }
 }
 
