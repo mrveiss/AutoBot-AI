@@ -204,8 +204,26 @@ export interface WorkflowExecutionResult {
   details: Record<string, unknown>;
 }
 
-/** Workflow plan */
-export interface WorkflowPlan {
+/**
+ * Orchestrator workflow plan — preview returned from `/api/orchestrator/*`
+ * for the multi-agent planning surface.
+ *
+ * #7228: renamed from `WorkflowPlan` to disambiguate from the canonical
+ * runtime `WorkflowPlan` in `@/types/workflowTemplates` (which mirrors
+ * backend `autobot_shared.workflow.WorkflowPlan`). The two shapes serve
+ * different concerns:
+ *   - `OrchestratorWorkflowPlan` (this) — UI preview from the
+ *     orchestrator endpoint; partial fields, inline task shape, no
+ *     runtime state.
+ *   - `WorkflowPlan` (canonical, in `@/types/workflowTemplates`) —
+ *     full runtime execution plan with fallback_plans,
+ *     approval_required, dependencies_graph, and the richer task
+ *     field set inherited from `WorkflowTask`.
+ *
+ * Both exist legitimately; the rename prevents future contributors from
+ * accidentally treating them as interchangeable.
+ */
+export interface OrchestratorWorkflowPlan {
   plan_id: string;
   goal: string;
   strategy: ExecutionStrategy;
@@ -292,7 +310,7 @@ class WorkflowBuilderApiClient {
   async createWorkflowPlan(
     goal: string,
     context?: Record<string, unknown>
-  ): Promise<ApiResponse<{ status: string; plan: WorkflowPlan; task_count: number }>> {
+  ): Promise<ApiResponse<{ status: string; plan: OrchestratorWorkflowPlan; task_count: number }>> {
     return this.request(`${getApiBase()}/orchestrator/workflow/plan`, {
       method: 'POST',
       body: JSON.stringify({ goal, context }),
@@ -570,7 +588,7 @@ export function useWorkflowBuilder() {
   const activeWorkflows = ref<ActiveWorkflow[]>([]);
   const completedWorkflows = ref<ActiveWorkflow[]>([]);
   const currentWorkflow = ref<ActiveWorkflow | null>(null);
-  const workflowPlan = ref<WorkflowPlan | null>(null);
+  const workflowPlan = ref<OrchestratorWorkflowPlan | null>(null);
   const pendingApproval = ref<PlanApprovalRequest | null>(null);
 
   // Orchestration data
@@ -799,7 +817,7 @@ export function useWorkflowBuilder() {
   async function createPlan(
     goal: string,
     context?: Record<string, unknown>
-  ): Promise<WorkflowPlan | null> {
+  ): Promise<OrchestratorWorkflowPlan | null> {
     errors.value = [];
     return wrapLoading(async () => {
       const response = await apiClient.createWorkflowPlan(goal, context);
