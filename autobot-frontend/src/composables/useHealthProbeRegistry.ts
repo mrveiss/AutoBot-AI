@@ -23,10 +23,19 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useHealthProbeRegistry')
 
-interface ProbeLike {
+/**
+ * Shape of a single probe entry in the `/api/system/health` response payload.
+ *
+ * Exported (#7248) so consumers don't have to redeclare the inline literal
+ * `{ name: string; status?: string; data?: Record<string, unknown>; detail?: string }`
+ * type at every probe-lookup site. Extends-friendly: callers needing extra
+ * fields can declare `interface ExtendedProbe extends ProbeResponse { … }`.
+ */
+export interface ProbeResponse {
   name: string
-  status?: string
+  status?: 'ok' | 'degraded' | 'unavailable' | string
   data?: Record<string, unknown>
+  detail?: string
 }
 
 let _cache: Set<string> | null = null
@@ -77,7 +86,7 @@ export async function refreshProbeRegistry(): Promise<Set<string> | null> {
  * name against the canonical registry. A typo on the caller side surfaces
  * as a one-shot logger.warn instead of silently returning undefined.
  */
-export async function findProbeByName<T extends ProbeLike>(
+export async function findProbeByName<T extends ProbeResponse = ProbeResponse>(
   probes: T[] | null | undefined,
   name: string,
 ): Promise<T | undefined> {
