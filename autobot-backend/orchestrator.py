@@ -105,19 +105,14 @@ except ImportError:
             return {"error": "Agent manager not available", "agent_name": agent_name}
 
 
+from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
+
 try:
-    from workflow_scheduler import WorkflowStatus
     from workflow_templates import WorkflowStep
 
     WORKFLOW_TYPES_AVAILABLE = True
 except ImportError:
     WORKFLOW_TYPES_AVAILABLE = False
-
-    class WorkflowStatus(Enum):
-        SCHEDULED = "scheduled"
-        RUNNING = "running"
-        COMPLETED = "completed"
-        FAILED = "failed"
 
     @dataclass
     class WorkflowStep:

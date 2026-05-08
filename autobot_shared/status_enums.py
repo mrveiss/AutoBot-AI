@@ -32,6 +32,8 @@ class TaskStatus(Enum):
     """
 
     PENDING = "pending"
+    QUEUED = "queued"  # Alias for PENDING with explicit queue semantics (#6973)
+    SCHEDULED = "scheduled"  # Pending with future-execution time (#6973: WorkflowStatus)
     ACTIVE = "active"  # Alias for IN_PROGRESS in some contexts
     IN_PROGRESS = "in_progress"
     RUNNING = "running"  # Alias for IN_PROGRESS
@@ -56,6 +58,14 @@ class TaskStatus(Enum):
     def is_active(cls, status: "TaskStatus") -> bool:
         """Check if status indicates active work."""
         return status in {cls.ACTIVE, cls.IN_PROGRESS, cls.RUNNING, cls.RETRYING}
+
+
+# Job/Workflow lifecycle alias — semantic shortcut for callers reasoning
+# about generic job execution rather than agent tasks (#6973). Canonically
+# the same enum as TaskStatus; use whichever name reads clearer at the call
+# site. Replaces ad-hoc per-module *Status enums (WorkflowStatus, etc.).
+JobStatus = TaskStatus
+WorkflowStatus = TaskStatus
 
 
 class Severity(Enum):
@@ -232,6 +242,8 @@ class HealthStatus(Enum):
 
 __all__ = [
     "TaskStatus",
+    "JobStatus",
+    "WorkflowStatus",
     "Severity",
     "RiskLevel",
     "Priority",

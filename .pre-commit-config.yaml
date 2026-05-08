@@ -327,6 +327,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks new top-level dataclass declarations of WorkflowStep/AgentTask/WorkflowPlan outside autobot_shared/workflow/types.py; subclasses and aliases are allowed"
 
+  # No new ad-hoc *Status(Enum) outside canonical (Issue #6973)
+  - repo: local
+    hooks:
+      - id: no-new-status-enum
+        name: No New *Status(Enum) Outside Canonical (Issue #6973)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-status-enum
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
+
   # No tag-pinned 3rd-party GitHub Actions (Issue #7120, preventive for #7091)
   - repo: local
     hooks:

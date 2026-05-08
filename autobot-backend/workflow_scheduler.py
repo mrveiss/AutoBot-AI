@@ -38,16 +38,7 @@ class WorkflowPriority(Enum):
     CRITICAL = 5
 
 
-class WorkflowStatus(Enum):
-    """Workflow execution status"""
-
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    PAUSED = "paused"
+from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 
 
 @dataclass
