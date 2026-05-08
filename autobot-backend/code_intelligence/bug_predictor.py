@@ -89,14 +89,7 @@ def _calculate_threshold_score(
 # ============================================================================
 
 
-class RiskLevel(Enum):
-    """Bug risk levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    MINIMAL = "minimal"
+from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 
 
 class RiskFactor(Enum):

@@ -13,8 +13,16 @@ from fastapi import Query
 from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessMessageResponse
+from autobot_shared.status_enums import RiskLevel, Severity
 from constants import PATH
 from type_defs.common import Metadata
+
+# #6689 consolidation: 5 severity-shape enums collapsed onto canonical Severity.
+# Aliases preserve external API names (FastAPI / OpenAPI / frontend codegen).
+ImpactLevel = Severity
+IssueSeverity = Severity
+CostLevel = Severity
+DFASeverity = Severity
 
 
 # ---------------------------------------------------------------------------
@@ -2576,15 +2584,6 @@ class EngagementMetricsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ImpactLevel(str, Enum):
-    """Impact level of performance issues."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
 class PerformancePatternCategory(str, Enum):
     """Categories of performance patterns."""
 
@@ -2743,16 +2742,6 @@ class EdgeType(str, Enum):
     RETURN_EDGE = "return_edge"
 
 
-class IssueSeverity(str, Enum):
-    """Severity levels for detected issues."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
-
-
 class IssueType(str, Enum):
     """Types of control flow issues."""
 
@@ -2818,15 +2807,6 @@ class OptimizationType(str, Enum):
     REDUCE_CONTEXT = "reduce_context"
     BATCH_REQUESTS = "batch_requests"
     TEMPLATE_REUSE = "template_reuse"
-
-
-class CostLevel(str, Enum):
-    """Cost level classification."""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 class PromptAnalysisRequest(BaseModel):
@@ -3150,16 +3130,6 @@ class VulnerabilityType(str, Enum):
     HARDCODED_SECRET = "hardcoded_secret"  # nosec B105
 
 
-class DFASeverity(str, Enum):
-    """Vulnerability severity levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    INFO = "info"
-
-
 class DFAAnalyzeRequest(BaseModel):
     """Request model for code analysis."""
 
@@ -3367,20 +3337,11 @@ class DebtSummary(BaseModel):
 # analytics_bug_prediction.py schemas
 # ---------------------------------------------------------------------------
 
-from enum import Enum as _BugPredEnum
+# RiskLevel is the canonical Severity enum (#6689 consolidation).
+# Imported above; keep module-level so Pydantic field annotations resolve.
 
 
-class RiskLevel(str, _BugPredEnum):
-    """Bug risk levels."""
-
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    MINIMAL = "minimal"
-
-
-class RiskFactor(str, _BugPredEnum):
+class RiskFactor(str, Enum):
     """Factors contributing to bug risk."""
 
     COMPLEXITY = "complexity"
