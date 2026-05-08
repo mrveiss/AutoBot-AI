@@ -584,8 +584,16 @@ class TestSummaryHelper:
 
 
 class TestUtcNow:
-    def test_returns_iso_string_with_z_suffix(self):
+    def test_returns_iso_string_with_offset_suffix(self):
+        # _utc_now is an alias for autobot_shared.time_utils.utc_timestamp,
+        # which returns ISO-8601 with ``+00:00`` offset and microsecond
+        # precision per the #5178 datetime migration. Format:
+        # ``YYYY-MM-DDTHH:MM:SS.ffffff+00:00``
+        from datetime import datetime
+
         ts = _utc_now()
-        assert ts.endswith("Z")
+        assert ts.endswith("+00:00")
         assert "T" in ts
-        assert len(ts) == 20  # YYYY-MM-DDTHH:MM:SSZ
+        # Round-trip parse confirms the string is valid ISO-8601 + tz-aware.
+        parsed = datetime.fromisoformat(ts)
+        assert parsed.tzinfo is not None
