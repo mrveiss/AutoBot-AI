@@ -1,0 +1,179 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No New *Status(Enum) Outside Canonical Location
+# =================================================================
+#
+# Issue #6973 — consolidates ad-hoc job/workflow lifecycle enums onto the
+# canonical autobot_shared.status_enums.{TaskStatus, JobStatus, WorkflowStatus}
+# (which are the same enum). New modules MUST either:
+#   1. Import the canonical type:
+#        from autobot_shared.status_enums import TaskStatus
+#        from autobot_shared.status_enums import JobStatus      # alias
+#        from autobot_shared.status_enums import WorkflowStatus # alias
+#   2. Alias for transitional compat:
+#        from autobot_shared.status_enums import TaskStatus as MyStatus
+#
+# This hook blocks commits that add NEW top-level `class FooStatus(Enum):` /
+# `class FooStatus(str, Enum):` declarations outside the exempt locations.
+#
+# Allowed patterns (NOT blocked):
+#   - `class HealthStatus(Enum):` — already in canonical (autobot_shared/status_enums.py)
+#   - `class XStatus = TaskStatus` — alias (no `class` keyword)
+#   - Domain-specific values that are NOT lifecycle-shaped — see EXEMPT_PATHS
+#
+# Exempt locations (canonical + documented domain shapes per #6973 audit):
+#   - autobot_shared/status_enums.py                              (canonical)
+#   - autobot-backend/agents/overseer/types.py                    (PLANNING/EXECUTING/STREAMING/EXPLAINING — overseer flow)
+#   - autobot-backend/integrations/base.py                        (CONNECTED/DISCONNECTED/CONFIGURING — connection state)
+#   - autobot-backend/models/agent.py                             (ACTIVE/INACTIVE/ARCHIVED — entity lifecycle)
+#   - autobot-backend/models/approval.py                          (PENDING/APPROVED/REJECTED — approval workflow)
+#   - autobot-backend/services/knowledge/sync_queue.py            (SyncStatus — domain sync states)
+#   - autobot-backend/services/load_balancer.py                   (WorkerStatus — load-balancer states)
+#   - autobot-backend/services/provider_health/base.py            (ProviderStatus — health, separate concept)
+#
+# Suppression: append `# noqa: status-shape` to the offending line (last resort).
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh"
+
+EXEMPT_PATHS=(
+    "autobot_shared/status_enums.py"
+    "autobot-backend/agents/overseer/types.py"
+    "autobot-backend/integrations/base.py"
+    "autobot-backend/models/agent.py"
+    "autobot-backend/models/approval.py"
+    "autobot-backend/models/heartbeat.py"
+    "autobot-backend/models/process_run.py"
+    "autobot-backend/models/task_delegation.py"
+    "autobot-backend/models/npu_models.py"
+    "autobot-backend/models/infrastructure.py"
+    "autobot-backend/services/knowledge/sync_queue.py"
+    "autobot-backend/services/load_balancer.py"
+    "autobot-backend/services/provider_health/base.py"
+    "autobot-backend/services/agents/subagent_task.py"
+    "autobot-backend/services/autoresearch/auto_research_agent.py"
+    "autobot-backend/services/autoresearch/prompt_optimizer.py"
+    "autobot-backend/services/claim_verifier.py"
+    "autobot-backend/services/execution/base_backend.py"
+    "autobot-backend/services/gateway/types.py"
+    "autobot-backend/services/grounded_agent.py"
+    "autobot-backend/services/knowledge_grounding_models.py"
+    "autobot-backend/services/slm/deployment_bridge.py"
+    "autobot-backend/skills/base_skill.py"
+    "autobot-backend/security/enterprise/security_policy_manager.py"
+    "autobot-backend/security/enterprise/sso_integration.py"
+    "autobot-backend/api/codebase_analytics/source_models.py"
+    "autobot-backend/api/knowledge_grounding_models.py"
+    "autobot-backend/api/registry.py"
+    "autobot-backend/api/schemas_analytics.py"
+    "autobot-backend/api/schemas_workflows.py"
+    "autobot-backend/async_chat_workflow.py"
+    "autobot-backend/code_intelligence/code_generation/types.py"
+    "autobot-backend/enterprise_feature_manager.py"
+    "autobot-backend/phase_progression_manager.py"
+    "autobot-backend/planner/types.py"
+    "autobot-backend/project_state_manager.py"
+    "autobot-backend/utils/monitoring_alerts.py"
+    "autobot-backend/utils/service_registry.py"
+    "autobot-backend/utils/todowrite_optimizer.py"
+    "autobot_shared/plugin_sdk/base.py"
+)
+
+is_exempt() {
+    local path="$1"
+    for exempt in "${EXEMPT_PATHS[@]}"; do
+        if [[ "$path" == "$exempt" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+collect_violations() {
+    git diff --cached --no-color -U0 -- '*.py' 2>/dev/null | \
+    awk '
+        /^diff --git/ {
+            file = ""
+            next
+        }
+        /^\+\+\+ b\// {
+            file = substr($0, 7)
+            next
+        }
+        /^@@ / {
+            match($0, /\+[0-9]+/)
+            new_lineno = substr($0, RSTART + 1, RLENGTH - 1) + 0
+            next
+        }
+        /^\+/ && !/^\+\+\+/ {
+            line = substr($0, 2)
+            # Match "class FooStatus(Enum):" or "class FooStatus(str, Enum):"
+            if (match(line, /^class[[:space:]]+[A-Za-z_]+Status[[:space:]]*\([^)]*Enum[^)]*\)[[:space:]]*:/)) {
+                if (line !~ /#[[:space:]]*noqa:.*status-shape/) {
+                    printf "%s\t%d\t%s\n", file, new_lineno, line
+                }
+            }
+            new_lineno++
+            next
+        }
+    '
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No New *Status(Enum) Outside Canonical Location${NC}"
+    echo "Issue #6973 — Status Enum Consolidation"
+    echo "================================================"
+    echo ""
+
+    local violations
+    violations=$(collect_violations)
+
+    if [[ -z "$violations" ]]; then
+        echo -e "${GREEN}No new status-enum declarations detected.${NC}"
+        exit 0
+    fi
+
+    local count=0
+    while IFS=$'\t' read -r path lineno text; do
+        if is_exempt "$path"; then
+            continue
+        fi
+        echo -e "  ${RED}VIOLATION${NC} ${path}:${lineno}"
+        echo "    ${text}"
+        ((count++))
+    done <<< "$violations"
+
+    echo ""
+    echo "================================================"
+
+    if (( count > 0 )); then
+        echo -e "${RED}COMMIT BLOCKED: $count new ad-hoc *Status(Enum) declaration(s) found${NC}"
+        echo ""
+        echo "Quick fix — import the canonical lifecycle enum:"
+        echo ""
+        echo "  from autobot_shared.status_enums import TaskStatus"
+        echo "  from autobot_shared.status_enums import JobStatus       # alias for job-context"
+        echo "  from autobot_shared.status_enums import WorkflowStatus  # alias for workflow-context"
+        echo ""
+        echo "Domain-specific status enums (HealthStatus, IntegrationStatus, etc.)"
+        echo "with values that are NOT lifecycle-shaped (PENDING/RUNNING/COMPLETED/FAILED)"
+        echo "should be added to EXEMPT_PATHS in this hook."
+        echo ""
+        echo "Suppression (last resort): append '# noqa: status-shape' to the class line."
+        echo ""
+        echo "See #6973 for the consolidation context."
+        echo ""
+        exit 1
+    fi
+
+    echo -e "${GREEN}All new status declarations are in exempt files.${NC}"
+    exit 0
+}
+
+main "$@"
