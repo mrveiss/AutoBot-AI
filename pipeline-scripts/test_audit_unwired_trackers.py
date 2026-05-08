@@ -105,22 +105,41 @@ def test_is_test_path(path: Path, is_test: bool) -> None:
 
 
 @pytest.mark.parametrize(
-    "path,should_skip",
+    "rel,should_skip",
     [
         # Fragments require a leading separator — the audit's intent is to
         # skip paths that *contain* these as directory segments, never as
         # filename prefixes (e.g. a real "build_*.py" production file).
-        (Path("/repo/autobot-backend/__pycache__/foo.cpython-310.pyc"), True),
-        (Path("/repo/autobot-frontend/node_modules/x/index.ts"), True),
-        (Path("/repo/.worktrees/issue-1234/foo.py"), True),
-        (Path("/repo/autobot-backend/dist/bundle.js"), True),
-        (Path("/repo/autobot-backend/build/out.js"), True),
-        (Path("/repo/autobot-backend/migrations/0001_init.py"), True),
-        (Path("/repo/autobot-backend/foo.py"), False),
+        ("autobot-backend/__pycache__/foo.cpython-310.pyc", True),
+        ("autobot-frontend/node_modules/x/index.ts", True),
+        (".worktrees/issue-1234/foo.py", True),
+        ("autobot-backend/dist/bundle.js", True),
+        ("autobot-backend/build/out.js", True),
+        ("autobot-backend/migrations/0001_init.py", True),
+        ("autobot-backend/foo.py", False),
     ],
 )
-def test_should_skip_path(path: Path, should_skip: bool) -> None:
-    assert audit.should_skip_path(path) is should_skip
+def test_should_skip_path(rel: str, should_skip: bool) -> None:
+    """Paths are checked relative to REPO_ROOT (#7128b: previously absolute,
+    which caused false-positives when the audit ran from inside a worktree)."""
+    p = audit.REPO_ROOT / rel
+    assert audit.should_skip_path(p) is should_skip
+
+
+def test_should_skip_path_handles_running_from_worktree() -> None:
+    """Regression: when REPO_ROOT itself contains `.worktrees/`, files INSIDE
+    that REPO_ROOT must NOT be auto-skipped (#7128b)."""
+    # Simulate: REPO_ROOT = /home/foo/repo/.worktrees/issue-X
+    # File:    /home/foo/repo/.worktrees/issue-X/autobot-backend/auth_rbac.py
+    # Should NOT be skipped — the .worktrees/ in REPO_ROOT itself is irrelevant.
+    fake_root = Path("/home/foo/repo/.worktrees/issue-X")
+    p = fake_root / "autobot-backend" / "auth_rbac.py"
+    with patch.object(audit, "REPO_ROOT", fake_root):
+        assert audit.should_skip_path(p) is False
+    # But a *nested* worktree under that fake_root should still be skipped:
+    nested = fake_root / ".worktrees" / "issue-Y" / "autobot-backend" / "x.py"
+    with patch.object(audit, "REPO_ROOT", fake_root):
+        assert audit.should_skip_path(nested) is True
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +370,60 @@ def test_scan_skips_router_registry_modules(tmp_path: Path) -> None:
         findings = audit.scan()
 
     assert findings == [], f"api/captcha.py should be filtered as registry-wired, got {findings}"
+
+
+# ---------------------------------------------------------------------------
+# is_entry_point_script — #7128b runner-script + demos/scripts/bin filter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path,is_entry",
+    [
+        # run_*.py prefix style (the case that flagged my own runners post-#7127)
+        (Path("autobot-backend/intelligence/demos/run_intelligent_agent.py"), True),
+        (Path("autobot-backend/intelligence/demos/run_streaming_executor.py"), True),
+        (Path("scripts/run_smoke.py"), True),
+        # /demos/, /scripts/, /bin/ directory conventions
+        (Path("autobot-backend/intelligence/demos/__init__.py"), True),
+        (Path("autobot-backend/scripts/migrate_data.py"), True),
+        (Path("bin/server.py"), True),
+        # Non-entry-point production code
+        (Path("autobot-backend/api/captcha.py"), False),
+        (Path("autobot-backend/intelligence/intelligent_agent.py"), False),
+        # Edge: a non-py file should not match (the filter is .py-only)
+        (Path("autobot-frontend/run_thing.ts"), False),
+        # Edge: 'demoscope.py' contains 'demos' substring but not '/demos/'
+        (Path("autobot-backend/utils/demoscope.py"), False),
+    ],
+)
+def test_is_entry_point_script(path: Path, is_entry: bool) -> None:
+    assert audit.is_entry_point_script(path) is is_entry
+
+
+def test_scan_skips_entry_point_runners(tmp_path: Path) -> None:
+    """Reproduces the post-#7127 false-positive: runner scripts cite #7127
+    (closed) and have 0 callers by design — they shouldn't be flagged.
+    """
+    fake_root = tmp_path
+    backend = fake_root / "autobot-backend"
+    demos = backend / "intelligence" / "demos"
+    demos.mkdir(parents=True)
+    (demos / "run_intelligent_agent.py").write_text(
+        '"""Standalone demo runner (#7127)."""\n',
+        encoding="utf-8",
+    )
+    registry_dir = backend / "initialization" / "router_registry"
+    registry_dir.mkdir(parents=True)
+    (registry_dir / "feature_routers.py").write_text("X = []\n", encoding="utf-8")
+
+    with patch.object(audit, "REPO_ROOT", fake_root), \
+         patch.object(audit, "ROUTER_REGISTRY_DIR", registry_dir), \
+         patch.object(audit, "fetch_closed_tracker_set", return_value={7127}), \
+         patch.object(audit, "grep_count_production_callers", return_value=0):
+        findings = audit.scan()
+
+    assert findings == [], f"runner script should be skipped as entry-point, got {findings}"
 
 
 def test_scan_still_flags_truly_orphaned_module(tmp_path: Path) -> None:
