@@ -125,6 +125,11 @@ class PluginManager:
         """Return the shared PluginRegistry."""
         return self._registry
 
+    @property
+    def is_started(self) -> bool:
+        """Return True if startup() has completed and shutdown() has not run."""
+        return self._started
+
     def get_plugin_status(self) -> Dict[str, str]:
         """Return a mapping of plugin name → status string."""
         return {name: plugin.status.value for name, plugin in self._registry.get_all_plugins().items()}

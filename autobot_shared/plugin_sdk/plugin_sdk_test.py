@@ -627,3 +627,29 @@ async def test_get_env_status_never_returns_value(monkeypatch):
 
     assert secret_value not in repr(status)
     assert secret_value not in json.dumps(status, default=str)
+
+
+# ---------------------------------------------------------------------------
+# PluginManager.is_started property (Issue #6970)
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_manager_is_started_false_before_startup():
+    pm = PluginManager(plugin_dirs=[])
+    assert pm.is_started is False
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_is_started_true_after_startup():
+    pm = PluginManager(plugin_dirs=[])
+    await pm.startup()
+    assert pm.is_started is True
+    await pm.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_is_started_false_after_shutdown():
+    pm = PluginManager(plugin_dirs=[])
+    await pm.startup()
+    await pm.shutdown()
+    assert pm.is_started is False
