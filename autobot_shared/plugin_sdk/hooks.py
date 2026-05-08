@@ -53,6 +53,10 @@ class Hook(str, Enum):
     # Custom hooks (plugins can define their own)
     CUSTOM = "custom"
 
+    # Extension-point hooks (Issue #6970)
+    API_ROUTER_REGISTER = "api_router_register"
+    CELERY_TASK_REGISTER = "celery_task_register"
+
 
 class HookRegistry:
     """

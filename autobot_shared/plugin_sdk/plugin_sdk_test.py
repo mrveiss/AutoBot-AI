@@ -653,3 +653,23 @@ async def test_plugin_manager_is_started_false_after_shutdown():
     await pm.startup()
     await pm.shutdown()
     assert pm.is_started is False
+
+
+# ---------------------------------------------------------------------------
+# Hook enum extension-point values (Issue #6970)
+# ---------------------------------------------------------------------------
+
+
+def test_hook_api_router_register_value():
+    assert Hook.API_ROUTER_REGISTER.value == "api_router_register"
+
+
+def test_hook_celery_task_register_value():
+    assert Hook.CELERY_TASK_REGISTER.value == "celery_task_register"
+
+
+def test_hook_extension_points_distinct_from_event_hooks():
+    """Extension-point hooks are separate enum members; not aliases of CUSTOM."""
+    assert Hook.API_ROUTER_REGISTER is not Hook.CUSTOM
+    assert Hook.CELERY_TASK_REGISTER is not Hook.CUSTOM
+    assert Hook.API_ROUTER_REGISTER != Hook.CELERY_TASK_REGISTER
