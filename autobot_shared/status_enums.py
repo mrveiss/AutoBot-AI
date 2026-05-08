@@ -60,14 +60,21 @@ class TaskStatus(Enum):
 
 class Severity(Enum):
     """
-    Severity/risk level enumeration.
+    Severity / risk-level enumeration.
 
-    Used in security, analytics, logging, and threat detection.
-    Replaces hardcoded strings: "low", "medium", "high", "critical", "unknown".
+    Canonical enum for severity, risk, and impact concepts across the
+    codebase. Used in security, analytics, code-intelligence, logging,
+    and threat detection.
+
+    Replaces hardcoded strings ("low", "medium", "high", "critical",
+    "unknown", "info", "minimal") and consolidates 10+ duplicate enums
+    (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
+    DebtSeverity, RiskLevel — all collapse to this enum.
     """
 
     UNKNOWN = "unknown"
     INFO = "info"
+    MINIMAL = "minimal"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -102,12 +109,19 @@ class Severity(Enum):
         scores = {
             cls.UNKNOWN: 0.0,
             cls.INFO: 0.1,
+            cls.MINIMAL: 0.2,
             cls.LOW: 0.3,
             cls.MEDIUM: 0.5,
             cls.HIGH: 0.7,
             cls.CRITICAL: 0.9,
         }
         return scores.get(severity, 0.0)
+
+
+# Risk-level alias — semantic shortcut for callers reasoning about "risk"
+# rather than "severity"; canonically the same enum (#6689). Use whichever
+# name reads clearer at the call site.
+RiskLevel = Severity
 
 
 class Priority(Enum):
@@ -219,6 +233,7 @@ class HealthStatus(Enum):
 __all__ = [
     "TaskStatus",
     "Severity",
+    "RiskLevel",
     "Priority",
     "LLMProvider",
     "OperationOutcome",

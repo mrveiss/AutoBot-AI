@@ -19,6 +19,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Set
 
+from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for string literal extraction
@@ -55,16 +57,6 @@ class Language(Enum):
     JSON = "json"
     GO = "go"
     UNKNOWN = "unknown"
-
-
-class IssueSeverity(Enum):
-    """Unified severity levels across all analyzers."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 class IssueCategory(Enum):

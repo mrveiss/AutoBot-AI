@@ -47,6 +47,7 @@ from api.schemas_analytics import (
     PatternType,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.status_enums import Severity
 
 logger = logging.getLogger(__name__)
 
@@ -68,16 +69,6 @@ NAMING_CONSISTENCY_PATTERN_TYPES = {
     PatternType.FACTORY,
 }
 CLASS_SUFFIX_INDICATORS = {"Repository", "Repo", "Service", "Factory"}
-
-
-class Severity(str, Enum):
-    """Severity of pattern violations."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 # Pattern indicators for detection
