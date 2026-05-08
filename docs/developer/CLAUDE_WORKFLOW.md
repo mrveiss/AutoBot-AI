@@ -234,6 +234,16 @@ python -m pytest tests/$(dirname <changed_file>) -x -q
 ### Gate 4: Linting
 
 ```bash
-python -m black --check <changed_files>
+# Use the project wrapper — it pins target-version=py312 + line-length=120
+# so a host running Python 3.10 doesn't produce spurious diffs (#7249).
+make format-check
+# Or, equivalently, for the whole tree:
+scripts/format.sh --check
+# For a specific file:
+scripts/format.sh path/to/file.py
 npm run lint --prefix autobot-vue 2>&1 | grep "error"
 ```
+
+Direct invocations like `python -m black <file>` from a Python<3.12 host
+will silently downgrade to py3.10 syntax (Black emits a warning, not an
+error) and produce 100+-line spurious diffs — always use the wrapper.

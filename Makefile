@@ -2,7 +2,7 @@
 # Requires: pytest, pytest-cov, pytest-asyncio installed in the active venv
 # Frontend targets require Node.js 20+ and npm ci run inside autobot-frontend/
 
-.PHONY: test test-coverage test-backend test-frontend test-e2e help
+.PHONY: test test-coverage test-backend test-frontend test-e2e format format-check help
 
 # Default target: run all backend unit tests without coverage
 test: test-backend
@@ -32,10 +32,20 @@ test-frontend:
 test-e2e:
 	cd autobot-frontend && npm run test:playwright
 
+## Format Python with project-pinned Black + isort settings (#7249)
+format:
+	@scripts/format.sh
+
+## Same as `make format` but exits non-zero if anything would change (CI mode)
+format-check:
+	@scripts/format.sh --check
+
 ## Show this help
 help:
-	@echo "AutoBot test targets:"
+	@echo "AutoBot targets:"
 	@echo "  make test            - backend unit tests (no coverage)"
 	@echo "  make test-coverage   - backend tests + coverage gate (>=70%)"
 	@echo "  make test-frontend   - frontend vitest coverage (>=70%)"
 	@echo "  make test-e2e        - Playwright E2E tests"
+	@echo "  make format          - format Python with project Black+isort settings"
+	@echo "  make format-check    - check formatting without modifying files (CI)"
