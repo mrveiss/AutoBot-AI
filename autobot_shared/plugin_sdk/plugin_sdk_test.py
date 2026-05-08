@@ -242,11 +242,7 @@ def test_check_required_env_treats_empty_string_as_missing(monkeypatch):
 
     monkeypatch.setenv("TEST_EMPTY_VAR", "")
     loader = PluginLoader([])
-    manifest = _make_manifest(
-        required_env=[
-            {"name": "TEST_EMPTY_VAR", "description": "x", "required": True}
-        ]
-    )
+    manifest = _make_manifest(required_env=[{"name": "TEST_EMPTY_VAR", "description": "x", "required": True}])
     missing_required, _ = loader._check_required_env(manifest)
     assert missing_required == ["TEST_EMPTY_VAR"]
 
@@ -468,9 +464,7 @@ async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, c
         ]
     )
 
-    monkeypatch.setattr(
-        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
-    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
 
     with caplog.at_level("ERROR"):
         result = await loader.load_plugin(manifest)
@@ -499,9 +493,7 @@ async def test_load_plugin_succeeds_with_optional_env_missing(monkeypatch, caplo
         ],
     )
 
-    monkeypatch.setattr(
-        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
-    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
 
     with caplog.at_level("INFO"):
         plugin = await loader.load_plugin(manifest)
@@ -530,9 +522,7 @@ async def test_load_plugin_succeeds_when_all_required_env_set(monkeypatch):
         ],
     )
 
-    monkeypatch.setattr(
-        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
-    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
 
     plugin = await loader.load_plugin(manifest)
     assert plugin is not None
@@ -572,9 +562,7 @@ async def test_get_env_status_returns_correct_shape(monkeypatch):
             },
         ],
     )
-    monkeypatch.setattr(
-        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
-    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("status-shape-plugin")
@@ -627,9 +615,7 @@ async def test_get_env_status_never_returns_value(monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr(
-        loader, "_import_plugin_class", lambda ep: _ConcretePlugin
-    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("leak-check-plugin")
@@ -638,5 +624,6 @@ async def test_get_env_status_never_returns_value(monkeypatch):
     # because all leaf types are primitives; this future-proofs against a
     # maintainer adding a SecretStr-style wrapper whose __repr__ masks values.
     import json
+
     assert secret_value not in repr(status)
     assert secret_value not in json.dumps(status, default=str)

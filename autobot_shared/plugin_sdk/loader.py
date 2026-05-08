@@ -205,9 +205,7 @@ class PluginLoader:
                 missing.append(dep)
         return missing
 
-    def _check_required_env(
-        self, manifest: PluginManifest
-    ) -> Tuple[List[str], List[str]]:
+    def _check_required_env(self, manifest: PluginManifest) -> Tuple[List[str], List[str]]:
         """
         Check which env vars declared by the manifest are unset.
 
@@ -225,9 +223,7 @@ class PluginLoader:
                     missing_optional.append(env.name)
         return missing_required, missing_optional
 
-    def get_env_status(
-        self, plugin_name: str
-    ) -> Optional[Dict[str, Dict[str, object]]]:
+    def get_env_status(self, plugin_name: str) -> Optional[Dict[str, Dict[str, object]]]:
         """
         Return per-env-var configuration status for a loaded plugin.
 

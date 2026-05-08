@@ -67,9 +67,7 @@ class PluginInstallGitRequest(BaseModel):
     """Install a plugin from a Git URL."""
 
     url: str = Field(..., description="HTTP(S) Git repository URL")
-    ref: Optional[str] = Field(
-        default=None, description="Branch or tag to clone (default: HEAD)"
-    )
+    ref: Optional[str] = Field(default=None, description="Branch or tag to clone (default: HEAD)")
 
 
 class PluginInstallResponse(BaseModel):
@@ -471,9 +469,7 @@ async def get_plugin_env_status(
         )
     return PluginEnvStatusResponse(
         plugin_name=plugin_name,
-        env_vars={
-            k: PluginEnvStatusEntry(**v) for k, v in status_data.items()
-        },
+        env_vars={k: PluginEnvStatusEntry(**v) for k, v in status_data.items()},
     )
 
 
