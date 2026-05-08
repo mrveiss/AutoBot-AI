@@ -19,9 +19,14 @@ name: ansible-role-facts-test
 on:
   pull_request:
     paths:
+      - 'autobot-slm-backend/ansible/ansible.cfg'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
+      - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
+      - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
+      - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
+      - 'autobot-slm-backend/ansible/roles/_shared/tasks/**'
       - 'autobot-slm-backend/ansible/tests/**'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
@@ -29,9 +34,14 @@ on:
       - Dev_new_gui
       - main
     paths:
+      - 'autobot-slm-backend/ansible/ansible.cfg'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
+      - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
+      - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
+      - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
+      - 'autobot-slm-backend/ansible/roles/_shared/tasks/**'
       - 'autobot-slm-backend/ansible/tests/**'
 
 jobs:
