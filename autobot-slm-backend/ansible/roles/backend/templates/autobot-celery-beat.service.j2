@@ -12,9 +12,15 @@
 # lock, but production deploys this on exactly one host.
 [Unit]
 Description=AutoBot Celery Beat (periodic scheduler)
+# #6580: Beat enqueues to Redis; the worker consumes from there. They
+# communicate via the broker, not directly. The previous Requires=
+# autobot-celery.service caused systemd to STOP Beat whenever the worker
+# stopped (crashes, deploy, max_tasks_per_child rotation) — schedules
+# would silently miss their windows because the schedule file's next-run
+# timestamp advances even on shutdown. After= keeps start-order ordering;
+# Wants= softens the dependency so Beat survives worker restarts.
 After=network-online.target redis-stack-server.service autobot-celery.service
-Wants=network-online.target redis-stack-server.service
-Requires=autobot-celery.service
+Wants=network-online.target redis-stack-server.service autobot-celery.service
 
 [Service]
 Type=simple
