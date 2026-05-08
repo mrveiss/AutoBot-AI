@@ -144,21 +144,21 @@ class TestGetCatalog:
     async def test_returns_redis_data_when_cached(self):
         catalog_data = [{"name": "cached-plugin", "version": "1.0.0"}]
         redis = _make_redis(catalog=catalog_data)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await _get_catalog()
         assert result == catalog_data
 
     @pytest.mark.asyncio
     async def test_falls_back_to_builtin_when_cache_empty(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await _get_catalog()
         assert result == _BUILTIN_CATALOG
 
     @pytest.mark.asyncio
     async def test_seeds_redis_when_cache_empty(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             await _get_catalog()
         redis.set.assert_awaited_once()
         call_args = redis.set.call_args
@@ -169,7 +169,7 @@ class TestGetCatalog:
     async def test_falls_back_to_builtin_on_redis_error(self):
         redis = AsyncMock()
         redis.get.side_effect = ConnectionError("Redis down")
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await _get_catalog()
         assert result == _BUILTIN_CATALOG
 
@@ -183,7 +183,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_returns_all_entries_for_all_category(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search=None, sort_by="downloads")
         assert isinstance(resp, MarketplaceCatalogResponse)
         assert resp.total == len(_BUILTIN_CATALOG)
@@ -193,7 +193,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_filters_by_category(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="observability", search=None, sort_by="name")
         for entry in resp.entries:
             assert entry.category == "observability"
@@ -201,7 +201,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_full_text_search_by_name(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search="logger", sort_by="name")
         assert resp.total >= 1
         assert any("logger" in e.name.lower() for e in resp.entries)
@@ -209,21 +209,21 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_full_text_search_by_description(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search="telemetry", sort_by="downloads")
         assert resp.total >= 1
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_tag(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search="mcp", sort_by="name")
         assert resp.total >= 1
 
     @pytest.mark.asyncio
     async def test_search_no_match_returns_empty(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search="xyznonexistent", sort_by="name")
         assert resp.total == 0
         assert resp.entries == []
@@ -231,7 +231,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_sort_by_downloads_descending(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search=None, sort_by="downloads")
         downloads = [e.downloads for e in resp.entries]
         assert downloads == sorted(downloads, reverse=True)
@@ -239,7 +239,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_sort_by_rating_descending(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search=None, sort_by="rating")
         ratings = [e.rating for e in resp.entries]
         assert ratings == sorted(ratings, reverse=True)
@@ -247,7 +247,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_sort_by_name_ascending(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search=None, sort_by="name")
         names = [e.name.lower() for e in resp.entries]
         assert names == sorted(names)
@@ -255,7 +255,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_invalid_category_raises_400(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await list_catalog(category="garbage", search=None, sort_by="downloads")
         assert exc_info.value.status_code == 400
@@ -264,7 +264,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_invalid_sort_raises_400(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await list_catalog(category="all", search=None, sort_by="badfield")
         assert exc_info.value.status_code == 400
@@ -273,7 +273,7 @@ class TestListCatalog:
     @pytest.mark.asyncio
     async def test_total_matches_entry_count(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             resp = await list_catalog(category="all", search=None, sort_by="name")
         assert resp.total == len(resp.entries)
 
@@ -287,7 +287,7 @@ class TestGetCatalogEntry:
     @pytest.mark.asyncio
     async def test_returns_known_entry(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             entry = await get_catalog_entry("hello-plugin")
         assert isinstance(entry, MarketplaceEntry)
         assert entry.name == "hello-plugin"
@@ -295,7 +295,7 @@ class TestGetCatalogEntry:
     @pytest.mark.asyncio
     async def test_raises_404_for_unknown(self):
         redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await get_catalog_entry("no-such-plugin")
         assert exc_info.value.status_code == 404
@@ -321,7 +321,7 @@ class TestGetCatalogEntry:
             }
         ]
         redis = _make_redis(catalog=custom_catalog)
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             entry = await get_catalog_entry("custom-plugin")
         assert entry.name == "custom-plugin"
         assert entry.version == "2.0.0"
@@ -369,14 +369,14 @@ class TestListInstalled:
     @pytest.mark.asyncio
     async def test_empty_when_none_installed(self):
         redis = _make_redis(installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await list_installed()
         assert result == {"installed": []}
 
     @pytest.mark.asyncio
     async def test_returns_sorted_installed_list(self):
         redis = _make_redis(installed={"logger-plugin", "hello-plugin"})
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await list_installed()
         assert result["installed"] == sorted(["hello-plugin", "logger-plugin"])
 
@@ -384,7 +384,7 @@ class TestListInstalled:
     async def test_returns_empty_on_redis_error(self):
         redis = AsyncMock()
         redis.smembers.side_effect = ConnectionError("Redis down")
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await list_installed()
         assert result == {"installed": []}
 
@@ -398,21 +398,21 @@ class TestInstallPlugin:
     @pytest.mark.asyncio
     async def test_installs_known_plugin(self):
         redis = _make_redis(catalog=None, installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await install_plugin(InstallRequest(plugin_name="hello-plugin"))
         assert result == {"status": "installed", "plugin": "hello-plugin"}
 
     @pytest.mark.asyncio
     async def test_sadd_called_with_plugin_name(self):
         redis = _make_redis(catalog=None, installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             await install_plugin(InstallRequest(plugin_name="logger-plugin"))
         redis.sadd.assert_awaited_once_with(_INSTALLED_KEY, "logger-plugin")
 
     @pytest.mark.asyncio
     async def test_download_counter_incremented(self):
         redis = _make_redis(catalog=None, installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             await install_plugin(InstallRequest(plugin_name="logger-plugin"))
         # The updated catalog is serialised and stored back via redis.set
         redis.set.assert_awaited()
@@ -427,7 +427,7 @@ class TestInstallPlugin:
     @pytest.mark.asyncio
     async def test_raises_404_for_unknown_plugin(self):
         redis = _make_redis(catalog=None, installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await install_plugin(InstallRequest(plugin_name="ghost-plugin"))
         assert exc_info.value.status_code == 404
@@ -440,7 +440,7 @@ class TestInstallPlugin:
         redis.set.return_value = True  # seed succeeds
         # Second client call for sadd → fails
         redis.sadd.side_effect = ConnectionError("Redis down")
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await install_plugin(InstallRequest(plugin_name="hello-plugin"))
         assert exc_info.value.status_code == 500
@@ -455,21 +455,21 @@ class TestUninstallPlugin:
     @pytest.mark.asyncio
     async def test_uninstalls_installed_plugin(self):
         redis = _make_redis(installed={"hello-plugin"})
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             result = await uninstall_plugin("hello-plugin")
         assert result == {"status": "uninstalled", "plugin": "hello-plugin"}
 
     @pytest.mark.asyncio
     async def test_srem_called_with_plugin_name(self):
         redis = _make_redis(installed={"hello-plugin"})
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             await uninstall_plugin("hello-plugin")
         redis.srem.assert_awaited_once_with(_INSTALLED_KEY, "hello-plugin")
 
     @pytest.mark.asyncio
     async def test_raises_404_when_not_installed(self):
         redis = _make_redis(installed=set())
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await uninstall_plugin("hello-plugin")
         assert exc_info.value.status_code == 404
@@ -480,7 +480,7 @@ class TestUninstallPlugin:
         redis = AsyncMock()
         redis.smembers.return_value = {b"hello-plugin"}
         redis.srem.side_effect = ConnectionError("Redis down")
-        with patch("api.marketplace.get_async_redis_client", return_value=redis):
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await uninstall_plugin("hello-plugin")
         assert exc_info.value.status_code == 500
