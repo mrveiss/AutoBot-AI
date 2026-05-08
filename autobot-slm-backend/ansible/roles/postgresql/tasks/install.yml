@@ -47,12 +47,14 @@
   become: true
   when: _pg_installed.rc != 0
 
-- name: Add PostgreSQL APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
-    state: present
-    filename: pgdg
-  become: true
+# #7218: idempotent repo-add — preserve device-shipped pgdg repo if present
+- name: "PostgreSQL | Add PostgreSQL APT repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.postgresql.org"
+    apt_repo_spec: "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt {{ _pgdg_release }}-pgdg main"
+    apt_repo_filename: "pgdg"
+    apt_repo_label: "PostgreSQL pgdg"
   when: _pg_installed.rc != 0
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.

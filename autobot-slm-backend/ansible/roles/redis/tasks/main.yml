@@ -32,12 +32,14 @@
          else 'jammy' }}
   tags: ['redis', 'packages']
 
-- name: "Redis | Add Redis Stack repository"
-  apt_repository:
-    repo: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
-    state: present
-    filename: redis
-  become: yes
+# #7218: idempotent repo-add — preserve device-shipped repo if present
+- name: "Redis | Add Redis Stack repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "packages.redis.io"
+    apt_repo_spec: "deb https://packages.redis.io/deb {{ redis_stack_suite }} main"
+    apt_repo_filename: "redis"
+    apt_repo_label: "Redis Stack"
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
