@@ -133,6 +133,29 @@
   become: yes
   tags: ['redis', 'configuration']
 
+# #6701: Stat each TLS cert before rendering redis.conf so the template
+# only emits tls-* directives when the certs actually exist. Mirrors the
+# #6677 pattern from roles/backend/tasks/main.yml — installs without TLS
+# (or where distribute-tls-certs.yml hasn't run yet) won't crash redis-server
+# at boot with "Cannot read CA certificate".
+- name: "Redis | Stat TLS server cert (#6701)"
+  ansible.builtin.stat:
+    path: "{{ redis_tls_cert_dir }}/server-cert.pem"
+  register: redis_tls_server_cert
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Stat TLS server key (#6701)"
+  ansible.builtin.stat:
+    path: "{{ redis_tls_cert_dir }}/server-key.pem"
+  register: redis_tls_server_key
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Stat TLS CA cert (#6701)"
+  ansible.builtin.stat:
+    path: "{{ redis_tls_cert_dir }}/ca-cert.pem"
+  register: redis_tls_ca_cert
+  tags: ['redis', 'configuration']
+
 - name: "Redis | Configure Redis Stack"
   template:
     src: redis-stack.conf.j2
