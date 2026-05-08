@@ -42,8 +42,10 @@ class TaskStatus(Enum):
     SKIPPED = "skipped"
     PAUSED = "paused"
     RETRYING = "retrying"
+    RETRY = "retry"  # Alias for RETRYING (#6520: utils/task_queue used RETRY)
     BLOCKED = "blocked"
     WAITING = "waiting"
+    TIMEOUT = "timeout"  # #6520: services/agent_analytics + subagent_manager use TIMEOUT
 
     @classmethod
     def is_terminal(cls, status: "TaskStatus") -> bool:

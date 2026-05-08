@@ -26,6 +26,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
@@ -43,17 +44,6 @@ class AgentType(str, Enum):
     BROWSER = "browser"
     WORKFLOW = "workflow"
     CUSTOM = "custom"
-
-
-class TaskStatus(str, Enum):
-    """Task execution status"""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    TIMEOUT = "timeout"
 
 
 @dataclass

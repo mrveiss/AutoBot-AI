@@ -37,7 +37,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
-from .types import Task, TaskArtifact, TaskState, TaskStatus
+from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def _task_to_json(task: Task) -> str:
 def _task_from_json(raw: str) -> Task:
     """Deserialise a Task from JSON.  TraceContext events are NOT reloaded here."""
     d = json.loads(raw)
-    status = TaskStatus(
+    status = A2ATaskStatus(
         state=TaskState(d["status"]["state"]),
         message=d["status"].get("message"),
         timestamp=d["status"]["timestamp"],
@@ -192,7 +192,7 @@ class TaskManager:
 
         task = Task(
             id=task_id,
-            status=TaskStatus(state=TaskState.SUBMITTED),
+            status=A2ATaskStatus(state=TaskState.SUBMITTED),
             input=input_text,
             context=context,
             trace_context=tc,
@@ -263,7 +263,7 @@ class TaskManager:
             )
             return task
 
-        task.status = TaskStatus(state=state, message=message)
+        task.status = A2ATaskStatus(state=state, message=message)
         task.updated_at = _utcnow()
         event = TraceEvent(
             event="task.state_transition",
@@ -297,7 +297,7 @@ class TaskManager:
             return False
         if task.status.state in _TERMINAL_STATES:
             return False
-        task.status = TaskStatus(state=TaskState.CANCELLED)
+        task.status = A2ATaskStatus(state=TaskState.CANCELLED)
         task.updated_at = _utcnow()
         event = TraceEvent(event="task.cancelled")
         if task.trace_context:

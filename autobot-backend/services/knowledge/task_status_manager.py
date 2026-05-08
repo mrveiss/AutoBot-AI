@@ -26,7 +26,7 @@ TASK_TTL_SECONDS = 86400  # 24 hours
 
 
 @dataclass
-class TaskStatus:
+class TaskStatusRecord:
     """Task status information for background operations."""
     task_id: str
     status: str  # "queued", "running", "completed", "failed"
@@ -55,7 +55,7 @@ class TaskStatusManager:
         return f"{TASK_STATUS_PREFIX}{task_id}"
 
     @classmethod
-    async def create_task(cls, task_id: str, message: str, total_items: int = 0) -> TaskStatus:
+    async def create_task(cls, task_id: str, message: str, total_items: int = 0) -> TaskStatusRecord:
         """
         Create a new task status in Redis.
 
@@ -65,9 +65,9 @@ class TaskStatusManager:
             total_items: Total items to process (for progress tracking)
 
         Returns:
-            TaskStatus object
+            TaskStatusRecord object
         """
-        status = TaskStatus(
+        status = TaskStatusRecord(
             task_id=task_id,
             status="queued",
             message=message,
@@ -90,7 +90,7 @@ class TaskStatusManager:
         items_total: int = None,
         error: str = None,
         elapsed_seconds: float = None,
-    ) -> TaskStatus:
+    ) -> TaskStatusRecord:
         """
         Update task status in Redis.
 
@@ -105,12 +105,12 @@ class TaskStatusManager:
             elapsed_seconds: Elapsed time
 
         Returns:
-            Updated TaskStatus
+            Updated TaskStatusRecord
         """
         existing = await cls.get_task(task_id)
         if not existing:
             # Create if doesn't exist
-            existing = TaskStatus(task_id=task_id, status="running", message="")
+            existing = TaskStatusRecord(task_id=task_id, status="running", message="")
 
         # Update fields
         existing.status = status
@@ -133,12 +133,12 @@ class TaskStatusManager:
         return existing
 
     @classmethod
-    async def get_task(cls, task_id: str) -> Optional[TaskStatus]:
+    async def get_task(cls, task_id: str) -> Optional[TaskStatusRecord]:
         """
         Retrieve task status from Redis.
 
         Returns:
-            TaskStatus or None if not found
+            TaskStatusRecord or None if not found
         """
         try:
             redis_client = get_redis_client()
@@ -150,13 +150,13 @@ class TaskStatusManager:
                 return None
 
             task_dict = json.loads(data)
-            return TaskStatus(**task_dict)
+            return TaskStatusRecord(**task_dict)
         except Exception as e:
             logger.error("[%s] Error retrieving task status: %s", task_id, e)
             return None
 
     @classmethod
-    async def _save_to_redis(cls, task_status: TaskStatus) -> bool:
+    async def _save_to_redis(cls, task_status: TaskStatusRecord) -> bool:
         """
         Save task status to Redis with TTL.
 
@@ -183,12 +183,12 @@ class TaskStatusManager:
         message: str,
         items_processed: int,
         elapsed_seconds: float,
-    ) -> TaskStatus:
+    ) -> TaskStatusRecord:
         """
         Mark task as completed.
 
         Returns:
-            Final TaskStatus
+            Final TaskStatusRecord
         """
         return await cls.update_task(
             task_id=task_id,
@@ -200,12 +200,12 @@ class TaskStatusManager:
         )
 
     @classmethod
-    async def fail_task(cls, task_id: str, error_message: str) -> TaskStatus:
+    async def fail_task(cls, task_id: str, error_message: str) -> TaskStatusRecord:
         """
         Mark task as failed.
 
         Returns:
-            Final TaskStatus with error
+            Final TaskStatusRecord with error
         """
         return await cls.update_task(
             task_id=task_id,
