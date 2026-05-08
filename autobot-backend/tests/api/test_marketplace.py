@@ -22,15 +22,12 @@ import pytest
 from fastapi import HTTPException
 
 from api.marketplace import (
-    InstallRequest,
-    MarketplaceCatalogResponse,
-    MarketplaceEntry,
+    CatalogCategory,
+    CatalogSort,
     _BUILTIN_CATALOG,
     _CATALOG_KEY,
     _CATALOG_TTL,
     _INSTALLED_KEY,
-    _VALID_CATEGORIES,
-    _VALID_SORT,
     _get_catalog,
     _plugin_source_url,
     get_catalog_entry,
@@ -40,6 +37,17 @@ from api.marketplace import (
     list_installed,
     uninstall_plugin,
 )
+from api.schemas_workflows import (
+    InstallRequest,
+    MarketplaceCatalogResponse,
+    MarketplaceEntry,
+)
+
+# Derived from CatalogCategory / CatalogSort enums (#6534) — replaces the
+# pre-enum ``_VALID_CATEGORIES`` / ``_VALID_SORT`` constants the tests used
+# to import from api.marketplace before the enum migration.
+_VALID_CATEGORIES = {c.value for c in CatalogCategory}
+_VALID_SORT = {s.value for s in CatalogSort}
 
 
 # ---------------------------------------------------------------------------
