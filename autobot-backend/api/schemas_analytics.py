@@ -7,8 +7,9 @@ Analytics, cost, budget, usage, and metrics schemas.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
+from fastapi import Query
 from pydantic import BaseModel, Field
 
 from api.schemas_common import SuccessMessageResponse
@@ -2870,11 +2871,45 @@ class UsageRecordRequest(BaseModel):
         }
 
 
-class DateRangeParams(BaseModel):
-    """Date range parameters."""
+class DateRangeParams:
+    """FastAPI ``Depends()`` helper for endpoints accepting a date-range filter.
 
-    start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
-    end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
+    Use as a query-param dependency to consolidate the recurring
+    ``start_date: Optional[str] = Query(None, ...)`` /
+    ``end_date: Optional[str] = Query(None, ...)`` pair across analytics
+    endpoints (#7110, #6624 follow-up).
+
+    Example usage::
+
+        from fastapi import Depends
+        from api.schemas_analytics import DateRangeParams
+
+        @router.get("/timeline")
+        async def get_timeline(
+            date_range: DateRangeParams = Depends(),
+            ...
+        ):
+            start_ts, end_ts = _parse_date_range(date_range.start_date, date_range.end_date)
+            ...
+
+    NOTE: this is intentionally a regular Python class (not Pydantic
+    ``BaseModel``) because FastAPI's ``Depends()`` only treats class fields
+    as **query** parameters when the class has a plain ``__init__`` —
+    Pydantic models would be treated as request bodies. See FastAPI's
+    "classes as dependencies" tutorial.
+    """
+
+    def __init__(
+        self,
+        start_date: Annotated[
+            Optional[str], Query(description="Start date (YYYY-MM-DD)")
+        ] = None,
+        end_date: Annotated[
+            Optional[str], Query(description="End date (YYYY-MM-DD)")
+        ] = None,
+    ):
+        self.start_date = start_date
+        self.end_date = end_date
 
 
 # ---------------------------------------------------------------------------
