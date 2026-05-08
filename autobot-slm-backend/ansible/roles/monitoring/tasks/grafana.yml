@@ -46,14 +46,15 @@
     - ansible_facts['os_family'] == "Debian"
     - _grafana_installed.rc != 0
 
-- name: Add Grafana repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
-    state: present
-    filename: grafana
-    # #6719: refresh handled by the bounded-shell task below; the apt module's
-    # update_cache aborts on flaky third-party PPAs.
-    update_cache: false
+# #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
+# Refresh handled by the bounded-shell task below (#6719).
+- name: "Add Grafana repository (idempotent, #7218)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+  vars:
+    apt_repo_match: "apt.grafana.com"
+    apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
+    apt_repo_filename: "grafana"
+    apt_repo_label: "Grafana (monitoring)"
   when:
     - ansible_facts['os_family'] == "Debian"
     - _grafana_installed.rc != 0
