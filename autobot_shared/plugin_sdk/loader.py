@@ -13,8 +13,9 @@ import importlib
 import importlib.util
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
 
@@ -93,6 +94,22 @@ class PluginLoader:
                     missing_deps,
                 )
                 return None
+
+            # Check required environment variables
+            missing_required, missing_optional = self._check_required_env(manifest)
+            if missing_required:
+                logger.error(
+                    "Cannot load plugin %s: required env vars not set: %s",
+                    manifest.name,
+                    missing_required,
+                )
+                return None
+            if missing_optional:
+                logger.info(
+                    "Plugin %s loaded with optional env vars unset: %s",
+                    manifest.name,
+                    missing_optional,
+                )
 
             # Import plugin module
             plugin_class = self._import_plugin_class(manifest.entry_point)
@@ -187,6 +204,53 @@ class PluginLoader:
             if not self.registry.get_plugin(dep):
                 missing.append(dep)
         return missing
+
+    def _check_required_env(self, manifest: PluginManifest) -> Tuple[List[str], List[str]]:
+        """
+        Check which env vars declared by the manifest are unset.
+
+        Returns:
+            Tuple of (missing_required, missing_optional) env var names.
+            An env var set to an empty string is treated as missing.
+        """
+        missing_required: List[str] = []
+        missing_optional: List[str] = []
+        for env in manifest.required_env:
+            if not os.environ.get(env.name):
+                if env.required:
+                    missing_required.append(env.name)
+                else:
+                    missing_optional.append(env.name)
+        return missing_required, missing_optional
+
+    def get_env_status(self, plugin_name: str) -> Optional[Dict[str, Dict[str, object]]]:
+        """
+        Return per-env-var configuration status for a loaded plugin.
+
+        SECURITY: response NEVER contains env var values, only the
+        configured/missing boolean and the manifest metadata.
+
+        Args:
+            plugin_name: Name of a loaded plugin
+
+        Returns:
+            Dict mapping env-var name to status dict, or None if the
+            plugin is not loaded.
+        """
+        plugin = self.registry.get_plugin(plugin_name)
+        if plugin is None:
+            return None
+        return {
+            env.name: {
+                "configured": bool(os.environ.get(env.name)),
+                "secret": env.secret,
+                "required": env.required,
+                "description": env.description,
+                "docs_url": env.docs_url,
+                "obtain_steps": list(env.obtain_steps),
+            }
+            for env in plugin.manifest.required_env
+        }
 
     def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
         """
