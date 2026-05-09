@@ -237,10 +237,11 @@ python -m pytest tests/$(dirname <changed_file>) -x -q
 # Use the project wrapper — it pins target-version=py312 + line-length=120
 # so a host running Python 3.10 doesn't produce spurious diffs (#7249).
 make format-check
-# Or, equivalently, for the whole tree:
-scripts/format.sh --check
+# Or, equivalently, for the whole tree (note: `bash` prefix because
+# scripts/*.sh files in this repo are committed without the exec bit):
+bash scripts/format.sh --check
 # For a specific file:
-scripts/format.sh path/to/file.py
+bash scripts/format.sh path/to/file.py
 npm run lint --prefix autobot-vue 2>&1 | grep "error"
 ```
 
