@@ -94,6 +94,25 @@ repos:
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
 
+  # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
+  # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
+  # no-ops (ModuleNotFoundError swallowed by `with` cleanup). Production
+  # code runs unmocked, tests pass on stale-mock-luck. #6987 found 48 such
+  # sites that masked years of real production drift (#7147, #7154, #7161,
+  # #7216, #7237, #7251, …). #6987 fixed the 48 existing violations; this
+  # hook prevents the next contributor from reintroducing the pattern.
+  # AST-based detection covers all import forms: patch(), mock.patch(),
+  # unittest.mock.patch(), patch.object(), and target= kwarg.
+  - repo: local
+    hooks:
+      - id: no-src-mock-path
+        name: Block patch("src.*") mock paths in tests (#6987 / #7165)
+        entry: tools/lint/check_no_src_mock_path.py
+        language: python
+        files: (_test\.py|test_.*\.py)$
+        stages: [pre-commit]
+        description: "patch('src.…') silently no-ops — autobot-backend has no src/ package"
+
   # AutoBot custom: regression-prevention for #7150 git safe.directory migration.
   # When code_source/ is owned by `autobot` (cloned by install.sh) and the
   # Ansible playbook runs as root via sudo, git 2.35+ aborts read-only
