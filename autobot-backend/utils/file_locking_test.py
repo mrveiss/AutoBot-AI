@@ -65,10 +65,19 @@ class TestWebsocketsNPUEventsLocking:
         errors = []
         call_count = {"count": 0}
 
-        # Mock the event_manager to avoid actual subscriptions
+        # Mock the event_manager to avoid actual subscriptions.
+        # #7184: pre-fix patched ``event_manager.event_manager`` (a stale
+        # module-level singleton attribute that no longer exists after the
+        # lazy_singleton refactor — see event_manager.py:102 where
+        # ``get_event_manager = lazy_singleton(EventManager)``). Patch the
+        # canonical accessor and configure the singleton it returns so
+        # init_npu_worker_websocket's repeated ``get_event_manager().subscribe(...)``
+        # calls hit the mock instead of the real EventManager.
         with patch.object(websockets, "broadcast_npu_worker_event", MagicMock()):
-            with patch("event_manager.event_manager") as mock_em:
+            with patch("event_manager.get_event_manager") as mock_get_em:
+                mock_em = MagicMock()
                 mock_em.subscribe = MagicMock()
+                mock_get_em.return_value = mock_em
 
                 def init_websocket():
                     try:
