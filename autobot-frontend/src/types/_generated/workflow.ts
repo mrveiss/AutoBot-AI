@@ -89,6 +89,7 @@ export type WorkflowStepStatus =
 export type Severity =
   | 'unknown'
   | 'info'
+  | 'minimal'
   | 'low'
   | 'medium'
   | 'high'

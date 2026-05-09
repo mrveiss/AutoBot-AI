@@ -14,6 +14,10 @@
 #
 # #7226: extended path filter to cover all MANIFEST sources
 # (status_enums + workflow_automation models).
+# #7269 followup: install pydantic so backend Pydantic-using sources
+# (like services/workflow_automation/models.py) load correctly. Source
+# files are loaded via spec_from_file_location, bypassing package
+# __init__.py, but they still need their direct imports installed.
 #
 # Security: this workflow does NOT interpolate any untrusted GitHub
 # event data (no issue titles, PR bodies, commit messages, head_ref,
@@ -55,6 +59,11 @@ jobs:
         uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
         with:
           python-version: '3.10'
+
+      - name: Install minimal codegen deps
+        # pydantic is the only non-stdlib import any MANIFEST source file
+        # currently needs. Pin to <3 to keep CI fast.
+        run: pip install 'pydantic>=2,<3'
 
       - name: Run codegen drift check
         run: |
