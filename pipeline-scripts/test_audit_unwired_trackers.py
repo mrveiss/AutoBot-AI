@@ -203,6 +203,58 @@ def test_grep_count_handles_timeout() -> None:
 
 
 # ---------------------------------------------------------------------------
+# grep regex coverage — #6872b widening for dynamic-import patterns
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "caller_line,stem,should_match",
+    [
+        # Static patterns — already worked pre-#6872b
+        ("from auth_rbac import require_permission", "auth_rbac", True),
+        ("import auth_rbac", "auth_rbac", True),
+        # JS/TS dynamic ES-module imports — the FP class this PR fixes
+        ("    component: () => import('@/views/CustomDashboard.vue'),", "CustomDashboard", True),
+        ("const m = await import('./modules/MyModule.js')", "MyModule", True),
+        # CommonJS / Vite require()
+        ("const x = require('./helpers/MyHelper.ts')", "MyHelper", True),
+        # Python dynamic loaders
+        ("mod = importlib.import_module('autobot.foo')", "foo", True),
+        ("mod = __import__('my_module')", "my_module", True),
+        # Negative: stem appearing only in unrelated code (no import-shape) doesn't match
+        ("logger.info('message about CustomDashboard usage')", "CustomDashboard", False),
+        ("self.helper = MyHelper()", "MyHelper", False),
+    ],
+)
+def test_grep_count_regex_pattern_shapes(
+    caller_line: str, stem: str, should_match: bool, tmp_path: Path
+) -> None:
+    """Verify the regex used by grep matches both static and dynamic imports.
+
+    Constructs the same regex the script uses and runs it via Python's `re`
+    so the test isn't coupled to system grep's specific dialect.
+    """
+    import re
+
+    # Mirror the script's pattern construction exactly
+    pattern = (
+        rf"from .*\b{stem}\b"
+        rf"|import .*\b{stem}\b"
+        rf"|import\([^)]*\b{stem}\b"
+        rf"|require\([^)]*\b{stem}\b"
+        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"
+        rf"|__import__\([^)]*\b{stem}\b"
+    )
+    matched = re.search(pattern, caller_line) is not None
+    assert matched is should_match, (
+        f"pattern: {pattern!r}\n"
+        f"line:    {caller_line!r}\n"
+        f"stem:    {stem!r}\n"
+        f"expected match={should_match}, got match={matched}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # fetch_closed_tracker_set — gh JSON parsing + error path
 # ---------------------------------------------------------------------------
 
@@ -375,6 +427,22 @@ def test_scan_skips_router_registry_modules(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # is_entry_point_script — #7128b runner-script + demos/scripts/bin filter
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path,is_dts",
+    [
+        (Path("autobot-frontend/src/types/global.d.ts"), True),
+        (Path("autobot-frontend/src/config/AppConfig.d.ts"), True),
+        # Negative: regular .ts file
+        (Path("autobot-frontend/src/utils/helper.ts"), False),
+        # Negative: filename ends in .d.ts but it's a directory marker (.d.ts in path component)
+        # This shouldn't ever happen but let's be explicit:
+        (Path("autobot-frontend/src/types/foo.ts"), False),
+    ],
+)
+def test_is_ambient_type_declaration(path: Path, is_dts: bool) -> None:
+    assert audit.is_ambient_type_declaration(path) is is_dts
 
 
 @pytest.mark.parametrize(
