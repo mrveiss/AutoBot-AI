@@ -259,6 +259,48 @@ async def _get_catalog() -> list[dict[str, Any]]:
     return _BUILTIN_CATALOG
 
 
+async def _resolve_catalog(source_id: str) -> list[dict[str, Any]]:
+    """#6524: shared catalog resolver used by list/detail/install endpoints.
+
+    For ``source_id == BUILTIN_SOURCE_ID`` returns the cached built-in catalog
+    (Redis-cached, seeded from ``_BUILTIN_CATALOG``). Otherwise looks up the
+    user-added source by id, fetches its remote catalog, and wraps each entry
+    via ``_safe_remote_plugin_to_entry`` to drop malformed payloads (#6525).
+
+    Raises ``HTTPException(404)`` for unknown source_id and ``HTTPException(422)``
+    for sources missing a catalog URL — preserves the same error semantics
+    that ``list_catalog`` already surfaced (#6527 contract).
+    """
+    if source_id == BUILTIN_SOURCE_ID:
+        return await _get_catalog()
+
+    from api.marketplace_sources import (  # local import: avoid cycle
+        fetch_remote_catalog,
+        get_source_by_id,
+    )
+
+    source = await get_source_by_id(source_id)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Marketplace source '{source_id}' not found",
+        )
+    if not source.url:
+        # Issue #6527: do NOT silently substitute the built-in catalog —
+        # surface the misconfiguration so the operator can fix the source.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Marketplace source '{source.name}' has no catalog URL configured",
+        )
+    remote_plugins = await fetch_remote_catalog(source.url)
+    # #6525: per-item wrapper drops malformed entries instead of failing
+    # the whole catalog. One bad apple from a user-added remote
+    # marketplace no longer 500s the response.
+    return [
+        entry for p in remote_plugins for entry in (_safe_remote_plugin_to_entry(p, source.name),) if entry is not None
+    ]
+
+
 @router.get("/catalog", response_model=MarketplaceCatalogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -286,37 +328,7 @@ async def list_catalog(
     Issue #6481: ?source_id= selects which marketplace catalog to query.
     Issue #6534: category/sort_by validated by Pydantic via CatalogCategory/CatalogSort enums.
     """
-    if source_id == BUILTIN_SOURCE_ID:
-        catalog = await _get_catalog()
-    else:
-        from api.marketplace_sources import (  # local import: avoid cycle
-            fetch_remote_catalog,
-            get_source_by_id,
-        )
-
-        source = await get_source_by_id(source_id)
-        if source is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Marketplace source '{source_id}' not found",
-            )
-        if not source.url:
-            # Issue #6527: do NOT silently substitute the built-in catalog —
-            # surface the misconfiguration so the operator can fix the source.
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Marketplace source '{source.name}' has no catalog URL configured",
-            )
-        remote_plugins = await fetch_remote_catalog(source.url)
-        # #6525: per-item wrapper drops malformed entries instead of failing
-        # the whole catalog. One bad apple from a user-added remote
-        # marketplace no longer 500s the response.
-        catalog = [
-            entry
-            for p in remote_plugins
-            for entry in (_safe_remote_plugin_to_entry(p, source.name),)
-            if entry is not None
-        ]
+    catalog = await _resolve_catalog(source_id)
 
     # Filter by category
     if category != CatalogCategory.ALL:
@@ -366,13 +378,24 @@ async def list_catalog(
     operation="get_catalog_entry",
     error_code_prefix="MARKETPLACE",
 )
-async def get_catalog_entry(plugin_name: str) -> MarketplaceEntry:
+async def get_catalog_entry(
+    plugin_name: str,
+    source_id: str = Query(
+        default=BUILTIN_SOURCE_ID,
+        description=f"Marketplace source id; '{BUILTIN_SOURCE_ID}' or a user-added source UUID (#6481, #6524)",
+    ),
+    # #6524: align auth posture with list_catalog — non-builtin source_id
+    # triggers a server-side fetch of arbitrary URLs (SSRF surface).
+    user: dict = Depends(get_current_user),
+) -> MarketplaceEntry:
     """
     Get a single marketplace catalog entry by name.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6524: ?source_id= selects which marketplace catalog to query —
+    detail endpoint must agree with list_catalog and install_plugin.
     """
-    catalog = await _get_catalog()
+    catalog = await _resolve_catalog(source_id)
     entry = next((e for e in catalog if e.get("name") == plugin_name), None)
 
     if not entry:
@@ -441,16 +464,23 @@ async def list_installed() -> dict[str, list[str]]:
     operation="install_plugin",
     error_code_prefix="MARKETPLACE",
 )
-async def install_plugin(body: InstallRequest) -> dict[str, str]:
+async def install_plugin(
+    body: InstallRequest,
+    user: dict = Depends(get_current_user),
+) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
 
-    Validates the plugin exists in the catalog then records it in the
-    installed set in Redis so the UI can reflect installation state.
+    Validates the plugin exists in the resolved catalog (built-in or the
+    user-added marketplace identified by ``body.source_id``) then records
+    it in the installed set in Redis so the UI can reflect installation state.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #6524: source_id required so install resolves against the same
+    catalog the user was browsing — fixes the headline 404 on every
+    custom-marketplace install.
     """
-    catalog = await _get_catalog()
+    catalog = await _resolve_catalog(body.source_id)
     entry = next((e for e in catalog if e.get("name") == body.plugin_name), None)
     if not entry:
         raise HTTPException(
@@ -461,11 +491,14 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
     try:
         redis = await get_async_redis_client(database="main")
         await redis.sadd(_INSTALLED_KEY, body.plugin_name)
-        # Bump download counter in cached catalog
-        updated = [
-            {**e, "downloads": e.get("downloads", 0) + 1} if e.get("name") == body.plugin_name else e for e in catalog
-        ]
-        await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
+        # Bump download counter in cached catalog — only meaningful for the
+        # built-in catalog (remote catalogs are read-only). Skip otherwise.
+        if body.source_id == BUILTIN_SOURCE_ID:
+            updated = [
+                {**e, "downloads": e.get("downloads", 0) + 1} if e.get("name") == body.plugin_name else e
+                for e in catalog
+            ]
+            await redis.set(_CATALOG_KEY, json.dumps(updated), ex=_CATALOG_TTL)
     except Exception as exc:
         logger.error("Marketplace: install failed for %s: %s", body.plugin_name, exc)
         raise HTTPException(
@@ -473,7 +506,11 @@ async def install_plugin(body: InstallRequest) -> dict[str, str]:
             detail="Failed to record plugin installation",
         ) from exc
 
-    logger.info("Marketplace: installed plugin %s", body.plugin_name)
+    logger.info(
+        "Marketplace: installed plugin %s from source %s",
+        body.plugin_name,
+        body.source_id,
+    )
     return {"status": "installed", "plugin": body.plugin_name}
 
 

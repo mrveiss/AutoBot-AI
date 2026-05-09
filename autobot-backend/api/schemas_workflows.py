@@ -1880,6 +1880,13 @@ class InstallRequest(BaseModel):
     """Request body for installing a marketplace plugin."""
 
     plugin_name: str = Field(..., description="Name of the plugin to install from catalog")
+    # #6524: source_id required so install resolves against the same catalog
+    # the user was browsing. Without it, custom marketplace plugins all
+    # 404'd because we'd resolve against the built-in catalog only.
+    source_id: str = Field(
+        default="builtin",
+        description="Marketplace source id; 'builtin' or a user-added source UUID (#6481)",
+    )
 
 
 # ---------------------------------------------------------------------------
