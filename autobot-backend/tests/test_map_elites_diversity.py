@@ -14,7 +14,7 @@ Issue #4677: Verifies:
 
 import unittest
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult, _MAP_ELITES_MIN_CATEGORIES
+from advanced_rag_optimizer import _MAP_ELITES_MIN_CATEGORIES, AdvancedRAGOptimizer, SearchResult
 from services.rag_config import RAGConfig
 
 

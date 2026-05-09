@@ -26,10 +26,10 @@ from api.schemas_code import (
     TemplatePreviewResponse,
     TemplateSearchResponse,
     TemplateSecretsUsageResponse,
+    TemplatesRootResponse,
     TemplateStatsResponse,
     TemplateValidationRequest,
     TemplateValidationResponse,
-    TemplatesRootResponse,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

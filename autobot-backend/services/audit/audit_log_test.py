@@ -16,18 +16,19 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Module-level stubs — keep import chain clean without a full backend venv
-# ---------------------------------------------------------------------------
-
 from services.audit.audit_log import (
+    _GLOBAL_KEY,
     AUDIT_LOG_TTL_SECONDS,
     AuditAction,
-    _GLOBAL_KEY,
     audit_record,
     query_audit_log,
     record_event,
 )
+
+# ---------------------------------------------------------------------------
+# Module-level stubs — keep import chain clean without a full backend venv
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # Helpers

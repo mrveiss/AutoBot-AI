@@ -21,12 +21,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.schemas_knowledge import (
     CompareVersionsRequest,
     CreateMetadataTemplateRequest,
-    RevertToVersionRequest,
-    SearchByMetadataRequest,
-    UpdateMetadataTemplateRequest,
-    ValidateMetadataRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeFactRevertResponse,
     KnowledgeFactVersionCompareResponse,
     KnowledgeFactVersionDetailResponse,
@@ -38,11 +32,15 @@ from api.schemas_knowledge import (
     KnowledgeMetadataTemplateListResponse,
     KnowledgeMetadataTemplateResponse,
     KnowledgeMetadataValidateResponse,
+    RevertToVersionRequest,
+    SearchByMetadataRequest,
+    UpdateMetadataTemplateRequest,
+    ValidateMetadataRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

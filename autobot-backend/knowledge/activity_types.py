@@ -18,8 +18,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import now_utc
 
 
 class TerminalActivity(BaseModel):

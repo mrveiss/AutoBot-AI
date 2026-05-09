@@ -18,27 +18,27 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
+from api.schemas_code import (
+    PMIssueCreateResponse,
+    PMIssueSearchResponse,
+    PMIssuesResponse,
+    PMIssueUpdateResponse,
+    PMProjectsResponse,
+)
 from api.schemas_workflows import (
     ConnectionTestRequest,
     IssueCreateRequest,
     IssueUpdateRequest,
     ProviderInfo,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.project_management_integration import (
     AsanaIntegration,
     JiraIntegration,
     TrelloIntegration,
 )
-from api.schemas_code import (
-    PMIssueCreateResponse,
-    PMIssueSearchResponse,
-    PMIssueUpdateResponse,
-    PMIssuesResponse,
-    PMProjectsResponse,
-)
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -11,8 +11,9 @@ Contains QueryKnowledgeIntentDetector for smart RAG triggering.
 import re
 from typing import Optional
 
-from .types import QueryIntentResult, QueryKnowledgeIntent
 from autobot_shared.singleton_factory import lazy_singleton
+
+from .types import QueryIntentResult, QueryKnowledgeIntent
 
 
 class QueryKnowledgeIntentDetector:

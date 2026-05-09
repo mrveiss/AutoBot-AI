@@ -14,7 +14,11 @@ from typing import Dict, List
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
+
 from api.schemas_agent import (
+    AuthCheckResponse,
+    AuthPermissionResponse,
+    AuthUserInfoResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
     LoginRequest,
@@ -23,16 +27,15 @@ from api.schemas_agent import (
     SignupRequest,
     SignupResponse,
 )
-
+from api.schemas_common import DataResponse
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.event_log import EventType, emit as _emit_event  # Issue #4461
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
+from services.event_log import EventType
+from services.event_log import emit as _emit_event  # Issue #4461
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-from api.schemas_agent import AuthCheckResponse, AuthPermissionResponse, AuthUserInfoResponse
-from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

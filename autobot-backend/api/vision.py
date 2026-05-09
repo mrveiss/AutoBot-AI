@@ -13,30 +13,31 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
+from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
-
-from api.system_health import register_singleton_probe
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
+
 from api.schemas_system import (
     ElementDetectionRequest,
     OCRRequest,
     ScreenAnalysisRequest,
     ScreenAnalysisResponse,
     UIElementResponse,
-    VisionDetectElementsResponse,
-    VisionHealthResponse,
-    VisionOCRResponse,
     VisionAutomationOpportunitiesResponse,
+    VisionDetectElementsResponse,
     VisionElementTypesResponse,
+    VisionHealthResponse,
     VisionInteractionTypesResponse,
     VisionLayoutResponse,
+    VisionOCRResponse,
     VisionStatusResponse,
 )
 

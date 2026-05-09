@@ -12,8 +12,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, Optional, Tuple
+
+from autobot_shared.time_utils import now_utc
 
 try:
     import docker

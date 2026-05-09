@@ -22,7 +22,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
-from api.system_health import ComponentHealth, register_health_probe
+
 from api.schemas_knowledge import (
     NLCodeExplanationResponse,
     NLDomainsResponse,
@@ -34,6 +34,7 @@ from api.schemas_knowledge import (
     ParsedQueryResponse,
     SearchResultWithExplanation,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

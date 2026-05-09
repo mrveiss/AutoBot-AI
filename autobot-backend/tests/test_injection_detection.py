@@ -17,8 +17,8 @@ from unittest.mock import patch
 
 from prompt_manager import PromptManager
 from security.prompt_injection_detector import (
-    PromptInjectionDetector,
     InjectionRisk,
+    PromptInjectionDetector,
 )
 
 

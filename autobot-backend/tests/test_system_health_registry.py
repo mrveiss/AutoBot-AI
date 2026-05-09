@@ -8,8 +8,8 @@ import asyncio
 import pytest
 
 from api.system_health import (
-    ComponentHealth,
     _PROBE_TIMEOUT_S,
+    ComponentHealth,
     _reset_probes_for_testing,
     collect_system_health,
     list_registered_probes,

@@ -10,10 +10,11 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List
 
 import psutil
+
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 

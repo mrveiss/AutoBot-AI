@@ -16,6 +16,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    AIStackEnhancedSearchRequest,
+    AIStackKnowledgeExtractionRequest,
+    AIStackRAGQueryRequest,
+    DocumentAnalysisRequest,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
@@ -26,14 +33,6 @@ from utils.response_helpers import (
     create_error_response,
     create_success_response,
     handle_ai_stack_error,
-)
-
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import (
-    AIStackEnhancedSearchRequest,
-    AIStackKnowledgeExtractionRequest,
-    AIStackRAGQueryRequest,
-    DocumentAnalysisRequest,
 )
 
 logger = logging.getLogger(__name__)

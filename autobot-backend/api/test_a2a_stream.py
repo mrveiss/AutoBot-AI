@@ -19,12 +19,13 @@ import pytest_asyncio  # noqa: F401 — ensures pytest-asyncio plugin loaded
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from api.a2a import router
+from auth_middleware import check_admin_permission
+
 # ---------------------------------------------------------------------------
 # App setup — import router first, then override auth dependency
 # ---------------------------------------------------------------------------
 
-from api.a2a import router
-from auth_middleware import check_admin_permission
 
 # Build a minimal FastAPI app to exercise the router in isolation
 app = FastAPI()

@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from constants.ttl_constants import TTL_30_DAYS
 from autobot_shared.singleton_factory import lazy_singleton
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 

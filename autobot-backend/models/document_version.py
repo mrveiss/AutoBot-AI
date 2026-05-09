@@ -12,10 +12,10 @@ import asyncio
 import hashlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from type_defs.common import Metadata
 
 

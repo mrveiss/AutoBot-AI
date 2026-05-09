@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from prompt_manager import PromptManager, _YAML_SECTION_ORDER
+from prompt_manager import _YAML_SECTION_ORDER, PromptManager
 
 # ---------------------------------------------------------------------------
 # Helpers

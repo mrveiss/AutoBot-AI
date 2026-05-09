@@ -11,8 +11,8 @@ Contains DocumentationSearcher for AutoBot documentation search integration.
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
 

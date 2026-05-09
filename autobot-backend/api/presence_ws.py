@@ -12,8 +12,8 @@ import logging
 
 from fastapi import APIRouter, Query, WebSocket
 
-from websocket.presence import presence_websocket_handler
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from websocket.presence import presence_websocket_handler
 
 logger = logging.getLogger(__name__)
 

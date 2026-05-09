@@ -30,6 +30,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
 
+# Issue #5064: prompt-injection sanitizer applied pre-embedding.
+from knowledge.query_sanitizer import sanitize_query as _sanitize_query
+
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,
@@ -46,9 +49,6 @@ from knowledge.search_components.helpers import (
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
-
-# Issue #5064: prompt-injection sanitizer applied pre-embedding.
-from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
 from knowledge.vector_search_engine import SearchResult as _EngineSearchResult

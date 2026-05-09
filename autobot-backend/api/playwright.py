@@ -6,27 +6,12 @@ Playwright API endpoints - Embedded Docker Integration
 Provides native API access to containerized Playwright functionality
 """
 
+import base64
 import logging
 from typing import Optional
 
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from auth_middleware import check_admin_permission
-
-from api.system_health import ComponentHealth, register_health_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
-from constants.network_constants import NetworkConstants
-from research_browser_manager import get_research_browser_manager
-from services.playwright_service import (
-    get_playwright_service,
-    playwright_service,
-    search_web_embedded,
-    send_test_message_embedded,
-    test_frontend_embedded,
-)
-from api.schemas_common import DataResponse
-import base64
 
 from api.schemas_code import (
     FrontendTestRequest,
@@ -45,7 +30,21 @@ from api.schemas_code import (
     SnapshotWithRegionsResponse,
     TestMessageRequest,
 )
+from api.schemas_common import DataResponse
 from api.schemas_system import PlaywrightEmbeddedResultResponse
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from research_browser_manager import get_research_browser_manager
+from services.playwright_service import (
+    get_playwright_service,
+    playwright_service,
+    search_web_embedded,
+    send_test_message_embedded,
+    test_frontend_embedded,
+)
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)

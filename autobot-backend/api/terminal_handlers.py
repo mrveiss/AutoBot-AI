@@ -35,12 +35,12 @@ from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
 from constants.terminal_constants import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
 )
-from chat_history import ChatHistoryManager
-from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from services.simple_pty import simple_pty_manager
 from services.terminal_completion_service import TerminalCompletionService

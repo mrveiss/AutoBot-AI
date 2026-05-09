@@ -14,20 +14,20 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from auth_middleware import check_admin_permission
 from api.schemas_workflows import (
     CommProviderInfo,
     SendMessageRequest,
     TestConnectionRequest,
     WebhookMessageRequest,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.communication_integration import (
     DiscordIntegration,
     SlackIntegration,
     TeamsIntegration,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,9 @@ import logging
 
 from fastapi import APIRouter
 
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import TimingConstants
-from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

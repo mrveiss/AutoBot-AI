@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
-from .skill_metrics import SkillMetrics, REDIS_SKILL_METRICS_PREFIX
+from .skill_metrics import REDIS_SKILL_METRICS_PREFIX, SkillMetrics
 
 logger = logging.getLogger(__name__)
 

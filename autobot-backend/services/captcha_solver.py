@@ -39,6 +39,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
+
 from autobot_shared.singleton_factory import lazy_singleton
 
 if TYPE_CHECKING:

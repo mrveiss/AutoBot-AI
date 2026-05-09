@@ -14,9 +14,17 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-from api.system_health import ComponentHealth, register_health_probe
-
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    CrossModalSearchRequest,
+    CrossModalSearchResponse,
+    EmbeddingRequest,
+    MultiModalResponse,
+    TextProcessingRequest,
+)
+from api.schemas_system import MultimodalHealthResponse
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from multimodal_processor import (
@@ -28,15 +36,6 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import (
-    CrossModalSearchRequest,
-    CrossModalSearchResponse,
-    EmbeddingRequest,
-    MultiModalResponse,
-    TextProcessingRequest,
-)
-from api.schemas_system import MultimodalHealthResponse
 
 logger = logging.getLogger(__name__)
 

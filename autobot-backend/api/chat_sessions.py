@@ -8,15 +8,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from auth_middleware import get_auth_middleware, get_current_user
-from autobot_memory_graph import AutoBotMemoryGraph
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-# CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
-from type_defs.common import Metadata
-
-from api.schemas_common import DataResponse
 from api.schemas_chat import (
     ActivityAddData,
     ActivityBatchCreate,
@@ -37,6 +29,20 @@ from api.schemas_chat import (
     SessionUpdate,
     SessionUpdateData,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import get_auth_middleware, get_current_user
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+# Import session lifecycle hooks (Issue #4260)
+from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
+
+# CRITICAL SECURITY FIX: Import session ownership validation
+from security.session_ownership import validate_session_ownership
+
+# Issue #6559: Wire audit_record into session create/delete/export endpoints
+from services.audit import AuditAction, audit_record
+from type_defs.common import Metadata
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from utils.chat_exceptions import get_exceptions_lazy
@@ -51,12 +57,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-# Import session lifecycle hooks (Issue #4260)
-from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
-
-# Issue #6559: Wire audit_record into session create/delete/export endpoints
-from services.audit import AuditAction, audit_record
 
 # ====================================================================
 # Router Configuration

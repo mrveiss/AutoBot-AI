@@ -9,6 +9,7 @@ Primary → secondary → minimal-feature mode.
 """
 
 import asyncio
+
 import pytest
 
 from services.resilience.fallback_manager import (

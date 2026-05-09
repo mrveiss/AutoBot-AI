@@ -35,9 +35,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
-from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ Issue #4397: Performance validation on extremely large files (10 MB+).
 
 import time
 
-from prompt_manager import _is_binary_content, _truncate_large_file, _snap_to_char_boundary
+from prompt_manager import _is_binary_content, _snap_to_char_boundary, _truncate_large_file
 
 
 class TestSmartTruncation:

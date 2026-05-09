@@ -11,11 +11,11 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from autobot_shared.ssot_config import PROJECT_ROOT, config as _ssot_config
+from api.schemas_common import SuccessMessageResponse
+from autobot_shared.ssot_config import PROJECT_ROOT
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import QueryDefaults
 from type_defs.common import JSONObject
-
-from api.schemas_common import SuccessMessageResponse
 
 # ---------------------------------------------------------------------------
 # Code schemas

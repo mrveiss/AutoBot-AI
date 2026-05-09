@@ -22,14 +22,14 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from api.system_health import register_singleton_probe
 from api.schemas_system import (
     FailureAnalysisRequest,
     FailureAnalysisResponse,
     HealthCheckResponse,
 )
-from services.causal_inference_engine import CausalInferenceEngine
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.causal_inference_engine import CausalInferenceEngine
 
 logger = logging.getLogger(__name__)
 

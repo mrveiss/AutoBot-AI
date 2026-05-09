@@ -44,10 +44,7 @@ from fastapi import (
     Query,
     Request,
 )
-from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.audit.audit_log import AuditAction, audit_record
-from constants.threshold_constants import QueryDefaults
+
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -55,6 +52,10 @@ from api.schemas_knowledge import (
     DocsBrowseRequest,
     OrgKnowledgeConfigPayload,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -100,8 +101,8 @@ from knowledge.schemas.stats import (
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
+from services.audit.audit_log import AuditAction, audit_record
 from utils.path_validation import contains_path_traversal
-from api.system_health import ComponentHealth, register_health_probe
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints

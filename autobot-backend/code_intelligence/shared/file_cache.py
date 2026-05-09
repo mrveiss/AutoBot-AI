@@ -42,9 +42,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 from utils.file_categorization import SKIP_DIRS
-from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 

@@ -16,9 +16,10 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
-from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 
 try:
     # docker SDK is an optional runtime dep; required for the sandbox

@@ -24,11 +24,11 @@ from agents.overseer.types import (
     OutputExplanation,
     StepStatus,
 )
-from auth_middleware import get_current_user
-from chat_history import ChatHistoryManager
 from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from chat_history import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
 

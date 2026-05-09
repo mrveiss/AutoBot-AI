@@ -74,8 +74,8 @@ async def test_github_integration_returns_error_dict_for_unknown_action():
     in #6658. The fix must produce a dict {"error": ...} for unknown actions.
     """
     try:
-        from integrations.github_integration import GitHubIntegration
         from integrations.base import IntegrationConfig
+        from integrations.github_integration import GitHubIntegration
     except Exception as exc:  # pragma: no cover — env-dependent
         pytest.skip(f"GitHub dep chain unavailable: {exc}")
 

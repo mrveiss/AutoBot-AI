@@ -16,14 +16,12 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
+
 from agents.npu_code_search_agent import (
     get_npu_code_search,
     index_project,
     search_codebase,
 )
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_redis_client
 from api.schemas_code import (
     CodeAnalyticsRequest,
     CodeSearchGetResponse,
@@ -31,6 +29,9 @@ from api.schemas_code import (
     CodeSearchRequest,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

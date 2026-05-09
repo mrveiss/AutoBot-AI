@@ -12,8 +12,8 @@ import uuid
 from typing import Dict, List
 
 from knowledge_base import KnowledgeBase
-from services.llm_service import get_llm_service
 from orchestrator import get_orchestrator_sync as get_orchestrator
+from services.llm_service import get_llm_service
 from services.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,

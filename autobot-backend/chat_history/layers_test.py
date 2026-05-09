@@ -258,10 +258,9 @@ class TestTieredContextBuilderFeatureFlag:
     @pytest.mark.asyncio
     async def test_returns_empty_when_flag_off(self):
         """When TIERED_CONTEXT_ENABLED=false, builder returns empty string."""
-        from chat_history.layers import TieredContextBuilder
-
         # Temporarily override the module-level flag
         import chat_history.layers as layers_mod
+        from chat_history.layers import TieredContextBuilder
 
         original = layers_mod.TIERED_CONTEXT_ENABLED
         try:

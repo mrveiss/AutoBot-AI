@@ -24,16 +24,14 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from auth_middleware import check_admin_permission
-from autobot_shared.security.path_validator import validate_path
 from api.schemas_analytics import (
+    DataFlowResponse,
     DFAAnalysisResponse,
     DFAAnalyzeFileRequest,
     DFAAnalyzeRequest,
-    DFASeverity,
-    DataFlowResponse,
     DfaHealthResponse,
     DfaSanitizersResponse,
+    DFASeverity,
     DfaSinksResponse,
     DfaSourcesResponse,
     DfaVulnerabilitiesResponse,
@@ -45,7 +43,9 @@ from api.schemas_analytics import (
     VulnerabilityResponse,
     VulnerabilityType,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 

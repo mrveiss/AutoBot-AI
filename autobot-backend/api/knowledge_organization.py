@@ -21,9 +21,9 @@ from api.schemas_knowledge import (
     UpdateOrganizationPolicyRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

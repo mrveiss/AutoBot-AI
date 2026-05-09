@@ -22,14 +22,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
-from api.schemas_common import UsageRecordResponse
 from api.schemas_analytics import (
     UsageByUserAllResponse,
+    UsageByUserSingleResponse,
     UsageMyUsageResponse,
     UsageRecordEndpointRequest,
-    UsageByUserSingleResponse,
     UsageSummaryResponse,
 )
+from api.schemas_common import UsageRecordResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp

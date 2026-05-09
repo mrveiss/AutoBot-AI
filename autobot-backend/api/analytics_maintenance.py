@@ -20,33 +20,31 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from auth_middleware import check_admin_permission
-from api.system_health import register_singleton_probe
 from api.schemas_analytics import (
     CustomReportRequest,
     DashboardResponse,
+    MaintenanceByCategoryResponse,
+    MaintenanceCustomReportResponse,
+    MaintenanceDashboardResponse,
+    MaintenanceHealthStatusResponse,
+    MaintenanceInsightsResponse,
     MaintenanceRecommendationResponse,
+    MaintenanceRecommendationsResponse,
+    MaintenanceSummaryResponse,
+    MaintenanceTrendsResponse,
+    OptimizationByTypeResponse,
+    OptimizationQuickWinsResponse,
+    OptimizationRecommendationsResponse,
     ResourceOptimizationResponse,
 )
+from api.system_health import register_singleton_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
     ResourceType,
     get_analytics_service,
-)
-from api.schemas_analytics import (
-    MaintenanceRecommendationsResponse,
-    MaintenanceByCategoryResponse,
-    MaintenanceSummaryResponse,
-    OptimizationRecommendationsResponse,
-    OptimizationByTypeResponse,
-    OptimizationQuickWinsResponse,
-    MaintenanceDashboardResponse,
-    MaintenanceHealthStatusResponse,
-    MaintenanceCustomReportResponse,
-    MaintenanceInsightsResponse,
-    MaintenanceTrendsResponse,
 )
 
 logger = logging.getLogger(__name__)

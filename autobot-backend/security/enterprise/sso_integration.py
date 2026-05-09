@@ -28,9 +28,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
-from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
-
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

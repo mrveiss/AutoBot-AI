@@ -14,19 +14,20 @@ Tests verify:
 """
 
 import asyncio
-import pytest
 import time
 from unittest.mock import AsyncMock
 
+import pytest
+
 from services.gateway import (
-    GatewayManager,
-    SlackAdapter,
     DiscordAdapter,
-    WhatsAppAdapter,
-    TeamsAdapter,
-    WebAdapter,
-    UnifiedMessage,
+    GatewayManager,
     NormalizedResponse,
+    SlackAdapter,
+    TeamsAdapter,
+    UnifiedMessage,
+    WebAdapter,
+    WhatsAppAdapter,
 )
 from services.gateway.message_queue import RateLimiter
 

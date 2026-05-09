@@ -45,15 +45,6 @@ from typing import Dict, List, Optional
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from chat_history import ChatHistoryManager
-from api.system_health import ComponentHealth, register_health_probe
-
-# Import existing components
-from knowledge_base import KnowledgeBase
-from services.llm_service import get_llm_service
-from type_defs.common import Metadata
-
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
@@ -69,6 +60,14 @@ from api.schemas_knowledge import (
     PreserveSessionFactsResponse,
     SessionFactsResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from chat_history import ChatHistoryManager
+
+# Import existing components
+from knowledge_base import KnowledgeBase
+from services.llm_service import get_llm_service
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

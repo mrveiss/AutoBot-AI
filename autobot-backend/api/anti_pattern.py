@@ -17,13 +17,13 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_code import (
     AnalysisResponse,
     AntiPatternAnalysisRequest,
     AntiPatternSummary,
     SeveritySummary,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
 
 # Lazy initialization for detector (thread-safe)
 import asyncio
+
 from api.schemas_common import DataResponse
 
 _detector_instance = None

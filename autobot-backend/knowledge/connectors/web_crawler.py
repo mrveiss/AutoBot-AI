@@ -13,10 +13,10 @@ import hashlib
 import logging
 import os
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import List, Optional
 from urllib.parse import urlparse
 
+from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,

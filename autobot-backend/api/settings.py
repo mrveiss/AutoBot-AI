@@ -15,6 +15,7 @@ import aiofiles
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.schemas_system import (
     ClearCacheResponse,
     ConfigSyncRequest,
@@ -29,7 +30,6 @@ from api.schemas_system import (
     UpdateStatusResponse,
     WorkerStatusResponse,
 )
-
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

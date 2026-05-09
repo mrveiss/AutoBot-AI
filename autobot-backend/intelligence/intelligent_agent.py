@@ -35,7 +35,6 @@ from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
 from constants.threshold_constants import TimingConstants
-from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import our new intelligent agent components
 from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
@@ -46,6 +45,7 @@ from intelligence.streaming_executor import (
 )
 from intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
+from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
 from services.llm_service import get_llm_service  # Phase 2D #3185

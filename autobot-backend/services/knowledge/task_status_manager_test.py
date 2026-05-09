@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.knowledge.task_status_manager import (
-    TaskStatusRecord,
     TaskStatusManager,
+    TaskStatusRecord,
 )
 
 

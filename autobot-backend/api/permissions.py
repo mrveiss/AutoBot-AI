@@ -28,10 +28,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from auth_middleware import check_admin_permission
-from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
-from services.approval_memory import get_approval_memory
-from services.permission_matcher import get_permission_matcher
+
 from api.schemas_system import (
     ApprovalRecordResponse,
     CheckCommandRequest,
@@ -46,10 +43,14 @@ from api.schemas_system import (
     PermissionRuleResponse,
     PermissionRulesResponse,
     PermissionStatusResponse,
-    ProjectApprovalsResponse,
     PermissionStoreApprovalResponse,
+    ProjectApprovalsResponse,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
+from services.approval_memory import get_approval_memory
+from services.permission_matcher import get_permission_matcher
 
 logger = logging.getLogger(__name__)
 

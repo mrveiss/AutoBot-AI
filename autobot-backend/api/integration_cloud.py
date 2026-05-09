@@ -14,6 +14,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_code import (
+    CloudAccountInfoResponse,
+    CloudConnectionTestResponse,
+    CloudResourcesResponse,
+    CloudStorageResponse,
+)
 from api.schemas_workflows import (
     CloudConnectionTestRequest,
     CloudProviderInfo,
@@ -25,12 +31,6 @@ from integrations.cloud_integration import (
     AWSIntegration,
     AzureIntegration,
     GCPIntegration,
-)
-from api.schemas_code import (
-    CloudAccountInfoResponse,
-    CloudConnectionTestResponse,
-    CloudResourcesResponse,
-    CloudStorageResponse,
 )
 
 router = APIRouter(

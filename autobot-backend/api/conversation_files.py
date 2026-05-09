@@ -18,15 +18,17 @@ from typing import Dict, Optional
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+
+from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AgentGenerateFileRequest,
+    ConversationFileInfo,
+    ConversationFileListResponse,
+    ConversationFilePreviewResponse,
     ConvFileCopyRequest,
     ConvFileCreateRequest,
     ConvFileRenameRequest,
     ConvFileUpdateContentRequest,
-    ConversationFileInfo,
-    ConversationFileListResponse,
-    ConversationFilePreviewResponse,
     FileTransferRequest,
     FileTransferResponse,
     FileUploadResponse,
@@ -36,7 +38,6 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
-from api.schemas_common import DataResponse
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

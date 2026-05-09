@@ -15,9 +15,10 @@ Tests verify:
 - Model parameter enrichment
 """
 
-import pytest
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock
+
+import pytest
 
 from llm_interface_pkg.models import ChatMessage, LLMRequest, LLMResponse
 from llm_providers.base_provider import BaseProvider

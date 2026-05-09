@@ -18,10 +18,10 @@ from agents.development_speedup_agent import (
     find_duplicates,
     get_development_speedup_agent,
 )
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_code import DevelopmentSpeedupAnalysisRequest
 from api.schemas_common import DataResponse, SuccessResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

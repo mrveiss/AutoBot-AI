@@ -12,6 +12,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from api.schemas_agent import (
     MemberAddedResponse,
     MemberRemovedResponse,
@@ -24,7 +25,6 @@ from api.schemas_agent import (
     TeamResponse,
     TeamUpdate,
 )
-
 from api.user_management.dependencies import (
     get_team_service,
     require_org_context,

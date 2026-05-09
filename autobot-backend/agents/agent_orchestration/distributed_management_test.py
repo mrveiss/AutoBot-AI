@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.time_utils import now_utc
+
 from .distributed_management import DistributedAgentManager
 from .types import CircuitState, DistributedAgentInfo
-from autobot_shared.time_utils import now_utc
 
 # ---------------------------------------------------------------------------
 # Helpers

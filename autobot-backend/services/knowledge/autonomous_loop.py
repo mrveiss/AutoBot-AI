@@ -35,10 +35,10 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Deque, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Module-level imports for patchability in tests.
 # Deferred via try/except to survive environments where these aren't installed yet.

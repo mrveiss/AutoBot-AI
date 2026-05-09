@@ -18,26 +18,26 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from auth_middleware import get_auth_middleware
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.models.pagination import PaginationParams
-from services.audit_logger import AuditResult, get_audit_logger
-from utils.catalog_http_exceptions import (
-    raise_auth_error,
-    raise_server_error,
-    raise_validation_error,
-)
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     AuditCleanupRequest,
     AuditQueryRequest,
     AuditQueryResponse,
     AuditStatisticsResponse,
+)
+from auth_middleware import get_auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.time_utils import parse_utc_iso
+from services.audit_logger import AuditResult, get_audit_logger
+from utils.catalog_http_exceptions import (
+    raise_auth_error,
+    raise_server_error,
+    raise_validation_error,
 )
 
 router = APIRouter(prefix="/audit", tags=["audit"])

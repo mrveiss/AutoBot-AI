@@ -18,16 +18,16 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_redis_client
-from services.man_page_parser import ManPageContent, get_man_page_content
-from api.schemas_common import DataResponse
 from api.schemas_code import (
     ManPageRequest,
     ManPageSearchRequest,
     ManualMCPToolItem,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from services.man_page_parser import ManPageContent, get_man_page_content
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])

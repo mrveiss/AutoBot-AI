@@ -32,11 +32,11 @@ import subprocess  # nosec B404 - required for git operations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)

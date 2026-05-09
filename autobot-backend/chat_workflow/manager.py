@@ -23,6 +23,7 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from constants.model_constants import ModelConfig, ModelConstants
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
+from services.tool_output_filter import get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -30,7 +31,6 @@ from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before
 from .models import LLMIterationContext, StreamingMessage, WorkflowSession
 from .session_handler import SessionHandlerMixin, _emit_approval_received, _emit_approval_required
 from .tool_handler import ToolHandlerMixin
-from services.tool_output_filter import get_tool_output_filter
 
 logger = logging.getLogger(__name__)
 

@@ -10,14 +10,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import config as ssot_config
-from config.manager import get_config_manager
-from constants.model_constants import ModelConstants as ModelConsts
-
-# Add caching support from unified cache manager (P4 Cache Consolidation)
-from utils.advanced_cache_manager import cache_manager, cache_response
 from api.schemas_system import (
     SystemAdminCheckResponse,
     SystemBackupStatusResponse,
@@ -34,6 +26,14 @@ from api.schemas_system import (
     SystemPromptReloadResponse,
     SystemReloadConfigResponse,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
+from config.manager import get_config_manager
+from constants.model_constants import ModelConstants as ModelConsts
+
+# Add caching support from unified cache manager (P4 Cache Consolidation)
+from utils.advanced_cache_manager import cache_manager, cache_response
 
 config = get_config_manager()
 

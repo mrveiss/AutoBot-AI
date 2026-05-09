@@ -337,9 +337,9 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from .custom_openai_provider import CustomOpenAIProvider
     from .groq_provider import GroqProvider
     from .huggingface_provider import HuggingFaceProvider
+    from .nous_portal_provider import NousPortalProvider
     from .openai_provider import OpenAIProvider
     from .openrouter_provider import OpenRouterProvider
-    from .nous_portal_provider import NousPortalProvider
     from .vllm_base_provider import VLLMBaseProvider
 
     fallback: List[str] = []

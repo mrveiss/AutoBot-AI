@@ -14,10 +14,10 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from api.schemas_common import SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
-from constants.path_constants import PATH
-from services.trigger_service import TriggerType
 from autobot_shared.time_utils import now_utc
+from constants.path_constants import PATH
 from models.approval import ApprovalType
+from services.trigger_service import TriggerType
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -2509,6 +2509,7 @@ class ResearchPreferences(BaseModel):
 # ---------------------------------------------------------------------------
 
 from pydantic import field_validator as _http_client_field_validator
+
 from type_defs.common import JSONObject as _HTTPClientJSONObject
 
 _HTTP_CLIENT_VALID_URL_SCHEMES = ("http://", "https://")

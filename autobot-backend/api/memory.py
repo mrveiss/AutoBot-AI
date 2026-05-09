@@ -33,13 +33,6 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
-from auth_middleware import check_admin_permission
-from autobot_memory_graph import AutoBotMemoryGraph
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from api.system_health import ComponentHealth, register_health_probe
-from autobot_shared.time_utils import utc_timestamp
-from autobot_shared.time_utils import now_utc
-from utils.request_utils import generate_request_id
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     EntityCreateRequest,
@@ -58,6 +51,12 @@ from api.schemas_knowledge import (
     ObservationAddRequest,
     RelationCreateRequest,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc, utc_timestamp
+from utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

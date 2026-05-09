@@ -25,13 +25,13 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import DebtCalculationRequest
+from api.schemas_common import DataResponse, SuccessResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.status_enums import Severity as DebtSeverity  # #6689 consolidation
 from constants.ttl_constants import TTL_30_DAYS
-from api.schemas_common import DataResponse, SuccessResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry

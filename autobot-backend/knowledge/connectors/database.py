@@ -12,9 +12,9 @@ import hashlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,

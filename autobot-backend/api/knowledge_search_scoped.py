@@ -17,6 +17,7 @@ from api.schemas_knowledge import (
     ScopedSearchRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,
@@ -24,7 +25,6 @@ from knowledge.search_filters import (
 )
 from knowledge_factory import get_or_create_knowledge_base
 from user_management.models.user import User
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -17,8 +17,8 @@ from typing import Any, Dict
 
 import psutil
 
-from config import config_manager
 from autobot_shared.singleton_factory import lazy_singleton
+from config import config_manager
 
 logger = logging.getLogger(__name__)
 

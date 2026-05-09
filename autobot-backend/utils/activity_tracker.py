@@ -14,11 +14,11 @@ import logging
 import re
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.time_utils import now_utc
 from models.activities import (
     BrowserActivityModel,
     DesktopActivityModel,

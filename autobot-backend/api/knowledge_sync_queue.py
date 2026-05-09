@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends, Query
 
 from api.schemas_knowledge import KnowledgeSyncQueuePruneResponse, KnowledgeSyncQueueResponse
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.knowledge.sync_queue import (
     SyncStatus,
     get_document_sync_queue,
     serialize_entry_for_api,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

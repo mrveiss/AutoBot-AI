@@ -9,8 +9,9 @@ Validates task routing, health checks, and result capture.
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from services.execution.base_backend import (
     BackendType,

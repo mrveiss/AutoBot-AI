@@ -16,8 +16,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.http_client import get_http_client
+from autobot_shared.singleton_factory import lazy_singleton
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service

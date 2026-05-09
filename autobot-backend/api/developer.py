@@ -16,16 +16,16 @@ from typing import Dict, List
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from config import unified_config_manager
-from services.config_service import ConfigService
-from type_defs.common import Metadata
 from api.schemas_system import (
     DeveloperConfigResponse,
     DeveloperConfigUpdateResponse,
     DeveloperEndpointsResponse,
     DeveloperSystemInfoResponse,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import unified_config_manager
+from services.config_service import ConfigService
+from type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

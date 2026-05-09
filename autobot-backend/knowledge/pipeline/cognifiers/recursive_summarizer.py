@@ -25,9 +25,9 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.summary import Summary, SummaryLevel
 from knowledge.pipeline.registry import TaskRegistry
-from services.llm_service import get_llm_service
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
+from services.llm_service import get_llm_service
 
 logger = logging.getLogger(__name__)
 

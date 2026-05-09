@@ -4,8 +4,8 @@ Test security agents with research-based tool discovery
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
 

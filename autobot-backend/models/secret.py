@@ -10,7 +10,6 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import Optional
 
@@ -19,6 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
+from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
 

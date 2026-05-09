@@ -4,8 +4,9 @@
 # Author: mrveiss
 """Unit tests for Neural Mesh RAG feature flags and RAGService mesh path (#2059, #4724)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # =============================================================================
 # Helpers
@@ -117,8 +118,9 @@ class TestMeshFlagDisabled:
 class TestMeshFlagEnabled:
     @pytest.mark.asyncio
     async def test_mesh_path_when_flag_on_and_retriever_injected(self):
-        from advanced_rag_optimizer import RAGMetrics
         from unittest.mock import patch
+
+        from advanced_rag_optimizer import RAGMetrics
 
         svc = _make_service(mesh_retriever_enabled=True)
         svc._mesh_retriever = MagicMock()  # non-None
@@ -196,9 +198,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_builds_per_instance_retriever_on_initialize(self):
         """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -234,9 +237,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_two_instances_get_independent_retrievers(self):
         """Two RAGService instances each get their own NeuralMeshRetriever."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -280,9 +284,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_already_set_retriever_not_overwritten(self):
         """An existing _mesh_retriever is NOT replaced even when components are registered."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -314,9 +319,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_no_components_no_retriever_built(self):
         """If components are not registered, no retriever is built."""
-        from services.rag_service import RAGService
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService
 
         # _shared_mesh_components is None (cleared in setup_method)
 

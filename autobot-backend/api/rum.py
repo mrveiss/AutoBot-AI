@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
+
 from api.schemas_analytics import (
     RumApiCallMetric,
     RumConfig,

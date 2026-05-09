@@ -13,8 +13,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
-
 from api.schemas_agent import (
     InferenceOptimizationSettings,
     LLMAvailableModelsResponse,
@@ -33,6 +31,7 @@ from api.schemas_agent import (
     LLMTrackPerformanceResponse,
     ModelPerformanceData,
 )
+from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config.manager import get_config_manager

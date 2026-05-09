@@ -8,17 +8,18 @@ Tests autonomous subagent spawning, parallel execution, failure isolation,
 conflict resolution, and constraint validation.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
+from services.agents.subagent_manager import SubagentManager
+from services.agents.subagent_spawner import SubagentSpawner
 from services.agents.subagent_task import (
     SubagentTask,
     TaskPriority,
     TaskResult,
     TaskStatus,
 )
-from services.agents.subagent_spawner import SubagentSpawner
-from services.agents.subagent_manager import SubagentManager
 
 
 class TestSubagentTask:

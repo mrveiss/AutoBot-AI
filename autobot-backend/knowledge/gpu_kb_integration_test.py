@@ -4,8 +4,8 @@ Simple test to verify GPU-optimized semantic chunking integration with knowledge
 """
 
 import asyncio
-import sys
 import os
+import sys
 import time
 
 # Add AutoBot to path

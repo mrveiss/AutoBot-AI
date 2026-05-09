@@ -16,7 +16,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-
 from autobot_shared.status_enums import TaskStatus  # #6973 consolidation
 
 

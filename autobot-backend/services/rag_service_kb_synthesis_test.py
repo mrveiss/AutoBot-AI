@@ -4,8 +4,9 @@
 # Author: mrveiss
 """Tests for RAGService._get_kb_synthesis_context() multi-collection path (#4659)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # =============================================================================
 # Helpers

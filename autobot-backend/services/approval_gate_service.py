@@ -12,13 +12,13 @@ notifications for pending approvals.
 import logging
 import uuid
 from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 
 logger = logging.getLogger(__name__)

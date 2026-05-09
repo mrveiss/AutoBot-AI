@@ -11,9 +11,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field, validator
 
+from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
 

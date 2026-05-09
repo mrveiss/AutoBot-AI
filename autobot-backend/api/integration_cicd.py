@@ -9,18 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from integrations.base import IntegrationConfig
-from integrations.cicd_integration import (
-    CircleCIIntegration,
-    GitLabCIIntegration,
-    JenkinsIntegration,
-)
 from api.schemas_code import (
     CICDConnectionTestResponse,
     CICDPipelineLogsResponse,
-    CICDPipelineStatusResponse,
     CICDPipelinesResponse,
+    CICDPipelineStatusResponse,
     CICDPipelineTriggerResponse,
 )
 from api.schemas_workflows import (
@@ -29,7 +22,14 @@ from api.schemas_workflows import (
     CICDProviderInfo,
     PipelineTriggerRequest,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from integrations.base import IntegrationConfig
+from integrations.cicd_integration import (
+    CircleCIIntegration,
+    GitLabCIIntegration,
+    JenkinsIntegration,
+)
 
 logger = logging.getLogger(__name__)
 

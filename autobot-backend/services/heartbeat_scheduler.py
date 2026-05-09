@@ -21,8 +21,9 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from live_event_manager import publish_live_event
 from autobot_shared.time_utils import now_utc
+from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
+from live_event_manager import publish_live_event
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -31,7 +32,6 @@ from models.heartbeat import (
     HeartbeatRunStatus,
     WakeupTrigger,
 )
-from events.event_types import HEARTBEAT_RUN_STARTED, HEARTBEAT_RUN_COMPLETED
 
 logger = logging.getLogger(__name__)
 

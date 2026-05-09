@@ -22,11 +22,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.error_utils import safe_http_detail
-from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
-from constants.threshold_constants import TimingConstants
 
 from api.schemas_chat import (
     ChatDeleteData,
@@ -46,6 +41,11 @@ from api.schemas_chat import (
     TranslateRequest,
 )
 from api.schemas_common import DataResponse
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
 from dependencies import get_config, get_knowledge_base
@@ -104,7 +104,6 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
     from services.llm_service import LLMService
-
     from utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)

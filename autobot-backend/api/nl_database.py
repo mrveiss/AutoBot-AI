@@ -19,8 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from auth_middleware import get_current_user
-from services.nl_database_service import get_nl_database_service
 from api.schemas_agent import NLDatabaseSchemaResponse
 from api.schemas_knowledge import (
     NLQueryRequest,
@@ -28,7 +26,9 @@ from api.schemas_knowledge import (
     TrainRequest,
     TrainResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.nl_database_service import get_nl_database_service
 
 logger = logging.getLogger(__name__)
 

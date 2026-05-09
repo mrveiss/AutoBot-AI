@@ -13,12 +13,12 @@ import hmac
 import logging
 import time
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
 
+from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

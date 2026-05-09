@@ -17,17 +17,17 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     AlertThresholdRequest,
     ErrorMonitoringAlertThresholdResponse,
-    ErrorMonitoringClearResponse,
     ErrorMonitoringCleanupResponse,
+    ErrorMonitoringClearResponse,
     ErrorMonitoringDataResponse,
     ErrorMonitoringResolveResponse,
     ErrorMonitoringTestErrorResponse,
     TestErrorRequest,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,

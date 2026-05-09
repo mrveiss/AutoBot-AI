@@ -12,8 +12,6 @@ Each agent can have its own LLM model configuration and status monitoring.
 import logging
 import os
 from datetime import datetime, timezone
-
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,10 +27,10 @@ from api.schemas_agent import (
     AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
-
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client

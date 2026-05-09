@@ -21,10 +21,10 @@ from fastapi import APIRouter, Depends
 
 from api.schemas_knowledge import RagFeedbackRequest
 from auth_middleware import get_current_user
-from knowledge.schemas.mcp import RagFeedbackResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
+from knowledge.schemas.mcp import RagFeedbackResponse
 from knowledge.search_components.retrieval_learner import GLOBAL_USER
 
 logger = logging.getLogger(__name__)

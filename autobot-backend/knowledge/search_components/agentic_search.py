@@ -360,7 +360,6 @@ class AgenticSearchTool:
         (Issue #5102).
         """
         from autobot_shared.ssot_config import get_config
-
         from llm_providers.ollama_helpers import call_ollama_generate
 
         ssot = get_config()

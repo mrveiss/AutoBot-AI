@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
+
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
     APIContractMismatch,

@@ -20,10 +20,6 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import now_utc, utc_timestamp
-from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 from api.schemas_analytics import (
     AgentBudgetRequest,
     AgentBudgetSetResponse,
@@ -43,6 +39,10 @@ from api.schemas_analytics import (
     SingleAgentCostResponse,
     UsageRecentResponse,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import now_utc, utc_timestamp
+from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])

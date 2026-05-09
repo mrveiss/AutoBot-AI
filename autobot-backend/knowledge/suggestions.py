@@ -16,8 +16,9 @@ import logging
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+
+from autobot_shared.time_utils import parse_utc_iso
 
 if TYPE_CHECKING:
     import aioredis

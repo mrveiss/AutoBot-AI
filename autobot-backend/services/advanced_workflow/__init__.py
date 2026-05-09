@@ -8,6 +8,7 @@ AI-driven workflow orchestration with intelligent step generation,
 optimization, and learning capabilities.
 """
 
+from .coordinator import WorkflowCoordinator
 from .intent_analyzer import IntentAnalyzer
 from .learning_engine import WorkflowLearningEngine
 from .models import (
@@ -19,7 +20,6 @@ from .models import (
     WorkflowTemplate,
 )
 from .optimizer import WorkflowOptimizer
-from .coordinator import WorkflowCoordinator
 from .risk_analyzer import RiskAnalyzer
 from .routes import get_orchestrator_instance, router
 from .step_generator import StepGenerator

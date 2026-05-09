@@ -34,8 +34,8 @@ from typing import Callable, List, Union
 
 from fastapi import Request
 
-from autobot_shared.singleton_factory import lazy_singleton
 from auth_middleware import get_auth_middleware
+from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 

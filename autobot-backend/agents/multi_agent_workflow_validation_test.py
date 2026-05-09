@@ -6,8 +6,8 @@ Tests the complete multi-agent coordination system for production readiness
 
 import asyncio
 import json
-import sys
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime

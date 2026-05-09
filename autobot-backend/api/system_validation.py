@@ -11,10 +11,6 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-from api.system_health import register_singleton_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
-from utils.system_validator import get_system_validator
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,
     SystemValidationComponentResponse,
@@ -25,6 +21,10 @@ from api.schemas_workflows import (
     SystemValidationResultModel,
     SystemValidationStatusResponse,
 )
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
+from utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)
 

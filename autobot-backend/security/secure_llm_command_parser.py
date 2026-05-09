@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import (
     InjectionRisk,
@@ -20,7 +21,6 @@ from security.prompt_injection_detector import (
     get_prompt_injection_detector,
 )
 from utils.command_validator import CommandValidator
-from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 

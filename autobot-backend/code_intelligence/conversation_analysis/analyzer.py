@@ -11,8 +11,9 @@ Contains the main ConversationFlowAnalyzer class that coordinates analysis.
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional, Tuple
+
+from autobot_shared.time_utils import parse_utc_iso
 
 from .classifiers import IntentClassifier, ResponseClassifier
 from .types import (

@@ -4785,6 +4785,7 @@ class KBQueryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 from datetime import datetime as _datetime
+
 from knowledge.audit_log import AuditEventType as _AuditEventType
 
 

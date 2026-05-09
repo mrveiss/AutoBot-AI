@@ -11,7 +11,8 @@ Issue #4346: Smart context truncation for large files
 """
 
 import pytest
-from prompt_manager import _truncate_large_file, PromptManager
+
+from prompt_manager import PromptManager, _truncate_large_file
 
 
 class TestTruncateLargeFile:

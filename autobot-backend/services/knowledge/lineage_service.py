@@ -13,8 +13,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = logging.getLogger(__name__)
 

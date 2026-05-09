@@ -15,7 +15,6 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_common import SuccessResponse
 from api.schemas_workflows import (
     ElevationAuthorization,
@@ -27,6 +26,7 @@ from api.schemas_workflows import (
     ElevationRequestResponse,
     ElevationStatusResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

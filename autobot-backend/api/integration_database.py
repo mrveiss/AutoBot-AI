@@ -14,6 +14,20 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_code import (
+    IntegrationDatabaseConnectionTestResponse,
+    IntegrationDatabaseListResponse,
+    IntegrationDatabaseProvidersResponse,
+    IntegrationDatabaseQueryResponse,
+    IntegrationMongoQueryResponse,
+    IntegrationTablesListResponse,
+)
+from api.schemas_workflows import (
+    DatabaseConnectionRequest,
+    DatabaseListRequest,
+    DBIntegrationQueryRequest,
+    MongoQueryRequest,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig
@@ -21,20 +35,6 @@ from integrations.database_integration import (
     MongoDBIntegration,
     MySQLIntegration,
     PostgreSQLIntegration,
-)
-from api.schemas_code import (
-    IntegrationDatabaseConnectionTestResponse,
-    IntegrationDatabaseProvidersResponse,
-    IntegrationDatabaseQueryResponse,
-    IntegrationMongoQueryResponse,
-    IntegrationDatabaseListResponse,
-    IntegrationTablesListResponse,
-)
-from api.schemas_workflows import (
-    DBIntegrationQueryRequest,
-    DatabaseConnectionRequest,
-    DatabaseListRequest,
-    MongoQueryRequest,
 )
 
 logger = logging.getLogger(__name__)

@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
+from redis.exceptions import RedisError
 
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
@@ -44,8 +45,6 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
-from redis.exceptions import RedisError
-
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.model_constants import (
@@ -840,6 +839,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
 # =============================================================================
 
 import threading
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 _analyzer: Optional[LLMPatternAnalyzer] = None

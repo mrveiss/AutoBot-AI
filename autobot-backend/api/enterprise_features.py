@@ -13,6 +13,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    BulkFeatureRequest,
+    FeatureEnableRequest,
+    PerformanceOptimizationRequest,
+)
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -20,12 +26,6 @@ from enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,
     get_enterprise_manager,
-)
-from api.schemas_common import DataResponse
-from api.schemas_workflows import (
-    BulkFeatureRequest,
-    FeatureEnableRequest,
-    PerformanceOptimizationRequest,
 )
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])

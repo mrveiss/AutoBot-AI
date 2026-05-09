@@ -15,7 +15,6 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_system import (
     CacheClearTypeResponse,
     CacheConfigResponse,
@@ -32,6 +31,7 @@ from api.schemas_system import (
     TopicCacheConfigUpdate,
     WarmCacheResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client

@@ -18,9 +18,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 from api.schemas_analytics import (
     AgentAllPerformanceResponse,
     AgentComparisonResponse,
@@ -30,11 +27,14 @@ from api.schemas_analytics import (
     AgentRecentTasksResponse,
     AgentRecommendationsResponse,
     AgentTaskCompleteResponse,
-    CompleteTaskRequest,
-    TrackTaskRequest,
     AgentTaskStartResponse,
     AgentTypesResponse,
+    CompleteTaskRequest,
+    TrackTaskRequest,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
@@ -255,6 +255,7 @@ def _check_agent_metrics(metrics) -> list:
 
     if metrics.total_tasks > 0 and metrics.last_activity:
         from datetime import timedelta
+
         from autobot_shared.time_utils import now_utc, parse_utc_iso
 
         try:

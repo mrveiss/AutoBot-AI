@@ -16,10 +16,6 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from auth_middleware import get_current_user
-
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_config import config
 from api.marketplace_sources import BUILTIN_SOURCE_ID
 from api.schemas_workflows import (
     InstallRequest,
@@ -29,7 +25,10 @@ from api.schemas_workflows import (
     MarketplaceInstalledResponse,
     MarketplacePluginActionResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 
 
 class CatalogCategory(str, Enum):

@@ -17,12 +17,12 @@ from api.schemas_code import (
 )
 from api.schemas_workflows import VCSConnectionTestRequest, VCSProviderInfo
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

@@ -5,8 +5,8 @@ Tests semantic chunking performance and identifies optimization opportunities.
 """
 
 import asyncio
-import sys
 import os
+import sys
 import time
 
 import psutil

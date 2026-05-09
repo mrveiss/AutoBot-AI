@@ -226,8 +226,8 @@ async def test_publish_feedback_events_tags_split():
 
 def test_endpoint_response_shape_has_new_fields():
     """POST /rag/benchmark/run must return all Issue #5074 fields."""
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission
@@ -262,8 +262,8 @@ def test_endpoint_response_shape_has_new_fields():
 
 
 def test_endpoint_rejects_invalid_split():
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission
@@ -316,8 +316,8 @@ def test_held_out_score_requires_test_access():
 
 
 def test_endpoint_dev_split_is_not_held_out():
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
     from api.knowledge_rag import router
     from auth_middleware import check_admin_permission

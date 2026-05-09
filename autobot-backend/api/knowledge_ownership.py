@@ -14,13 +14,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.schemas_knowledge import ShareFactRequest, UpdateVisibilityRequest
 from api.schemas_knowledge import (
     KnowledgeMyFactsResponse,
-    KnowledgeShareFactResponse,
     KnowledgeSharedWithMeResponse,
+    KnowledgeShareFactResponse,
     KnowledgeUnshareFactResponse,
     KnowledgeUpdateVisibilityResponse,
+    ShareFactRequest,
+    UpdateVisibilityRequest,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

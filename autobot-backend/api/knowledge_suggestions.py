@@ -25,19 +25,17 @@ from fastapi import APIRouter, HTTPException
 from api.schemas_knowledge import (
     AutoApplySuggestionsRequest,
     ContextSuggestionsRequest,
-    SuggestAllRequest,
-    SuggestCategoriesRequest,
-    SuggestTagsRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeAutoApplySuggestionsResponse,
     KnowledgeSuggestionsAllResponse,
     KnowledgeSuggestionsCategoriesResponse,
     KnowledgeSuggestionsContextResponse,
     KnowledgeSuggestionsTagsResponse,
+    SuggestAllRequest,
+    SuggestCategoriesRequest,
+    SuggestTagsRequest,
 )
-from knowledge import get_knowledge_base
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 

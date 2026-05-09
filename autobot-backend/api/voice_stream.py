@@ -37,8 +37,8 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from services.tts_client import get_tts_client
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.tts_client import get_tts_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -15,11 +15,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from api.schemas_knowledge import (
-    MarkdownReferenceRequest,
-    TaskCreateRequest,
-    TaskUpdateRequest,
-)
 from api.schemas_agent import (
     MemoryActiveTasksResponse,
     MemoryCleanupResponse,
@@ -33,7 +28,11 @@ from api.schemas_agent import (
     MemoryTaskHistoryResponse,
     MemoryTaskUpdateResponse,
 )
-
+from api.schemas_knowledge import (
+    MarkdownReferenceRequest,
+    TaskCreateRequest,
+    TaskUpdateRequest,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,

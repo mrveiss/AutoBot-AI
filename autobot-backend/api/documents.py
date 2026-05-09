@@ -29,11 +29,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_async_redis_client
-from constants.ttl_constants import TTL_365_DAYS
-from models.document import AIDocument
 from api.schemas_knowledge import (
     AIDocumentListResponse,
     AIDocumentResponse,
@@ -41,6 +36,11 @@ from api.schemas_knowledge import (
     RefineDocumentRequest,
     UpdateDocumentRequest,
 )
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
+from constants.ttl_constants import TTL_365_DAYS
+from models.document import AIDocument
 
 logger = logging.getLogger(__name__)
 

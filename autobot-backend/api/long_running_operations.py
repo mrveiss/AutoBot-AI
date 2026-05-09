@@ -33,11 +33,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from api.system_health import ComponentHealth, register_health_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.security.path_validator import validate_path
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
+
 from api.schemas_workflows import (
     CodebaseIndexingRequest,
     KnowledgeBaseRequest,
@@ -50,6 +46,11 @@ from api.schemas_workflows import (
     SecurityScanRequest,
     TestSuiteRequest,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))

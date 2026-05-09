@@ -6,11 +6,11 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
-from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -16,11 +16,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from integrations.base import IntegrationConfig
 from integrations.slack_integration import (
     SlackChannelMapping,
     SlackNotificationIntegration,
 )
-from integrations.base import IntegrationConfig
 
 
 @pytest.fixture

@@ -2,7 +2,6 @@
 
 import unittest
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import now_utc
 
 from notification_suppression import (
     NotificationFilter,
@@ -10,6 +9,8 @@ from notification_suppression import (
     NotificationSuppressionConfig,
     NotificationSuppressionManager,
 )
+
+from autobot_shared.time_utils import now_utc
 
 
 class TestNotificationFilter(unittest.TestCase):

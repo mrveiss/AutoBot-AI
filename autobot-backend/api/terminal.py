@@ -120,49 +120,44 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from api.system_health import ComponentHealth, register_health_probe
-
+# Import models from dedicated module (Issue #185 - split oversized files)
 # Response schemas for OpenAPI documentation and response validation
 from api.schemas_terminal import (
+    AdminExecuteRequest,
     AdminExecuteResponse,
     CommandAssessResponse,
+    CommandRequest,
+    CommandRiskLevel,
+    SecurityLevel,
+    SSHKeyAgentRequest,
     SSHKeyAgentResponse,
     SSHKeyListResponse,
     SSHKeyPathResponse,
+    SSHKeySetupRequest,
     TerminalAuditLogResponse,
     TerminalCapabilitiesResponse,
     TerminalCommandHistoryResponse,
     TerminalFeaturesResponse,
     TerminalHealthResponse,
     TerminalInfoResponse,
+    TerminalInputRequest,
     TerminalInputResponse,
     TerminalSecurityPoliciesResponse,
     TerminalSessionCreateResponse,
     TerminalSessionDeleteResponse,
     TerminalSessionDetailResponse,
     TerminalSessionListResponse,
+    TerminalSessionRequest,
     TerminalSignalResponse,
     TerminalStatsResponse,
     TerminalSystemStatusResponse,
 )
-
-from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
-
-# Import models from dedicated module (Issue #185 - split oversized files)
-from api.schemas_terminal import (
-    AdminExecuteRequest,
-    CommandRequest,
-    CommandRiskLevel,
-    SecurityLevel,
-    SSHKeyAgentRequest,
-    SSHKeySetupRequest,
-    TerminalInputRequest,
-    TerminalSessionRequest,
-)
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from constants.error_constants import ERR_SESSION_NOT_FOUND
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)

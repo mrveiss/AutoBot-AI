@@ -16,21 +16,20 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from api.system_health import ComponentHealth, register_health_probe
-
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import config as ssot_config
-from config.manager import get_config_manager
-from constants.error_constants import ERR_SESSION_NOT_FOUND
-from api.schemas_common import DataResponse
 from api.schemas_code import ResearchBrowserHealthResponse
+from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     BrowserResearchRequest,
     CreateChatBrowserRequest,
     NavigationRequest,
     SessionAction,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import config as ssot_config
+from config.manager import get_config_manager
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 
 logger = logging.getLogger(__name__)
 

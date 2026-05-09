@@ -12,12 +12,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
 

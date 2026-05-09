@@ -25,12 +25,11 @@ import re
 import sqlite3
 import time
 from datetime import datetime
-
-from autobot_shared.time_utils import utc_timestamp
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 

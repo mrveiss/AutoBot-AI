@@ -14,10 +14,11 @@ sys.modules patching so the test suite can run without the full backend stack.
 import sys
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
-from tests.helpers.fake_kb import FactsFakeKB
-from knowledge.facts import FactsMixin
 
 import pytest
+
+from knowledge.facts import FactsMixin
+from tests.helpers.fake_kb import FactsFakeKB
 
 # ---------------------------------------------------------------------------
 # Stub out heavy dependencies before importing knowledge.facts

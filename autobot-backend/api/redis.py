@@ -6,16 +6,16 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.system_health import register_redis_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_async_redis_client
-from services.config_service import ConfigService
-from utils.connection_utils import ConnectionTester
 from api.schemas_system import (
     RedisConfigResponse,
     RedisConnectionStatusResponse,
     RedisHealthResponse,
 )
+from api.system_health import register_redis_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
+from services.config_service import ConfigService
+from utils.connection_utils import ConnectionTester
 
 router = APIRouter()
 

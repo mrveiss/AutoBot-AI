@@ -19,11 +19,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.redis_client import get_redis_client
-from constants.threshold_constants import TimingConstants
-from constants.ttl_constants import TTL_5_MINUTES
-from utils.background_task_manager import BackgroundTaskManager
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -40,7 +35,12 @@ from api.schemas_analytics import (
     RiskFactor,
     RiskLevel,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
+from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
 

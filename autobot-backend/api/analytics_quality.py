@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,8 +19,6 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
-from auth_middleware import check_admin_permission
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     HealthScore,
     MetricCategory,
@@ -34,7 +31,10 @@ from api.schemas_analytics import (
     QualitySnapshotResponse,
     QualityTrendsResponse,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,19 @@ from typing import Any, Dict, List, Optional, Set
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from services.llm_service import get_llm_service
+from enhanced_orchestration.agent_router import AgentRouter
+from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
+
+# Issue #5040: multi-agent imports
+from enhanced_orchestration.types import (
+    FALLBACK_TIERS,
+    AgentPerformance,
+    AgentTask,
+    ExecutionStrategy,
+    WorkflowPlan,
+)
+from enhanced_orchestration.workflow_planning import StrategyPlanner
+from enhanced_orchestration.workflow_runner import WorkflowRunner
 from memory import LongTermMemoryManager
 
 # Issue #381: shared orchestration types
@@ -43,25 +55,13 @@ from orchestration import (
     WorkflowDocumenter,
 )
 from orchestration.performance_tracker import PerformanceTracker
+from services.llm_service import get_llm_service
 from task_execution_tracker import Priority, TaskType, get_task_tracker
 
 # Shared agent selection utilities (Issue #292)
 from utils.agent_selection import find_best_agent_for_task as _find_best_agent
 from utils.agent_selection import release_agent as _release_agent
 from utils.agent_selection import reserve_agent as _reserve_agent
-
-# Issue #5040: multi-agent imports
-from enhanced_orchestration.types import (
-    FALLBACK_TIERS,
-    AgentPerformance,
-    AgentTask,
-    ExecutionStrategy,
-    WorkflowPlan,
-)
-from enhanced_orchestration.agent_router import AgentRouter
-from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
-from enhanced_orchestration.workflow_planning import StrategyPlanner
-from enhanced_orchestration.workflow_runner import WorkflowRunner
 
 logger = get_logger("orchestrator")
 
@@ -77,8 +77,8 @@ except ImportError:
     KNOWLEDGE_BASE_AVAILABLE = False
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
-from autobot_types import TaskComplexity
 from agents.agent_client import AgentRegistry as _AgentClientRegistry
+from autobot_types import TaskComplexity
 
 try:
     from agents.gemma_classification_agent import GemmaClassificationAgent

@@ -13,12 +13,6 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-from services.resilience.circuit_breaker_manager import (
-    get_circuit_breaker_manager,
-)
-from services.resilience.error_budget import get_error_budget_tracker
-from services.resilience.fallback_manager import get_fallback_manager
 from api.schemas_workflows import (
     CircuitBreakerResetResponse,
     CircuitBreakerStatusResponse,
@@ -26,7 +20,13 @@ from api.schemas_workflows import (
     ErrorBudgetStatusResponse,
     ResilienceHealthResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.resilience.circuit_breaker_manager import (
+    get_circuit_breaker_manager,
+)
+from services.resilience.error_budget import get_error_budget_tracker
+from services.resilience.fallback_manager import get_fallback_manager
 
 logger = logging.getLogger(__name__)
 

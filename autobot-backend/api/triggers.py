@@ -18,20 +18,20 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
-from auth_middleware import get_current_user
-from services.trigger_service import (
-    TriggerConfig,
-    TriggerDefinition,
-    TriggerService,
-    TriggerType,
-)
 from api.schemas_agent import WebhookAcceptedResponse
 from api.schemas_workflows import (
     TriggerCreateRequest,
     TriggerCreateResponse,
     TriggerListResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.trigger_service import (
+    TriggerConfig,
+    TriggerDefinition,
+    TriggerService,
+    TriggerType,
+)
 
 logger = logging.getLogger(__name__)
 

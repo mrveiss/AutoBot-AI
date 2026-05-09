@@ -27,8 +27,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
-from auth_middleware import check_admin_permission
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_analytics import (
     ContinuousLearningFeedbackResponse,
     ContinuousLearningGenerateInsightsResponse,
@@ -49,6 +47,8 @@ from api.schemas_analytics import (
     RetrainingReason,
     RetrainingRequest,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

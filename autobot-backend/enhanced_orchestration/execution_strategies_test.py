@@ -4,6 +4,7 @@
 """Unit tests for ExecutionStrategyHandler. Issue #6421."""
 
 import asyncio
+
 import pytest
 
 from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler

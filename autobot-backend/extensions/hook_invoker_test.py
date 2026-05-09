@@ -12,8 +12,9 @@ Tests verify:
 5. Config registration and override
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from extensions.base import Extension, HookContext
 from extensions.hook_invoker import (

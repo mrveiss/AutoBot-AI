@@ -15,14 +15,11 @@ from typing import TYPE_CHECKING, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from api.system_health import ComponentHealth, register_health_probe
-
 from auth_middleware import check_admin_permission, get_current_user
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from monitoring.prometheus_metrics import get_metrics_manager
 from api.schemas_agent import (
     AgentReloadResponse,
     AgentSystemCapabilitiesResponse,
@@ -31,6 +28,8 @@ from api.schemas_agent import (
     HealthResponse,
 )
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)

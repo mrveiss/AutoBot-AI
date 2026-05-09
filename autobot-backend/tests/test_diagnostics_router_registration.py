@@ -7,11 +7,12 @@ Test diagnostics router registration.
 Issue #4254: Verify diagnostics router is properly registered and discoverable.
 """
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 
 # Test that the diagnostics router can be imported
-from api.diagnostics import router, get_engine
+from api.diagnostics import get_engine, router
 from initialization.router_registry.monitoring_routers import MONITORING_ROUTER_CONFIGS
 
 

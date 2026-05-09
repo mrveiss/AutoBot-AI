@@ -14,19 +14,19 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_analytics import CodeAnalysisRequest
+from api.schemas_analytics import (
+    AnalyticsCodeCommunicationChainsResponse,
+    AnalyticsCodeIndexResponse,
+    AnalyticsCodeQualityAssessmentResponse,
+    AnalyticsCodeQualityMetricsResponse,
+    AnalyticsCodeQualityScoreResponse,
+    AnalyticsCodeStatusResponse,
+    CodeAnalysisRequest,
+)
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
-from api.schemas_common import DataResponse
-from api.schemas_analytics import (
-    AnalyticsCodeIndexResponse,
-    AnalyticsCodeStatusResponse,
-    AnalyticsCodeQualityAssessmentResponse,
-    AnalyticsCodeQualityMetricsResponse,
-    AnalyticsCodeCommunicationChainsResponse,
-    AnalyticsCodeQualityScoreResponse,
-)
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated

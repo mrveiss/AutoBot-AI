@@ -19,8 +19,8 @@ from fastapi import APIRouter, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_system import ApplyPresetRequest, OnboardingStatus
-from onboarding.presets import get_all_presets, get_preset
 from onboarding.doctor import run_doctor
+from onboarding.presets import get_all_presets, get_preset
 
 logger = logging.getLogger(__name__)
 

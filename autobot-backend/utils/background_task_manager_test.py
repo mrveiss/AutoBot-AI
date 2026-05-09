@@ -25,8 +25,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from utils.background_task_manager import BackgroundTaskManager
 from autobot_shared.time_utils import now_utc
+from utils.background_task_manager import BackgroundTaskManager
 
 
 @pytest.fixture

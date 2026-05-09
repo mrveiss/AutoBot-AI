@@ -14,11 +14,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from api.schemas_common import DataResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
-from llm_interface_pkg.adapters.registry import get_adapter_registry
-from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from llm_interface_pkg.adapters.registry import get_adapter_registry
 
 logger = logging.getLogger(__name__)
 

@@ -22,9 +22,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Request
 from fastapi.openapi.utils import get_openapi
 
+from api.schemas_agent import SelfCapabilitiesResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.ttl_constants import TTL_5_MINUTES
-from api.schemas_agent import SelfCapabilitiesResponse
 
 logger = logging.getLogger(__name__)
 

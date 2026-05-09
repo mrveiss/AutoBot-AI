@@ -21,11 +21,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from api.schemas_workflows import (
     APIBatchRequest,
     APIBatchResponse,
@@ -34,9 +29,9 @@ from api.schemas_workflows import (
     BatchJobCreate,
     BatchJobDeleteResponse,
     BatchJobList,
+    BatchJobsHealthResponse,
     BatchJobStatus,
     BatchJobType,
-    BatchJobsHealthResponse,
     BatchLoadResponse,
     BatchLogEntry,
     BatchSchedule,
@@ -45,6 +40,11 @@ from api.schemas_workflows import (
     BatchTemplate,
     BatchTemplateDeleteResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])

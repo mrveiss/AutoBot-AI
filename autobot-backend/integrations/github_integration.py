@@ -14,11 +14,11 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -30,8 +30,8 @@ from integrations.rate_limiter import (
     GITHUB_REQUESTS_PER_HOUR,
     GITHUB_REQUESTS_PER_MINUTE,
     IntegrationRateLimiter,
-    integration_rate_limiter as _shared_rate_limiter,
 )
+from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
 
 logger = logging.getLogger(__name__)
 

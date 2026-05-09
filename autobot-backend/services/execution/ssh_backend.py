@@ -13,8 +13,9 @@ import io
 import logging
 import sys
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Optional, Tuple
+
+from autobot_shared.time_utils import now_utc
 
 try:
     import paramiko

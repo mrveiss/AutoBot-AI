@@ -10,16 +10,11 @@ Integrates with backend VNC proxy for browser and desktop observation
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
-from constants.network_constants import NetworkConstants
-from type_defs.common import Metadata
+
 from api.schemas_system import (
     BrowserVncContextResponse,
     DesktopClickMcpResponse,
@@ -31,13 +26,19 @@ from api.schemas_system import (
     DesktopScreenshotMcpResponse,
     DesktopSpecialKeyMcpResponse,
     DesktopSpecialKeyRequest,
-    VNCObservationRequest,
-    VNCStatusRequest,
     VncMCPTool,
     VncObservationMcpResponse,
+    VNCObservationRequest,
     VncRecordObservationResponse,
     VncStatusMcpResponse,
+    VNCStatusRequest,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import parse_utc_iso
+from constants.network_constants import NetworkConstants
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

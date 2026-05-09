@@ -16,11 +16,11 @@ Functions:
 import logging
 from typing import TYPE_CHECKING, TypeVar
 
-from autobot_shared.time_utils import utc_timestamp
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from autobot_shared.time_utils import utc_timestamp
 
 if TYPE_CHECKING:
     from services.ai_stack_client import AIStackError

@@ -25,8 +25,8 @@ from autobot_shared.ssot_config import (
 )
 from config.manager import get_config_manager as _get_config_manager
 from llm_interface_pkg.types import LLMType
-from services.llm_service import get_llm_service
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
+from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent

@@ -11,8 +11,8 @@ Contains response building and clustering functionality.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from models.task_context import SearchResponseContext
 from autobot_shared.singleton_factory import lazy_singleton
+from models.task_context import SearchResponseContext
 
 logger = logging.getLogger(__name__)
 

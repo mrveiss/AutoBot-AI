@@ -33,12 +33,16 @@ from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
 from api.knowledge import router as knowledge_router
+from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_audit import router as knowledge_audit_router
-from api.knowledge_cognition import router as knowledge_cognition_router
+from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
+from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
 from api.knowledge_connectors import router as knowledge_connectors_router
+from api.knowledge_debug import router as knowledge_debug_router
+from api.knowledge_grounding import router as knowledge_grounding_router
 from api.knowledge_mcp import router as knowledge_mcp_router
 from api.knowledge_metadata import router as knowledge_metadata_router
 from api.knowledge_organization import router as knowledge_organization_router
@@ -46,23 +50,16 @@ from api.knowledge_ownership import router as knowledge_ownership_router
 from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
+from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
-from api.knowledge_tags import router as knowledge_tags_router
-from api.knowledge_verification import router as knowledge_verification_router
-from api.knowledge_ai_stack import router as knowledge_ai_stack_router
-from api.knowledge_boards import router as knowledge_boards_router
-from api.knowledge_debug import router as knowledge_debug_router
-from api.knowledge_grounding import router as knowledge_grounding_router
-from api.knowledge_search_aggregator import (
-    router as knowledge_search_aggregator_router,
-)
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
+from api.knowledge_tags import router as knowledge_tags_router
 from api.knowledge_vectorization import router as knowledge_vectorization_router
-from api.llm import router as llm_router
+from api.knowledge_verification import router as knowledge_verification_router
 from api.live_events import router as live_events_router  # Issue #6229
+from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
-from api.websockets import router as websockets_router  # Issue #6229
 from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
@@ -86,6 +83,7 @@ from api.vnc_proxy import router as vnc_proxy_router
 from api.voice import router as voice_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
+from api.websockets import router as websockets_router  # Issue #6229
 from plugin_manager import router as plugin_manager_router
 from services.knowledge_sync_service import router as knowledge_sync_router
 

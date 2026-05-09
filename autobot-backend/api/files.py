@@ -23,6 +23,20 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 
+from api.schemas_system import (
+    AdminFileListResponse,
+    AdminFileReadResponse,
+    DirectoryCreateResponse,
+    DirectoryListing,
+    DirectoryTreeResponse,
+    FileDeleteResponse,
+    FileInfo,
+    FilePreviewResponse,
+    FileRenameResponse,
+    FilesAPIUploadResponse,
+    FileStatsResponse,
+    FileViewResponse,
+)
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
@@ -36,20 +50,6 @@ from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
-from api.schemas_system import (
-    AdminFileListResponse,
-    AdminFileReadResponse,
-    DirectoryCreateResponse,
-    DirectoryListing,
-    DirectoryTreeResponse,
-    FileDeleteResponse,
-    FileInfo,
-    FilePreviewResponse,
-    FileRenameResponse,
-    FileStatsResponse,
-    FileViewResponse,
-    FilesAPIUploadResponse,
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

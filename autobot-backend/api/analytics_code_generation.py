@@ -29,10 +29,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
-from auth_middleware import check_admin_permission
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     CodeGenerationHealthResponse,
     CodeGenerationRefactoringTypesResponse,
@@ -48,7 +44,11 @@ from api.schemas_analytics import (
     RefactoringResponse,
     RefactoringType,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service

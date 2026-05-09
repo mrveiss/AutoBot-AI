@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+
 from api.schemas_code import (
     CachedSecurityScoreResponse,
     ClearStuckResponse,

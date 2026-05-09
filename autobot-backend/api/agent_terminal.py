@@ -230,13 +230,6 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.error_constants import ERR_SESSION_NOT_FOUND
-from autobot_shared.redis_client import get_redis_client
-from services.agent_terminal import AgentSessionState, AgentTerminalService
-from services.command_approval_manager import AgentRole
-from services.command_execution_queue import get_command_queue
 from api.schemas_agent import (
     AgentTerminalApproveResponse,
     AgentTerminalExecuteResponse,
@@ -265,6 +258,13 @@ from api.schemas_terminal import (
     AgentTerminalSessionListResponse,
     AgentTerminalToolApprovalResponse,
 )
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from constants.error_constants import ERR_SESSION_NOT_FOUND
+from services.agent_terminal import AgentSessionState, AgentTerminalService
+from services.command_approval_manager import AgentRole
+from services.command_execution_queue import get_command_queue
 
 logger = logging.getLogger(__name__)
 

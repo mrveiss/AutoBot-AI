@@ -13,14 +13,15 @@ Issue #4346: Smart context truncation for large files
 import json
 
 import pytest
+
 from prompt_manager import (
+    PromptManager,
     _detect_structured_format,
     _json_head_boundary,
     _json_tail_boundary,
     _truncate_large_file,
     _xml_head_boundary,
     _xml_tail_boundary,
-    PromptManager,
 )
 
 

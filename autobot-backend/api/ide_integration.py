@@ -26,8 +26,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-
 from api.schemas_code import (
     CodeAction,
     CodeActionKind,
@@ -54,6 +52,7 @@ from api.schemas_code import (
     QuickFixRequest,
     QuickFixResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton

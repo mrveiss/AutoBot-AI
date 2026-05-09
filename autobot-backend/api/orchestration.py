@@ -31,8 +31,8 @@ except ImportError as _e:
     orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
     logging.getLogger(__name__).warning("orchestrator module not available")
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_common import DataResponse
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

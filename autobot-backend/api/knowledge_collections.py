@@ -31,9 +31,6 @@ from starlette.requests import Request
 from api.schemas_knowledge import (
     CollectionFactsRequest,
     CreateCollectionRequest,
-    UpdateCollectionRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeCollectionAddFactsResponse,
     KnowledgeCollectionBulkDeleteResponse,
     KnowledgeCollectionCreateResponse,
@@ -45,6 +42,7 @@ from api.schemas_knowledge import (
     KnowledgeCollectionRemoveFactsResponse,
     KnowledgeCollectionUpdateResponse,
     KnowledgeFactCollectionsResponse,
+    UpdateCollectionRequest,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

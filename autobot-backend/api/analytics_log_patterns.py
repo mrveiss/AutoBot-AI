@@ -17,8 +17,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.schemas_analytics import (
     LogAnomaly,
     LogPattern,
@@ -29,6 +27,8 @@ from api.schemas_analytics import (
     LogTrend,
     PatternMiningResult,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

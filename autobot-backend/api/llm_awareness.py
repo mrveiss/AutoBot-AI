@@ -13,8 +13,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
-
 from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
     LLMAwarenessHealthResponse,
@@ -29,6 +27,7 @@ from api.schemas_agent import (
     PromptInjectionRequest,
     QueryAnalysisRequest,
 )
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_self_awareness import get_llm_self_awareness
 

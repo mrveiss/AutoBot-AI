@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.knowledge.autonomous_loop import (
+    _DEFAULT_PROMOTION_THRESHOLD,
     AutonomousLoopRunner,
     LoopRunRecord,
     LoopStatus,
-    _DEFAULT_PROMOTION_THRESHOLD,
     get_loop_runner,
 )
 

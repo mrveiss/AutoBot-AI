@@ -10,15 +10,15 @@ don't need a running app, DB, or actual filesystem operations.
 from __future__ import annotations
 
 import asyncio
+
+# Add autobot-slm-backend to path so api.code_sync imports resolve.
+import sys
 from pathlib import Path
 from typing import List, Tuple
 from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
-
-# Add autobot-slm-backend to path so api.code_sync imports resolve.
-import sys
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))

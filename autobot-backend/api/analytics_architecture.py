@@ -30,7 +30,6 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 from fastapi import APIRouter, Depends, Query, Request
 
-from auth_middleware import check_admin_permission
 from api.schemas_analytics import (
     AnalyticsArchitectureConsistencyResponse,
     AnalyticsArchitectureDiagramResponse,
@@ -46,6 +45,7 @@ from api.schemas_analytics import (
     PatternMatch,
     PatternType,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.status_enums import Severity
 

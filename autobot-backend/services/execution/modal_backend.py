@@ -187,7 +187,7 @@ class ModalBackend(ExecutionBackend):
         # Simulate Modal execution
         try:
             import io
-            from contextlib import redirect_stdout, redirect_stderr
+            from contextlib import redirect_stderr, redirect_stdout
 
             # Capture stdout/stderr
             stdout_capture = io.StringIO()

@@ -16,7 +16,13 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
+
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
+from constants.model_constants import ModelConstants
+from dependencies import get_config
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
     KnowledgeSearchRequest,
@@ -32,11 +38,6 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
-from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from constants.model_constants import ModelConstants
-from dependencies import get_config
 from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
 from utils.service_registry import get_service_url

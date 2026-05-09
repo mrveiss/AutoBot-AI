@@ -11,9 +11,9 @@ Moved from shared /metrics prefix to avoid collision with JSON metrics endpoints
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from monitoring.prometheus_metrics import get_metrics_manager
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from monitoring.prometheus_metrics import get_metrics_manager
 
 router = APIRouter()
 

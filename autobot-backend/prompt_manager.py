@@ -845,8 +845,8 @@ class PromptManager:
         """
         try:
             from security.prompt_injection_detector import (
-                get_prompt_injection_detector,
                 InjectionRisk,
+                get_prompt_injection_detector,
             )
 
             detector = get_prompt_injection_detector(strict_mode=True)

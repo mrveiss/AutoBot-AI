@@ -8,8 +8,8 @@ Mocks ``memory.agent_diary._get_kb`` so no real KB connection is required.
 """
 
 import asyncio
-import sys
 import os
+import sys
 from unittest.mock import AsyncMock, patch
 
 # Add backend root and repo root (for autobot_shared) to path

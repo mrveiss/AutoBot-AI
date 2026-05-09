@@ -15,8 +15,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 

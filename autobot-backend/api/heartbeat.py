@@ -18,16 +18,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
-from models.heartbeat import (
-    AgentRuntimeState,
-    AgentWakeupRequest,
-    HeartbeatRun,
-    HeartbeatRunEvent,
-    WakeupTrigger,
-)
-from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
 from api.schemas_system import (
     HeartbeatConfigRequest,
     HeartbeatConfigResponse,
@@ -38,7 +28,17 @@ from api.schemas_system import (
     WakeupRequestCreate,
     WakeupRequestResponse,
 )
+from api.user_management.dependencies import get_db_session
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from models.heartbeat import (
+    AgentRuntimeState,
+    AgentWakeupRequest,
+    HeartbeatRun,
+    HeartbeatRunEvent,
+    WakeupTrigger,
+)
+from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

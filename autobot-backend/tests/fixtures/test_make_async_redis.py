@@ -11,8 +11,9 @@ with confidence.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from tests.fixtures import make_async_redis, patch_async_redis
 

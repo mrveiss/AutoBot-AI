@@ -47,9 +47,9 @@ from .schemas_code import (
     DatabaseMCPTool,
     DatabaseQueryResponse,
     DatabaseStatisticsResponse,
+    SchemaRequest,
     SQLExecuteRequest,
     SQLQueryRequest,
-    SchemaRequest,
     TableListRequest,
 )
 

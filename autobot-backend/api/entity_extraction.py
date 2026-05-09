@@ -29,10 +29,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
-from utils.request_utils import generate_request_id
 from api.schemas_knowledge import (
     BatchExtractionRequest,
     BatchExtractionResponse,
@@ -41,6 +37,10 @@ from api.schemas_knowledge import (
     EntityExtractionResponse,
     ExtractionMessage,
 )
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
+from utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

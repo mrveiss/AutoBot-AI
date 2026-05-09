@@ -12,7 +12,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Request
 
-from api.system_health import ComponentHealth, register_health_probe
 from api.schemas_workflows import (
     RegistryEndpointsResponse,
     RegistryHealthResponse,
@@ -22,6 +21,7 @@ from api.schemas_workflows import (
     RegistryTagsResponse,
     RegistryValidateResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create FastAPI router

@@ -11,8 +11,6 @@ import logging
 from datetime import timedelta
 from typing import Dict, Optional
 
-from autobot_shared.time_utils import now_utc
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
@@ -22,10 +20,11 @@ from api.schemas_knowledge import (
     KnowledgePermissionChangesResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.time_utils import now_utc
 from knowledge.audit_log import KnowledgeAuditLog
 from knowledge_factory import get_or_create_knowledge_base
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

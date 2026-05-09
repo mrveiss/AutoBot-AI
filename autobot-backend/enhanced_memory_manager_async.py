@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
+
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 

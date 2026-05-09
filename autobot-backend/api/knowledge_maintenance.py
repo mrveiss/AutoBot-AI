@@ -23,6 +23,23 @@ from pathlib import Path as PathLib
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
+from api.schemas_knowledge import (
+    BackupRequest,
+    BulkCategoryUpdateRequest,
+    BulkDeleteRequest,
+    CleanupRequest,
+    DeduplicationRequest,
+    DeleteBackupRequest,
+    ExportRequest,
+    ImportRequest,
+    RestoreRequest,
+    ScanHostChangesRequest,
+    UpdateFactRequest,
+)
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
+
 # Import Pydantic models from dedicated module
 from knowledge.schemas import (
     BulkCategoryUpdateResponse,
@@ -50,22 +67,6 @@ from knowledge.schemas import (
     SynthesisLogResponse,
     UpdateFactResponse,
 )
-from api.schemas_knowledge import (
-    BackupRequest,
-    BulkCategoryUpdateRequest,
-    BulkDeleteRequest,
-    CleanupRequest,
-    DeduplicationRequest,
-    DeleteBackupRequest,
-    ExportRequest,
-    ImportRequest,
-    RestoreRequest,
-    ScanHostChangesRequest,
-    UpdateFactRequest,
-)
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
 from services.knowledge.contradiction_detector import (
     ContradictionDetector,

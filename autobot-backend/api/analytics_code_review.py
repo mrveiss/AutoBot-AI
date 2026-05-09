@@ -14,7 +14,6 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -25,6 +24,8 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
+    CodeReviewCategoryItem,
+    CodeReviewPatternItem,
     PatternToggleRequest,
     ReviewCategory,
     ReviewComment,
@@ -42,10 +43,10 @@ from api.schemas_code import (
     CodeReviewSummaryResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
-from api.schemas_analytics import CodeReviewPatternItem, CodeReviewCategoryItem
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

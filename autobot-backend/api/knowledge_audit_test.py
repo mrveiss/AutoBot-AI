@@ -61,9 +61,8 @@ def _make_kb(audit_log=None):
 @pytest.mark.asyncio
 async def test_org_audit_log_admin_allowed():
     """Admin role can access org audit log."""
-    from autobot_shared.models.pagination import PaginationParams
-
     from api.knowledge_audit import get_organization_audit_log
+    from autobot_shared.models.pagination import PaginationParams
 
     user = {"user_id": "u1", "org_id": "org1", "role": "admin"}
     kb = _make_kb()
@@ -85,9 +84,8 @@ async def test_org_audit_log_admin_allowed():
 @pytest.mark.asyncio
 async def test_org_audit_log_org_admin_allowed():
     """org_admin role can access org audit log."""
-    from autobot_shared.models.pagination import PaginationParams
-
     from api.knowledge_audit import get_organization_audit_log
+    from autobot_shared.models.pagination import PaginationParams
 
     user = {"user_id": "u2", "org_id": "org1", "role": "org_admin"}
     kb = _make_kb()

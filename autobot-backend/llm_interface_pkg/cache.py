@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import xxhash
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)

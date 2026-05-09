@@ -10,15 +10,16 @@ Tests detect timeouts, connection errors, rate limits.
 
 import asyncio
 import time
+
 import pytest
 
 from services.resilience.circuit_breaker_manager import (
-    CircuitBreakerConfig,
-    CircuitBreakerOpenError,
-    CircuitBreakerTimeout,
-    CircuitBreakerState,
     CircuitBreaker,
+    CircuitBreakerConfig,
     CircuitBreakerManager,
+    CircuitBreakerOpenError,
+    CircuitBreakerState,
+    CircuitBreakerTimeout,
 )
 
 

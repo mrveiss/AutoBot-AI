@@ -18,6 +18,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from redis.exceptions import RedisError
 
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import utc_timestamp
+from background_vectorization import get_background_vectorizer
+from exceptions import InternalError
+from knowledge.backends import get_async_default_client
+from knowledge.pipeline.base import PipelineContext
+from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
+from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
     BatchVectorizeRequest,
@@ -35,16 +43,8 @@ from knowledge.schemas.vectorization import (
     VectorizeFactsResponse,
     VectorizeJobStatusResponse,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
-from background_vectorization import get_background_vectorizer
-from exceptions import InternalError
-from knowledge.pipeline.base import PipelineContext
-from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
-from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
-from knowledge.backends import get_async_default_client
 
 # Set up logging
 logger = logging.getLogger(__name__)

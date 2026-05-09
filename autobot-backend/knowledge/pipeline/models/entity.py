@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from autobot_shared.time_utils import now_utc
 
 EntityType = Literal[

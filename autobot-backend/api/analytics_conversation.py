@@ -17,10 +17,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import parse_utc_iso
-from constants.path_constants import PATH
 from api.schemas_analytics import (
     ConversationAnalysisResult,
     ConversationBottlenecksResponse,
@@ -33,6 +29,10 @@ from api.schemas_analytics import (
     FlowBottleneck,
     IntentPattern,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

@@ -15,18 +15,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import get_current_user
 from api.schemas_knowledge import (
     KnowledgeGraphDocumentOverviewResponse,
     KnowledgeGraphDrillDownResponse,
     KnowledgeGraphEntitiesResponse,
     KnowledgeGraphEntityRelationshipsResponse,
-    KnowledgeGraphEventTimelineResponse,
     KnowledgeGraphEventsResponse,
+    KnowledgeGraphEventTimelineResponse,
     KnowledgeGraphSummariesResponse,
     PipelineRunRequest,
     PipelineRunResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -243,8 +243,8 @@ async def search_summaries(
 ):
     """Vector search on summary embeddings."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
@@ -269,8 +269,8 @@ async def get_document_overview(
 ):
     """Get document overview with hierarchical summaries."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
@@ -295,8 +295,8 @@ async def drill_down_summary(
 ):
     """Navigate from summary to children or source chunks."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)

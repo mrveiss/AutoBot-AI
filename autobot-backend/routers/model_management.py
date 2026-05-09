@@ -11,7 +11,6 @@ import logging
 import threading
 import time
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -21,6 +20,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc
 from models.ml_model import MLModel
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,6 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
-from autobot_shared.time_utils import parse_utc_iso
 import json
 import logging
 import os
@@ -25,6 +24,7 @@ from autobot_shared.auth.jwt_core import (
 )
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error

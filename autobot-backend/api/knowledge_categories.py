@@ -31,10 +31,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from api.schemas_knowledge import (
     AssignFactToCategoryRequest,
     CreateCategoryRequest,
-    SearchCategoriesByPathRequest,
-    UpdateCategoryRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeCategoryAncestorsResponse,
     KnowledgeCategoryChildrenResponse,
     KnowledgeCategoryCreateResponse,
@@ -45,6 +41,8 @@ from api.schemas_knowledge import (
     KnowledgeCategoryTreeResponse,
     KnowledgeCategoryUpdateResponse,
     KnowledgeFactAssignCategoryResponse,
+    SearchCategoriesByPathRequest,
+    UpdateCategoryRequest,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

@@ -9,8 +9,9 @@ Issue #4502: TaskManager tests now mock Redis instead of the in-process dict.
 Uses no network connections and no external dependencies.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from a2a.agent_card import build_agent_card
 from a2a.task_manager import TaskManager

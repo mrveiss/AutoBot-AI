@@ -25,9 +25,9 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile, status
-from plugin_sdk.base import PluginManifest
 
 from autobot_shared.ssot_config import config
+from plugin_sdk.base import PluginManifest
 
 logger = logging.getLogger(__name__)
 

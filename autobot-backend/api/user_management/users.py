@@ -12,6 +12,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from api.schemas_agent import (
     PasswordChangedResponse,
     RoleAssignmentResponse,
@@ -22,7 +23,6 @@ from api.schemas_agent import (
     UserSearchResponse,
     UserSearchResult,
 )
-
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
@@ -561,6 +561,7 @@ async def set_user_role(
 ):
     """Set a user's system role by name, replacing previous system role assignments."""
     from sqlalchemy import delete, select
+
     from user_management.models.role import Role, UserRole
 
     user = await user_service.get_user(user_id)

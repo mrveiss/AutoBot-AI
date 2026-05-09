@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
 from api.schemas_agent import LogFileMetadata
-from api.schemas_common import AgentMessageResponse
 from api.schemas_code import (
     LogContainerResponse,
     LogReadResponse,
@@ -31,6 +30,7 @@ from api.schemas_code import (
     LogSourcesResponse,
     LogUnifiedResponse,
 )
+from api.schemas_common import AgentMessageResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path

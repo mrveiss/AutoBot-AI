@@ -23,11 +23,10 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from api.system_health import ComponentHealth, register_health_probe
+
 from api.schemas_analytics import (
     ActiveLearningQuery,
     ConfidenceLevel,
@@ -46,7 +45,9 @@ from api.schemas_analytics import (
     PatternLearningRegisterResponse,
     PatternUpdate,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 

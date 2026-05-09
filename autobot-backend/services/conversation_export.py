@@ -14,8 +14,9 @@ Provides export and import operations for chat conversations:
 import json
 import logging
 import time
-from autobot_shared.time_utils import utc_timestamp
 from typing import Any, Dict, List, Optional, Tuple
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 

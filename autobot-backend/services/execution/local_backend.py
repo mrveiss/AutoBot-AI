@@ -14,9 +14,9 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, Optional, Tuple
 
+from autobot_shared.time_utils import now_utc
 from services.execution.base_backend import (
     BackendType,
     ExecutionBackend,

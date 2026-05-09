@@ -24,8 +24,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
 
 

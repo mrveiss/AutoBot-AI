@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 import pytest
+
 from autobot_shared.error_utils import safe_http_detail, user_facing_detail
 
 

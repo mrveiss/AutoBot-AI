@@ -36,11 +36,11 @@ if "psutil" not in sys.modules:
 
 
 from onboarding.doctor import (
-    _recommend_tier,
-    _hardware_scan,
-    TIER_POWERFUL,
     TIER_BALANCED,
     TIER_FAST,
+    TIER_POWERFUL,
+    _hardware_scan,
+    _recommend_tier,
 )
 
 

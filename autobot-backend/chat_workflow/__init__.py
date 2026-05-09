@@ -23,9 +23,10 @@ Usage:
 
 import logging
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
-from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 

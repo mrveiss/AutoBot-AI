@@ -14,17 +14,23 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
+from api.schemas_agent import (
+    ComprehensiveResearchData,
+    EnhancedKnowledgeSearchData,
+    MultiAgentQueryData,
+)
+from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
+from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
-    KbCodeSearchRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
     EnhancedChatRequest,
+    KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
     ResearchRequest,
 )
-
+from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
@@ -34,14 +40,6 @@ from type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
-
-from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
-from api.schemas_common import DataResponse
-from api.schemas_agent import (
-    ComprehensiveResearchData,
-    EnhancedKnowledgeSearchData,
-    MultiAgentQueryData,
-)
 
 logger = logging.getLogger(__name__)
 

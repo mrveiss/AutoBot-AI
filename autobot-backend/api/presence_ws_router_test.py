@@ -9,8 +9,8 @@ in the feature routers configuration.
 """
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.presence_ws import router
 

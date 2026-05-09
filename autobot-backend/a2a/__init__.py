@@ -20,7 +20,7 @@ from .capability_verifier import CapabilityReport, verify_local_card, verify_rem
 from .security import SecurityCardSigner
 from .task_manager import TaskManager, get_task_manager
 from .tracing import TraceContext, extract_caller_id, new_trace_id
-from .types import AgentCard, AgentSkill, Task, TaskArtifact, TaskState, A2ATaskStatus
+from .types import A2ATaskStatus, AgentCard, AgentSkill, Task, TaskArtifact, TaskState
 
 __all__ = [
     "AgentCard",

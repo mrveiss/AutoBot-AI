@@ -17,8 +17,8 @@ from typing import Any, Dict, Optional
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from models.process_run import AgentSession
 from autobot_shared.time_utils import now_utc
+from models.process_run import AgentSession
 
 logger = logging.getLogger(__name__)
 

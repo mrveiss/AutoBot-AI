@@ -13,28 +13,26 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
     BenchmarkRequest,
-    NPUOptimizationRequest,
-    NPUSearchRequest,
-    NPUSearchResponse,
-)
-from api.system_health import register_singleton_probe
-from ai_hardware_accelerator import HardwareDevice
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_llm_logger
-
-# Import NPU semantic search components
-from npu_semantic_search import get_npu_search_engine
-from type_defs.common import Metadata
-from api.schemas_knowledge import (
     EnhancedSearchBenchmarkResponse,
     EnhancedSearchConnectivityResponse,
     EnhancedSearchHardwareStatusResponse,
     EnhancedSearchHealthResponse,
     EnhancedSearchOptimizeResponse,
     EnhancedSearchPerformanceAnalyticsResponse,
+    NPUOptimizationRequest,
+    NPUSearchRequest,
+    NPUSearchResponse,
 )
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_llm_logger
+
+# Import NPU semantic search components
+from npu_semantic_search import get_npu_search_engine
+from type_defs.common import Metadata
 
 logger = get_llm_logger("enhanced_search_api")
 

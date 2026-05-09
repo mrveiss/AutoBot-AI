@@ -21,6 +21,7 @@ router = APIRouter(tags=["startup", "status"])
 
 # Thread lock for synchronous access to startup_state
 import threading
+
 from api.schemas_common import DataResponse
 from api.schemas_system import StartupMessage, StartupPhase, StartupStatusResponse
 

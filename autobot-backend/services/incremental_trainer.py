@@ -11,11 +11,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from autobot_shared.time_utils import now_utc, utc_timestamp
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import now_utc, utc_timestamp
 from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
 

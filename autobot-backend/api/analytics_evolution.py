@@ -23,13 +23,6 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_redis_client
-from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
-from autobot_shared.security.path_validator import validate_path
-from autobot_shared.time_utils import parse_utc_iso
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     DateRangeParams,
     EvolutionAnalysisRequest,
@@ -37,6 +30,13 @@ from api.schemas_analytics import (
     EvolutionQualitySnapshot,
     PatternSnapshot,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
+from autobot_shared.security.path_validator import validate_path
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["code-evolution", "analytics"])  # Prefix set in router_registry

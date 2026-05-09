@@ -31,6 +31,8 @@ except ImportError as _phase_validator_import_error:
 
     PhaseValidator = _MissingDep("PhaseValidator", _phase_validator_import_error)  # type: ignore[assignment, misc]
 
+from autobot_shared.singleton_factory import lazy_singleton
+
 from .database import (
     init_database,
     load_milestones_from_db,
@@ -60,8 +62,6 @@ from .types import (
     StateChangeType,
     TrackingMetric,
 )
-
-from autobot_shared.singleton_factory import lazy_singleton
 
 try:
     from autobot_shared.error_boundaries import get_error_boundary_manager

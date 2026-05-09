@@ -81,6 +81,7 @@ def _make_vllm_provider():
     sys.modules.setdefault("vllm", vllm_mock)
     # Re-import after patching so VLLM_AVAILABLE reflects mock
     import importlib
+
     import llm_providers.vllm_provider as mod
 
     importlib.reload(mod)

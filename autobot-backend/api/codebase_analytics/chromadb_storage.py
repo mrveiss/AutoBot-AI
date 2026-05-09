@@ -14,9 +14,8 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from utils.file_categorization import FILE_CATEGORY_CODE
-
 from autobot_shared.redis_client import get_async_redis_client
+from utils.file_categorization import FILE_CATEGORY_CODE
 
 from .progress_tracker import FILE_HASH_REDIS_PREFIX
 from .storage import (

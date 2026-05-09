@@ -3,6 +3,24 @@
 # Author: mrveiss
 """Knowledge base API response schemas."""
 
+from knowledge.schemas.connectors import (
+    ConnectorConfigDict,
+    ConnectorCreateResponse,
+    ConnectorDetailResponse,
+    ConnectorEntry,
+    ConnectorHistoryEntry,
+    ConnectorHistoryResponse,
+    ConnectorsHealthResponse,
+    ConnectorsListResponse,
+    ConnectorStatusDict,
+    ConnectorSyncResponse,
+    ConnectorTestResponse,
+    ConnectorTypeEntry,
+    ConnectorTypesResponse,
+    ConnectorUpdateResponse,
+    CreateConnectorRequest,
+    UpdateConnectorRequest,
+)
 from knowledge.schemas.documents import (
     DocsBrowseResponse,
     DocsCategoriesResponse,
@@ -28,31 +46,6 @@ from knowledge.schemas.facts import (
     ManPageSearchResponse,
     QueryKnowledgeResponse,
     UploadFileResponse,
-)
-from knowledge.schemas.operations import (
-    ImportStatisticsResponse,
-    ImportStatusResponse,
-    KnowledgeHealthResponse,
-    KnowledgeStatsResponse,
-    MachineKnowledgeInitComponents,
-    MachineKnowledgeInitResponse,
-    MachineProfileCapabilities,
-    MachineProfileResponse,
-    ManPagesIntegrateResponse,
-    ManPagesSummaryEnvelope,
-    ManPagesSummaryResponse,
-    OrgKnowledgeConfigResponse,
-    TestCategoriesResponse,
-)
-from knowledge.schemas.search import (
-    EnhancedSearchResponse,
-    EnhancedSearchV2Response,
-    ExpandQueryResponse,
-    KnowledgeSearchResponse,
-    RagSearchResponse,
-    RecordClickResponse,
-    SearchAnalyticsResponse,
-    SimilaritySearchResponse,
 )
 from knowledge.schemas.maintenance import (
     BulkCategoryUpdateResponse,
@@ -80,6 +73,37 @@ from knowledge.schemas.maintenance import (
     SynthesisLogResponse,
     UpdateFactResponse,
 )
+from knowledge.schemas.mcp import (
+    DocumentAddRequest,
+    KnowledgeSearchRequest,
+    KnowledgeStatsRequest,
+    McpAddDocumentResponse,
+    McpHealthResponse,
+    McpKnowledgeStatsResponse,
+    McpQaChainResponse,
+    McpRedisVectorOpsResponse,
+    McpSchemaResponse,
+    McpSearchResponse,
+    McpSummarizeTopicResponse,
+    McpToolsResponse,
+    McpVectorSimilarityResponse,
+    RagFeedbackResponse,
+)
+from knowledge.schemas.operations import (
+    ImportStatisticsResponse,
+    ImportStatusResponse,
+    KnowledgeHealthResponse,
+    KnowledgeStatsResponse,
+    MachineKnowledgeInitComponents,
+    MachineKnowledgeInitResponse,
+    MachineProfileCapabilities,
+    MachineProfileResponse,
+    ManPagesIntegrateResponse,
+    ManPagesSummaryEnvelope,
+    ManPagesSummaryResponse,
+    OrgKnowledgeConfigResponse,
+    TestCategoriesResponse,
+)
 from knowledge.schemas.population import (
     JobStatusResponse,
     PopulateManPagesResponse,
@@ -98,29 +122,23 @@ from knowledge.schemas.rag import (
     LoopApproveResponse,
     LoopRejectResponse,
     LoopStatusResponse,
-    RAGConfigUpdate,
     RagConfigResponse,
+    RAGConfigUpdate,
     RagStatsResponse,
     RerankRequest,
     RerankResultsResponse,
     RunBenchmarkRequest,
     UpdateRagConfigResponse,
 )
-from knowledge.schemas.mcp import (
-    DocumentAddRequest,
-    KnowledgeSearchRequest,
-    KnowledgeStatsRequest,
-    McpAddDocumentResponse,
-    McpHealthResponse,
-    McpKnowledgeStatsResponse,
-    McpQaChainResponse,
-    McpRedisVectorOpsResponse,
-    McpSchemaResponse,
-    McpSearchResponse,
-    McpSummarizeTopicResponse,
-    McpToolsResponse,
-    McpVectorSimilarityResponse,
-    RagFeedbackResponse,
+from knowledge.schemas.search import (
+    EnhancedSearchResponse,
+    EnhancedSearchV2Response,
+    ExpandQueryResponse,
+    KnowledgeSearchResponse,
+    RagSearchResponse,
+    RecordClickResponse,
+    SearchAnalyticsResponse,
+    SimilaritySearchResponse,
 )
 from knowledge.schemas.stats import (
     DetailedKnowledgeSizeMetrics,
@@ -131,24 +149,6 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeMainCategoryEntry,
     KnowledgeStatsBasic,
-)
-from knowledge.schemas.connectors import (
-    ConnectorConfigDict,
-    ConnectorCreateResponse,
-    ConnectorDetailResponse,
-    ConnectorEntry,
-    ConnectorHistoryEntry,
-    ConnectorHistoryResponse,
-    ConnectorsHealthResponse,
-    ConnectorsListResponse,
-    ConnectorStatusDict,
-    ConnectorSyncResponse,
-    ConnectorTestResponse,
-    ConnectorTypeEntry,
-    ConnectorTypesResponse,
-    ConnectorUpdateResponse,
-    CreateConnectorRequest,
-    UpdateConnectorRequest,
 )
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
