@@ -76,3 +76,26 @@ def test_async_bridge_run_coro_with_sleep():
         return "done"
 
     assert AsyncSyncBridge().run_coro(yield_then_return()) == "done"
+
+
+def test_async_bridge_run_coro_with_timeout():
+    """Timeout parameter raises concurrent.futures.TimeoutError when exceeded."""
+    import concurrent.futures
+
+    from plugin_sdk.async_bridge import AsyncSyncBridge
+
+    async def hang():
+        await asyncio.sleep(10)
+
+    with pytest.raises(concurrent.futures.TimeoutError):
+        AsyncSyncBridge().run_coro(hang(), timeout=0.05)
+
+
+def test_async_bridge_reset_for_tests_releases_loop_resources():
+    """After reset, the previous loop is closed (no leaked selector FDs)."""
+    from plugin_sdk.async_bridge import AsyncSyncBridge
+
+    a = AsyncSyncBridge()
+    prev_loop = a._loop
+    AsyncSyncBridge.reset_for_tests()
+    assert prev_loop.is_closed() is True
