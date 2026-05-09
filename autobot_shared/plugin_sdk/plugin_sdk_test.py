@@ -726,3 +726,73 @@ async def test_register_extension_point_records_plugin_name():
     plugin.register_extension_point(Hook.API_ROUTER_REGISTER, my_handler)
     handlers = HookRegistry()._hooks[Hook.API_ROUTER_REGISTER.value]
     assert handlers[0]["plugin_name"] == "ep-name-test"
+
+
+def test_register_extension_point_rejects_non_hook_argument():
+    """Plain string hook name (not Hook enum) is rejected with TypeError."""
+    from plugin_sdk.hooks import HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-bad-hook-type"))
+
+    async def my_handler(app):
+        pass
+
+    with pytest.raises(TypeError) as exc_info:
+        plugin.register_extension_point("api_router_register", my_handler)
+    assert "Hook enum" in str(exc_info.value)
+    assert "ep-bad-hook-type" in str(exc_info.value)
+
+
+def test_register_extension_point_rejects_event_style_hook():
+    """ON_STARTUP and other event-style hooks are rejected with TypeError."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-event-hook"))
+
+    async def my_handler():
+        pass
+
+    with pytest.raises(TypeError) as exc_info:
+        plugin.register_extension_point(Hook.ON_STARTUP, my_handler)
+    assert "not an extension-point hook" in str(exc_info.value)
+    assert "ep-event-hook" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_register_extension_point_accepts_bound_async_method():
+    """Bound async methods (typical plugin handler pattern) are accepted."""
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+
+    class _MyPlugin(_ConcretePlugin):
+        async def my_async_method(self, app):
+            return "called"
+
+    plugin = _MyPlugin(_make_manifest(name="ep-bound-method"))
+    plugin.register_extension_point(Hook.API_ROUTER_REGISTER, plugin.my_async_method)
+    assert HookRegistry().get_hook_count(Hook.API_ROUTER_REGISTER.value) == 1
+
+
+@pytest.mark.asyncio
+async def test_register_extension_point_accepts_partial_of_async():
+    """functools.partial wrapping an async function is accepted."""
+    import functools
+
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-partial"))
+
+    async def my_async_handler(extra_arg, app):
+        pass
+
+    bound = functools.partial(my_async_handler, "extra")
+    plugin.register_extension_point(Hook.API_ROUTER_REGISTER, bound)
+    assert HookRegistry().get_hook_count(Hook.API_ROUTER_REGISTER.value) == 1

@@ -10,11 +10,12 @@ and plugin registry for managing plugin lifecycle.
 Issue #730 - Plugin SDK for extensible tool architecture.
 """
 
+import asyncio
 import logging
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -199,25 +200,38 @@ class BasePlugin(ABC):
             "hooks": self.manifest.hooks,
         }
 
-    def register_extension_point(self, hook: "Hook", callback) -> None:
+    def register_extension_point(
+        self,
+        hook: "Hook",
+        callback: Callable[..., Awaitable[Any]],
+    ) -> None:
         """Register a handler for an extension-point hook.
 
-        All extension-point handlers MUST be async. The host invokes them
-        at the appropriate runtime moment (FastAPI lifespan or Celery
-        worker init). Plugin authors never need to know which underlying
-        runtime is sync vs async — the host bridges internally.
-
         Args:
-            hook: A Hook enum value (e.g. Hook.API_ROUTER_REGISTER)
-            callback: An async function matching the hook's signature
+            hook: An extension-point Hook enum value (e.g. Hook.API_ROUTER_REGISTER).
+                  Must be a member of EXTENSION_POINT_HOOKS — event-style hooks
+                  are rejected.
+            callback: An async function matching the hook's signature. Bound
+                  async methods and functools.partial(async_fn) also accepted.
 
         Raises:
-            TypeError: If the callback is not a coroutine function.
+            TypeError: If hook is not a Hook instance, hook is not an
+                extension-point hook, or callback is not a coroutine function.
         """
-        import asyncio
+        from plugin_sdk.hooks import EXTENSION_POINT_HOOKS, Hook, HookRegistry
 
-        from plugin_sdk.hooks import HookRegistry
-
+        if not isinstance(hook, Hook):
+            raise TypeError(
+                f"register_extension_point requires a Hook enum value, "
+                f"got {type(hook).__name__}: {hook!r}. "
+                f"Plugin '{self.manifest.name}'."
+            )
+        if hook not in EXTENSION_POINT_HOOKS:
+            raise TypeError(
+                f"{hook.value} is not an extension-point hook. "
+                f"Use HookRegistry.register_hook directly for event-style hooks. "
+                f"Plugin '{self.manifest.name}'."
+            )
         if not asyncio.iscoroutinefunction(callback):
             raise TypeError(
                 f"Extension-point handler for {hook.value} must be async. "

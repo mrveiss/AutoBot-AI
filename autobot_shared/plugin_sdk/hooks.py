@@ -58,6 +58,15 @@ class Hook(str, Enum):
     CELERY_TASK_REGISTER = "celery_task_register"
 
 
+# Extension-point hooks (Issue #6970) — handlers MUST be async; dispatched
+# at host runtime moments (FastAPI lifespan, Celery worker_init), not on
+# arbitrary events. Used by BasePlugin.register_extension_point to validate
+# that callers don't accidentally register an event-style hook.
+EXTENSION_POINT_HOOKS = frozenset(
+    {Hook.API_ROUTER_REGISTER, Hook.CELERY_TASK_REGISTER}
+)
+
+
 class HookRegistry:
     """
     Singleton registry for managing hooks and callbacks.
