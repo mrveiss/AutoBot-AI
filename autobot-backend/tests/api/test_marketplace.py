@@ -54,6 +54,7 @@ _VALID_SORT = {s.value for s in CatalogSort}
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_redis(catalog: list | None = None, installed: set | None = None) -> AsyncMock:
     """Return an AsyncMock Redis client pre-configured with catalog/installed data."""
     redis = AsyncMock()
@@ -104,8 +105,13 @@ class TestBuiltinCatalog:
 
     def test_all_entries_have_required_fields(self):
         required = {
-            "name", "version", "display_name", "description",
-            "author", "category", "entry_point",
+            "name",
+            "version",
+            "display_name",
+            "description",
+            "author",
+            "category",
+            "entry_point",
         }
         for entry in _BUILTIN_CATALOG:
             missing = required - entry.keys()
@@ -114,9 +120,7 @@ class TestBuiltinCatalog:
     def test_all_categories_are_valid(self):
         valid = _VALID_CATEGORIES - {"all"}
         for entry in _BUILTIN_CATALOG:
-            assert entry["category"] in valid, (
-                f"Entry '{entry['name']}' has unknown category '{entry['category']}'"
-            )
+            assert entry["category"] in valid, f"Entry '{entry['name']}' has unknown category '{entry['category']}'"
 
     def test_all_names_unique(self):
         names = [e["name"] for e in _BUILTIN_CATALOG]
@@ -188,11 +192,24 @@ class TestGetCatalog:
 
 
 class TestListCatalog:
+    # NOTE: ``list_catalog`` is a FastAPI route handler with ``Query()``-annotated
+    # parameters. When called directly (not through TestClient), the test must
+    # pass enum instances + a real source_id string — Pydantic only unwraps
+    # ``Query()`` defaults at the HTTP layer, not on direct calls.
+    # Input-validation tests for invalid category/sort_by run on the enum
+    # constructor (which is what Pydantic uses at the HTTP layer post-#6534);
+    # full HTTP-level 422 tests are tracked separately as a TestClient sweep.
+
     @pytest.mark.asyncio
     async def test_returns_all_entries_for_all_category(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search=None, sort_by="downloads")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search=None,
+                sort_by=CatalogSort.DOWNLOADS,
+                source_id="builtin",
+            )
         assert isinstance(resp, MarketplaceCatalogResponse)
         assert resp.total == len(_BUILTIN_CATALOG)
         assert resp.category == "all"
@@ -202,7 +219,12 @@ class TestListCatalog:
     async def test_filters_by_category(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="observability", search=None, sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.OBSERVABILITY,
+                search=None,
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         for entry in resp.entries:
             assert entry.category == "observability"
 
@@ -210,7 +232,12 @@ class TestListCatalog:
     async def test_full_text_search_by_name(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search="logger", sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search="logger",
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         assert resp.total >= 1
         assert any("logger" in e.name.lower() for e in resp.entries)
 
@@ -218,21 +245,36 @@ class TestListCatalog:
     async def test_full_text_search_by_description(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search="telemetry", sort_by="downloads")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search="telemetry",
+                sort_by=CatalogSort.DOWNLOADS,
+                source_id="builtin",
+            )
         assert resp.total >= 1
 
     @pytest.mark.asyncio
     async def test_full_text_search_by_tag(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search="mcp", sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search="mcp",
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         assert resp.total >= 1
 
     @pytest.mark.asyncio
     async def test_search_no_match_returns_empty(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search="xyznonexistent", sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search="xyznonexistent",
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         assert resp.total == 0
         assert resp.entries == []
 
@@ -240,7 +282,12 @@ class TestListCatalog:
     async def test_sort_by_downloads_descending(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search=None, sort_by="downloads")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search=None,
+                sort_by=CatalogSort.DOWNLOADS,
+                source_id="builtin",
+            )
         downloads = [e.downloads for e in resp.entries]
         assert downloads == sorted(downloads, reverse=True)
 
@@ -248,7 +295,12 @@ class TestListCatalog:
     async def test_sort_by_rating_descending(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search=None, sort_by="rating")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search=None,
+                sort_by=CatalogSort.RATING,
+                source_id="builtin",
+            )
         ratings = [e.rating for e in resp.entries]
         assert ratings == sorted(ratings, reverse=True)
 
@@ -256,33 +308,39 @@ class TestListCatalog:
     async def test_sort_by_name_ascending(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search=None, sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search=None,
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         names = [e.name.lower() for e in resp.entries]
         assert names == sorted(names)
 
-    @pytest.mark.asyncio
-    async def test_invalid_category_raises_400(self):
-        redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            with pytest.raises(HTTPException) as exc_info:
-                await list_catalog(category="garbage", search=None, sort_by="downloads")
-        assert exc_info.value.status_code == 400
-        assert "Invalid category" in exc_info.value.detail
+    def test_invalid_category_rejected_by_enum(self):
+        # Post-#6534: invalid category values are rejected at Pydantic
+        # validation time (HTTP layer) via the ``CatalogCategory`` str-enum
+        # constructor. Direct enum construction reproduces the same check.
+        with pytest.raises(ValueError):
+            CatalogCategory("garbage")
 
-    @pytest.mark.asyncio
-    async def test_invalid_sort_raises_400(self):
-        redis = _make_redis(catalog=None)
-        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            with pytest.raises(HTTPException) as exc_info:
-                await list_catalog(category="all", search=None, sort_by="badfield")
-        assert exc_info.value.status_code == 400
-        assert "Invalid sort_by" in exc_info.value.detail
+    def test_invalid_sort_rejected_by_enum(self):
+        # Post-#6534: invalid sort_by values are rejected at Pydantic
+        # validation time (HTTP layer) via the ``CatalogSort`` str-enum
+        # constructor. Direct enum construction reproduces the same check.
+        with pytest.raises(ValueError):
+            CatalogSort("badfield")
 
     @pytest.mark.asyncio
     async def test_total_matches_entry_count(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            resp = await list_catalog(category="all", search=None, sort_by="name")
+            resp = await list_catalog(
+                category=CatalogCategory.ALL,
+                search=None,
+                sort_by=CatalogSort.NAME,
+                source_id="builtin",
+            )
         assert resp.total == len(resp.entries)
 
 
