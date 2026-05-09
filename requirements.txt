@@ -9,7 +9,7 @@ asyncssh>=2.22.0
 # opentelemetry-proto>=1.40.0 requires protobuf>=5.0,<7.0 — relaxed upper bound to <7.0.0 (#3971)
 # TensorFlow is not a project dependency; former <6.0.0 cap caused pip conflicts with protobuf 6.x
 # Bumped to 5.29.6+ for JSON recursion depth bypass fix (#3933)
-protobuf>=5.29.6,<7.0.0
+protobuf>=7.34.1,<8.0.0
 
 # vLLM - High-performance LLM inference with prefix caching
 # Provides 3-4x throughput improvement with 98.7% cache efficiency
