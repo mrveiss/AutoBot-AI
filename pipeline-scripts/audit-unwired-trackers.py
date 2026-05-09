@@ -159,6 +159,14 @@ def is_entry_point_script(path: Path) -> bool:
     return any(part in ENTRY_POINT_DIR_NAMES for part in path.parts)
 
 
+def is_ambient_type_declaration(path: Path) -> bool:
+    """TypeScript ``.d.ts`` files are wired via ``tsconfig.json`` ``include`` paths,
+    not via explicit imports. Without this skip, every ambient-types file is
+    flagged with 0 callers (#6872b — sibling FP class to entry-point scripts).
+    """
+    return path.name.endswith(".d.ts")
+
+
 def should_skip_path(path: Path) -> bool:
     """Skip caches/build dirs/worktrees/migrations.
 
@@ -232,10 +240,31 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
 
 
 def grep_count_production_callers(stem: str, self_path: Path) -> int:
-    """Return number of production import lines referencing `stem`."""
+    """Return number of production import lines referencing `stem`.
+
+    Catches both static and dynamic-loading patterns (#6872b widening):
+    - ``from X import Y`` — Python static
+    - ``import X`` — Python static
+    - ``import('@/path/X.vue')`` — JS/TS dynamic ES-module import
+    - ``require('./X')`` — CommonJS / Vite require
+    - ``importlib.import_module("X")`` — Python dynamic
+    - ``__import__("X")`` — Python dynamic
+
+    The first two require a literal space after the keyword; the dynamic
+    forms allow any character before the stem inside the call-arg parens
+    so paths like ``@/views/CustomDashboard.vue`` and dotted module paths
+    like ``autobot.foo`` both register as callers.
+    """
     if stem in AMBIGUOUS_STEMS:
         return -1  # skip
-    pattern = rf"from .*\b{stem}\b|import .*\b{stem}\b"
+    pattern = (
+        rf"from .*\b{stem}\b"  # py static `from X import …`
+        rf"|import .*\b{stem}\b"  # py/ts static `import X` (note: requires space)
+        rf"|import\([^)]*\b{stem}\b"  # ts/js dynamic `import('…/X')`
+        rf"|require\([^)]*\b{stem}\b"  # ts/js cjs `require('./X')`
+        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"  # py `importlib.import_module(…)`
+        rf"|__import__\([^)]*\b{stem}\b"  # py `__import__(…)`
+    )
     cmd = [
         "grep",
         "-rn",
@@ -350,6 +379,10 @@ def scan() -> list[Finding]:
                 # /bin/) are designed to be invoked from CLI; 0 callers is
                 # by-design, not unwired.
                 if is_entry_point_script(f):
+                    continue
+                # #6872b: TypeScript ambient declaration (.d.ts) files are
+                # wired via tsconfig.json include paths, not via imports.
+                if is_ambient_type_declaration(f):
                     continue
                 # #7109: skip files registered via router_registry tuples;
                 # they're wired at runtime via dotted-path lookup which the
