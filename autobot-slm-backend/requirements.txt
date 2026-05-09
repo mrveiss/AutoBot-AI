@@ -48,7 +48,7 @@ paramiko>=4.0.0
 croniter>=6.2.2
 
 # SSO Integration (Issue #576 Phase 4)
-authlib>=1.7.0  # OAuth2/OIDC client
+authlib>=1.7.2  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.4  # SAML 2.0 Service Provider
 
