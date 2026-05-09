@@ -12,7 +12,7 @@ pandas>=3.0.2
 ast-tools>=0.1.8
 
 # Vector Database for Embeddings
-chromadb>=0.3.0
+chromadb>=1.5.9
 
 # Optional: NPU/AI Acceleration
 # openvino>=2023.0.0  # Intel OpenVINO for NPU
