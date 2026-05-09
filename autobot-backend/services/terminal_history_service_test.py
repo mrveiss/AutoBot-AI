@@ -27,7 +27,7 @@ class TestTerminalHistoryService:
         """Create history service with mocked Redis."""
         with patch(
             "autobot_shared.redis_client.get_async_redis_client",
-            return_value=mock_redis,
+            new=AsyncMock(return_value=mock_redis),
         ):
             from services.terminal_history_service import TerminalHistoryService
 
