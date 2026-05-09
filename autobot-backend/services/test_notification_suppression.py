@@ -1,7 +1,7 @@
 """Unit tests for notification suppression service."""
 
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from notification_suppression import (
     NotificationFilter,

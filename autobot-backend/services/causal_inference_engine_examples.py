@@ -22,7 +22,6 @@ Each scenario includes:
 - Severity assessment
 """
 
-from datetime import datetime
 
 from services.causal_inference_engine import (
     CausalAnalysisReport,

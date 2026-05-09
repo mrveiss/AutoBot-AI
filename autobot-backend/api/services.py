@@ -9,7 +9,6 @@ Provides service status, health checks, and system information endpoints.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 

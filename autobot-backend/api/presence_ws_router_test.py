@@ -89,7 +89,6 @@ class TestPresenceWSConfiguration:
 
         # Test the import path directly
         module_path = "api.presence_ws"
-        name = "presence_ws"
 
         try:
             module = importlib.import_module(module_path)

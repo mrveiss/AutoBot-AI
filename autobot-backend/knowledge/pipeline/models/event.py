@@ -7,7 +7,7 @@ Event Model - Temporal event representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID, uuid4
 

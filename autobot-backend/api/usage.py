@@ -16,7 +16,7 @@ Issue #1807: Usage metering and cost tracking.
 import csv
 import io
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query

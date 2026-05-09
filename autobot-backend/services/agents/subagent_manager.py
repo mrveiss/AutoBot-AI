@@ -15,7 +15,6 @@ Core functionality:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.time_utils import now_utc

@@ -13,7 +13,6 @@ window) with automatic Retry-After and X-RateLimit-Reset handling.
 import asyncio
 import logging
 import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp

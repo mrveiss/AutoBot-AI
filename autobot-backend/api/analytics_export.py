@@ -19,7 +19,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, Response

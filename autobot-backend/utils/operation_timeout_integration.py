@@ -622,9 +622,10 @@ class OperationMigrator:
 
             # If original function expects progress callback
             if hasattr(original_function, "__code__") and "progress_callback" in original_function.__code__.co_varnames:
-                progress_callback = lambda step, processed, total=None: asyncio.create_task(
-                    context.update_progress(step, processed, total)
-                )
+
+                def progress_callback(step, processed, total=None):
+                    return asyncio.create_task(context.update_progress(step, processed, total))
+
                 return await original_function(progress_callback=progress_callback)
             else:
                 # Simple wrapper without progress

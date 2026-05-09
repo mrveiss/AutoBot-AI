@@ -11,7 +11,7 @@ SynthesisProvenanceLog and ChromaDB entity metadata.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -226,7 +226,7 @@ class LineageService:
             raise ValueError(f"Version {to_version} has no lineage_source_collection — cannot roll back")
 
         live_collection = await self._collection_factory(source_collection)
-        current_version_ids = await self._get_current_version(entity_id, live_collection)
+        await self._get_current_version(entity_id, live_collection)
         new_version = max(int(v.get("lineage_version", 0)) for v in history) + 1
         rollback_meta = {k: v for k, v in target.items() if k not in ("version_id", "content")}
         rollback_meta["lineage_version"] = new_version

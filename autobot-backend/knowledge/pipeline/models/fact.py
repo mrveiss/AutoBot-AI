@@ -9,7 +9,7 @@ Phase 2 — Atomic Facts Extraction: Extract atomic factual statements from docu
 as discrete retrievable units alongside full chunks.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Literal
 from uuid import UUID, uuid4
 

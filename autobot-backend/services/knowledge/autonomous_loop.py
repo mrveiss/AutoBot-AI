@@ -34,7 +34,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any, Deque, Dict, List, Optional
 
 from autobot_shared.redis_client import get_async_redis_client

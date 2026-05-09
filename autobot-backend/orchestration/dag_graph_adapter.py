@@ -35,9 +35,8 @@ state and converts it back to the legacy execution_context dict shape.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from .dag_executor import (
     DAGExecutionContext,
@@ -80,7 +79,6 @@ def _make_dag_node_fn(
     async def _run(state: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
         ctx: DAGExecutionContext = state["dag_ctx"]
         step_executor: StepExecutorCallback = state["step_executor"]
-        extra: Dict[str, Any] = state.get("extra_context", {})
 
         # Mirror DAGExecutor._execute_node logic.
         if dag_node.node_type == NodeType.CONDITION:

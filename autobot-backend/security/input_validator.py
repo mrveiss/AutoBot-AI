@@ -273,7 +273,7 @@ class WebResearchInputValidator:
         try:
             parsed = urlparse(url)
             return parsed, None
-        except Exception as e:
+        except Exception:
             return None, {
                 "safe": False,
                 "threats_detected": ["INVALID_URL_FORMAT"],

@@ -12,7 +12,7 @@ Tests verify:
 5. No-op when no extensions are registered
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -216,7 +216,7 @@ class TestAfterPromptBuild:
         get_extension_manager().register(tracker)
 
         original = "original prompt"
-        result = await _emit_after_prompt_build(original, "sess-1", {})
+        await _emit_after_prompt_build(original, "sess-1", {})
 
         assert "after_prompt_build" in tracker.called_hooks
 
@@ -260,7 +260,7 @@ class TestAfterLLMResponse:
         get_extension_manager().register(tracker)
 
         original = "response text"
-        result = await _emit_after_llm_response(original, {}, "sess-1")
+        await _emit_after_llm_response(original, {}, "sess-1")
 
         assert "after_llm_response" in tracker.called_hooks
 
@@ -574,7 +574,7 @@ class TestApprovalRequired:
         tracker = _TrackingExtension()
         get_extension_manager().register(tracker)
 
-        result = await _emit_approval_required("req-123", "action", "sess-123", {})
+        await _emit_approval_required("req-123", "action", "sess-123", {})
 
         assert "approval_required" in tracker.called_hooks
 

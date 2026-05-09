@@ -15,7 +15,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
@@ -66,8 +66,6 @@ def _validate_log_path(filename: str) -> Path:
 
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
-from typing import Dict
-
 _log_file_locks: Dict[str, asyncio.Lock] = {}
 _log_locks_lock = asyncio.Lock()
 

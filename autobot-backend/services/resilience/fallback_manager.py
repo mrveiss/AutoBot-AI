@@ -9,7 +9,6 @@ Primary service → secondary service → minimal-feature mode.
 Ensures core functions work even when peripherals fail.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from threading import Lock

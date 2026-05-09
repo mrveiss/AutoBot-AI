@@ -119,7 +119,7 @@ async def health_check():
         HealthCheckResponse with status and engine readiness
     """
     try:
-        engine = get_engine()
+        get_engine()
         # Engine is ready if it can be instantiated
         return HealthCheckResponse(status="ok", engine_ready=True)
     except Exception as e:

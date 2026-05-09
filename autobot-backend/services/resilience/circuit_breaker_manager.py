@@ -55,13 +55,11 @@ class CircuitBreakerStats:
 class CircuitBreakerOpenError(Exception):
     """Raised when circuit breaker is open."""
 
-    pass
 
 
 class CircuitBreakerTimeout(Exception):
     """Raised when call exceeds circuit breaker timeout."""
 
-    pass
 
 
 class CircuitBreaker:

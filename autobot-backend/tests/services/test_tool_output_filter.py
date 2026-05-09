@@ -713,7 +713,7 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "record_filter_savings", _capture)
 
-    f = ToolOutputFilter()
+    ToolOutputFilter()
     # Build output that will trigger savings > 200 so tee_and_hint fires.
     # Use a rule with max_lines=1 to compress heavily.
     big_output = "\n".join(["x" * 40] * 30)  # ~1200 bytes

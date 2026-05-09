@@ -10,7 +10,7 @@ skills with unhealthy scores. Runs every 5 minutes.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from skills.registry import get_skill_registry

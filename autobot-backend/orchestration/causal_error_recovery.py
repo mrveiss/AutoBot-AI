@@ -11,11 +11,9 @@ scoring and alternative actions.
 Issue #2154: Enhanced error handling with root-cause analysis and recovery planning.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -428,7 +426,6 @@ class CausalErrorRecovery:
 
             # Record resolution (which action actually worked)
             if success:
-                resolution_key = f"{FAILURE_PATTERN_RESOLUTION_PREFIX}{pattern_hash}" f":{action_taken.value}"
                 resolution_data = {
                     "action": action_taken.value,
                     "outcome": outcome or "success",

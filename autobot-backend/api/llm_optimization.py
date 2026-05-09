@@ -8,7 +8,7 @@ Provides intelligent model selection, performance tracking, and optimization sug
 
 import logging
 import time
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse

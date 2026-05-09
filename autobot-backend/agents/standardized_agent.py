@@ -191,7 +191,6 @@ class StandardizedAgent(BaseAgent):
             context: Context dict as returned by _before_process.
             result:  The handler return value (may be None on error).
         """
-        pass
 
     async def process_request(self, request: AgentRequest) -> AgentResponse:
         """Standardized request processing (Issue #398: refactored to use helpers)."""

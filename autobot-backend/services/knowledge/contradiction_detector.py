@@ -15,7 +15,7 @@ import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from autobot_shared.redis_client import get_async_redis_client

@@ -185,7 +185,7 @@ class DocumentsMixin:
         async with semaphore:
             try:
                 return await self.add_document_from_file(str(file_path), category=category)
-            except Exception as e:
+            except Exception:
                 return {"status": "error", "message": "Document operation failed"}
 
     def _count_results(self, results: List[Any]) -> tuple:

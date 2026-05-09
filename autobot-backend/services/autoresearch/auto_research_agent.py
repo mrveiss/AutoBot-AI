@@ -721,8 +721,6 @@ class AutoResearchAgent(AsyncRedisClientMixin):
             if result.decision == CheckpointDecision.REDIRECT and result.redirect_instructions:
                 query = result.redirect_instructions
                 logger.info("_run_single_iteration: query redirected by user to: %r", query)
-        # Track whether the query was redirected so the hypothesis can note it
-        query_redirected = query != session.topic
 
         # 1b. Web search
         search_hits = await self._web_search(

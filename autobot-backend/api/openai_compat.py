@@ -19,9 +19,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import os
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request

@@ -15,7 +15,6 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client

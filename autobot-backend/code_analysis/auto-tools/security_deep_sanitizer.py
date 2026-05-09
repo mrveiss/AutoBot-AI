@@ -555,7 +555,7 @@ class EnhancedSecurityFixAgent:
                 "enhancements": all_enhancements,
             }
 
-        except Exception as e:
+        except Exception:
             logger.error("Error processing file %sfile_path : %se ")
             return {
                 "file": file_path,

@@ -7,7 +7,6 @@ Test diagnostics router registration.
 Issue #4254: Verify diagnostics router is properly registered and discoverable.
 """
 
-from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 

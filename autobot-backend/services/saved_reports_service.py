@@ -16,7 +16,7 @@ Parent Issue: #1282 (bi_export_endpoints.py integration)
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase

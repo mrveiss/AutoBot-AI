@@ -21,7 +21,6 @@ Usage:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Type
 

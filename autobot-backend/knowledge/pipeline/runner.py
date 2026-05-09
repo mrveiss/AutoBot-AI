@@ -8,7 +8,6 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List
 
 from autobot_shared.time_utils import now_utc

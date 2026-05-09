@@ -288,7 +288,6 @@ class LLMService:
 
         Returns a dict of ``{provider_name: [model_id, …]}``.
         """
-        import asyncio as _asyncio
 
         target_names = [provider_name] if provider_name else list(self._registry._providers.keys())
         results: Dict[str, List[str]] = {}

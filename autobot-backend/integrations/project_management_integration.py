@@ -16,7 +16,6 @@ and CRUD operations for tasks/issues/cards.
 import base64
 import logging
 import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp

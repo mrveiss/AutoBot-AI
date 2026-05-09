@@ -9,7 +9,6 @@ a live CA on the test machine.
 """
 
 import asyncio
-import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

@@ -16,7 +16,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 import asyncio
 import logging
 from datetime import timedelta
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 

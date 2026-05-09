@@ -15,7 +15,7 @@ Domain-specific schemas live in:
   schemas_code.py        - CodeReview*, Git*, Skills*, Database*, Template*, etc.
 """
 
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 

@@ -11,7 +11,7 @@ Tests the following functionality:
 - Thread-safe access to indexing_tasks
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest

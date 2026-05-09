@@ -19,7 +19,6 @@ Issue: Knowledge Grounding Tier 4 implementation
 
 import asyncio
 import json
-import logging
 import re
 import time
 from typing import Any, Dict, List, Optional, Set

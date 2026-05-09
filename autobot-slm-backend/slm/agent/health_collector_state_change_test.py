@@ -4,7 +4,7 @@
 """Unit tests for HealthCollector state-change pub/sub logic (#3404)."""
 
 import json
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

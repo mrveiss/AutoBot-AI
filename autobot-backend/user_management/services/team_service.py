@@ -10,7 +10,6 @@ membership management, and role assignment within teams.
 
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import func, or_, select

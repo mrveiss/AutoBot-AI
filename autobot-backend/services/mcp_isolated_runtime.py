@@ -12,7 +12,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for

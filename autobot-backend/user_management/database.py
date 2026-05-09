@@ -245,7 +245,7 @@ async def check_database_health() -> dict:
             "pool_checked_out": pool.checkedout() if pool else 0,
             "pool_overflow": pool.overflow() if pool else 0,
         }
-    except Exception as e:
+    except Exception:
         return {
             "status": "unhealthy",
             "mode": config.mode.value,

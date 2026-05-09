@@ -651,7 +651,7 @@ async def _run_playbook(
             execution.error = _summary or f"Playbook failed with exit code {process.returncode}"
             execution.output.append(f"[FAILED] Exit code: {process.returncode}")
 
-    except Exception as e:
+    except Exception:
         execution.status = PlaybookStatus.FAILED
         execution.error = "Internal server error"
         execution.output.append("[ERROR] Playbook execution failed")

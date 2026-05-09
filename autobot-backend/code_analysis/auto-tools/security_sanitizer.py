@@ -353,7 +353,7 @@ class SecurityFixAgent:
                 "fixes": fixes_applied,
             }
 
-        except Exception as e:
+        except Exception:
             logger.error("Error processing file %sfile_path : %se ")
             return {
                 "file": file_path,

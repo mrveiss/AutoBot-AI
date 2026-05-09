@@ -2,7 +2,6 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 

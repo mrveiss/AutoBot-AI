@@ -56,7 +56,7 @@ class JenkinsIntegration(BaseIntegration):
                         message=f"Jenkins returned status {response.status}",
                         details={},
                     )
-        except Exception as e:
+        except Exception:
             logger.exception("Jenkins connection test failed")
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
@@ -189,7 +189,7 @@ class GitLabCIIntegration(BaseIntegration):
                         message=f"GitLab returned status {response.status}",
                         details={},
                     )
-        except Exception as e:
+        except Exception:
             logger.exception("GitLab connection test failed")
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
@@ -325,7 +325,7 @@ class CircleCIIntegration(BaseIntegration):
                         message=f"CircleCI returned status {response.status}",
                         details={},
                     )
-        except Exception as e:
+        except Exception:
             logger.exception("CircleCI connection test failed")
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,

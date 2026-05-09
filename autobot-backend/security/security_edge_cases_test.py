@@ -402,7 +402,7 @@ class TestSecurityEdgeCases:
             try:
                 result = await self.security.execute_command(cmd, user="developer", user_role="developer")
                 results.append(result)
-            except Exception as e:
+            except Exception:
                 # Should handle gracefully
                 results.append({"error": "Command execution failed"})
 

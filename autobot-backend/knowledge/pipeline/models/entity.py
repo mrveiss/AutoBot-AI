@@ -7,7 +7,7 @@ Entity Model - Extracted entity representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Literal
 from uuid import UUID, uuid4
 

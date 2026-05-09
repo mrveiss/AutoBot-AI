@@ -12,7 +12,6 @@ Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 

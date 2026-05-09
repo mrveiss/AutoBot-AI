@@ -8,9 +8,7 @@ Executes tasks on Modal serverless platform.
 Supports cost tracking and automatic scaling.
 """
 
-import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from autobot_shared.time_utils import now_utc, utc_timestamp

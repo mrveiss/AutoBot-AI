@@ -18,7 +18,7 @@ Access: admin role required.
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 

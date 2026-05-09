@@ -10,7 +10,6 @@ from a user-added marketplace 404.
 """
 
 import inspect
-from typing import get_type_hints
 
 import pytest
 

@@ -808,7 +808,6 @@ async def repair_worker(
         400: If re-pair is not possible
         500: If re-pair fails
     """
-    from datetime import datetime
 
     try:
         manager = await get_worker_manager()
@@ -839,7 +838,6 @@ async def repair_worker(
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Dict, Tuple
 
 import httpx
@@ -1163,7 +1161,6 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     Raises:
         400: If worker is not paired (Issue #641)
     """
-    from datetime import datetime
 
     try:
         manager = await get_worker_manager()
@@ -1289,7 +1286,6 @@ def _resolve_bootstrap_worker_id(request: dict) -> tuple[str, str, str]:
 
 def _build_bootstrap_response(worker_id: str, platform: str, worker_url: str, ssot_config) -> dict:
     """Helper for worker_bootstrap. Ref: #1088."""
-    from datetime import datetime
 
     logger.info(
         "Bootstrap config sent to worker %s (%s) at %s",

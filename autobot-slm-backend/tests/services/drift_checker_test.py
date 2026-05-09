@@ -9,7 +9,6 @@ ansible/inventory/localhost.yml, and autobot_shared/* files) are excluded from
 the drift report even when their checksums differ between source and deployed.
 """
 
-import os
 import tempfile
 from pathlib import Path
 

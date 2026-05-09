@@ -11,7 +11,7 @@ Issue #476: Added /metrics endpoint for Prometheus integration.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 

@@ -20,7 +20,7 @@ Test scenarios:
 """
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -508,7 +508,6 @@ class TestRecommendationGeneration:
         # Check order: IMMEDIATE comes before SHORT_TERM comes before LONG_TERM
         immediate_idx = None
         short_idx = None
-        long_idx = None
 
         for i, rec in enumerate(recommendations):
             if "IMMEDIATE" in rec:
@@ -516,7 +515,7 @@ class TestRecommendationGeneration:
             elif "SHORT-TERM" in rec:
                 short_idx = i
             elif "LONG-TERM" in rec:
-                long_idx = i
+                pass
 
         if immediate_idx is not None and short_idx is not None:
             assert immediate_idx < short_idx

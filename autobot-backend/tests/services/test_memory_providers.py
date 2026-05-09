@@ -14,7 +14,6 @@ Tests the provider-based memory architecture including:
 Issue #4344: Provider-based memory architecture with external provider support
 """
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest

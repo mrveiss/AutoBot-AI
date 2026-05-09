@@ -237,7 +237,6 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
     pattern — catch ImportError → log warning → sleep 24h → continue — works end-to-end.
     Prior behaviour was CRITICAL + permanent exit; now it retries after 24h (#4924).
     """
-    import asyncio
     import logging
 
     db = AsyncMock()

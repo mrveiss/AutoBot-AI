@@ -763,7 +763,7 @@ class BulkOperationsMixin:
                     "status": result.get("status", "error"),
                 }
 
-            except Exception as e:
+            except Exception:
                 return {
                     "fact_id": fact_data.get("fact_id"),
                     "action": "error",
@@ -1172,7 +1172,7 @@ class BulkOperationsMixin:
                 async with semaphore:
                     try:
                         return await self.delete_fact(fact_id, _skip_bm25_refresh=True)
-                    except Exception as e:
+                    except Exception:
                         return {"status": "error", "message": "Bulk operation failed"}
 
             results = await asyncio.gather(
@@ -1226,7 +1226,7 @@ class BulkOperationsMixin:
                 async with semaphore:
                     try:
                         return await self.update_fact(fact_id, metadata={"category": new_category})
-                    except Exception as e:
+                    except Exception:
                         return {"status": "error", "message": "Bulk operation failed"}
 
             results = await asyncio.gather(*[bounded_update(fid) for fid in fact_ids], return_exceptions=True)
@@ -1645,7 +1645,7 @@ class BulkOperationsMixin:
 
                 return await self._store_restored_fact(fact_data, content, metadata, fact_id, restore_embeddings)
 
-            except Exception as e:
+            except Exception:
                 return {"action": "error", "reason": "Bulk operation failed"}
 
     async def _handle_existing_restore(

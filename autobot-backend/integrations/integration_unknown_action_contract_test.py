@@ -14,7 +14,6 @@ the next person to add an integration can't silently re-introduce the
 violation.
 """
 
-import inspect
 import re
 from pathlib import Path
 

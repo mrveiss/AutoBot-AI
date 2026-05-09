@@ -12,7 +12,7 @@ extraction with condition detection and evidence tracking.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
@@ -201,7 +201,7 @@ class CausalRelationshipExtractor(BaseCognifier):
         Returns:
             List of CausalEdge objects
         """
-        text_lower = chunk.content.lower()
+        chunk.content.lower()
         edges: List[CausalEdge] = []
 
         # Simple heuristic: find sentences with causal keywords

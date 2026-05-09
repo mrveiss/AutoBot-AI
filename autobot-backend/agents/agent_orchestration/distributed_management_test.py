@@ -8,7 +8,7 @@ circuit breaker logic (Issue #4694).
 All tests are pure in-memory; no Redis, no actual agents, no network I/O.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

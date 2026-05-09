@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Unit tests for WorkflowRunner. Issue #6421."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

@@ -10,7 +10,6 @@ Endpoints for training, deploying, and serving code completion models.
 import logging
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 

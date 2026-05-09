@@ -6,7 +6,7 @@ Tests how security components work together with the rest of the AutoBot system
 import asyncio
 import os
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient

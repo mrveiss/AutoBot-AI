@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client

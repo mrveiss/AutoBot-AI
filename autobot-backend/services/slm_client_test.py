@@ -5,7 +5,6 @@
 Tests for SLM client SSL context and WebSocket reconnect backoff (#4664).
 """
 
-import asyncio
 import os
 import ssl
 import tempfile

@@ -110,7 +110,7 @@ class HealthCollector:
             }
         except subprocess.TimeoutExpired:
             return {"active": False, "status": "timeout"}
-        except Exception as e:
+        except Exception:
             return {"active": False, "status": "health check failed"}
 
     def check_port(self, host: str, port: int, timeout: float = 2.0) -> bool:

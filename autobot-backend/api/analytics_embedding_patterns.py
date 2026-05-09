@@ -16,7 +16,6 @@ Parent Epic: #217 (Advanced Code Intelligence)
 Related: #229 (LLM Integration Pattern Analyzer - CLOSED)
 """
 
-import asyncio
 import json
 import logging
 import time
