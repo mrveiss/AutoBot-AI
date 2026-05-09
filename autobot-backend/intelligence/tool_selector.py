@@ -8,7 +8,7 @@ Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from constants.network_constants import NetworkConstants
@@ -27,6 +27,11 @@ class ToolSelection:
     install_command: Optional[str]
     requires_install: bool
     explanation: str
+    # #7245: `IntelligentAgent._build_tool_selection_chunks` iterates
+    # `tool_selection.warnings` to surface advisory notes (e.g. "tool needs
+    # sudo"). Field was missing — caused AttributeError on every goal.
+    # Default empty so existing constructors keep working.
+    warnings: List[str] = field(default_factory=list)
 
 
 class OSAwareToolSelector:
@@ -38,13 +43,31 @@ class OSAwareToolSelector:
         self.tool_mappings = self._initialize_tool_mappings()
 
     def _initialize_tool_mappings(self) -> Dict:
-        """Initialize OS-specific tool mappings (Issue #281 - uses helper methods)."""
+        """Initialize OS-specific tool mappings (Issue #281 - uses helper methods).
+
+        #7245: keys must reference real ``GoalCategory`` enum members. The
+        original version used ``NETWORK_DISCOVERY`` / ``SECURITY_SCAN`` /
+        ``SYSTEM_UPDATE`` / ``SYSTEM_INFO`` / ``PROCESS_MANAGEMENT`` — none of
+        which exist on the post-rename enum (collapsed into ``NETWORK`` /
+        ``SECURITY`` / ``SYSTEM`` in ``goal_processor.py``). The bare
+        attribute access raised ``AttributeError: NETWORK_DISCOVERY`` during
+        ``OSAwareToolSelector`` construction, hard-failing every
+        ``IntelligentAgent.initialize()``.
+
+        The 3 system-related helpers (system_update, system_info,
+        process_management) merge under one ``SYSTEM`` key — they have
+        non-overlapping intent keys (``system_update`` vs ``system_info`` vs
+        ``list_processes`` etc.), so the lookup at
+        ``_get_mapped_tools(category_tools[goal.intent])`` keeps working.
+        """
         return {
-            GoalCategory.NETWORK_DISCOVERY: self._get_network_discovery_tools(),
-            GoalCategory.SECURITY_SCAN: self._get_security_scan_tools(),
-            GoalCategory.SYSTEM_UPDATE: self._get_system_update_tools(),
-            GoalCategory.SYSTEM_INFO: self._get_system_info_tools(),
-            GoalCategory.PROCESS_MANAGEMENT: self._get_process_management_tools(),
+            GoalCategory.NETWORK: self._get_network_discovery_tools(),
+            GoalCategory.SECURITY: self._get_security_scan_tools(),
+            GoalCategory.SYSTEM: {
+                **self._get_system_update_tools(),
+                **self._get_system_info_tools(),
+                **self._get_process_management_tools(),
+            },
             GoalCategory.MONITORING: self._get_monitoring_tools(),
         }
 
@@ -214,8 +237,8 @@ class OSAwareToolSelector:
             return await self._select_best_available_tool(tools, goal)
 
         # Fallback to suggested tools from goal processing
-        if goal.suggested_tools:
-            return await self._select_best_available_tool(goal.suggested_tools, goal)
+        if goal.suggested_commands:
+            return await self._select_best_available_tool(goal.suggested_commands, goal)
 
         # No specific tools found
         return ToolSelection(
