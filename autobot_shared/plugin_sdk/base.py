@@ -199,6 +199,34 @@ class BasePlugin(ABC):
             "hooks": self.manifest.hooks,
         }
 
+    def register_extension_point(self, hook: "Hook", callback) -> None:
+        """Register a handler for an extension-point hook.
+
+        All extension-point handlers MUST be async. The host invokes them
+        at the appropriate runtime moment (FastAPI lifespan or Celery
+        worker init). Plugin authors never need to know which underlying
+        runtime is sync vs async — the host bridges internally.
+
+        Args:
+            hook: A Hook enum value (e.g. Hook.API_ROUTER_REGISTER)
+            callback: An async function matching the hook's signature
+
+        Raises:
+            TypeError: If the callback is not a coroutine function.
+        """
+        import asyncio
+
+        from plugin_sdk.hooks import HookRegistry
+
+        if not asyncio.iscoroutinefunction(callback):
+            raise TypeError(
+                f"Extension-point handler for {hook.value} must be async. "
+                f"Plugin '{self.manifest.name}' provided a sync callable."
+            )
+        HookRegistry().register_hook(
+            hook.value, callback, plugin_name=self.manifest.name
+        )
+
 
 class PluginRegistry:
     """

@@ -673,3 +673,56 @@ def test_hook_extension_points_distinct_from_event_hooks():
     assert Hook.API_ROUTER_REGISTER is not Hook.CUSTOM
     assert Hook.CELERY_TASK_REGISTER is not Hook.CUSTOM
     assert Hook.API_ROUTER_REGISTER != Hook.CELERY_TASK_REGISTER
+
+
+# ---------------------------------------------------------------------------
+# BasePlugin.register_extension_point (Issue #6970)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_register_extension_point_accepts_async_handler():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-async-plugin"))
+
+    async def my_handler(app):
+        pass
+
+    plugin.register_extension_point(Hook.API_ROUTER_REGISTER, my_handler)
+    assert HookRegistry().get_hook_count(Hook.API_ROUTER_REGISTER.value) == 1
+
+
+def test_register_extension_point_rejects_sync_handler():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-sync-plugin"))
+
+    def my_sync_handler(app):
+        pass
+
+    with pytest.raises(TypeError) as exc_info:
+        plugin.register_extension_point(Hook.API_ROUTER_REGISTER, my_sync_handler)
+    assert "ep-sync-plugin" in str(exc_info.value)
+    assert "api_router_register" in str(exc_info.value)
+    assert HookRegistry().get_hook_count(Hook.API_ROUTER_REGISTER.value) == 0
+
+
+@pytest.mark.asyncio
+async def test_register_extension_point_records_plugin_name():
+    from plugin_sdk.hooks import Hook, HookRegistry
+
+    HookRegistry().clear()
+    PluginRegistry().clear()
+    plugin = _ConcretePlugin(_make_manifest(name="ep-name-test"))
+
+    async def my_handler(app):
+        pass
+
+    plugin.register_extension_point(Hook.API_ROUTER_REGISTER, my_handler)
+    handlers = HookRegistry()._hooks[Hook.API_ROUTER_REGISTER.value]
+    assert handlers[0]["plugin_name"] == "ep-name-test"
