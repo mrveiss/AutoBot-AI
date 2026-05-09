@@ -164,16 +164,13 @@ function _handleWsMessage(msg: any): void {
   }
 }
 
-function _onSpeakingDone(): void {
-  state.value = 'idle'
-  if (!isActive.value) return
-  if (mode.value === 'full-duplex') {
-    _startListeningInternal()
-  } else if (mode.value === 'hands-free' && _sileroVad) {
-    // Hands-free auto-resumes via Silero VAD (already running)
-    state.value = 'listening'
-  }
-}
+// #6823: `_onSpeakingDone` was a near-duplicate of `_resumeAutoListening`
+// (no hands-free cooldown timer). The single factory-level watcher now
+// uses `_resumeAutoListening` directly — removing this function eliminates
+// the path that was missing the cooldown and double-triggering listening
+// resumes when both watchers fired. Walkie-talkie semantics preserved:
+// `_resumeAutoListening` no-ops on inactive sessions and on walkie-talkie
+// (only resumes for full-duplex / hands-free per existing logic).
 
 // ─── AudioWorklet VAD helpers ────────────────────────────
 
@@ -536,13 +533,13 @@ function _dispatchTranscript(text: string): void {
       state.value = 'speaking'
       speakStreaming(speechText)
       flushStreaming()
-      // Resume listening when audio finishes
-      const unwatch = watch(isSpeaking, (speaking) => {
-        if (!speaking && state.value === 'speaking') {
-          unwatch()
-          _resumeAutoListening()
-        }
-      })
+      // #6823: removed local one-shot `watch(isSpeaking, ...)` here.
+      // The factory-level watcher (below) is the single source of truth
+      // for TTS-completion handling — pre-fix this duplicate caused
+      // both `_resumeAutoListening` AND `_onSpeakingDone` to fire on
+      // every walkie-talkie/hands-free TTS burst, double-triggering
+      // the hands-free TTS cooldown timer and bouncing state through
+      // 'idle' → 'listening' → 'idle' → 'listening'.
     }
   }).catch((err) => {
     logger.error('Failed to send voice transcript:', err)
@@ -816,10 +813,14 @@ export function useVoiceConversation() {
     logger.debug('Mode switched to:', newMode)
   }
 
-  // Watch isSpeaking to handle TTS completion
+  // #6823: single source of truth for TTS-completion handling. Routes
+  // through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
+  // so the hands-free TTS cooldown timer is set exactly once per burst
+  // — was previously fired by both the inner `_dispatchTranscript`
+  // watcher AND this outer one.
   watch(isSpeaking, (speaking) => {
     if (!speaking && state.value === 'speaking') {
-      _onSpeakingDone()
+      _resumeAutoListening()
     }
   })
 
