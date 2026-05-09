@@ -146,7 +146,7 @@ async def _resolve_safe_ip(host: str) -> str:
 
 
 @router.get(
-    "/marketplaces",
+    "",
     response_model=MarketplaceSourcesResponse,
 )
 @with_error_handling(
@@ -164,7 +164,7 @@ async def list_marketplaces(
 
 
 @router.post(
-    "/marketplaces",
+    "",
     status_code=status.HTTP_201_CREATED,
     response_model=MarketplaceSource,
 )
@@ -204,7 +204,7 @@ async def add_marketplace(
 
 
 @router.delete(
-    "/marketplaces/{source_id}",
+    "/{source_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
 )
