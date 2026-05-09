@@ -121,9 +121,7 @@ class RelationOperationsMixin:
 
         try:
             from_id, to_id = await self._resolve_entity_ids(from_entity, to_entity)
-            relation, reverse_rel = self._build_relation_objects(
-                from_id, to_id, relation_type, strength, metadata
-            )
+            relation, reverse_rel = self._build_relation_objects(from_id, to_id, relation_type, strength, metadata)
             await self._store_outgoing_relation(from_id, relation)
             await self._store_incoming_relation(to_id, reverse_rel)
 
@@ -209,9 +207,7 @@ class RelationOperationsMixin:
         """
         out_key = f"memory:relations:out:{from_id}"
         if not await self.redis_client.exists(out_key):
-            await self.redis_client.json().set(
-                out_key, "$", {"entity_id": from_id, "relations": []}
-            )
+            await self.redis_client.json().set(out_key, "$", {"entity_id": from_id, "relations": []})
         await self.redis_client.json().arrappend(out_key, "$.relations", relation)
 
     async def _store_incoming_relation(
@@ -227,9 +223,7 @@ class RelationOperationsMixin:
         """
         in_key = f"memory:relations:in:{to_id}"
         if not await self.redis_client.exists(in_key):
-            await self.redis_client.json().set(
-                in_key, "$", {"entity_id": to_id, "relations": []}
-            )
+            await self.redis_client.json().set(in_key, "$", {"entity_id": to_id, "relations": []})
         await self.redis_client.json().arrappend(in_key, "$.relations", reverse_rel)
 
     async def _get_outgoing_relations(
@@ -260,9 +254,7 @@ class RelationOperationsMixin:
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
 
-    def _format_outgoing_relation(
-        self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _format_outgoing_relation(self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]) -> Dict[str, Any]:
         """Format an outgoing relation for response. Issue #620."""
         return {
             "from": entity_id,
@@ -272,9 +264,7 @@ class RelationOperationsMixin:
             "metadata": rel.get("metadata", {}),
         }
 
-    def _format_incoming_relation(
-        self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _format_incoming_relation(self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]) -> Dict[str, Any]:
         """Format an incoming relation for response. Issue #620."""
         return {
             "from": rel.get("from"),
@@ -370,17 +360,9 @@ class RelationOperationsMixin:
                 )
             )
         elif need_outgoing:
-            related.extend(
-                await self._process_outgoing(
-                    current_id, relation_type, depth, max_depth, queue
-                )
-            )
+            related.extend(await self._process_outgoing(current_id, relation_type, depth, max_depth, queue))
         elif need_incoming:
-            related.extend(
-                await self._process_incoming(
-                    current_id, relation_type, depth, max_depth, queue
-                )
-            )
+            related.extend(await self._process_incoming(current_id, relation_type, depth, max_depth, queue))
 
         return related
 
@@ -404,11 +386,7 @@ class RelationOperationsMixin:
         queue: List,
     ) -> List[Dict[str, Any]]:
         """Process relations in a single direction. Issue #620."""
-        filtered = [
-            rel
-            for rel in relations
-            if relation_type is None or rel["type"] == relation_type
-        ]
+        filtered = [rel for rel in relations if relation_type is None or rel["type"] == relation_type]
         if not filtered:
             return []
 
@@ -421,9 +399,7 @@ class RelationOperationsMixin:
         related = []
         for rel, related_entity in zip(filtered, entities):
             if related_entity and not isinstance(related_entity, Exception):
-                related.append(
-                    self._build_related_entry(rel, related_entity, direction)
-                )
+                related.append(self._build_related_entry(rel, related_entity, direction))
                 if depth + 1 <= max_depth:
                     queue.append((rel[id_field], depth + 1))
 
@@ -497,13 +473,9 @@ class RelationOperationsMixin:
 
         if out_data and "relations" in out_data:
             filtered_relations = [
-                rel
-                for rel in out_data["relations"]
-                if not (rel["to"] == to_id and rel["type"] == relation_type)
+                rel for rel in out_data["relations"] if not (rel["to"] == to_id and rel["type"] == relation_type)
             ]
-            await self.redis_client.json().set(
-                out_key, "$.relations", filtered_relations
-            )
+            await self.redis_client.json().set(out_key, "$.relations", filtered_relations)
 
     async def _filter_incoming_relations(
         self: AutoBotMemoryGraphCore,
@@ -526,13 +498,9 @@ class RelationOperationsMixin:
 
         if in_data and "relations" in in_data:
             filtered_relations = [
-                rel
-                for rel in in_data["relations"]
-                if not (rel["from"] == from_id and rel["type"] == relation_type)
+                rel for rel in in_data["relations"] if not (rel["from"] == from_id and rel["type"] == relation_type)
             ]
-            await self.redis_client.json().set(
-                in_key, "$.relations", filtered_relations
-            )
+            await self.redis_client.json().set(in_key, "$.relations", filtered_relations)
 
     async def _set_valid_to_on_relations(
         self: AutoBotMemoryGraphCore,
@@ -584,9 +552,7 @@ class RelationOperationsMixin:
 
             out_updated, in_updated = await asyncio.gather(
                 self._set_valid_to_on_relations(out_key, "to", to_id, relation_type, valid_to),
-                self._set_valid_to_on_relations(
-                    in_key, "from", from_id, relation_type, valid_to
-                ),
+                self._set_valid_to_on_relations(in_key, "from", from_id, relation_type, valid_to),
             )
             updated = out_updated or in_updated
             if updated:

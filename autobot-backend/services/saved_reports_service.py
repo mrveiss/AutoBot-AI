@@ -125,9 +125,7 @@ class SavedReportsService(AsyncRedisClientMixin):
     # Report execution
     # ------------------------------------------------------------------
 
-    async def run_report(
-        self, report_id: str, days: int = 30
-    ) -> Optional[Dict[str, Any]]:
+    async def run_report(self, report_id: str, days: int = 30) -> Optional[Dict[str, Any]]:
         """
         Run a saved report: fetch live analytics for configured sections.
 

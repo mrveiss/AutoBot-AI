@@ -175,16 +175,13 @@ class SubWorkflowExecutor:
                 sub_step.workflow_id,
             )
             raise ValueError(
-                f"Sub-workflow step '{sub_step.step_id}': "
-                f"workflow '{sub_step.workflow_id}' not found."
+                f"Sub-workflow step '{sub_step.step_id}': " f"workflow '{sub_step.workflow_id}' not found."
             )
 
         child_steps: List[Dict[str, Any]] = workflow_def.get("steps", [])
         child_edges: List[Dict[str, Any]] = workflow_def.get("edges", [])
 
-        child_context = self._build_child_context(
-            sub_step, parent_context, parent_step_outputs
-        )
+        child_context = self._build_child_context(sub_step, parent_context, parent_step_outputs)
 
         child_result = await self._executor.execute_coordinated_workflow(
             workflow_id=sub_step.workflow_id,
@@ -305,9 +302,7 @@ def extract_sub_workflow_step(step: Dict[str, Any]) -> SubWorkflowStep:
     """
     workflow_id: str = step.get("workflow_id", "")
     if not workflow_id:
-        raise ValueError(
-            f"Sub-workflow step '{step.get('id', '<unknown>')}' is missing 'workflow_id'."
-        )
+        raise ValueError(f"Sub-workflow step '{step.get('id', '<unknown>')}' is missing 'workflow_id'.")
 
     return SubWorkflowStep(
         workflow_id=workflow_id,

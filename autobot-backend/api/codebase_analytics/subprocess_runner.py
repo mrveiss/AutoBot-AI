@@ -48,9 +48,7 @@ async def _handle_subprocess_crash(
     save_task_fn:
         Async callable ``(task_id)`` that persists task state to Redis.
     """
-    logger.error(
-        "[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode
-    )
+    logger.error("[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode)
     task_data = await _load_task_from_redis(task_id) or {}
     if task_data.get("status") not in ("completed", "failed", "cancelled"):
         mark_task_failed_fn(
@@ -102,8 +100,7 @@ async def _wait_with_watchdog(
                 last_progress_time = now
             elif now - last_progress_time > _SUBPROCESS_PROGRESS_TIMEOUT:
                 logger.error(
-                    "[Task %s] Subprocess stale for %d seconds, "
-                    "killing (no progress update)",
+                    "[Task %s] Subprocess stale for %d seconds, " "killing (no progress update)",
                     task_id,
                     int(now - last_progress_time),
                 )
@@ -170,8 +167,6 @@ async def _run_indexing_subprocess(
         returncode = -9
 
     if returncode != 0:
-        await _handle_subprocess_crash(
-            task_id, returncode, mark_task_failed_fn, save_task_fn
-        )
+        await _handle_subprocess_crash(task_id, returncode, mark_task_failed_fn, save_task_fn)
     else:
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)

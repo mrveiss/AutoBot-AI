@@ -58,9 +58,7 @@ async def _async_write_verbatim(
     )
 
 
-async def _async_extract_facts(
-    session_id: str, conversation_text: str, user_id: str | None
-) -> int:
+async def _async_extract_facts(session_id: str, conversation_text: str, user_id: str | None) -> int:
     """Run KnowledgeExtractionAgent on the turn text."""
     from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 
@@ -74,9 +72,7 @@ async def _async_extract_facts(
     return result.get("facts_count", 0) if isinstance(result, dict) else 0
 
 
-async def _async_update_graph(
-    session_id: str, entities: list, relations: list
-) -> dict:
+async def _async_update_graph(session_id: str, entities: list, relations: list) -> dict:
     """Write entities and relations into AutoBotMemoryGraph."""
     from autobot_memory_graph import AutoBotMemoryGraph
 
@@ -127,9 +123,7 @@ async def _async_update_graph(
     }
 
 
-async def _async_compact_snapshot(
-    session_id: str, conversation_snapshot: str, user_id: str | None
-) -> None:
+async def _async_compact_snapshot(session_id: str, conversation_snapshot: str, user_id: str | None) -> None:
     """Persist pre-compaction snapshot to verbatim store."""
     from datetime import datetime, timezone
 
@@ -162,10 +156,7 @@ def _log_queue_depth(task_name: str) -> None:
         inspection = celery_app.control.inspect(timeout=0.5)
         reserved = inspection.reserved() or {}
         depth = sum(
-            len(tasks)
-            for worker_tasks in reserved.values()
-            for tasks in [worker_tasks]
-            if isinstance(tasks, list)
+            len(tasks) for worker_tasks in reserved.values() for tasks in [worker_tasks] if isinstance(tasks, list)
         )
         logger.info("memory task queue depth after %s: ~%d reserved", task_name, depth)
     except Exception:
@@ -209,9 +200,7 @@ def write_verbatim_task(
         Dict with ``chunk_id`` and ``status``.
     """
     try:
-        chunk_id = asyncio.run(
-            _async_write_verbatim(session_id, turn, role, text, timestamp, user_id)
-        )
+        chunk_id = asyncio.run(_async_write_verbatim(session_id, turn, role, text, timestamp, user_id))
         logger.debug(
             "memory.write_verbatim: stored chunk %s (session=%s turn=%d role=%s)",
             chunk_id,
@@ -258,9 +247,7 @@ def extract_facts_task(
         Dict with ``status`` and ``facts_count``.
     """
     try:
-        facts_count = asyncio.run(
-            _async_extract_facts(session_id, conversation_text, user_id)
-        )
+        facts_count = asyncio.run(_async_extract_facts(session_id, conversation_text, user_id))
         logger.info(
             "memory.extract_facts: extracted %d facts (session=%s)",
             facts_count,
@@ -350,9 +337,7 @@ def compact_snapshot_task(
         Dict with ``status`` and ``session_id``.
     """
     try:
-        asyncio.run(
-            _async_compact_snapshot(session_id, conversation_snapshot, user_id)
-        )
+        asyncio.run(_async_compact_snapshot(session_id, conversation_snapshot, user_id))
         logger.info(
             "memory.compact_snapshot: saved snapshot for session=%s (%d chars)",
             session_id,

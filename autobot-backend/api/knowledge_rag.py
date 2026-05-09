@@ -15,6 +15,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from knowledge.schemas.rag import (
@@ -25,8 +26,8 @@ from knowledge.schemas.rag import (
     LoopApproveResponse,
     LoopRejectResponse,
     LoopStatusResponse,
-    RAGConfigUpdate,
     RagConfigResponse,
+    RAGConfigUpdate,
     RagStatsResponse,
     RerankRequest,
     RerankResultsResponse,
@@ -210,9 +211,7 @@ async def rerank_results(
     - **reranked_results**: Results sorted by rerank score
     - **original_count**: Number of input results
     """
-    logger.info(
-        f"Reranking {len(request.results)} results for query: '{request.query}'"
-    )
+    logger.info(f"Reranking {len(request.results)} results for query: '{request.query}'")
 
     # Perform reranking
     reranked_results = await rag_service.rerank_results(
@@ -361,8 +360,8 @@ async def approve_loop_variant(
 
     Issue #4680.
     """
-    from services.rag_config import get_rag_config
     from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
+    from services.rag_config import get_rag_config
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
@@ -395,8 +394,8 @@ async def reject_loop_variant(
 
     Issue #4916.
     """
-    from services.rag_config import get_rag_config
     from services.knowledge.autonomous_loop import get_loop_runner as get_loop_orchestrator
+    from services.rag_config import get_rag_config
 
     cfg = get_rag_config()
     orchestrator = await get_loop_orchestrator(None, dry_run=cfg.autonomous_loop_dry_run)
@@ -529,9 +528,7 @@ async def run_rag_benchmark(
         # warning.  reason="redis_down" - analytics Redis unreachable.
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="rag_benchmark", reason="redis_down"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="rag_benchmark", reason="redis_down").inc()
         return {
             "published": 0,
             "total": len(report.results),
@@ -550,8 +547,7 @@ async def run_rag_benchmark(
 
     published = await publish_feedback_events(redis, report.results)
     logger.info(
-        "run_rag_benchmark: split=%s published %d/%d feedback events "
-        "(held_out_score=%s)",
+        "run_rag_benchmark: split=%s published %d/%d feedback events " "(held_out_score=%s)",
         report.split_used,
         published,
         len(report.results),
@@ -595,9 +591,9 @@ async def get_entity_history(
     - **versions**: List of version dicts sorted by lineage_version ascending.
     - **count**: Number of versions found.
     """
+    from knowledge.backends import get_async_default_client
     from services.knowledge.lineage_service import LineageService
     from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
-    from knowledge.backends import get_async_default_client
 
     async def _collection_factory(name: str):
         client = await get_async_default_client()

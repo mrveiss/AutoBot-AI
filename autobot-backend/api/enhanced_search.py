@@ -13,28 +13,26 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
     BenchmarkRequest,
-    NPUOptimizationRequest,
-    NPUSearchRequest,
-    NPUSearchResponse,
-)
-from api.system_health import register_singleton_probe
-from ai_hardware_accelerator import HardwareDevice
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_llm_logger
-
-# Import NPU semantic search components
-from npu_semantic_search import get_npu_search_engine
-from type_defs.common import Metadata
-from api.schemas_knowledge import (
     EnhancedSearchBenchmarkResponse,
     EnhancedSearchConnectivityResponse,
     EnhancedSearchHardwareStatusResponse,
     EnhancedSearchHealthResponse,
     EnhancedSearchOptimizeResponse,
     EnhancedSearchPerformanceAnalyticsResponse,
+    NPUOptimizationRequest,
+    NPUSearchRequest,
+    NPUSearchResponse,
 )
+from api.system_health import register_singleton_probe
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_llm_logger
+
+# Import NPU semantic search components
+from npu_semantic_search import get_npu_search_engine
+from type_defs.common import Metadata
 
 logger = get_llm_logger("enhanced_search_api")
 
@@ -284,17 +282,13 @@ async def get_performance_analytics():
             "search_statistics": statistics,
             "hardware_status": hardware_status,
             "performance_analysis": performance_analysis,
-            "recommendations": _generate_system_recommendations(
-                statistics, hardware_status
-            ),
+            "recommendations": _generate_system_recommendations(statistics, hardware_status),
             "timestamp": time.time(),
         }
 
     except Exception as e:
         logger.error("Failed to get performance analytics: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to get performance analytics"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get performance analytics")
 
 
 @router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
@@ -388,9 +382,7 @@ def _generate_performance_recommendations(
     npu_stats = summary.get("npu")
     if npu_stats:
         if npu_stats.get("success_rate", 100) < 80:
-            recommendations.append(
-                "NPU success rate is low - check NPU Worker stability and connectivity"
-            )
+            recommendations.append("NPU success rate is low - check NPU Worker stability and connectivity")
         else:
             recommendations.extend(
                 _evaluate_device_timing(
@@ -403,9 +395,7 @@ def _generate_performance_recommendations(
                 )
             )
     else:
-        recommendations.append(
-            "NPU not available - verify NPU Worker setup and Intel NPU drivers"
-        )
+        recommendations.append("NPU not available - verify NPU Worker setup and Intel NPU drivers")
 
     # Analyze GPU performance (Issue #281: Using extracted helper)
     gpu_stats = summary.get("gpu")
@@ -426,25 +416,19 @@ def _generate_performance_recommendations(
         gpu_time = gpu_stats["average_total_time_ms"]
 
         if npu_time < gpu_time * 0.7:
-            recommendations.append(
-                "NPU significantly outperforms GPU for these queries - increase NPU utilization"
-            )
+            recommendations.append("NPU significantly outperforms GPU for these queries - increase NPU utilization")
         elif gpu_time < npu_time * 0.7:
             recommendations.append(
                 "GPU significantly outperforms NPU for these queries - prefer GPU for similar workloads"
             )
 
     if not recommendations:
-        recommendations.append(
-            "Performance looks good across all devices - system is well optimized"
-        )
+        recommendations.append("Performance looks good across all devices - system is well optimized")
 
     return recommendations
 
 
-def _generate_system_recommendations(
-    statistics: Metadata, hardware_status: Metadata
-) -> List[str]:
+def _generate_system_recommendations(statistics: Metadata, hardware_status: Metadata) -> List[str]:
     """Generate system-wide recommendations."""
     recommendations = []
 
@@ -454,9 +438,7 @@ def _generate_system_recommendations(
     cache_max_size = cache_stats.get("cache_max_size", 100)
 
     if cache_size == 0:
-        recommendations.append(
-            "Search cache is empty - performance will improve as cache builds up"
-        )
+        recommendations.append("Search cache is empty - performance will improve as cache builds up")
     elif cache_size >= cache_max_size * 0.9:
         recommendations.append(
             "Search cache is near capacity - consider increasing cache_max_size for better hit rates"
@@ -469,24 +451,16 @@ def _generate_system_recommendations(
     gpu_available = devices.get("gpu", {}).get("available", False)
 
     if not npu_available and not gpu_available:
-        recommendations.append(
-            "CRITICAL: No hardware acceleration available - check NPU Worker and GPU drivers"
-        )
+        recommendations.append("CRITICAL: No hardware acceleration available - check NPU Worker and GPU drivers")
     elif not npu_available:
-        recommendations.append(
-            "NPU not available - missing Intel NPU optimization opportunity"
-        )
+        recommendations.append("NPU not available - missing Intel NPU optimization opportunity")
     elif not gpu_available:
-        recommendations.append(
-            "GPU not available - missing RTX 4070 optimization opportunity"
-        )
+        recommendations.append("GPU not available - missing RTX 4070 optimization opportunity")
 
     # Knowledge base status
     kb_ready = statistics.get("knowledge_base_ready", False)
     if not kb_ready:
-        recommendations.append(
-            "Knowledge base vector store not ready - semantic search quality may be degraded"
-        )
+        recommendations.append("Knowledge base vector store not ready - semantic search quality may be degraded")
 
     return recommendations
 

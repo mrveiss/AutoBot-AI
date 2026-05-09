@@ -30,9 +30,7 @@ logger = logging.getLogger(__name__)
 # ===== Helper functions for date filtering (Issue #398: extracted) =====
 
 
-def _parse_date_bound(
-    date_str: Optional[str], is_end_date: bool = False
-) -> Optional[datetime]:
+def _parse_date_bound(date_str: Optional[str], is_end_date: bool = False) -> Optional[datetime]:
     """
     Parse a date string to tz-aware UTC datetime.
 
@@ -76,9 +74,7 @@ def _parse_fact_timestamp(timestamp_str: Any) -> Optional[datetime]:
     try:
         if "T" in timestamp_str:
             return parse_utc_iso(timestamp_str)
-        return datetime.strptime(timestamp_str, "%Y-%m-%d").replace(
-            tzinfo=timezone.utc
-        )
+        return datetime.strptime(timestamp_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
 
@@ -148,11 +144,7 @@ class BulkOperationsMixin:
         date_to: Optional[str],
     ) -> List[Dict[str, Any]]:
         """Get and filter facts for export (Issue #398: extracted)."""
-        facts = (
-            await self._get_facts_by_ids(fact_ids)
-            if fact_ids
-            else await self.get_all_facts()
-        )
+        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await self.get_all_facts()
         facts = self._apply_category_filter(facts, category)
         facts = self._apply_categories_filter(facts, categories)
         facts = self._apply_tags_filter(facts, tags)
@@ -174,9 +166,7 @@ class BulkOperationsMixin:
     ) -> Dict[str, Any]:
         """Export facts with optional filtering (Issue #398: refactored)."""
         try:
-            facts = await self._get_export_facts(
-                fact_ids, category, categories, tags, date_from, date_to
-            )
+            facts = await self._get_export_facts(fact_ids, category, categories, tags, date_from, date_to)
 
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
@@ -193,9 +183,7 @@ class BulkOperationsMixin:
             logger.error("Export failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    def _apply_category_filter(
-        self, facts: List[Dict[str, Any]], category: Optional[str]
-    ) -> List[Dict[str, Any]]:
+    def _apply_category_filter(self, facts: List[Dict[str, Any]], category: Optional[str]) -> List[Dict[str, Any]]:
         """Filter facts by single category (legacy support)."""
         if not category:
             return facts
@@ -212,9 +200,7 @@ class BulkOperationsMixin:
         if not categories:
             return facts
         categories_set = set(categories)
-        return [
-            f for f in facts if f.get("metadata", {}).get("category") in categories_set
-        ]
+        return [f for f in facts if f.get("metadata", {}).get("category") in categories_set]
 
     def _filter_fact_fields(
         self,
@@ -256,9 +242,7 @@ class BulkOperationsMixin:
 
         return result
 
-    def _apply_tags_filter(
-        self, facts: List[Dict[str, Any]], tags: Optional[List[str]]
-    ) -> List[Dict[str, Any]]:
+    def _apply_tags_filter(self, facts: List[Dict[str, Any]], tags: Optional[List[str]]) -> List[Dict[str, Any]]:
         """Filter facts by tags (match any)."""
         if not tags:
             return facts
@@ -313,9 +297,7 @@ class BulkOperationsMixin:
         """
         filtered = []
         for fact in facts:
-            timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get(
-                "created_at"
-            )
+            timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
 
             if not timestamp_str:
                 filtered.append(fact)
@@ -362,29 +344,21 @@ class BulkOperationsMixin:
         facts = []
         for fact_id in fact_ids:
             try:
-                fact_data = await asyncio.to_thread(
-                    self.redis_client.hgetall, f"fact:{fact_id}"
-                )
+                fact_data = await asyncio.to_thread(self.redis_client.hgetall, f"fact:{fact_id}")
                 if fact_data:
                     facts.append(self._parse_fact_data(fact_id, fact_data))
             except Exception as e:
                 logger.warning("Failed to get fact %s: %s", fact_id, e)
         return facts
 
-    async def _fetch_embeddings_from_vector_store(
-        self, fact_ids: List[str]
-    ) -> Dict[str, List[float]]:
+    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, List[float]]:
         """Fetch embeddings from vector store (Issue #398: extracted)."""
-        result = await asyncio.to_thread(
-            self.vector_store.get, ids=fact_ids, include=["embeddings"]
-        )
+        result = await asyncio.to_thread(self.vector_store.get, ids=fact_ids, include=["embeddings"])
         if result and result.get("ids") and result.get("embeddings"):
             return dict(zip(result["ids"], result["embeddings"]))
         return {}
 
-    async def _add_embeddings_to_facts(
-        self, facts: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    async def _add_embeddings_to_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add vector embeddings to facts from ChromaDB (Issue #398: refactored)."""
         if not facts or not hasattr(self, "vector_store") or self.vector_store is None:
             return facts
@@ -395,9 +369,7 @@ class BulkOperationsMixin:
                 return facts
 
             try:
-                embeddings_map = await self._fetch_embeddings_from_vector_store(
-                    fact_ids
-                )
+                embeddings_map = await self._fetch_embeddings_from_vector_store(fact_ids)
                 for fact in facts:
                     fact_id = fact.get("fact_id")
                     if fact_id and fact_id in embeddings_map:
@@ -486,9 +458,7 @@ class BulkOperationsMixin:
 
         return "\n".join(lines)
 
-    async def _get_import_content(
-        self, source_file: Optional[str], data: Optional[str]
-    ) -> tuple:
+    async def _get_import_content(self, source_file: Optional[str], data: Optional[str]) -> tuple:
         """Get content for import from file or data (Issue #398: extracted)."""
         if source_file:
             return await asyncio.to_thread(_read_file_sync, source_file), None
@@ -570,9 +540,7 @@ class BulkOperationsMixin:
             "validation_errors": [v for v in validation_results if not v["valid"]],
         }
 
-    def _build_no_valid_facts_result(
-        self, facts: List, invalid_count: int, validation_results: List
-    ) -> Dict[str, Any]:
+    def _build_no_valid_facts_result(self, facts: List, invalid_count: int, validation_results: List) -> Dict[str, Any]:
         """Build error result for no valid facts case (Issue #398: extracted)."""
         return {
             "status": "error",
@@ -610,25 +578,15 @@ class BulkOperationsMixin:
                 validation_results,
                 valid_count,
                 invalid_count,
-            ) = self._validate_all_facts(
-                facts, default_category, min_content_length, max_content_length
-            )
+            ) = self._validate_all_facts(facts, default_category, min_content_length, max_content_length)
 
             if validate_only:
-                return self._build_validation_only_result(
-                    facts, validation_results, valid_count, invalid_count
-                )
+                return self._build_validation_only_result(facts, validation_results, valid_count, invalid_count)
             if not valid_facts:
-                return self._build_no_valid_facts_result(
-                    facts, invalid_count, validation_results
-                )
+                return self._build_no_valid_facts_result(facts, invalid_count, validation_results)
 
-            import_results = await self._import_valid_facts(
-                valid_facts, skip_duplicates, overwrite_existing
-            )
-            return self._build_import_result(
-                facts, validation_results, valid_count, invalid_count, import_results
-            )
+            import_results = await self._import_valid_facts(valid_facts, skip_duplicates, overwrite_existing)
+            return self._build_import_result(facts, validation_results, valid_count, invalid_count, import_results)
 
         except json.JSONDecodeError as e:
             logger.error("JSON parse error during import: %s", e)
@@ -661,14 +619,10 @@ class BulkOperationsMixin:
             Dict with validation result and normalized fact
         """
         errors = []
-        content, content_errors = self._validate_content(
-            fact_data, min_content_length, max_content_length
-        )
+        content, content_errors = self._validate_content(fact_data, min_content_length, max_content_length)
         errors.extend(content_errors)
 
-        metadata, metadata_errors = self._normalize_metadata(
-            fact_data, default_category
-        )
+        metadata, metadata_errors = self._normalize_metadata(fact_data, default_category)
         errors.extend(metadata_errors)
 
         fact_id = self._normalize_fact_id(fact_data)
@@ -768,12 +722,7 @@ class BulkOperationsMixin:
         semaphore = asyncio.Semaphore(50)
 
         results = await asyncio.gather(
-            *[
-                self._store_single_import_fact(
-                    fact, semaphore, skip_duplicates, overwrite_existing
-                )
-                for fact in facts
-            ],
+            *[self._store_single_import_fact(fact, semaphore, skip_duplicates, overwrite_existing) for fact in facts],
             return_exceptions=True,
         )
 
@@ -939,11 +888,7 @@ class BulkOperationsMixin:
                     "content": row.get("content", ""),
                     "metadata": {
                         "category": row.get("category", "general"),
-                        "tags": [
-                            t.strip()
-                            for t in row.get("tags", "").split(",")
-                            if t.strip()
-                        ],
+                        "tags": [t.strip() for t in row.get("tags", "").split(",") if t.strip()],
                     },
                 }
             )
@@ -974,9 +919,7 @@ class BulkOperationsMixin:
                 return self._build_empty_duplicates_result(use_embeddings)
 
             duplicate_groups = (
-                await self._find_duplicates_by_embedding(
-                    facts, similarity_threshold, max_results
-                )
+                await self._find_duplicates_by_embedding(facts, similarity_threshold, max_results)
                 if use_embeddings
                 else self._find_duplicates_by_hash(facts)
             )
@@ -994,9 +937,7 @@ class BulkOperationsMixin:
             logger.error("Duplicate detection failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    def _find_duplicates_by_hash(
-        self, facts: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _find_duplicates_by_hash(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Find exact duplicates by content hash.
 
@@ -1067,9 +1008,7 @@ class BulkOperationsMixin:
             logger.error("Embedding-based duplicate detection failed: %s", e)
             return self._find_duplicates_by_hash(facts)
 
-    async def _fetch_embeddings_map(
-        self, fact_ids: List[str]
-    ) -> Dict[str, List[float]]:
+    async def _fetch_embeddings_map(self, fact_ids: List[str]) -> Dict[str, List[float]]:
         """
         Fetch embeddings from vector store.
 
@@ -1087,9 +1026,7 @@ class BulkOperationsMixin:
 
         return dict(zip(result["ids"], result["embeddings"]))
 
-    def _build_fact_info_map(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
+    def _build_fact_info_map(self, facts: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Build fact info lookup map.
 
@@ -1137,9 +1074,7 @@ class BulkOperationsMixin:
                 duplicate_groups.append(
                     {
                         "primary_fact": fact_info.get(fact_id1, {"fact_id": fact_id1}),
-                        "similar_facts": sorted(
-                            similar_facts, key=lambda x: x["similarity"], reverse=True
-                        ),
+                        "similar_facts": sorted(similar_facts, key=lambda x: x["similarity"], reverse=True),
                         "max_similarity": max(f["similarity"] for f in similar_facts),
                         "reason": "semantic_similarity",
                     }
@@ -1282,9 +1217,7 @@ class BulkOperationsMixin:
                 updated += 1
         return updated, errors
 
-    async def bulk_update_category(
-        self, fact_ids: List[str], new_category: str
-    ) -> Dict[str, Any]:
+    async def bulk_update_category(self, fact_ids: List[str], new_category: str) -> Dict[str, Any]:
         """Update category for multiple facts using parallel processing (Issue #398: refactored)."""
         try:
             semaphore = asyncio.Semaphore(50)
@@ -1292,15 +1225,11 @@ class BulkOperationsMixin:
             async def bounded_update(fact_id: str) -> Dict[str, Any]:
                 async with semaphore:
                     try:
-                        return await self.update_fact(
-                            fact_id, metadata={"category": new_category}
-                        )
+                        return await self.update_fact(fact_id, metadata={"category": new_category})
                     except Exception as e:
                         return {"status": "error", "message": "Bulk operation failed"}
 
-            results = await asyncio.gather(
-                *[bounded_update(fid) for fid in fact_ids], return_exceptions=True
-            )
+            results = await asyncio.gather(*[bounded_update(fid) for fid in fact_ids], return_exceptions=True)
             updated, errors = self._count_bulk_update_results(results)
 
             return {
@@ -1314,9 +1243,7 @@ class BulkOperationsMixin:
             logger.error("Bulk category update failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    async def cleanup(
-        self, remove_orphaned_vectors: bool = True, verify_integrity: bool = True
-    ) -> Dict[str, Any]:
+    async def cleanup(self, remove_orphaned_vectors: bool = True, verify_integrity: bool = True) -> Dict[str, Any]:
         """
         Cleanup knowledge base (remove orphaned data, verify integrity).
 
@@ -1401,18 +1328,14 @@ class BulkOperationsMixin:
             backup_dir = self._get_backup_dir(backup_dir)
             os.makedirs(backup_dir, exist_ok=True)
 
-            backup_name, backup_file = self._generate_backup_path(
-                backup_dir, compression
-            )
+            backup_name, backup_file = self._generate_backup_path(backup_dir, compression)
             logger.info("Creating backup: %s", backup_file)
 
             facts = await self.get_all_facts()
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
 
-            backup_data = await self._build_backup_data(
-                facts, description, include_embeddings, include_metadata
-            )
+            backup_data = await self._build_backup_data(facts, description, include_embeddings, include_metadata)
             await self._write_backup_file(backup_file, backup_data, compression)
 
             file_size = os.path.getsize(backup_file)
@@ -1508,9 +1431,7 @@ class BulkOperationsMixin:
             logger.warning("Could not include metadata: %s", e)
             return {}
 
-    async def _write_backup_file(
-        self, backup_file: str, backup_data: Dict[str, Any], compression: bool
-    ) -> None:
+    async def _write_backup_file(self, backup_file: str, backup_data: Dict[str, Any], compression: bool) -> None:
         """
         Write backup data to file.
 
@@ -1598,9 +1519,7 @@ class BulkOperationsMixin:
             content = await asyncio.to_thread(_read_file_sync, backup_file)
         return json.loads(content)
 
-    def _validate_backup_data(
-        self, backup_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _validate_backup_data(self, backup_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Validate backup data format.
 
@@ -1645,9 +1564,7 @@ class BulkOperationsMixin:
             ],
         }
 
-    def _build_restore_response(
-        self, backup_data: Dict[str, Any], results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_restore_response(self, backup_data: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build restore response.
 
@@ -1726,9 +1643,7 @@ class BulkOperationsMixin:
                     if existing_result:
                         return existing_result
 
-                return await self._store_restored_fact(
-                    fact_data, content, metadata, fact_id, restore_embeddings
-                )
+                return await self._store_restored_fact(fact_data, content, metadata, fact_id, restore_embeddings)
 
             except Exception as e:
                 return {"action": "error", "reason": "Bulk operation failed"}
@@ -1774,24 +1689,18 @@ class BulkOperationsMixin:
 
         Issue #398: Extracted from _restore_single_backup_fact.
         """
-        result = await self.store_fact(
-            content=content, metadata=metadata, fact_id=fact_id
-        )
+        result = await self.store_fact(content=content, metadata=metadata, fact_id=fact_id)
 
         if result.get("status") != "success":
             return {"action": "error", "reason": "store_failed"}
 
         embedding = fact_data.get("embedding")
         if restore_embeddings and embedding and self.vector_store:
-            return await self._restore_fact_embedding(
-                result.get("fact_id", fact_id), content, embedding
-            )
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), content, embedding)
 
         return {"action": "restored", "embedding": False}
 
-    async def _restore_fact_embedding(
-        self, fact_id: str, content: str, embedding: List[float]
-    ) -> Dict[str, Any]:
+    async def _restore_fact_embedding(self, fact_id: str, content: str, embedding: List[float]) -> Dict[str, Any]:
         """
         Restore embedding for a fact.
 
@@ -1845,9 +1754,7 @@ class BulkOperationsMixin:
     def _is_valid_backup_file(self, filename: str) -> bool:
         """Check if filename is a valid backup file (Issue #398: extracted)."""
         return filename.startswith("kb_backup_") and (
-            filename.endswith(".json")
-            or filename.endswith(".jsongz")
-            or filename.endswith(".json.gz")
+            filename.endswith(".json") or filename.endswith(".jsongz") or filename.endswith(".json.gz")
         )
 
     def _scan_backup_files(self, backup_dir: str) -> List[Dict[str, Any]]:
@@ -1870,9 +1777,7 @@ class BulkOperationsMixin:
                 )
         return backups
 
-    async def list_backups(
-        self, backup_dir: Optional[str] = None, limit: int = 50
-    ) -> Dict[str, Any]:
+    async def list_backups(self, backup_dir: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
         """List available backups (Issue #398: refactored)."""
         import os
 

@@ -272,9 +272,7 @@ class DocsCommand(Command):
         query_lower = query.lower()
 
         # Issue #358 - avoid blocking
-        all_md_files = await asyncio.to_thread(
-            lambda: list(self.docs_base_path.rglob("*.md"))
-        )
+        all_md_files = await asyncio.to_thread(lambda: list(self.docs_base_path.rglob("*.md")))
 
         matches = []
         for md_file in all_md_files:
@@ -286,10 +284,7 @@ class DocsCommand(Command):
             return SlashCommandResult(
                 success=True,
                 command_type=CommandType.DOCS,
-                content=(
-                    f"🔍 No documentation found matching '{query}'.\n\n"
-                    "Try `/docs` to see categories."
-                ),
+                content=(f"🔍 No documentation found matching '{query}'.\n\n" "Try `/docs` to see categories."),
             )
 
         return SlashCommandResult(
@@ -351,9 +346,7 @@ class HelpCommand(Command):
 
     async def execute(self) -> SlashCommandResult:
         """Execute /help command. Issue #620."""
-        return SlashCommandResult(
-            success=True, command_type=CommandType.HELP, content=self.HELP_CONTENT
-        )
+        return SlashCommandResult(success=True, command_type=CommandType.HELP, content=self.HELP_CONTENT)
 
 
 class StatusCommand(Command):
@@ -489,16 +482,10 @@ class ScanCommand(Command):
             "name": assessment_name,
         }
 
-    def _format_scan_result(
-        self, assessment, training_mode: bool
-    ) -> SlashCommandResult:
+    def _format_scan_result(self, assessment, training_mode: bool) -> SlashCommandResult:
         """Format scan initiation result."""
         mode_emoji = "🎯" if training_mode else "🛡️"
-        mode_text = (
-            "Training Mode (exploitation enabled)"
-            if training_mode
-            else "Safe Mode (no exploitation)"
-        )
+        mode_text = "Training Mode (exploitation enabled)" if training_mode else "Safe Mode (no exploitation)"
 
         content = f"""## {mode_emoji} Security Assessment Started
 
@@ -559,9 +546,7 @@ class SecurityCommand(Command):
                 "list": lambda: SecurityListSubcommand(manager).execute(),
                 "status": lambda: SecurityStatusSubcommand(manager, sub_args).execute(),
                 "resume": lambda: SecurityResumeSubcommand(manager, sub_args).execute(),
-                "phases": lambda: SecurityPhasesSubcommand(
-                    PHASE_DESCRIPTIONS
-                ).execute(),
+                "phases": lambda: SecurityPhasesSubcommand(PHASE_DESCRIPTIONS).execute(),
             }
 
             handler = subcommand_handlers.get(subcommand)
@@ -571,10 +556,7 @@ class SecurityCommand(Command):
                 return SlashCommandResult(
                     success=False,
                     command_type=CommandType.SECURITY,
-                    content=(
-                        f"❓ Unknown subcommand: `{subcommand}`\n\n"
-                        "Use `/security` for available commands."
-                    ),
+                    content=(f"❓ Unknown subcommand: `{subcommand}`\n\n" "Use `/security` for available commands."),
                 )
 
         except Exception as e:
@@ -674,8 +656,7 @@ No active assessments found.
             vuln_count = sum(len(h.vulnerabilities) for h in a.hosts)
 
             lines.append(
-                f"  {emoji} `{a.id[:8]}` | **{a.name}** | "
-                f"{a.phase.value} | {host_count} hosts, {vuln_count} vulns"
+                f"  {emoji} `{a.id[:8]}` | **{a.name}** | " f"{a.phase.value} | {host_count} hosts, {vuln_count} vulns"
             )
 
         if len(assessments) > 10:
@@ -742,17 +723,11 @@ class SecurityStatusSubcommand(Command):
         """Format assessment status display."""
         # Build severity display
         severity_lines = []
-        for sev, count in (
-            summary.get("stats", {}).get("severity_distribution", {}).items()
-        ):
+        for sev, count in summary.get("stats", {}).get("severity_distribution", {}).items():
             sev_emoji = _SEVERITY_EMOJIS.get(sev.lower(), "⚪")
             severity_lines.append(f"    {sev_emoji} {sev.upper()}: {count}")
 
-        severity_text = (
-            "\n".join(severity_lines)
-            if severity_lines
-            else "    No vulnerabilities found yet"
-        )
+        severity_text = "\n".join(severity_lines) if severity_lines else "    No vulnerabilities found yet"
 
         return f"""## 🔒 Assessment Status
 
@@ -927,21 +902,11 @@ class SecretsCommand(Command):
         from api.secrets import secrets_manager
 
         return {
-            "list": lambda: SecretsListSubcommand(
-                secrets_manager, self.chat_id
-            ).execute(),
-            "add": lambda: SecretsAddSubcommand(
-                secrets_manager, sub_args, self.chat_id
-            ).execute(),
-            "show": lambda: SecretsShowSubcommand(
-                secrets_manager, sub_args, self.chat_id
-            ).execute(),
-            "delete": lambda: SecretsDeleteSubcommand(
-                secrets_manager, sub_args, self.chat_id
-            ).execute(),
-            "transfer": lambda: SecretsTransferSubcommand(
-                secrets_manager, sub_args, self.chat_id
-            ).execute(),
+            "list": lambda: SecretsListSubcommand(secrets_manager, self.chat_id).execute(),
+            "add": lambda: SecretsAddSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+            "show": lambda: SecretsShowSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+            "delete": lambda: SecretsDeleteSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+            "transfer": lambda: SecretsTransferSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
             "types": lambda: SecretsTypesSubcommand().execute(),
         }
 
@@ -1147,10 +1112,7 @@ class SecretsAddSubcommand(Command):
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECRETS,
-                content=(
-                    f"❌ Invalid type `{secret_type}`.\n\n"
-                    f"Valid types: {', '.join(self.VALID_SECRET_TYPES)}"
-                ),
+                content=(f"❌ Invalid type `{secret_type}`.\n\n" f"Valid types: {', '.join(self.VALID_SECRET_TYPES)}"),
             )
 
         self._parsed_name = name
@@ -1158,9 +1120,7 @@ class SecretsAddSubcommand(Command):
         self._parsed_value = value
         return None
 
-    def _build_success_response(
-        self, name: str, secret_type: str, scope
-    ) -> SlashCommandResult:
+    def _build_success_response(self, name: str, secret_type: str, scope) -> SlashCommandResult:
         """
         Build success response for secret creation.
 
@@ -1206,9 +1166,7 @@ Your secret has been securely encrypted and stored.
             )
 
             self.manager.create_secret(request)
-            return self._build_success_response(
-                self._parsed_name, self._parsed_type, scope
-            )
+            return self._build_success_response(self._parsed_name, self._parsed_type, scope)
 
         except ValueError as e:
             return SlashCommandResult(
@@ -1295,9 +1253,7 @@ class SecretsShowSubcommand(Command):
             )
 
         try:
-            full_secret = self.manager.get_secret(
-                target_secret["id"], chat_id=self.chat_id
-            )
+            full_secret = self.manager.get_secret(target_secret["id"], chat_id=self.chat_id)
             if not full_secret:
                 return SlashCommandResult(
                     success=False,
@@ -1350,10 +1306,7 @@ class SecretsDeleteSubcommand(Command):
             return SlashCommandResult(
                 success=True,
                 command_type=CommandType.SECRETS,
-                content=(
-                    f"## ✅ Secret Deleted\n\n"
-                    f"`{self.secret_name}` has been permanently removed."
-                ),
+                content=(f"## ✅ Secret Deleted\n\n" f"`{self.secret_name}` has been permanently removed."),
             )
         return SlashCommandResult(
             success=False,
@@ -1379,9 +1332,7 @@ class SecretsDeleteSubcommand(Command):
             )
 
         try:
-            success = self.manager.delete_secret(
-                target_secret["id"], chat_id=self.chat_id
-            )
+            success = self.manager.delete_secret(target_secret["id"], chat_id=self.chat_id)
             return self._build_delete_result(success)
         except PermissionError:
             return SlashCommandResult(
@@ -1459,9 +1410,7 @@ class SecretsTransferSubcommand(Command):
             )
 
         try:
-            request, scope_text = self._build_transfer_request(
-                target_secret, target_scope_str
-            )
+            request, scope_text = self._build_transfer_request(target_secret, target_scope_str)
             result = self.manager.transfer_secrets(request, chat_id=self.chat_id)
 
             if result.get("transferred"):
@@ -1573,9 +1522,7 @@ class SlashCommandHandler:
             "testing": "testing/",
         }
 
-        logger.info(
-            "SlashCommandHandler initialized with docs path: %s", docs_base_path
-        )
+        logger.info("SlashCommandHandler initialized with docs path: %s", docs_base_path)
 
     def is_slash_command(self, message: str) -> bool:
         """
@@ -1656,9 +1603,7 @@ class SlashCommandHandler:
     ) -> Dict[CommandType, callable]:
         """Get command type to factory mapping (Issue #315)."""
         return {
-            CommandType.DOCS: lambda args: DocsCommand(
-                args, self.docs_base_path, self.doc_categories
-            ),
+            CommandType.DOCS: lambda args: DocsCommand(args, self.docs_base_path, self.doc_categories),
             CommandType.HELP: lambda args: HelpCommand(),
             CommandType.STATUS: lambda args: StatusCommand(),
             CommandType.SCAN: lambda args: ScanCommand(args),

@@ -98,9 +98,7 @@ _DEV_TOOLS: FrozenSet[str] = frozenset(
 )
 
 # Issue #380: Root-required package managers frozenset
-_ROOT_REQUIRED_MANAGERS: FrozenSet[str] = frozenset(
-    {"apt", "yum", "dnf", "pacman", "zypper"}
-)
+_ROOT_REQUIRED_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dnf", "pacman", "zypper"})
 
 # Issue #380: Package manager command templates (static parts cached)
 _PM_INSTALL_TEMPLATES: Dict[str, str] = {
@@ -317,9 +315,7 @@ class OSDetector:
     async def _detect_wsl(self) -> bool:
         """Detect if running in Windows Subsystem for Linux."""
         try:
-            proc_version_exists = await asyncio.to_thread(
-                os.path.exists, "/proc/version"
-            )
+            proc_version_exists = await asyncio.to_thread(os.path.exists, "/proc/version")
             if proc_version_exists:
                 async with aiofiles.open("/proc/version", "r", encoding="utf-8") as f:
                     content = (await f.read()).lower()
@@ -353,9 +349,7 @@ class OSDetector:
                 return pm
         return None
 
-    async def _detect_package_manager(
-        self, os_type: OSType, distro: Optional[LinuxDistro]
-    ) -> str:
+    async def _detect_package_manager(self, os_type: OSType, distro: Optional[LinuxDistro]) -> str:
         """Detect the system package manager (Issue #315 - refactored)."""
         if os_type == OSType.LINUX:
             if distro and distro in self._LINUX_DISTRO_PM:
@@ -420,8 +414,7 @@ class OSDetector:
         ):
             return (
                 False,
-                f"Package manager {self._os_info.package_manager} "
-                "requires root access",
+                f"Package manager {self._os_info.package_manager} " "requires root access",
             )
 
         return True, f"Can install using {self._os_info.package_manager}"

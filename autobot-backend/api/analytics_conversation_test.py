@@ -12,6 +12,7 @@ producing `naive >= aware` TypeError unconditionally (#5420).
 #5427 also deleted the duplicate `_parse_session_timestamp` wrapper —
 only `_parse_timestamp` remains. These tests exercise the unified helper.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -41,8 +42,7 @@ def test_parse_timestamp_returns_aware_for_naive_input() -> None:
     parsed = _parse_timestamp("2026-04-20T12:00:00")
     assert parsed is not None
     assert parsed.tzinfo is not None, (
-        "parse_utc_iso must promote naive input to aware to keep "
-        "_is_session_in_range comparison consistent"
+        "parse_utc_iso must promote naive input to aware to keep " "_is_session_in_range comparison consistent"
     )
 
 
@@ -88,9 +88,7 @@ def test_is_session_in_range_naive_input_promoted_to_aware() -> None:
     """Naive input string flows through parse_utc_iso → aware → comparable."""
     cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=1)
     # Naive ISO string (no tz suffix) — parse_utc_iso assumes UTC
-    naive_iso = (datetime.now(tz=timezone.utc) - timedelta(minutes=30)).strftime(
-        "%Y-%m-%dT%H:%M:%S"
-    )
+    naive_iso = (datetime.now(tz=timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S")
     session = {"created_at": naive_iso}
     # Must not raise; ts (now aware UTC) is within last hour → True
     assert _is_session_in_range(session, cutoff) is True

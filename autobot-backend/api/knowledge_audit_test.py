@@ -37,9 +37,7 @@ def _make_audit_log():
     """Return a mock KnowledgeAuditLog."""
     log = AsyncMock()
     log.get_organization_audit_log = AsyncMock(return_value=[])
-    log.generate_compliance_report = AsyncMock(
-        return_value={"total_events": 0, "events": []}
-    )
+    log.generate_compliance_report = AsyncMock(return_value={"total_events": 0, "events": []})
     return log
 
 
@@ -63,9 +61,8 @@ def _make_kb(audit_log=None):
 @pytest.mark.asyncio
 async def test_org_audit_log_admin_allowed():
     """Admin role can access org audit log."""
-    from autobot_shared.models.pagination import PaginationParams
-
     from api.knowledge_audit import get_organization_audit_log
+    from autobot_shared.models.pagination import PaginationParams
 
     user = {"user_id": "u1", "org_id": "org1", "role": "admin"}
     kb = _make_kb()
@@ -87,9 +84,8 @@ async def test_org_audit_log_admin_allowed():
 @pytest.mark.asyncio
 async def test_org_audit_log_org_admin_allowed():
     """org_admin role can access org audit log."""
-    from autobot_shared.models.pagination import PaginationParams
-
     from api.knowledge_audit import get_organization_audit_log
+    from autobot_shared.models.pagination import PaginationParams
 
     user = {"user_id": "u2", "org_id": "org1", "role": "org_admin"}
     kb = _make_kb()
@@ -226,9 +222,7 @@ async def test_compliance_summary_org_admin_allowed():
         "api.knowledge_audit.get_or_create_knowledge_base",
         new=AsyncMock(return_value=kb),
     ):
-        result = await get_compliance_summary(
-            request=_make_request(kb), current_user=user, days=30
-        )
+        result = await get_compliance_summary(request=_make_request(kb), current_user=user, days=30)
 
     assert "summary_period_days" in result
     assert result["summary_period_days"] == 30

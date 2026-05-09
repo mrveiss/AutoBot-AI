@@ -80,9 +80,7 @@ def verify_local_card() -> CapabilityReport:
     except ImportError:
         return CapabilityReport(
             verified=False,
-            warnings=[
-                "Cannot import DEFAULT_AGENT_CAPABILITIES — agent stack not loaded"
-            ],
+            warnings=["Cannot import DEFAULT_AGENT_CAPABILITIES — agent stack not loaded"],
         )
 
     try:
@@ -204,8 +202,7 @@ def _check_card_skills(card_data: Dict[str, Any]) -> CapabilityReport:
         else:
             unverified.append(skill_id)
             warnings.append(
-                f"Skill '{skill_id}' has insufficient metadata "
-                "(missing id, description, tags, or examples)"
+                f"Skill '{skill_id}' has insufficient metadata " "(missing id, description, tags, or examples)"
             )
 
     return CapabilityReport(

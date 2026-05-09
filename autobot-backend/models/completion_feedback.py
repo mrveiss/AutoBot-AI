@@ -58,9 +58,7 @@ class CompletionFeedback(Base):
             "id": self.id,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "user_id": self.user_id,
-            "context": (
-                self.context[:100] + "..." if len(self.context) > 100 else self.context
-            ),
+            "context": (self.context[:100] + "..." if len(self.context) > 100 else self.context),
             "suggestion": self.suggestion,
             "language": self.language,
             "file_path": self.file_path,
@@ -76,7 +74,4 @@ class CompletionFeedback(Base):
         return self.action == "accepted"
 
     def __repr__(self) -> str:
-        return (
-            f"<CompletionFeedback(id={self.id}, action={self.action}, "
-            f"pattern_id={self.pattern_id})>"
-        )
+        return f"<CompletionFeedback(id={self.id}, action={self.action}, " f"pattern_id={self.pattern_id})>"

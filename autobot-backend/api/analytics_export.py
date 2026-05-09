@@ -24,13 +24,13 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, Response
 
+from api.schemas_analytics import ExportFormatsResponse
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
-from api.schemas_common import DataResponse
-from api.schemas_analytics import ExportFormatsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
@@ -81,9 +81,7 @@ async def export_cost_csv(
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename=autobot_costs_{days}d.csv"
-        },
+        headers={"Content-Disposition": f"attachment; filename=autobot_costs_{days}d.csv"},
     )
 
 
@@ -200,9 +198,7 @@ async def export_usage_csv(
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename=autobot_usage_{limit}.csv"
-        },
+        headers={"Content-Disposition": f"attachment; filename=autobot_usage_{limit}.csv"},
     )
 
 
@@ -263,9 +259,7 @@ async def export_full_json(
     return Response(
         content=json.dumps(export_data, indent=2),
         media_type="application/json",
-        headers={
-            "Content-Disposition": f"attachment; filename=autobot_analytics_{days}d.json"
-        },
+        headers={"Content-Disposition": f"attachment; filename=autobot_analytics_{days}d.json"},
     )
 
 
@@ -314,12 +308,8 @@ def _build_cost_metrics_lines(cost_summary: dict) -> list[str]:
     for model, data in cost_summary.get("by_model", {}).items():
         input_tokens = data.get("input_tokens", 0)
         output_tokens = data.get("output_tokens", 0)
-        lines.append(
-            f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}'
-        )
-        lines.append(
-            f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}'
-        )
+        lines.append(f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}')
+        lines.append(f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}')
 
     return lines
 
@@ -449,9 +439,7 @@ def _get_cost_panels() -> list:
             "title": "Cost by Model",
             "type": "piechart",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-            "targets": [
-                {"expr": "autobot_llm_model_cost_usd", "legendFormat": "{{model}}"}
-            ],
+            "targets": [{"expr": "autobot_llm_model_cost_usd", "legendFormat": "{{model}}"}],
         },
     ]
 
@@ -464,9 +452,7 @@ def _get_agent_panels() -> list:
             "title": "Agent Success Rates",
             "type": "bargauge",
             "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-            "targets": [
-                {"expr": "autobot_agent_success_rate", "legendFormat": "{{agent_id}}"}
-            ],
+            "targets": [{"expr": "autobot_agent_success_rate", "legendFormat": "{{agent_id}}"}],
             "options": {"orientation": "horizontal", "displayMode": "gradient"},
             "fieldConfig": {"defaults": {"max": 100, "min": 0, "unit": "percent"}},
         },
@@ -488,9 +474,7 @@ def _get_agent_panels() -> list:
             "title": "Agent Error Rates",
             "type": "timeseries",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-            "targets": [
-                {"expr": "autobot_agent_error_rate", "legendFormat": "{{agent_id}}"}
-            ],
+            "targets": [{"expr": "autobot_agent_error_rate", "legendFormat": "{{agent_id}}"}],
             "fieldConfig": {
                 "defaults": {
                     "unit": "percent",
@@ -590,9 +574,7 @@ async def export_grafana_dashboard(
     return Response(
         content=json.dumps(dashboard, indent=2),
         media_type="application/json",
-        headers={
-            "Content-Disposition": "attachment; filename=autobot_grafana_dashboard.json"
-        },
+        headers={"Content-Disposition": "attachment; filename=autobot_grafana_dashboard.json"},
     )
 
 

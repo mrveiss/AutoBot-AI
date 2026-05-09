@@ -53,9 +53,7 @@ class OpenRouterProvider(BaseProvider):
               OPENROUTER_API_KEY environment variable
     """
 
-    provider_name = ProviderType.OPENROUTER.value if hasattr(
-        ProviderType, "OPENROUTER"
-    ) else "openrouter"
+    provider_name = ProviderType.OPENROUTER.value if hasattr(ProviderType, "OPENROUTER") else "openrouter"
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(settings)
@@ -75,11 +73,7 @@ class OpenRouterProvider(BaseProvider):
         """Resolve base URL with default."""
         if self._base_url:
             return self._base_url
-        url = (
-            self._get_setting("base_url") or
-            os.getenv("OPENROUTER_API_BASE_URL") or
-            "https://openrouter.ai/api/v1"
-        )
+        url = self._get_setting("base_url") or os.getenv("OPENROUTER_API_BASE_URL") or "https://openrouter.ai/api/v1"
         self._base_url = url
         return url
 
@@ -91,16 +85,11 @@ class OpenRouterProvider(BaseProvider):
         try:
             from openai import AsyncOpenAI
         except ImportError as exc:
-            raise ImportError(
-                "openai package not installed. Run: pip install openai"
-            ) from exc
+            raise ImportError("openai package not installed. Run: pip install openai") from exc
 
         api_key = self._resolve_api_key()
         if not api_key:
-            raise ValueError(
-                "OpenRouter API key not found. Set OPENROUTER_API_KEY or "
-                "provide api_key in settings."
-            )
+            raise ValueError("OpenRouter API key not found. Set OPENROUTER_API_KEY or " "provide api_key in settings.")
 
         base_url = self._resolve_base_url()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
@@ -116,18 +105,13 @@ class OpenRouterProvider(BaseProvider):
         Returns:
             LLMResponse with content populated or error field set.
         """
-        with _tracer.start_as_current_span(
-            "openrouter.chat_completion", kind=SpanKind.CLIENT
-        ) as span:
+        with _tracer.start_as_current_span("openrouter.chat_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
                 # Convert to OpenAI format
-                messages = [
-                    {"role": msg.role, "content": msg.content}
-                    for msg in request.messages
-                ]
+                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
                 # Merge API kwargs
                 api_kwargs = request.metadata.get("api_kwargs", {})
@@ -198,17 +182,12 @@ class OpenRouterProvider(BaseProvider):
         Yields:
             String chunks of the generated text.
         """
-        with _tracer.start_as_current_span(
-            "openrouter.stream_completion", kind=SpanKind.CLIENT
-        ) as span:
+        with _tracer.start_as_current_span("openrouter.stream_completion", kind=SpanKind.CLIENT) as span:
             try:
                 self._total_requests += 1
                 self._ensure_client()
 
-                messages = [
-                    {"role": msg.role, "content": msg.content}
-                    for msg in request.messages
-                ]
+                messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
                 api_kwargs = request.metadata.get("api_kwargs", {})
                 chat_kwargs = {
@@ -283,6 +262,7 @@ def _ensure_provider_type():
     """Ensure OPENROUTER is in ProviderType enum."""
     try:
         from llm_interface_pkg.types import ProviderType
+
         if not hasattr(ProviderType, "OPENROUTER"):
             logger.info("ProviderType.OPENROUTER not defined; using string 'openrouter'")
     except Exception:

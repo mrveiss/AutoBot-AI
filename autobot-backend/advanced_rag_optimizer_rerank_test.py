@@ -142,9 +142,7 @@ class TestRAGServiceForwardsWeights(unittest.IsolatedAsyncioTestCase):
 
         captured_weights = []
 
-        original_init = (
-            service.optimizer.__class__.__init__ if service.optimizer else None
-        )
+        original_init = service.optimizer.__class__.__init__ if service.optimizer else None
 
         with patch(
             "services.rag_service.AdvancedRAGOptimizer",

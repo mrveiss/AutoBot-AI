@@ -19,8 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from auth_middleware import get_current_user
-from services.nl_database_service import get_nl_database_service
 from api.schemas_agent import NLDatabaseSchemaResponse
 from api.schemas_knowledge import (
     NLQueryRequest,
@@ -28,7 +26,9 @@ from api.schemas_knowledge import (
     TrainRequest,
     TrainResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.nl_database_service import get_nl_database_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +45,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_db_url(
-    db_secret_id: Optional[str], request: Request
-) -> Optional[str]:
+async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Optional[str]:
     """
     Resolve a database URL from a secret ID.
 
@@ -82,9 +80,7 @@ async def _resolve_db_url(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(  # codeql[py/clear-text-logging-sensitive-data]
-            "Failed to resolve database secret: %s", exc
-        )
+        logger.error("Failed to resolve database secret: %s", exc)  # codeql[py/clear-text-logging-sensitive-data]
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve database credentials",

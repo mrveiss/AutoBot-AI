@@ -233,9 +233,7 @@ def __getattr__(name: str):
         _lazy_import_manager()
         compat = _lazy_import_compat()
         if "legacy_config" not in _lazy_cache:
-            _lazy_cache["legacy_config"] = compat["Config"](
-                _get_cached_config_manager()
-            )
+            _lazy_cache["legacy_config"] = compat["Config"](_get_cached_config_manager())
         return _lazy_cache["legacy_config"]
 
     # Settings (new name + deprecated alias)
@@ -318,9 +316,7 @@ async def save_config_async(config_type: str, data):
 
 async def get_config_value_async(config_type: str, key: str, default=None):
     """Get configuration value asynchronously"""
-    return await _get_cached_config_manager().get_config_value_async(
-        config_type, key, default
-    )
+    return await _get_cached_config_manager().get_config_value_async(config_type, key, default)
 
 
 async def set_config_value_async(config_type: str, key: str, value):

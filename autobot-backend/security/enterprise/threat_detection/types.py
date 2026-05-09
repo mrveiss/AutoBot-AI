@@ -12,12 +12,8 @@ Part of Issue #381 - God Class Refactoring
 from enum import Enum
 
 # Issue #380: Module-level frozensets to avoid repeated list creation in detection methods
-SENSITIVE_RESOURCE_KEYWORDS = frozenset(
-    {"admin", "config", "secret", "key", "password"}
-)
-FILE_OPERATION_ACTIONS = frozenset(
-    {"file_read", "file_write", "file_delete", "file_upload"}
-)
+SENSITIVE_RESOURCE_KEYWORDS = frozenset({"admin", "config", "secret", "key", "password"})
+FILE_OPERATION_ACTIONS = frozenset({"file_read", "file_write", "file_delete", "file_upload"})
 
 # Issue #315 - Severity priority ordering for comparison
 SEVERITY_PRIORITY = {"critical": 4, "high": 3, "medium": 2, "low": 1}

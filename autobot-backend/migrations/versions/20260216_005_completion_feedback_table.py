@@ -41,12 +41,8 @@ def upgrade() -> None:
         "completion_feedback",
         ["timestamp"],
     )
-    op.create_index(
-        op.f("ix_completion_feedback_user_id"), "completion_feedback", ["user_id"]
-    )
-    op.create_index(
-        op.f("ix_completion_feedback_action"), "completion_feedback", ["action"]
-    )
+    op.create_index(op.f("ix_completion_feedback_user_id"), "completion_feedback", ["user_id"])
+    op.create_index(op.f("ix_completion_feedback_action"), "completion_feedback", ["action"])
     op.create_index(
         op.f("ix_completion_feedback_pattern_id"),
         "completion_feedback",
@@ -56,16 +52,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop completion_feedback table."""
-    op.drop_index(
-        op.f("ix_completion_feedback_pattern_id"), table_name="completion_feedback"
-    )
-    op.drop_index(
-        op.f("ix_completion_feedback_action"), table_name="completion_feedback"
-    )
-    op.drop_index(
-        op.f("ix_completion_feedback_user_id"), table_name="completion_feedback"
-    )
-    op.drop_index(
-        op.f("ix_completion_feedback_timestamp"), table_name="completion_feedback"
-    )
+    op.drop_index(op.f("ix_completion_feedback_pattern_id"), table_name="completion_feedback")
+    op.drop_index(op.f("ix_completion_feedback_action"), table_name="completion_feedback")
+    op.drop_index(op.f("ix_completion_feedback_user_id"), table_name="completion_feedback")
+    op.drop_index(op.f("ix_completion_feedback_timestamp"), table_name="completion_feedback")
     op.drop_table("completion_feedback")

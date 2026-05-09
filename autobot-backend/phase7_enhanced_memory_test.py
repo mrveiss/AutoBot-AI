@@ -42,9 +42,7 @@ async def test_enhanced_memory_system():
     print(f"✅ Started task: {task_id}")  # noqa: print
 
     # Complete the task
-    memory_manager.complete_task(
-        task_id, outputs={"test_result": "success", "validation": "passed"}
-    )
+    memory_manager.complete_task(task_id, outputs={"test_result": "success", "validation": "passed"})
     print(f"✅ Completed task: {task_id}")  # noqa: print
 
     # Get task statistics
@@ -70,9 +68,7 @@ async def test_enhanced_memory_system():
         task_context.set_outputs({"async_result": "success"})
 
         # Create a subtask
-        subtask_id = task_context.create_subtask(
-            "Subtask Example", "Testing subtask creation"
-        )
+        subtask_id = task_context.create_subtask("Subtask Example", "Testing subtask creation")
         print(f"✅ Created subtask: {subtask_id}")  # noqa: print
 
     print("✅ Async task completed automatically")  # noqa: print
@@ -85,17 +81,13 @@ async def test_enhanced_memory_system():
     docs_path = Path("docs")
     if docs_path.exists():
         scan_result = markdown_system.scan_markdown_directory(docs_path)
-        print(  # noqa: print
-            f"✅ Scanned docs: {scan_result['scanned_files']} files, {scan_result['new_files']} new"
-        )
+        print(f"✅ Scanned docs: {scan_result['scanned_files']} files, {scan_result['new_files']} new")  # noqa: print
     else:
         print("⚠️ Docs directory not found, skipping markdown scan")  # noqa: print
 
     # Get markdown statistics
     md_stats = markdown_system.get_markdown_statistics()
-    print(  # noqa: print
-        f"✅ Markdown stats: {md_stats['total_documents']} documents, {md_stats['total_words']} words"
-    )
+    print(f"✅ Markdown stats: {md_stats['total_documents']} documents, {md_stats['total_words']} words")  # noqa: print
 
     # Test 4: Integration Test
     print("\n4. Testing System Integration...")  # noqa: print
@@ -110,33 +102,23 @@ async def test_enhanced_memory_system():
     # Add markdown reference if README exists
     readme_path = Path("README.md")
     if readme_path.exists():
-        memory_manager.add_markdown_reference(
-            integration_task_id, str(readme_path), "project_documentation"
-        )
-        print(  # noqa: print
-            f"✅ Added markdown reference: README.md -> {integration_task_id}"
-        )  # noqa: print
+        memory_manager.add_markdown_reference(integration_task_id, str(readme_path), "project_documentation")
+        print(f"✅ Added markdown reference: README.md -> {integration_task_id}")  # noqa: print  # noqa: print
 
     # Complete integration task
     memory_manager.complete_task(integration_task_id)
 
     # Get updated statistics
     final_stats = memory_manager.get_task_statistics(days_back=1)
-    print(  # noqa: print
-        f"✅ Final statistics: {final_stats['total_tasks']} total tasks"
-    )  # noqa: print
+    print(f"✅ Final statistics: {final_stats['total_tasks']} total tasks")  # noqa: print  # noqa: print
 
     # Test 5: Performance Analysis
     print("\n5. Testing Performance Analysis...")  # noqa: print
     insights = await tracker.analyze_task_patterns(days_back=1)
-    print(  # noqa: print
-        f"✅ Performance insights for {insights['total_tasks_analyzed']} tasks"
-    )  # noqa: print
+    print(f"✅ Performance insights for {insights['total_tasks_analyzed']} tasks")  # noqa: print  # noqa: print
 
     for agent, perf in insights.get("agent_performance", {}).items():
-        print(  # noqa: print
-            f"   - {agent}: {perf['success_rate_percent']}% success, {perf['total_tasks']} tasks"
-        )
+        print(f"   - {agent}: {perf['success_rate_percent']}% success, {perf['total_tasks']} tasks")  # noqa: print
 
     print("\n" + "=" * 50)  # noqa: print
     print("🎉 Phase 7 Enhanced Memory System Test PASSED!")  # noqa: print
@@ -185,9 +167,7 @@ def main():
         asyncio.run(test_enhanced_memory_system())
         asyncio.run(test_embedding_system())
 
-        print(  # noqa: print
-            "\n🚀 Phase 7 Enhanced Memory System is ready for production!"
-        )  # noqa: print
+        print("\n🚀 Phase 7 Enhanced Memory System is ready for production!")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")  # noqa: print

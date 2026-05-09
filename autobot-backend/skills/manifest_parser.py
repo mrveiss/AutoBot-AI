@@ -52,9 +52,7 @@ def parse_manifest(text: str) -> dict[str, Any]:
     """
     match = _FRONT_MATTER_RE.match(text)
     if not match:
-        raise ValueError(
-            "SKILL.md must start with a YAML front-matter block delimited by '---' lines"
-        )
+        raise ValueError("SKILL.md must start with a YAML front-matter block delimited by '---' lines")
 
     raw_yaml = match.group(1)
     try:
@@ -99,16 +97,12 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         elif isinstance(value, list):
             for item in value:
                 if not isinstance(item, str):
-                    errors.append(
-                        f"All items in '{field}' must be strings; got {type(item).__name__}"
-                    )
+                    errors.append(f"All items in '{field}' must be strings; got {type(item).__name__}")
 
     trust = manifest.get("trust_level_requested")
     if trust is not None:
         if not isinstance(trust, str) or trust not in _VALID_TRUST_LEVELS:
-            errors.append(
-                f"'trust_level_requested' must be one of {sorted(_VALID_TRUST_LEVELS)}"
-            )
+            errors.append(f"'trust_level_requested' must be one of {sorted(_VALID_TRUST_LEVELS)}")
 
     known = set(_REQUIRED_FIELDS) | set(_OPTIONAL_FIELDS)
     for key in manifest:

@@ -76,9 +76,7 @@ class OllamaProvider:
         logger.debug("[REQUEST] Using Ollama URL from config: %s", host_url)
         return host_url
 
-    def build_request_data(
-        self, request: LLMRequest, model: str, use_streaming: bool
-    ) -> dict:
+    def build_request_data(self, request: LLMRequest, model: str, use_streaming: bool) -> dict:
         """
         Build Ollama API request data dictionary.
 
@@ -177,9 +175,7 @@ class OllamaProvider:
             "error": str(error),
         }
 
-    def _record_success_span_attributes(
-        self, span, processing_time: float, content: str
-    ) -> None:
+    def _record_success_span_attributes(self, span, processing_time: float, content: str) -> None:
         """
         Record success attributes on OpenTelemetry span. Issue #620.
 
@@ -193,9 +189,7 @@ class OllamaProvider:
             span.set_attribute("llm.response_length", len(content))
             span.set_status(Status(StatusCode.OK))
 
-    def _build_span_attributes(
-        self, model: str, use_streaming: bool, request: LLMRequest
-    ) -> dict:
+    def _build_span_attributes(self, model: str, use_streaming: bool, request: LLMRequest) -> dict:
         """
         Build span attributes for OpenTelemetry tracing. Issue #620.
 
@@ -246,9 +240,7 @@ class OllamaProvider:
             response = await self.non_streaming_request(url, headers, data, request_id)
 
         if not isinstance(response, dict):
-            logger.error(
-                f"Streaming response is not a dict: {type(response)} - {response}"
-            )
+            logger.error(f"Streaming response is not a dict: {type(response)} - {response}")
             response = {"message": {"content": str(response)}, "model": model}
 
         return response
@@ -310,9 +302,7 @@ class OllamaProvider:
             sock_connect=5.0,
         )
 
-    async def _process_stream_response(
-        self, response: aiohttp.ClientResponse, request_id: str
-    ) -> dict:
+    async def _process_stream_response(self, response: aiohttp.ClientResponse, request_id: str) -> dict:
         """
         Issue #665: Extracted from stream_response to reduce function length.
 
@@ -337,10 +327,7 @@ class OllamaProvider:
         if not completed_successfully:
             logger.warning(f"[{request_id}] Stream did not complete properly")
 
-        logger.info(
-            f"[{request_id}] Stream processing completed: "
-            f"{len(accumulated_content)} chars"
-        )
+        logger.info(f"[{request_id}] Stream processing completed: " f"{len(accumulated_content)} chars")
 
         return {
             "message": {"role": "assistant", "content": accumulated_content},
@@ -378,19 +365,13 @@ class OllamaProvider:
         try:
             async with self._get_session() as session:
                 timeout = self._create_streaming_timeout()
-                async with session.post(
-                    url, headers=headers, json=data, timeout=timeout
-                ) as response:
+                async with session.post(url, headers=headers, json=data, timeout=timeout) as response:
                     if response.status != 200:
-                        raise aiohttp.ClientError(
-                            f"HTTP {response.status}: {await response.text()}"
-                        )
+                        raise aiohttp.ClientError(f"HTTP {response.status}: {await response.text()}")
                     return await self._process_stream_response(response, request_id)
         except asyncio.CancelledError:
             duration = time.time() - start_time
-            logger.info(
-                "[%s] Stream cancelled by user after %.2fs", request_id, duration
-            )
+            logger.info("[%s] Stream cancelled by user after %.2fs", request_id, duration)
             raise
         except Exception as e:
             duration = time.time() - start_time
@@ -423,13 +404,9 @@ class OllamaProvider:
 
         async with self._get_session() as session:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with session.post(
-                url, headers=headers, json=data_copy, timeout=timeout
-            ) as response:
+            async with session.post(url, headers=headers, json=data_copy, timeout=timeout) as response:
                 if response.status != 200:
-                    raise aiohttp.ClientError(
-                        f"HTTP {response.status}: {await response.text()}"
-                    )
+                    raise aiohttp.ClientError(f"HTTP {response.status}: {await response.text()}")
 
                 result = await response.json()
                 return result
@@ -496,29 +473,21 @@ class OllamaProvider:
             span_attrs,
         ) = self._prepare_chat_request(request)
 
-        with _tracer.start_as_current_span(
-            "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
-        ) as span:
+        with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
             start_time = time.time()
 
             try:
-                response = await self._execute_request(
-                    url, headers, data, request.request_id, model, use_streaming
-                )
+                response = await self._execute_request(url, headers, data, request.request_id, model, use_streaming)
                 processing_time = time.time() - start_time
                 content = self.extract_content(response)
                 self._record_success_span_attributes(span, processing_time, content)
 
-                return self.build_response(
-                    content, response, model, processing_time, request.request_id
-                )
+                return self.build_response(content, response, model, processing_time, request.request_id)
 
             except Exception as e:
                 self._record_error_span_attributes(span, e)
                 if use_streaming:
-                    return self._handle_streaming_error(
-                        span, model, start_time, request.request_id, e
-                    )
+                    return self._handle_streaming_error(span, model, start_time, request.request_id, e)
                 raise e
 
 

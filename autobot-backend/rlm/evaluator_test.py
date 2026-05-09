@@ -41,9 +41,7 @@ class TestEvaluatorErrorPath:
             new=AsyncMock(side_effect=ConnectionError("ollama timeout")),
         ):
             with caplog.at_level(logging.WARNING):
-                result = await evaluator.evaluate(
-                    query="What is 2+2?", response="Probably 5", iteration=1
-                )
+                result = await evaluator.evaluate(query="What is 2+2?", response="Probably 5", iteration=1)
 
         assert result.verdict == ReflectionVerdict.INDETERMINATE
         assert "ConnectionError" in result.critique
@@ -63,9 +61,7 @@ class TestEvaluatorErrorPath:
             new=AsyncMock(side_effect=ConnectionError()),
         ):
             with caplog.at_level(logging.WARNING):
-                result = await evaluator.evaluate(
-                    query="x", response="y", iteration=1
-                )
+                result = await evaluator.evaluate(query="x", response="y", iteration=1)
 
         assert result.verdict == ReflectionVerdict.INDETERMINATE
         # Log must mention the exception type even when message is empty
@@ -91,10 +87,7 @@ class TestEvaluatorErrorPath:
         log_text = " ".join(r.getMessage() for r in caplog.records)
         # Either the log uses INDETERMINATE wording OR doesn't claim acceptance —
         # not the previous "accepting response" while returning FAIL.
-        assert (
-            "INDETERMINATE" in log_text
-            or "passing through" in log_text
-        )
+        assert "INDETERMINATE" in log_text or "passing through" in log_text
         assert result.verdict == ReflectionVerdict.INDETERMINATE
 
     @pytest.mark.asyncio
@@ -114,9 +107,9 @@ class TestEvaluatorErrorPath:
 
         warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
         # exc_info=True attaches an exc_info tuple to the LogRecord
-        assert any(r.exc_info is not None for r in warning_records), (
-            "exc_info=True must be set so traceback is captured"
-        )
+        assert any(
+            r.exc_info is not None for r in warning_records
+        ), "exc_info=True must be set so traceback is captured"
 
     def test_indeterminate_value_exists_on_enum(self):
         """The new INDETERMINATE verdict must be on the enum."""

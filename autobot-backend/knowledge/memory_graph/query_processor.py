@@ -62,9 +62,7 @@ _TIME_PATTERNS: List[Tuple[str, Any]] = [
     ),
     (
         r"\blast (\d+) days?\b",
-        lambda m: {
-            "start": (datetime.now(tz=timezone.utc) - timedelta(days=int(m.group(1)))).date()
-        },
+        lambda m: {"start": (datetime.now(tz=timezone.utc) - timedelta(days=int(m.group(1)))).date()},
     ),
     (
         r"\bthis month\b",
@@ -244,16 +242,10 @@ class MemoryGraphQueryProcessor:
         redis_query = _build_redis_query(intent)
 
         # Stages 3 & 4 run concurrently
-        embedding_task = asyncio.create_task(
-            self._get_query_embedding(intent.semantic_query or query)
-        )
-        candidates_task = asyncio.create_task(
-            self._fetch_candidates(redis_query, self._candidate_limit)
-        )
+        embedding_task = asyncio.create_task(self._get_query_embedding(intent.semantic_query or query))
+        candidates_task = asyncio.create_task(self._fetch_candidates(redis_query, self._candidate_limit))
 
-        query_embedding, candidates = await asyncio.gather(
-            embedding_task, candidates_task
-        )
+        query_embedding, candidates = await asyncio.gather(embedding_task, candidates_task)
 
         if not candidates:
             logger.info("No candidates found for query: %s", query)
@@ -356,9 +348,7 @@ class MemoryGraphQueryProcessor:
             doc = raw_json if isinstance(raw_json, dict) else {}
             relations: List[Dict[str, Any]] = doc.get("relations", [])
         except Exception as exc:
-            logger.warning(
-                "Failed to read relations for %s: %s", entity_name, exc
-            )
+            logger.warning("Failed to read relations for %s: %s", entity_name, exc)
             return []
 
         if relation_type:
@@ -418,9 +408,7 @@ class MemoryGraphQueryProcessor:
     # Stage 3: Embedding
     # ------------------------------------------------------------------
 
-    async def _get_query_embedding(
-        self, semantic_query: str
-    ) -> Optional[List[float]]:
+    async def _get_query_embedding(self, semantic_query: str) -> Optional[List[float]]:
         """
         Return an embedding vector for *semantic_query*.
 
@@ -461,9 +449,7 @@ class MemoryGraphQueryProcessor:
     # Stage 4: Redis candidate retrieval
     # ------------------------------------------------------------------
 
-    async def _fetch_candidates(
-        self, redis_query: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    async def _fetch_candidates(self, redis_query: str, limit: int) -> List[Dict[str, Any]]:
         """
         Execute FT.SEARCH to retrieve entity candidates.
 
@@ -482,9 +468,7 @@ class MemoryGraphQueryProcessor:
             )
             return _parse_ft_results(raw)
         except Exception as exc:
-            logger.warning(
-                "FT.SEARCH failed (%s), falling back to scan", exc
-            )
+            logger.warning("FT.SEARCH failed (%s), falling back to scan", exc)
             return await self._scan_fallback(limit)
 
     async def _scan_fallback(self, limit: int) -> List[Dict[str, Any]]:
@@ -492,9 +476,7 @@ class MemoryGraphQueryProcessor:
         redis = await self._get_redis()
         entities: List[Dict[str, Any]] = []
         try:
-            async for key in redis.scan_iter(
-                match=f"{_ENTITY_KEY_PREFIX}*", count=100
-            ):
+            async for key in redis.scan_iter(match=f"{_ENTITY_KEY_PREFIX}*", count=100):
                 if len(entities) >= limit:
                     break
                 doc = await redis.json().get(key)
@@ -511,9 +493,7 @@ class MemoryGraphQueryProcessor:
     async def _get_redis(self):
         """Lazily obtain the async Redis client."""
         if self._redis is None:
-            self._redis = await get_redis_client(
-                async_client=True, database="knowledge"
-            )
+            self._redis = await get_redis_client(async_client=True, database="knowledge")
         return self._redis
 
 
@@ -555,10 +535,7 @@ def _build_redis_query(intent: QueryIntent) -> str:
         start_dt = intent.time_range["start"]
         # created_at stored as ms-since-epoch integer
         if hasattr(start_dt, "timetuple"):
-            ts = int(
-                datetime(start_dt.year, start_dt.month, start_dt.day).timestamp()
-                * 1000
-            )
+            ts = int(datetime(start_dt.year, start_dt.month, start_dt.day).timestamp() * 1000)
         else:
             ts = int(start_dt) * 1000
         parts.append(f"@created_at:[{ts} +inf]")

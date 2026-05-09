@@ -246,9 +246,7 @@ class TestPlanPresentation:
         assert call_args[0][1]["type"] == "workflow_plan_presented"
 
     @pytest.mark.asyncio
-    async def test_present_plan_stores_pending_approval(
-        self, executor, sample_workflow
-    ):
+    async def test_present_plan_stores_pending_approval(self, executor, sample_workflow):
         """Test that pending approval is stored correctly."""
         await executor.present_plan_for_approval(sample_workflow)
 
@@ -256,9 +254,7 @@ class TestPlanPresentation:
         assert "test_workflow_123" in executor._plan_approval_events
 
     @pytest.mark.asyncio
-    async def test_present_plan_unsupported_mode_raises_error(
-        self, executor, sample_workflow
-    ):
+    async def test_present_plan_unsupported_mode_raises_error(self, executor, sample_workflow):
         """Test that unsupported approval modes raise ValueError."""
         with pytest.raises(ValueError) as exc_info:
             await executor.present_plan_for_approval(
@@ -270,9 +266,7 @@ class TestPlanPresentation:
         assert "full_plan" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_present_plan_invalid_timeout_raises_error(
-        self, executor, sample_workflow
-    ):
+    async def test_present_plan_invalid_timeout_raises_error(self, executor, sample_workflow):
         """Test that invalid timeout raises ValueError."""
         with pytest.raises(ValueError) as exc_info:
             await executor.present_plan_for_approval(
@@ -293,9 +287,7 @@ class TestPlanPresentation:
         assert result.timeout_seconds == 3600  # Capped at 1 hour
 
     @pytest.mark.asyncio
-    async def test_present_plan_returns_existing_if_pending(
-        self, executor, sample_workflow
-    ):
+    async def test_present_plan_returns_existing_if_pending(self, executor, sample_workflow):
         """Test that existing pending approval is returned."""
         # First presentation
         first_result = await executor.present_plan_for_approval(sample_workflow)
@@ -394,9 +386,7 @@ class TestApprovalResponseHandling:
         assert approval.user_response == "Not safe now"
 
     @pytest.mark.asyncio
-    async def test_handle_approval_response_with_modifications(
-        self, executor, sample_workflow
-    ):
+    async def test_handle_approval_response_with_modifications(self, executor, sample_workflow):
         """Test handling response with modifications."""
         await executor.present_plan_for_approval(sample_workflow)
 
@@ -544,9 +534,7 @@ class TestApprovalCleanup:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_cancel_workflow_clears_approval(
-        self, executor, sample_workflow, mock_messenger
-    ):
+    async def test_cancel_workflow_clears_approval(self, executor, sample_workflow, mock_messenger):
         """Test that cancelling workflow clears pending approval."""
         await executor.present_plan_for_approval(sample_workflow)
 

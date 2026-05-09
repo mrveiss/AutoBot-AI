@@ -107,9 +107,7 @@ class TestEvaluatePromotesHotNodes:
         )
         await promoter.evaluate()
 
-        db.get_promotion_candidates.assert_awaited_once_with(
-            min_access=100, min_edges=8
-        )
+        db.get_promotion_candidates.assert_awaited_once_with(min_access=100, min_edges=8)
 
 
 # =============================================================================
@@ -294,9 +292,7 @@ class TestReportContents:
     async def test_report_contains_promoted_ids(self):
         """nodes_promoted contains all promoted node IDs."""
         db = _make_db()
-        db.get_promotion_candidates = AsyncMock(
-            return_value=[_candidate(_NODE_ID), _candidate(_NODE_ID_2)]
-        )
+        db.get_promotion_candidates = AsyncMock(return_value=[_candidate(_NODE_ID), _candidate(_NODE_ID_2)])
         db.get_neighborhood = AsyncMock(return_value=_neighborhood())
         chroma = _make_chroma()
 

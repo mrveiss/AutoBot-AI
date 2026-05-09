@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.redis_client import get_async_redis_client
-
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
@@ -150,9 +149,7 @@ async def _save_task_to_redis(task_id: str, indexing_tasks: Dict) -> None:
                     ex=_TASK_REDIS_TTL,
                 )
     except Exception as e:
-        logger.debug(
-            "[Task %s] Redis task state save failed (non-fatal): %s", task_id, e
-        )
+        logger.debug("[Task %s] Redis task state save failed (non-fatal): %s", task_id, e)
 
 
 async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
@@ -164,9 +161,7 @@ async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
             if data:
                 return json.loads(data)
     except Exception as e:
-        logger.debug(
-            "[Task %s] Redis task state load failed (non-fatal): %s", task_id, e
-        )
+        logger.debug("[Task %s] Redis task state load failed (non-fatal): %s", task_id, e)
     return None
 
 
@@ -202,9 +197,7 @@ async def _remove_queue_entries_redis(source_id: str) -> None:
         if not redis:
             return
         raw_items = await redis.lrange(_QUEUE_REDIS_KEY, 0, -1)
-        keep = [
-            item for item in raw_items if json.loads(item).get("source_id") != source_id
-        ]
+        keep = [item for item in raw_items if json.loads(item).get("source_id") != source_id]
         pipe = redis.pipeline()
         pipe.delete(_QUEUE_REDIS_KEY)
         for item in keep:
@@ -242,8 +235,7 @@ async def recover_index_queue(tasks_lock: asyncio.Lock, index_queue) -> int:
     async with tasks_lock:
         for entry in entries:
             if not any(
-                e.get("source_id") == entry.get("source_id")
-                and e.get("root_path") == entry.get("root_path")
+                e.get("source_id") == entry.get("source_id") and e.get("root_path") == entry.get("root_path")
                 for e in index_queue
             ):
                 index_queue.append(entry)
@@ -314,9 +306,7 @@ def _create_initial_task_state(
     }
 
 
-def _update_task_phase(
-    task_id: str, phase_id: str, status: str, indexing_tasks: Dict
-) -> None:
+def _update_task_phase(task_id: str, phase_id: str, status: str, indexing_tasks: Dict) -> None:
     """
     Update phase status and track completion in task state.
 
@@ -378,9 +368,7 @@ async def _invalidate_quality_cache() -> None:
         keys = await redis.keys("code_quality:latest*")
         if keys:
             await redis.delete(*keys)
-            logger.info(
-                "Invalidated %d quality cache key(s) after scan", len(keys)
-            )
+            logger.info("Invalidated %d quality cache key(s) after scan", len(keys))
     except Exception as exc:
         logger.warning("Quality cache invalidation failed: %s", exc)
 
@@ -404,8 +392,7 @@ def _mark_task_completed(
     indexing_tasks[task_id]["result"] = {
         "status": "success",
         "message": (
-            f"Indexed {total_files} files, found {hardcodes_stored} hardcodes "
-            f"using {storage_type} storage"
+            f"Indexed {total_files} files, found {hardcodes_stored} hardcodes " f"using {storage_type} storage"
         ),
         "stats": analysis_results["stats"],
         "hardcodes_count": hardcodes_stored,

@@ -162,9 +162,7 @@ class NeuralMeshRetriever:
         seeds = await self.hybrid_search(query, top_k * 2)
         seed_ids = [self._chunk_id(r) for r in seeds[:5]]
 
-        expanded_scores = await self.ppr.rank(
-            seed_ids, top_k=top_k * 3, max_iterations=5
-        )
+        expanded_scores = await self.ppr.rank(seed_ids, top_k=top_k * 3, max_iterations=5)
         merged = self._merge_with_expansion(seeds, expanded_scores)
 
         ranked = await self.reranker.rerank(query, merged, top_k=top_k)
@@ -203,9 +201,7 @@ class NeuralMeshRetriever:
     # A-RAG ReAct loop (Issue #2136)
     # ------------------------------------------------------------------
 
-    async def retrieve_agentic(
-        self, query: str, top_k: int = 5, max_steps: int = 5
-    ) -> MeshRetrievalResult:
+    async def retrieve_agentic(self, query: str, top_k: int = 5, max_steps: int = 5) -> MeshRetrievalResult:
         """ReAct loop: LLM selects retrieval tools iteratively. Issue #2136.
 
         Only activated for COMPLEX/MULTI_HOP queries when self.llm is set.
@@ -226,12 +222,8 @@ class NeuralMeshRetriever:
             action = await self._select_next_action(query, context_tracker)
             if action["tool"] == "DONE":
                 break
-            results = await self._execute_tool(
-                action["tool"], action.get("params", {}), query
-            )
-            context_tracker.append(
-                {"tool": action["tool"], "result_count": len(results)}
-            )
+            results = await self._execute_tool(action["tool"], action.get("params", {}), query)
+            context_tracker.append({"tool": action["tool"], "result_count": len(results)})
             accumulated.extend(results)
 
         chunks = await self._finalize_agentic(query, accumulated, top_k)
@@ -243,9 +235,7 @@ class NeuralMeshRetriever:
             nodes_explored=len(accumulated),
         )
 
-    async def _finalize_agentic(
-        self, query: str, accumulated: list, top_k: int
-    ) -> list:
+    async def _finalize_agentic(self, query: str, accumulated: list, top_k: int) -> list:
         """Deduplicate and rerank accumulated agentic results. Issue #2136.
 
         Args:
@@ -316,9 +306,7 @@ class NeuralMeshRetriever:
         }
         handler = dispatch.get(tool_name)
         if handler is None:
-            logger.warning(
-                "_execute_tool: unknown tool %r; returning empty list", tool_name
-            )
+            logger.warning("_execute_tool: unknown tool %r; returning empty list", tool_name)
             return []
         return await handler()
 
@@ -335,9 +323,7 @@ class NeuralMeshRetriever:
         seed_ids = [self._chunk_id(r) for r in seeds[:5]]
         anchors = await self._find_anchors(seed_ids)
         if anchors:
-            anchor_results = [
-                {"chunk_id": a, "score": 0.5, "content": ""} for a in anchors
-            ]
+            anchor_results = [{"chunk_id": a, "score": 0.5, "content": ""} for a in anchors]
             return seeds + anchor_results
         return seeds
 
@@ -359,9 +345,7 @@ class NeuralMeshRetriever:
             if isinstance(action, dict) and "tool" in action:
                 return action
         except (json.JSONDecodeError, AttributeError):
-            logger.warning(
-                "_parse_action: could not parse LLM output as JSON; using DONE"
-            )
+            logger.warning("_parse_action: could not parse LLM output as JSON; using DONE")
         return {"tool": "DONE"}
 
     # ------------------------------------------------------------------
@@ -455,11 +439,7 @@ class NeuralMeshRetriever:
             Chunk ID string, empty string on failure.
         """
         if isinstance(result, dict):
-            return (
-                result.get("metadata", {}).get("chunk_id")
-                or result.get("chunk_id")
-                or result.get("source_path", "")
-            )
+            return result.get("metadata", {}).get("chunk_id") or result.get("chunk_id") or result.get("source_path", "")
         meta = getattr(result, "metadata", {}) or {}
         return meta.get("chunk_id") or getattr(result, "source_path", "")
 

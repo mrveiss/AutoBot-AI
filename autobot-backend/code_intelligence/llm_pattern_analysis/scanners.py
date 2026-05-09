@@ -86,9 +86,7 @@ class CodePatternScanner:
     RETRY_PATTERNS = RETRY_LOGIC_PATTERNS
 
     @classmethod
-    def _scan_for_llm_patterns(
-        cls, file_path: Path, lines: List[str]
-    ) -> List[UsagePattern]:
+    def _scan_for_llm_patterns(cls, file_path: Path, lines: List[str]) -> List[UsagePattern]:
         """
         Scan lines for LLM API call patterns.
 
@@ -118,9 +116,7 @@ class CodePatternScanner:
         return usage_patterns
 
     @classmethod
-    def _scan_for_retry_patterns(
-        cls, file_path: Path, lines: List[str], content: str
-    ) -> List[RetryPattern]:
+    def _scan_for_retry_patterns(cls, file_path: Path, lines: List[str], content: str) -> List[RetryPattern]:
         """
         Scan lines for retry logic patterns.
 
@@ -140,24 +136,18 @@ class CodePatternScanner:
                 if pattern.search(line):
                     retry_patterns.append(
                         RetryPattern(
-                            pattern_id=cls._generate_pattern_id(
-                                file_path, line_num, "retry"
-                            ),
+                            pattern_id=cls._generate_pattern_id(file_path, line_num, "retry"),
                             file_path=str(file_path),
                             line_number=line_num,
                             max_retries=cls._extract_retry_count(content, line_num),
-                            backoff_strategy=cls._detect_backoff_strategy(
-                                content, line_num
-                            ),
+                            backoff_strategy=cls._detect_backoff_strategy(content, line_num),
                         )
                     )
                     break  # Only one retry pattern per line
         return retry_patterns
 
     @classmethod
-    def scan_file(
-        cls, file_path: Path
-    ) -> Tuple[List[UsagePattern], List[RetryPattern]]:
+    def scan_file(cls, file_path: Path) -> Tuple[List[UsagePattern], List[RetryPattern]]:
         """
         Scan a Python file for LLM patterns.
 
@@ -258,9 +248,7 @@ class CacheOpportunityDetector:
     """
 
     @classmethod
-    def _create_embedding_opportunity(
-        cls, embeddings: List[UsagePattern]
-    ) -> Optional[CacheOpportunity]:
+    def _create_embedding_opportunity(cls, embeddings: List[UsagePattern]) -> Optional[CacheOpportunity]:
         """
         Create embedding cache opportunity if embeddings exist.
 
@@ -280,18 +268,14 @@ class CacheOpportunityDetector:
         )
 
     @classmethod
-    def _create_static_prompt_opportunity(
-        cls, patterns: List[UsagePattern]
-    ) -> Optional[CacheOpportunity]:
+    def _create_static_prompt_opportunity(cls, patterns: List[UsagePattern]) -> Optional[CacheOpportunity]:
         """
         Create static prompt cache opportunity if cacheable prompts exist.
 
         Issue #620.
         """
         static_prompts = [
-            p
-            for p in patterns
-            if p.is_cacheable() and p.pattern_type == UsagePatternType.CHAT_COMPLETION
+            p for p in patterns if p.is_cacheable() and p.pattern_type == UsagePatternType.CHAT_COMPLETION
         ]
         if not static_prompts:
             return None
@@ -307,9 +291,7 @@ class CacheOpportunityDetector:
         )
 
     @classmethod
-    def _create_analysis_opportunity(
-        cls, analysis: List[UsagePattern]
-    ) -> Optional[CacheOpportunity]:
+    def _create_analysis_opportunity(cls, analysis: List[UsagePattern]) -> Optional[CacheOpportunity]:
         """
         Create analysis response cache opportunity if analysis patterns exist.
 
@@ -415,9 +397,7 @@ class BatchingAnalyzer:
         return type_groups
 
     @staticmethod
-    def _find_close_pair_opportunity(
-        file_path: str, sorted_pats: List[UsagePattern]
-    ) -> Optional[BatchingOpportunity]:
+    def _find_close_pair_opportunity(file_path: str, sorted_pats: List[UsagePattern]) -> Optional[BatchingOpportunity]:
         """Find batching opportunity from close patterns (Issue #335 - extracted helper)."""
         for i in range(len(sorted_pats) - 1):
             line_diff = sorted_pats[i + 1].line_number - sorted_pats[i].line_number
@@ -426,9 +406,7 @@ class BatchingAnalyzer:
             return BatchingOpportunity(
                 opportunity_id=f"batch_{hash(file_path) % 10000:04d}",
                 file_path=file_path,
-                related_calls=[
-                    (p.line_number, p.code_snippet[:50]) for p in sorted_pats[i : i + 2]
-                ],
+                related_calls=[(p.line_number, p.code_snippet[:50]) for p in sorted_pats[i : i + 2]],
                 estimated_speedup=1.5,
                 estimated_token_savings=100,
                 priority=OptimizationPriority.MEDIUM,

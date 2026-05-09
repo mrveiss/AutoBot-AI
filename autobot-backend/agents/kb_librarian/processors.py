@@ -44,11 +44,7 @@ class ResultProcessor:
                 if any(word in line.lower() for word in LIMITATION_KEYWORDS):
                     limitations.append(line.strip())
 
-        return (
-            "\n".join(limitations[:3])
-            if limitations
-            else "See documentation for limitations"
-        )
+        return "\n".join(limitations[:3]) if limitations else "See documentation for limitations"
 
     @classmethod
     def extract_performance_notes(cls, results: Dict[str, Any]) -> str:
@@ -61,16 +57,10 @@ class ResultProcessor:
                 if any(word in line.lower() for word in PERFORMANCE_KEYWORDS):
                     perf_notes.append(line.strip())
 
-        return (
-            "\n".join(perf_notes[:3])
-            if perf_notes
-            else "Performance varies with input size"
-        )
+        return "\n".join(perf_notes[:3]) if perf_notes else "Performance varies with input size"
 
     @classmethod
-    def extract_tool_info(
-        cls, results: List[Dict], tool_type: str
-    ) -> List[Dict[str, Any]]:
+    def extract_tool_info(cls, results: List[Dict], tool_type: str) -> List[Dict[str, Any]]:
         """Extract tool information from KB search results."""
         tools = []
 
@@ -93,9 +83,7 @@ class ResultProcessor:
         return tools
 
     @classmethod
-    def extract_tools_from_content(
-        cls, content: str, title: str, tool_type: str
-    ) -> List[Dict[str, Any]]:
+    def extract_tools_from_content(cls, content: str, title: str, tool_type: str) -> List[Dict[str, Any]]:
         """Extract tool names and descriptions from web content."""
         tools = []
 
@@ -115,14 +103,10 @@ class ResultProcessor:
         for pattern in patterns:
             if pattern in content_lower:
                 start = max(0, content_lower.find(pattern) - 50)
-                end = min(
-                    len(content), content_lower.find(pattern) + len(pattern) + 100
-                )
+                end = min(len(content), content_lower.find(pattern) + len(pattern) + 100)
                 context = content[start:end]
 
-                tools.append(
-                    {"name": pattern, "context": context, "source_title": title}
-                )
+                tools.append({"name": pattern, "context": context, "source_title": title})
 
         return tools
 

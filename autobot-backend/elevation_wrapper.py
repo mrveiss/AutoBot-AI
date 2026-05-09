@@ -120,9 +120,7 @@ class ElevationWrapper:
         if not reason:
             reason = f"This command requires administrator privileges: {clean_command[:50]}..."
 
-        return await self._request_and_execute_elevated(
-            clean_command, operation, reason, risk_level
-        )
+        return await self._request_and_execute_elevated(clean_command, operation, reason, risk_level)
 
     def _check_elevation_needed(self, command: str) -> Tuple[bool, str]:
         """Check if command needs elevation and extract clean command"""
@@ -184,9 +182,7 @@ class ElevationWrapper:
         try:
             # Call elevation API to execute command
             if self.elevation_client:
-                result = await self.elevation_client.execute_elevated_command(
-                    command, session_token
-                )
+                result = await self.elevation_client.execute_elevated_command(command, session_token)
                 return result
             else:
                 # Fallback to direct sudo (should not happen in production)

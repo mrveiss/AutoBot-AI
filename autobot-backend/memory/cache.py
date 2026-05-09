@@ -33,9 +33,7 @@ class LRUCacheManager:
             max_size: Maximum items (default from SSOT config.cache.l1.lru_memory)
         """
         # Issue #743: Read from SSOT config, allow explicit override
-        self._max_size = (
-            max_size if max_size is not None else config.cache.l1.lru_memory
-        )
+        self._max_size = max_size if max_size is not None else config.cache.l1.lru_memory
         self._cache: OrderedDict = OrderedDict()
         self._hits = 0
         self._misses = 0

@@ -21,15 +21,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
 _PERSONALITIES_DIR = (
-    Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
-    / "autobot-backend"
-    / "resources"
-    / "personalities"
+    Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")) / "autobot-backend" / "resources" / "personalities"
 )
 
 # Fallback for local dev (relative to this file)
@@ -79,9 +77,7 @@ class PersonalityProfile:
     off_limits: List[str] = field(default_factory=list)
     custom_notes: str = ""
     voice_id: str = ""  # Pocket TTS voice override (#1135)
-    voice_ids: Dict[str, str] = field(
-        default_factory=dict
-    )  # Per-language voices (#1333)
+    voice_ids: Dict[str, str] = field(default_factory=dict)  # Per-language voices (#1333)
     language_code: str = "en"  # Response language (#1324)
     is_system: bool = False
     created_by: str = "system"
@@ -114,10 +110,7 @@ class PersonalityProfile:
             lines.append(f"\n**Additional Notes:**\n{self.custom_notes}")
         if self.language_code and self.language_code != "en":
             lang_name = SUPPORTED_LANGUAGES.get(self.language_code, self.language_code)
-            lines.append(
-                f"\n**Response Language:** Always respond in"
-                f" {lang_name} ({self.language_code})."
-            )
+            lines.append(f"\n**Response Language:** Always respond in" f" {lang_name} ({self.language_code}).")
         return "\n".join(line for line in lines if line is not None)
 
 
@@ -174,18 +167,14 @@ class PersonalityManager:
             if p.exists():
                 try:
                     data = _load_json(p)
-                    profiles.append(
-                        {"id": pid, "name": data.get("name", pid), "is_system": True}
-                    )
+                    profiles.append({"id": pid, "name": data.get("name", pid), "is_system": True})
                 except Exception:
                     logger.debug("Suppressed exception in try block", exc_info=True)
         index: Dict = {"active_id": "default", "enabled": True, "profiles": profiles}
         self._write_index(index)
         return index
 
-    def _update_index_entry(
-        self, index: dict, pid: str, name: str, is_system: bool
-    ) -> None:
+    def _update_index_entry(self, index: dict, pid: str, name: str, is_system: bool) -> None:
         entries = [e for e in index["profiles"] if e["id"] != pid]
         entries.append({"id": pid, "name": name, "is_system": is_system})
         index["profiles"] = entries
@@ -231,9 +220,7 @@ class PersonalityManager:
         """Return a specific profile by id, or None if not found."""
         return self._load_profile(pid)
 
-    def create_profile(
-        self, name: str, created_by: str = "user", **kwargs
-    ) -> PersonalityProfile:
+    def create_profile(self, name: str, created_by: str = "user", **kwargs) -> PersonalityProfile:
         """
         Create a new user profile, optionally copying fields from kwargs.
 

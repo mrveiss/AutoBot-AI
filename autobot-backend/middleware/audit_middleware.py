@@ -153,9 +153,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return True
 
         # Check if path is in auto-audit list
-        return path in AUTO_AUDIT_OPERATIONS or self._is_sensitive_operation(
-            path, method
-        )
+        return path in AUTO_AUDIT_OPERATIONS or self._is_sensitive_operation(path, method)
 
     def _is_sensitive_operation(self, path: str, method: str) -> bool:
         """Check if operation is security-sensitive"""
@@ -177,9 +175,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return "denied"
         return "failed"
 
-    def _build_audit_details(
-        self, method: str, response, error_details, request: Request
-    ) -> dict:
+    def _build_audit_details(self, method: str, response, error_details, request: Request) -> dict:
         """Helper for dispatch. Ref: #1088.
 
         Build the details dict passed to _log_audit.
@@ -209,9 +205,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         ip_address = self._get_client_ip(request)
 
         # Determine operation type
-        operation = AUTO_AUDIT_OPERATIONS.get(
-            path, f"{method.lower()}.{path.replace('/', '.')}"
-        )
+        operation = AUTO_AUDIT_OPERATIONS.get(path, f"{method.lower()}.{path.replace('/', '.')}")
 
         # Process request
         response = None
@@ -239,9 +233,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     ip_address=ip_address,
                     resource=path,
                     performance_ms=performance_ms,
-                    details=self._build_audit_details(
-                        method, response, error_details, request
-                    ),
+                    details=self._build_audit_details(method, response, error_details, request),
                 )
             )
             self._background_tasks.add(task)
@@ -334,9 +326,7 @@ def _extract_request_context(args: tuple) -> tuple:
     return request, user_id, session_id, ip_address
 
 
-def _determine_resource(
-    resource_handler: Optional[Callable[..., str]], args: tuple, kwargs: dict
-) -> Optional[str]:
+def _determine_resource(resource_handler: Optional[Callable[..., str]], args: tuple, kwargs: dict) -> Optional[str]:
     """
     Determine resource from handler if provided.
 
@@ -411,9 +401,7 @@ def _schedule_audit_log(
         # No running event loop: called from a thread-pool (sync endpoint).
         # Submit the coroutine to the main event loop stored at startup.
         if _main_event_loop is None or _main_event_loop.is_closed():
-            logger.warning(
-                "Audit log dropped for %s: main event loop unavailable", operation
-            )
+            logger.warning("Audit log dropped for %s: main event loop unavailable", operation)
             return
         asyncio.run_coroutine_threadsafe(coro, _main_event_loop)
 
@@ -565,13 +553,9 @@ def audit_operation(
     def decorator(func: Callable):
         """Create wrapper function with audit logging and result tracking."""
         if asyncio.iscoroutinefunction(func):
-            return _create_async_audit_wrapper(
-                func, operation, result_handler, resource_handler
-            )
+            return _create_async_audit_wrapper(func, operation, result_handler, resource_handler)
         else:
-            return _create_sync_audit_wrapper(
-                func, operation, result_handler, resource_handler
-            )
+            return _create_sync_audit_wrapper(func, operation, result_handler, resource_handler)
 
     return decorator
 

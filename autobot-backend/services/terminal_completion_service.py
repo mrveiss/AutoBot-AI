@@ -104,9 +104,7 @@ class TerminalCompletionService:
         expanded_prefix = os.path.expanduser(prefix)
         safe_prefix = shlex.quote(expanded_prefix)
         cmd = f"compgen -f -- {safe_prefix} 2>/dev/null"
-        completions = await self._run_compgen(
-            cmd, {"HOME": os.environ.get("HOME", "")}, cwd
-        )
+        completions = await self._run_compgen(cmd, {"HOME": os.environ.get("HOME", "")}, cwd)
 
         result = []
         for c in completions:
@@ -117,9 +115,7 @@ class TerminalCompletionService:
                 result.append(c)
         return result
 
-    async def _run_compgen(
-        self, cmd: str, env: dict, cwd: Optional[str] = None
-    ) -> List[str]:
+    async def _run_compgen(self, cmd: str, env: dict, cwd: Optional[str] = None) -> List[str]:
         """Run compgen command and return results."""
         try:
             proc = await asyncio.create_subprocess_shell(

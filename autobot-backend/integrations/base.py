@@ -15,8 +15,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,7 @@ class IntegrationConfig(BaseModel):
     token: Optional[str] = Field(None, description="Auth token (stored encrypted)")
     username: Optional[str] = Field(None, description="Username for basic auth")
     password: Optional[str] = Field(None, description="Password (stored encrypted)")
-    extra: Dict[str, Any] = Field(
-        default_factory=dict, description="Provider-specific config"
-    )
+    extra: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific config")
 
 
 class IntegrationHealth(BaseModel):
@@ -105,9 +104,7 @@ class BaseIntegration(ABC):
         ...
 
     @abstractmethod
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named action with given parameters."""
         ...
 
@@ -132,9 +129,7 @@ class BaseIntegration(ABC):
         try:
             timeout_obj = aiohttp.ClientTimeout(total=timeout)
             async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                async with session.request(
-                    method, url, headers=merged_headers, json=json_data
-                ) as resp:
+                async with session.request(method, url, headers=merged_headers, json=json_data) as resp:
                     body = await resp.json()
                     return {
                         "status_code": resp.status,

@@ -7,11 +7,12 @@ Test diagnostics router registration.
 Issue #4254: Verify diagnostics router is properly registered and discoverable.
 """
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 
 # Test that the diagnostics router can be imported
-from api.diagnostics import router, get_engine
+from api.diagnostics import get_engine, router
 from initialization.router_registry.monitoring_routers import MONITORING_ROUTER_CONFIGS
 
 
@@ -27,9 +28,7 @@ class TestDiagnosticsRouterRegistration:
     def test_diagnostics_router_in_registry(self):
         """Verify diagnostics router is registered in MONITORING_ROUTER_CONFIGS."""
         config_names = [config[4] for config in MONITORING_ROUTER_CONFIGS]
-        assert "diagnostics" in config_names, (
-            f"Diagnostics router not found in registry. Available: {config_names}"
-        )
+        assert "diagnostics" in config_names, f"Diagnostics router not found in registry. Available: {config_names}"
 
     def test_diagnostics_router_config_format(self):
         """Verify diagnostics router config has correct format."""

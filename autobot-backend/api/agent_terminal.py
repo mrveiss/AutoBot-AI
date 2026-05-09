@@ -230,13 +230,6 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.error_constants import ERR_SESSION_NOT_FOUND
-from autobot_shared.redis_client import get_redis_client
-from services.agent_terminal import AgentSessionState, AgentTerminalService
-from services.command_approval_manager import AgentRole
-from services.command_execution_queue import get_command_queue
 from api.schemas_agent import (
     AgentTerminalApproveResponse,
     AgentTerminalExecuteResponse,
@@ -265,6 +258,13 @@ from api.schemas_terminal import (
     AgentTerminalSessionListResponse,
     AgentTerminalToolApprovalResponse,
 )
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
+from constants.error_constants import ERR_SESSION_NOT_FOUND
+from services.agent_terminal import AgentSessionState, AgentTerminalService
+from services.command_approval_manager import AgentRole
+from services.command_execution_queue import get_command_queue
 
 logger = logging.getLogger(__name__)
 
@@ -300,9 +300,7 @@ def get_agent_terminal_service(
             # Double-check after acquiring lock
             if _agent_terminal_service_instance is None:
                 logger.info("Initializing AgentTerminalService singleton")
-                _agent_terminal_service_instance = AgentTerminalService(
-                    redis_client=redis_client
-                )
+                _agent_terminal_service_instance = AgentTerminalService(redis_client=redis_client)
 
     return _agent_terminal_service_instance
 
@@ -359,9 +357,7 @@ async def create_agent_terminal_session(
         "host": session.host,
         "state": session.state.value,
         "created_at": session.created_at,
-        "pty_session_id": (
-            session.pty_session_id
-        ),  # CRITICAL: Frontend needs this for WebSocket connection
+        "pty_session_id": (session.pty_session_id),  # CRITICAL: Frontend needs this for WebSocket connection
     }
 
 
@@ -405,9 +401,7 @@ async def list_agent_terminal_sessions(
                 "created_at": s.created_at,
                 "last_activity": s.last_activity,
                 "command_count": len(s.command_history),
-                "pty_session_id": (
-                    s.pty_session_id
-                ),  # CRITICAL: Frontend needs this for WebSocket connection
+                "pty_session_id": (s.pty_session_id),  # CRITICAL: Frontend needs this for WebSocket connection
             }
             for s in sessions
         ],
@@ -541,9 +535,7 @@ async def approve_agent_command(
         project_path=request.project_path,
     )
 
-    logger.info(
-        f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
-    )
+    logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
     return result
 
 
@@ -686,9 +678,7 @@ async def get_command_state(
     command = await queue.get_command(command_id)
 
     if not command:
-        raise HTTPException(
-            status_code=404, detail=f"Command {command_id} not found in queue"
-        )
+        raise HTTPException(status_code=404, detail=f"Command {command_id} not found in queue")
 
     # Return command state and output
     return {
@@ -729,9 +719,7 @@ async def agent_terminal_info(
     return {
         "name": "Agent Terminal API",
         "version": "1.0.0",
-        "description": (
-            "Secure terminal access for AI agents with approval workflow and user control"
-        ),
+        "description": ("Secure terminal access for AI agents with approval workflow and user control"),
         "features": [
             "Agent session management",
             "Command execution with risk assessment",
@@ -748,9 +736,7 @@ async def agent_terminal_info(
             "list_sessions": "GET /api/agent-terminal/sessions",
             "get_session": "GET /api/agent-terminal/sessions/{session_id}",
             "delete_session": "DELETE /api/agent-terminal/sessions/{session_id}",
-            "execute_command": (
-                "POST /api/agent-terminal/execute?session_id={session_id}"
-            ),
+            "execute_command": ("POST /api/agent-terminal/execute?session_id={session_id}"),
             "approve_command": "POST /api/agent-terminal/sessions/{session_id}/approve",
             "get_command_state": "GET /api/agent-terminal/commands/{command_id}",
             "interrupt": "POST /api/agent-terminal/sessions/{session_id}/interrupt",
@@ -857,9 +843,7 @@ async def get_host_selection(
     - If selected: includes host details and connection info
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 
@@ -907,9 +891,7 @@ async def submit_host_selection(
         remember_choice: Whether to use this host for future SSH commands
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 
@@ -931,9 +913,7 @@ async def submit_host_selection(
     selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
     selection["remember_choice"] = remember_choice
 
-    logger.info(
-        f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})"
-    )
+    logger.info(f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})")
 
     return {
         "status": "selected",
@@ -962,9 +942,7 @@ async def cancel_host_selection(
     Called by frontend when user closes the dialog without selecting.
     """
     if request_id not in _pending_host_selections:
-        raise HTTPException(
-            status_code=404, detail=f"Host selection request {request_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
     selection = _pending_host_selections[request_id]
 

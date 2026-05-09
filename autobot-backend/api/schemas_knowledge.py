@@ -17,10 +17,10 @@ from knowledge.ownership import VisibilityLevel
 from type_defs.common import Metadata
 from utils.path_validation import contains_path_traversal
 
-
 # ---------------------------------------------------------------------------
 # Knowledge schemas
 # ---------------------------------------------------------------------------
+
 
 class KnowledgeMetadataTemplateResponse(BaseModel):
     """Response for POST /metadata/templates and PUT /metadata/templates/{id}."""
@@ -30,7 +30,6 @@ class KnowledgeMetadataTemplateResponse(BaseModel):
     template: Optional[Dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
-
 
 
 class KnowledgeMetadataTemplateListResponse(BaseModel):
@@ -43,7 +42,6 @@ class KnowledgeMetadataTemplateListResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class KnowledgeMetadataTemplateDetailResponse(BaseModel):
     """Response for GET /metadata/templates/{template_id}."""
 
@@ -53,7 +51,6 @@ class KnowledgeMetadataTemplateDetailResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class KnowledgeMetadataTemplateDeleteResponse(BaseModel):
     """Response for DELETE /metadata/templates/{template_id}."""
 
@@ -61,7 +58,6 @@ class KnowledgeMetadataTemplateDeleteResponse(BaseModel):
     message: Optional[str] = None
 
     model_config = {"extra": "allow"}
-
 
 
 class KnowledgeMetadataValidateResponse(BaseModel):
@@ -74,7 +70,6 @@ class KnowledgeMetadataValidateResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class KnowledgeMetadataSearchResponse(BaseModel):
     """Response for POST /metadata/search."""
 
@@ -83,7 +78,6 @@ class KnowledgeMetadataSearchResponse(BaseModel):
     facts: Optional[List[Any]] = None
 
     model_config = {"extra": "allow"}
-
 
 
 class KnowledgeFactVersionListResponse(BaseModel):
@@ -97,7 +91,6 @@ class KnowledgeFactVersionListResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class KnowledgeFactVersionDetailResponse(BaseModel):
     """Response for GET /facts/{fact_id}/versions/{version}."""
 
@@ -107,7 +100,6 @@ class KnowledgeFactVersionDetailResponse(BaseModel):
     content: Optional[Any] = None
 
     model_config = {"extra": "allow"}
-
 
 
 class KnowledgeFactRevertResponse(BaseModel):
@@ -120,7 +112,6 @@ class KnowledgeFactRevertResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class KnowledgeFactVersionCompareResponse(BaseModel):
     """Response for POST /facts/{fact_id}/versions/compare."""
 
@@ -131,7 +122,6 @@ class KnowledgeFactVersionCompareResponse(BaseModel):
     diff: Optional[Any] = None
 
     model_config = {"extra": "allow"}
-
 
 
 class KnowledgeFactVersionHistoryDeleteResponse(BaseModel):
@@ -148,14 +138,12 @@ class KnowledgeFactVersionHistoryDeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeCollectionCreateResponse(BaseModel):
     """Response for POST /collections."""
 
     status: str
     collection: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
-
 
 
 class KnowledgeCollectionListResponse(BaseModel):
@@ -170,13 +158,11 @@ class KnowledgeCollectionListResponse(BaseModel):
     has_more: bool
 
 
-
 class KnowledgeCollectionDetailResponse(BaseModel):
     """Response for GET /collections/{collection_id}."""
 
     status: str
     collection: Optional[Dict[str, Any]] = None
-
 
 
 class KnowledgeCollectionUpdateResponse(BaseModel):
@@ -187,7 +173,6 @@ class KnowledgeCollectionUpdateResponse(BaseModel):
     message: Optional[str] = None
 
 
-
 class KnowledgeCollectionDeleteResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}."""
 
@@ -196,7 +181,6 @@ class KnowledgeCollectionDeleteResponse(BaseModel):
     facts_in_collection: int
     facts_deleted: int
     message: Optional[str] = None
-
 
 
 class KnowledgeCollectionAddFactsResponse(BaseModel):
@@ -211,7 +195,6 @@ class KnowledgeCollectionAddFactsResponse(BaseModel):
     message: Optional[str] = None
 
 
-
 class KnowledgeCollectionRemoveFactsResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}/facts."""
 
@@ -221,7 +204,6 @@ class KnowledgeCollectionRemoveFactsResponse(BaseModel):
     not_in_collection: int
     total_facts: int
     message: Optional[str] = None
-
 
 
 class KnowledgeCollectionFactsListResponse(BaseModel):
@@ -238,7 +220,6 @@ class KnowledgeCollectionFactsListResponse(BaseModel):
     has_more: bool
 
 
-
 class KnowledgeFactCollectionsResponse(BaseModel):
     """Response for GET /facts/{fact_id}/collections."""
 
@@ -246,7 +227,6 @@ class KnowledgeFactCollectionsResponse(BaseModel):
     fact_id: Optional[str] = None
     collections: List[Any]
     count: int
-
 
 
 class KnowledgeCollectionExportResponse(BaseModel):
@@ -257,7 +237,6 @@ class KnowledgeCollectionExportResponse(BaseModel):
     facts: List[Any]
     total_count: int
     exported_at: Optional[str] = None
-
 
 
 class KnowledgeCollectionBulkDeleteResponse(BaseModel):
@@ -276,14 +255,12 @@ class KnowledgeCollectionBulkDeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeCategoryCreateResponse(BaseModel):
     """Response for POST /categories."""
 
     status: str
     category: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
-
 
 
 class KnowledgeCategoryTreeResponse(BaseModel):
@@ -294,13 +271,11 @@ class KnowledgeCategoryTreeResponse(BaseModel):
     total_categories: int
 
 
-
 class KnowledgeCategoryDetailResponse(BaseModel):
     """Response for GET /categories/{category_id} and GET /categories/path/{path}."""
 
     status: str
     category: Optional[Dict[str, Any]] = None
-
 
 
 class KnowledgeCategoryUpdateResponse(BaseModel):
@@ -309,7 +284,6 @@ class KnowledgeCategoryUpdateResponse(BaseModel):
     status: str
     category: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
-
 
 
 class KnowledgeCategoryDeleteResponse(BaseModel):
@@ -321,7 +295,6 @@ class KnowledgeCategoryDeleteResponse(BaseModel):
     message: Optional[str] = None
 
 
-
 class KnowledgeCategoryChildrenResponse(BaseModel):
     """Response for GET /categories/{category_id}/children."""
 
@@ -331,7 +304,6 @@ class KnowledgeCategoryChildrenResponse(BaseModel):
     count: int
 
 
-
 class KnowledgeCategoryAncestorsResponse(BaseModel):
     """Response for GET /categories/{category_id}/ancestors."""
 
@@ -339,7 +311,6 @@ class KnowledgeCategoryAncestorsResponse(BaseModel):
     category_id: Optional[str] = None
     ancestors: List[Any]
     depth: int
-
 
 
 class KnowledgeCategoryFactsResponse(BaseModel):
@@ -357,7 +328,6 @@ class KnowledgeCategoryFactsResponse(BaseModel):
     include_descendants: bool
 
 
-
 class KnowledgeFactAssignCategoryResponse(BaseModel):
     """Response for POST /facts/{fact_id}/category."""
 
@@ -366,7 +336,6 @@ class KnowledgeFactAssignCategoryResponse(BaseModel):
     category_id: Optional[str] = None
     category_path: Optional[str] = None
     message: Optional[str] = None
-
 
 
 class KnowledgeCategorySearchResponse(BaseModel):
@@ -383,7 +352,6 @@ class KnowledgeCategorySearchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeUnifiedSearchResponse(BaseModel):
     """Response for POST /unified/search."""
 
@@ -394,7 +362,6 @@ class KnowledgeUnifiedSearchResponse(BaseModel):
     documentation: List[Any]
     sources_searched: List[str]
     total_results: int
-
 
 
 class KnowledgeUnifiedStatsResponse(BaseModel):
@@ -411,7 +378,6 @@ class KnowledgeUnifiedStatsResponse(BaseModel):
     documentation: Dict[str, Any]
 
 
-
 class KnowledgeUnifiedContextResponse(BaseModel):
     """Response for POST /unified/context."""
 
@@ -420,7 +386,6 @@ class KnowledgeUnifiedContextResponse(BaseModel):
     context_length: int
     citations: List[Any]
     sources_used: List[Any]
-
 
 
 class KnowledgeDocumentationSearchResponse(BaseModel):
@@ -433,7 +398,6 @@ class KnowledgeDocumentationSearchResponse(BaseModel):
     message: Optional[str] = None
 
 
-
 class KnowledgeDocumentationStatsResponse(BaseModel):
     """Response for GET /unified/documentation/stats."""
 
@@ -443,7 +407,6 @@ class KnowledgeDocumentationStatsResponse(BaseModel):
     how_to_index: Optional[str] = None
     collection_name: Optional[str] = None
     document_count: Optional[int] = None
-
 
 
 class KnowledgeUnifiedGraphResponse(BaseModel):
@@ -459,7 +422,6 @@ class KnowledgeUnifiedGraphResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeRelationResultResponse(BaseModel):
     """Generic response for relation create/delete/traverse/hybrid-search/stats endpoints.
 
@@ -469,7 +431,6 @@ class KnowledgeRelationResultResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     success: bool
-
 
 
 class KnowledgeRelationTypesResponse(BaseModel):
@@ -484,14 +445,12 @@ class KnowledgeRelationTypesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeScopedFactsResponse(BaseModel):
     """Response for GET /knowledge/collaboration/facts and /facts/organization/{id} and /facts/group/{id}."""
 
     facts: List[Any]
     count: int
     total: Optional[int] = None
-
 
 
 class KnowledgeShareResponse(BaseModel):
@@ -504,7 +463,6 @@ class KnowledgeShareResponse(BaseModel):
     group_ids: List[Any]
 
 
-
 class KnowledgeUnshareResponse(BaseModel):
     """Response for DELETE /knowledge/collaboration/facts/{id}/share/{entity_id}."""
 
@@ -515,7 +473,6 @@ class KnowledgeUnshareResponse(BaseModel):
     group_ids: List[Any]
 
 
-
 class KnowledgePermissionsUpdateResponse(BaseModel):
     """Response for PUT /knowledge/collaboration/facts/{id}/permissions."""
 
@@ -524,7 +481,6 @@ class KnowledgePermissionsUpdateResponse(BaseModel):
     visibility: Optional[str] = None
     organization_id: Optional[str] = None
     group_ids: List[Any]
-
 
 
 class KnowledgeAccessInfoResponse(BaseModel):
@@ -547,7 +503,6 @@ class KnowledgeAccessInfoResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeAuditEventsResponse(BaseModel):
     """Response for GET /knowledge/audit/user-activity, /fact/{id}/access-log, /organization/audit-log."""
 
@@ -558,13 +513,11 @@ class KnowledgeAuditEventsResponse(BaseModel):
     organization_id: Optional[str] = None
 
 
-
 class KnowledgePermissionChangesResponse(BaseModel):
     """Response for GET /knowledge/audit/permission-changes."""
 
     events: List[Any]
     count: int
-
 
 
 class KnowledgeComplianceReportResponse(BaseModel):
@@ -583,7 +536,6 @@ class KnowledgeComplianceReportResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeVerificationPendingResponse(BaseModel):
     """Response for GET /verification/pending."""
 
@@ -593,7 +545,6 @@ class KnowledgeVerificationPendingResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
-
 
 
 class KnowledgeVerificationApproveResponse(BaseModel):
@@ -606,7 +557,6 @@ class KnowledgeVerificationApproveResponse(BaseModel):
     message: Optional[str] = None
 
 
-
 class KnowledgeVerificationRejectResponse(BaseModel):
     """Response for POST /verification/{fact_id}/reject."""
 
@@ -614,7 +564,6 @@ class KnowledgeVerificationRejectResponse(BaseModel):
     fact_id: str
     deleted: bool
     message: Optional[str] = None
-
 
 
 class KnowledgeVerificationConfigResponse(BaseModel):
@@ -630,7 +579,6 @@ class KnowledgeVerificationConfigResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeSuggestionsTagsResponse(BaseModel):
     """Response for POST /suggestions/tags.
 
@@ -644,7 +592,6 @@ class KnowledgeSuggestionsTagsResponse(BaseModel):
     similar_docs_analyzed: Optional[int] = None
 
 
-
 class KnowledgeSuggestionsCategoriesResponse(BaseModel):
     """Response for POST /suggestions/categories."""
 
@@ -655,14 +602,12 @@ class KnowledgeSuggestionsCategoriesResponse(BaseModel):
     similar_docs_analyzed: Optional[int] = None
 
 
-
 class KnowledgeSuggestionsAllResponse(BaseModel):
     """Response for POST /suggestions/all."""
 
     model_config = {"extra": "allow"}
 
     success: bool
-
 
 
 class KnowledgeSuggestionsContextResponse(BaseModel):
@@ -673,7 +618,6 @@ class KnowledgeSuggestionsContextResponse(BaseModel):
     success: bool
     suggestions: Optional[List[Any]] = None
     total_candidates: Optional[int] = None
-
 
 
 class KnowledgeAutoApplySuggestionsResponse(BaseModel):
@@ -689,7 +633,6 @@ class KnowledgeAutoApplySuggestionsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeShareFactResponse(BaseModel):
     """Response for POST /api/knowledge/facts/{fact_id}/share."""
 
@@ -697,7 +640,6 @@ class KnowledgeShareFactResponse(BaseModel):
     fact_id: str
     shared_with: List[Any]
     visibility: Optional[str] = None
-
 
 
 class KnowledgeUnshareFactResponse(BaseModel):
@@ -709,14 +651,12 @@ class KnowledgeUnshareFactResponse(BaseModel):
     visibility: Optional[str] = None
 
 
-
 class KnowledgeUpdateVisibilityResponse(BaseModel):
     """Response for PUT /api/knowledge/facts/{fact_id}/visibility."""
 
     success: bool
     fact_id: str
     visibility: Optional[str] = None
-
 
 
 class KnowledgeMyFactsResponse(BaseModel):
@@ -728,7 +668,6 @@ class KnowledgeMyFactsResponse(BaseModel):
     shared_count: int
     facts: List[Any]
     total_returned: int
-
 
 
 class KnowledgeSharedWithMeResponse(BaseModel):
@@ -745,13 +684,11 @@ class KnowledgeSharedWithMeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeGroundResponseResponse(BaseModel):
     """Response for POST /api/ground-response."""
 
     status: str
     data: Dict[str, Any]
-
 
 
 class KnowledgeVerifyClaimResponse(BaseModel):
@@ -766,7 +703,6 @@ class KnowledgeVerifyClaimResponse(BaseModel):
     kb_source: Optional[str] = None
 
 
-
 class KnowledgeConflictsListResponse(BaseModel):
     """Response for GET /api/kb-conflicts."""
 
@@ -778,13 +714,11 @@ class KnowledgeConflictsListResponse(BaseModel):
     has_more: bool
 
 
-
 class KnowledgeResolveConflictResponse(BaseModel):
     """Response for POST /api/kb-conflicts/{conflict_id}/resolve."""
 
     status: str
     data: Dict[str, Any]
-
 
 
 class KnowledgeGroundingStatsResponse(BaseModel):
@@ -804,7 +738,6 @@ class KnowledgeGroundingStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeOrganizationPolicyResponse(BaseModel):
     """Response for GET/PUT /knowledge/organization/policy.
 
@@ -821,7 +754,6 @@ class KnowledgeOrganizationPolicyResponse(BaseModel):
     retention_days: Optional[int] = None
 
 
-
 class KnowledgeOrganizationStatsResponse(BaseModel):
     """Response for GET /knowledge/organization/stats."""
 
@@ -833,7 +765,6 @@ class KnowledgeOrganizationStatsResponse(BaseModel):
     user_count: int
     team_count: int
     top_contributors: List[Any]
-
 
 
 class KnowledgeOrganizationCleanupResponse(BaseModel):
@@ -851,7 +782,6 @@ class KnowledgeOrganizationCleanupResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeScopedSearchResponse(BaseModel):
     """Response for POST /knowledge/search/scoped and POST /knowledge/search/rag/scoped."""
 
@@ -863,7 +793,6 @@ class KnowledgeScopedSearchResponse(BaseModel):
     mode: Optional[str] = None
     user_id: Optional[str] = None
     filtered_by_permissions: Optional[bool] = None
-
 
 
 class KnowledgeAccessibleScopesResponse(BaseModel):
@@ -880,7 +809,6 @@ class KnowledgeAccessibleScopesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeFreshStatsResponse(BaseModel):
     """Response for GET /fresh_stats.
 
@@ -894,7 +822,6 @@ class KnowledgeFreshStatsResponse(BaseModel):
     status: str
 
 
-
 class KnowledgeDebugRedisResponse(BaseModel):
     """Response for GET /debug_redis.
 
@@ -904,7 +831,6 @@ class KnowledgeDebugRedisResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     redis_connection: str
-
 
 
 class KnowledgeRebuildIndexResponse(BaseModel):
@@ -924,13 +850,11 @@ class KnowledgeRebuildIndexResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeBoardsListResponse(BaseModel):
     """Response for GET /boards."""
 
     boards: List[Any]
     total: int
-
 
 
 class KnowledgeBoardCreateResponse(BaseModel):
@@ -939,7 +863,6 @@ class KnowledgeBoardCreateResponse(BaseModel):
     board_id: str
     name: str
     created: bool
-
 
 
 class KnowledgeBoardDeleteResponse(BaseModel):
@@ -954,13 +877,11 @@ class KnowledgeBoardDeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeCognitionStatusResponse(BaseModel):
     """Response for GET /cognition-store/status."""
 
     collections: List[Any]
     total_seeded_collections: int
-
 
 
 class KnowledgeCognitionSeedResponse(BaseModel):
@@ -975,7 +896,6 @@ class KnowledgeCognitionSeedResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class KnowledgeSyncQueueResponse(BaseModel):
     """Response for GET /knowledge/sync-queue."""
 
@@ -986,19 +906,15 @@ class KnowledgeSyncQueueResponse(BaseModel):
     offset: int
 
 
-
 class KnowledgeSyncQueuePruneResponse(BaseModel):
     """Response for POST /knowledge/sync-queue/prune."""
 
     pruned: int
 
 
-
-
 # ---------------------------------------------------------------------------
 # memory.py schemas  (Issue #5960)
 # ---------------------------------------------------------------------------
-
 
 
 class MemoryEntityListResponse(BaseModel):
@@ -1007,12 +923,10 @@ class MemoryEntityListResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class MemoryOrphanScanResponse(BaseModel):
     """Response for GET /memory/entities/orphans — JSONResponse shape from helper."""
 
     model_config = {"extra": "allow"}
-
 
 
 class MemoryOrphanCleanupResponse(BaseModel):
@@ -1021,12 +935,10 @@ class MemoryOrphanCleanupResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class MemoryDeleteEntityResponse(BaseModel):
     """Response for DELETE /memory/entities/{entity_id} — JSONResponse shape from helper."""
 
     model_config = {"extra": "allow"}
-
 
 
 class MemoryRelatedEntitiesResponse(BaseModel):
@@ -1035,19 +947,16 @@ class MemoryRelatedEntitiesResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class MemoryDeleteRelationResponse(BaseModel):
     """Response for DELETE /memory/relations — JSONResponse shape from helper."""
 
     model_config = {"extra": "allow"}
 
 
-
 class MemoryEntityInvalidateResponse(BaseModel):
     """Response for PATCH /memory/entities/{entity_id}/invalidate — JSONResponse shape."""
 
     model_config = {"extra": "allow"}
-
 
 
 class MemoryRelationInvalidateResponse(BaseModel):
@@ -1102,9 +1011,7 @@ class FactIdValidator(BaseModel):
         """Validate fact_id format to prevent injection attacks"""
         # Allow UUID format or safe alphanumeric with underscores/hyphens
         if not _ALNUM_ID_RE.match(v):
-            raise ValueError(
-                "Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed"
-            )
+            raise ValueError("Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed")
         # Prevent path traversal attempts (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
             raise ValueError("Path traversal not allowed in fact_id")
@@ -1137,9 +1044,7 @@ class EnhancedSearchRequest(BaseModel):
         le=100,
         description="Max results to return",
     )
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     category: Optional[str] = Field(default=None, max_length=100)
     tags: Optional[List[str]] = Field(
         default=None,
@@ -1152,8 +1057,7 @@ class EnhancedSearchRequest(BaseModel):
     )
     mode: str = Field(
         default=CategoryDefaults.SEARCH_MODE_HYBRID,
-        description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
-        "'hybrid' (both)",
+        description="Search mode: 'semantic' (vector only), 'keyword' (text only), " "'hybrid' (both)",
     )
     enable_reranking: bool = Field(
         default=False,
@@ -1174,10 +1078,7 @@ class EnhancedSearchRequest(BaseModel):
     board_id: Optional[str] = Field(
         default=None,
         max_length=100,
-        description=(
-            "Project-scoped board ID for namespaced search. "
-            "None / '__global__' searches all boards."
-        ),
+        description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
     )
 
     @field_validator("category")
@@ -1276,9 +1177,7 @@ class ConsolidatedSearchRequest(BaseModel):
         le=100,
         description="Maximum results to return",
     )
-    category: Optional[str] = Field(
-        default=None, max_length=100, description="Filter by category"
-    )
+    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category")
 
     # Search mode
     mode: str = Field(
@@ -1323,9 +1222,7 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Pagination
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
 
     # Advanced filtering (Issue #78 v2 features)
     created_after: Optional[str] = Field(
@@ -1361,10 +1258,7 @@ class ConsolidatedSearchRequest(BaseModel):
     board_id: Optional[str] = Field(
         default=None,
         max_length=100,
-        description=(
-            "Project-scoped board ID for namespaced search. "
-            "None / '__global__' searches all boards."
-        ),
+        description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
     )
 
     # Analytics
@@ -1543,9 +1437,7 @@ class AddTextRequest(BaseModel):
         """Validate access level (Issue #685)."""
         valid_levels = {"autobot", "general", "system", "user"}
         if v not in valid_levels:
-            raise ValueError(
-                f"Invalid access_level: {v}. Must be one of: {valid_levels}"
-            )
+            raise ValueError(f"Invalid access_level: {v}. Must be one of: {valid_levels}")
         return v
 
     @field_validator("source_type")
@@ -1564,9 +1456,7 @@ class ScanHostChangesRequest(BaseModel):
     machine_id: str = Field(..., min_length=1, max_length=100)
     force: bool = Field(default=False)
     scan_type: str = Field(default="manpages", max_length=50)
-    auto_vectorize: bool = Field(
-        default=False, description="Automatically vectorize detected changes"
-    )
+    auto_vectorize: bool = Field(default=False, description="Automatically vectorize detected changes")
 
 
 class AdvancedSearchRequest(BaseModel):
@@ -1579,23 +1469,15 @@ class AdvancedSearchRequest(BaseModel):
         le=50,
         description="Maximum results to return",
     )
-    enable_reranking: bool = Field(
-        default=True, description="Enable cross-encoder reranking"
-    )
-    return_context: bool = Field(
-        default=False, description="Return optimized context for RAG"
-    )
-    timeout: Optional[float] = Field(
-        default=None, description="Optional timeout in seconds"
-    )
+    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
+    return_context: bool = Field(default=False, description="Return optimized context for RAG")
+    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
     """Request model for reranking existing search results"""
 
-    query: str = Field(
-        ..., min_length=1, max_length=1000, description="Original search query"
-    )
+    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
     results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
@@ -1615,10 +1497,7 @@ class TagValidator(BaseModel):
         v = v.lower().strip()
         # Allow alphanumeric, hyphens, underscores
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         # Prevent injection attempts (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
@@ -1701,8 +1580,7 @@ class BulkTagRequest(BaseModel):
         for item in v:
             if not _ALNUM_ID_RE.match(item):
                 raise ValueError(
-                    f"Invalid fact_id format: {item} - only alphanumeric, "
-                    "underscore, and hyphen allowed"
+                    f"Invalid fact_id format: {item} - only alphanumeric, " "underscore, and hyphen allowed"
                 )
             # Prevent path traversal attempts (Issue #328 - uses shared validation)
             if contains_path_traversal(item):
@@ -1780,10 +1658,7 @@ class RenameTagRequest(BaseModel):
         """Validate new tag format."""
         v = v.lower().strip()
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
         return v
@@ -1823,10 +1698,7 @@ class MergeTagsRequest(BaseModel):
         """Validate target tag format."""
         v = v.lower().strip()
         if not _LOWERCASE_TAG_RE.match(v):
-            raise ValueError(
-                "Invalid tag format: only lowercase alphanumeric, underscore, "
-                "and hyphen allowed"
-            )
+            raise ValueError("Invalid tag format: only lowercase alphanumeric, underscore, " "and hyphen allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
         return v
@@ -1841,9 +1713,7 @@ class GetFactsByTagRequest(BaseModel):
         le=500,
         description="Max facts to return",
     )
-    offset: int = Field(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
-    )
+    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     include_content: bool = Field(
         default=False,
         description="Include fact content in response",
@@ -1896,9 +1766,7 @@ class UpdateTagStyleRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
     @field_validator("icon")
@@ -1908,9 +1776,7 @@ class UpdateTagStyleRequest(BaseModel):
         if v is not None:
             # Only allow alphanumeric, hyphens, and spaces (for icon classes)
             if not re.match(r"^[a-zA-Z0-9\s\-]+$", v):
-                raise ValueError(
-                    "Invalid icon format: only alphanumeric, spaces, hyphens"
-                )
+                raise ValueError("Invalid icon format: only alphanumeric, spaces, hyphens")
         return v
 
 
@@ -1961,10 +1827,7 @@ class CreateCategoryRequest(BaseModel):
         """Validate category name format."""
         v = v.lower().strip().replace(" ", "-")
         if not _CATEGORY_NAME_RE.match(v):
-            raise ValueError(
-                "Invalid category name: only lowercase alphanumeric, "
-                "hyphens, underscores allowed"
-            )
+            raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         if contains_path_traversal(v):
             raise ValueError("Invalid characters in category name")
         return v
@@ -1986,9 +1849,7 @@ class CreateCategoryRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -2030,10 +1891,7 @@ class UpdateCategoryRequest(BaseModel):
         if v is not None:
             v = v.lower().strip().replace(" ", "-")
             if not _CATEGORY_NAME_RE.match(v):
-                raise ValueError(
-                    "Invalid category name: only lowercase alphanumeric, "
-                    "hyphens, underscores allowed"
-                )
+                raise ValueError("Invalid category name: only lowercase alphanumeric, " "hyphens, underscores allowed")
         return v
 
     @field_validator("color")
@@ -2042,9 +1900,7 @@ class UpdateCategoryRequest(BaseModel):
         """Validate hex color format if provided."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -2186,9 +2042,7 @@ class CreateCollectionRequest(BaseModel):
         """Validate hex color format."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -2242,9 +2096,7 @@ class UpdateCollectionRequest(BaseModel):
         """Validate hex color format if provided."""
         if v is not None:
             if not _HEX_COLOR_RE.match(v):
-                raise ValueError(
-                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
-                )
+                raise ValueError(f"Invalid color format: {v}. Use hex format like '#3B82F6'")
         return v
 
 
@@ -2441,10 +2293,7 @@ class ContextSuggestionsRequest(BaseModel):
         default=0.2,
         ge=0.0,
         le=1.0,
-        description=(
-            "Weight of recency boost relative to relevance score (0=purely semantic, "
-            "1=purely recency)"
-        ),
+        description=("Weight of recency boost relative to relevance score (0=purely semantic, " "1=purely recency)"),
     )
     min_score: float = Field(
         default=0.3,
@@ -2526,9 +2375,7 @@ class MetadataFieldDefinition(BaseModel):
         """Validate field name format."""
         v = v.strip()
         if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
-            raise ValueError(
-                "Field name must start with letter, contain only alphanumeric/underscore"
-            )
+            raise ValueError("Field name must start with letter, contain only alphanumeric/underscore")
         return v
 
     @field_validator("type")
@@ -2820,9 +2667,7 @@ class DeduplicationRequest(BaseModel):
     def validate_strategy(cls, v):
         """Validate keep strategy"""
         if v not in _VALID_SORT_OPTIONS:  # Issue #380: use module constant
-            raise ValueError(
-                f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}"
-            )
+            raise ValueError(f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}")
         return v
 
 
@@ -3002,12 +2847,8 @@ class UpdateFactRequest(BaseModel):
         max_length=1000000,
         description="New content for the fact",
     )
-    category: Optional[str] = Field(
-        default=None, max_length=100, description="New category"
-    )
-    metadata: Optional[Metadata] = Field(
-        default=None, description="New or updated metadata"
-    )
+    category: Optional[str] = Field(default=None, max_length=100, description="New category")
+    metadata: Optional[Metadata] = Field(default=None, description="New or updated metadata")
 
     @field_validator("category")
     @classmethod
@@ -3236,16 +3077,14 @@ class PreserveSessionFactsResponse(BaseModel):
     failed_count: int
     errors: Optional[List[str]] = None
 
+    # ---------------------------------------------------------------------------
+    # code_search.py schemas (#5984)
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# code_search.py schemas (#5984)
-# ---------------------------------------------------------------------------
-
-
-# #6799: removed duplicate CodeSearchGetResponse (was here AND in
-# schemas_code.py with identical shape). The canonical definition lives in
-# schemas_code.py:1179. Only api/code_search.py imported this name and it
-# already pulls from schemas_code.
+    # #6799: removed duplicate CodeSearchGetResponse (was here AND in
+    # schemas_code.py with identical shape). The canonical definition lives in
+    # schemas_code.py:1179. Only api/code_search.py imported this name and it
+    # already pulls from schemas_code.
 
     success: bool = True
 
@@ -3698,12 +3537,8 @@ class FileUploadResponse(BaseModel):
 class FileTransferRequest(BaseModel):
     """Request model for file transfer operation."""
 
-    file_ids: List[str] = Field(
-        ..., min_length=1, description="List of file IDs to transfer"
-    )
-    destination: FileDestination = Field(
-        ..., description="Transfer destination (kb or shared)"
-    )
+    file_ids: List[str] = Field(..., min_length=1, description="List of file IDs to transfer")
+    destination: FileDestination = Field(..., description="Transfer destination (kb or shared)")
     target_path: Optional[str] = Field(None, description="Target path in destination")
     copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
     tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
@@ -3765,9 +3600,7 @@ class ConvFileUpdateContentRequest(BaseModel):
 class ConvFileCopyRequest(BaseModel):
     """Request model for copying a file."""
 
-    new_filename: Optional[str] = Field(
-        None, max_length=255, description="Optional new name for the copy"
-    )
+    new_filename: Optional[str] = Field(None, max_length=255, description="Optional new name for the copy")
 
 
 class AgentGenerateFileRequest(BaseModel):
@@ -3790,14 +3623,33 @@ class MCPToolCallRequest(BaseModel):
 
 # memory.py schemas (#6042)
 
-_VALID_ENTITY_TYPES = frozenset({
-    "conversation", "bug_fix", "feature", "decision", "task",
-    "user_preference", "context", "learning", "research", "implementation",
-})
-_VALID_RELATION_TYPES = frozenset({
-    "relates_to", "depends_on", "implements", "fixes", "informs",
-    "guides", "follows", "contains", "blocks",
-})
+_VALID_ENTITY_TYPES = frozenset(
+    {
+        "conversation",
+        "bug_fix",
+        "feature",
+        "decision",
+        "task",
+        "user_preference",
+        "context",
+        "learning",
+        "research",
+        "implementation",
+    }
+)
+_VALID_RELATION_TYPES = frozenset(
+    {
+        "relates_to",
+        "depends_on",
+        "implements",
+        "fixes",
+        "informs",
+        "guides",
+        "follows",
+        "contains",
+        "blocks",
+    }
+)
 
 
 class EntityCreateRequest(BaseModel):
@@ -4090,7 +3942,9 @@ class CrossModalSearchRequest(BaseModel):
     query: Union[str, bytes]
     query_modality: str = Field(..., description="Type of query: text, image, audio")
     target_modalities: Optional[List[str]] = Field(default=None, description="Target modalities to search")
-    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality")
+    limit: int = Field(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality"
+    )
     similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
@@ -4194,7 +4048,9 @@ class AddFactsRequest(BaseModel):
     source: str = Field(default="Manual Entry", max_length=500, description="Content source")
     category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
-    board_id: Optional[str] = Field(default=None, max_length=100, description="Board ID to scope this fact. None means global board.")
+    board_id: Optional[str] = Field(
+        default=None, max_length=100, description="Board ID to scope this fact. None means global board."
+    )
 
     @field_validator("tags")
     @classmethod
@@ -4212,7 +4068,9 @@ class AddUrlRequest(BaseModel):
     method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
-    board_id: Optional[str] = Field(default=None, max_length=100, description="Board ID to scope this URL content. None means global board.")
+    board_id: Optional[str] = Field(
+        default=None, max_length=100, description="Board ID to scope this URL content. None means global board."
+    )
 
     @field_validator("url")
     @classmethod
@@ -4229,7 +4087,9 @@ class AudioIngestRequest(BaseModel):
     title: str = Field(default="", max_length=500)
     category: str = Field(default="audio", max_length=100)
     tags: List[str] = Field(default_factory=list)
-    whisper_model: str = Field(default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size")
+    whisper_model: str = Field(
+        default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size"
+    )
     language: Optional[str] = Field(default=None, max_length=10, description="ISO-639-1 language hint")
 
     @field_validator("url")
@@ -4250,13 +4110,23 @@ class AudioIngestRequest(BaseModel):
 class DocsBrowseRequest(BaseModel):
     """Request model for browsing indexed documentation."""
 
-    category: Optional[str] = Field(default=None, max_length=100, description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')")
-    doc_type: Optional[str] = Field(default=None, max_length=50, description="Filter by document type (e.g., 'markdown', 'code')")
-    file_path_pattern: Optional[str] = Field(default=None, max_length=500, description="Filter by file path pattern (e.g., 'docs/api/')")
-    search_query: Optional[str] = Field(default=None, max_length=500, description="Optional text search within documents")
+    category: Optional[str] = Field(
+        default=None, max_length=100, description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')"
+    )
+    doc_type: Optional[str] = Field(
+        default=None, max_length=50, description="Filter by document type (e.g., 'markdown', 'code')"
+    )
+    file_path_pattern: Optional[str] = Field(
+        default=None, max_length=500, description="Filter by file path pattern (e.g., 'docs/api/')"
+    )
+    search_query: Optional[str] = Field(
+        default=None, max_length=500, description="Optional text search within documents"
+    )
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
-    sort_by: str = Field(default="indexed_at", pattern="^(indexed_at|title|category|file_path)$", description="Sort field")
+    sort_by: str = Field(
+        default="indexed_at", pattern="^(indexed_at|title|category|file_path)$", description="Sort field"
+    )
     sort_order: str = Field(default="desc", pattern="^(asc|desc)$", description="Sort order")
 
 
@@ -4374,16 +4244,24 @@ class HybridSearchRequest(BaseModel):
 class NLQueryRequest(BaseModel):
     """Request body for a natural language database query."""
 
-    question: str = Field(..., min_length=1, max_length=2048, description="Natural language question to translate into SQL")
-    db_id: str = Field(default="local", max_length=128, description="Database identifier. Use 'local' for autobot_data.db")
-    db_secret_id: Optional[str] = Field(default=None, max_length=128, description="Secret ID (from secrets manager) containing the database_url")
+    question: str = Field(
+        ..., min_length=1, max_length=2048, description="Natural language question to translate into SQL"
+    )
+    db_id: str = Field(
+        default="local", max_length=128, description="Database identifier. Use 'local' for autobot_data.db"
+    )
+    db_secret_id: Optional[str] = Field(
+        default=None, max_length=128, description="Secret ID (from secrets manager) containing the database_url"
+    )
 
 
 class TrainRequest(BaseModel):
     """Request body for training the NL service on an external database."""
 
     db_id: str = Field(..., min_length=1, max_length=128, description="Unique identifier for this database connection")
-    db_secret_id: str = Field(..., max_length=128, description="Secret ID containing the database_url in the secrets manager")
+    db_secret_id: str = Field(
+        ..., max_length=128, description="Secret ID containing the database_url in the secrets manager"
+    )
     db_type: str = Field(default="postgresql", description="Database type: postgresql, mysql, or sqlite")
 
 
@@ -4533,11 +4411,15 @@ class GraphRequest(BaseModel):
 class OrganizationKnowledgePolicy(BaseModel):
     """Organization-wide knowledge policies."""
 
-    default_visibility: VisibilityLevel = Field(default=VisibilityLevel.PRIVATE, description="Default visibility for new knowledge")
+    default_visibility: VisibilityLevel = Field(
+        default=VisibilityLevel.PRIVATE, description="Default visibility for new knowledge"
+    )
     allow_user_private: bool = Field(default=True, description="Allow users to create private knowledge")
     allow_user_shared: bool = Field(default=True, description="Allow users to share knowledge")
     allow_user_organization: bool = Field(default=False, description="Allow non-admins to create org-wide knowledge")
-    require_approval_for_system: bool = Field(default=True, description="Require admin approval for system-wide knowledge")
+    require_approval_for_system: bool = Field(
+        default=True, description="Require admin approval for system-wide knowledge"
+    )
     retention_days: Optional[int] = Field(default=None, description="Knowledge retention period (None = indefinite)")
 
 
@@ -4569,7 +4451,9 @@ class GraphRAGSearchRequest(BaseModel):
     """Request model for graph-aware RAG search."""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
-    start_entity: Optional[str] = Field(None, max_length=200, description="Optional starting entity name for graph traversal")
+    start_entity: Optional[str] = Field(
+        None, max_length=200, description="Optional starting entity name for graph traversal"
+    )
     max_depth: int = Field(2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
@@ -4733,10 +4617,7 @@ class NPUOptimizationRequest(BaseModel):
 
     workload_type: str = Field(
         "balanced",
-        description=(
-            "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
-            "balanced"
-        ),
+        description=("Workload type: latency_optimized, throughput_optimized, quality_optimized," "balanced"),
     )
 
 
@@ -4820,9 +4701,7 @@ class CreateBoardRequest(BaseModel):
         if v == KNOWLEDGE_BOARD_GLOBAL_ID:
             raise ValueError("'__global__' is reserved and cannot be created")
         if not _BOARD_ID_RE.match(v):
-            raise ValueError(
-                "board_id must only contain lowercase letters, digits, hyphen, or underscore"
-            )
+            raise ValueError("board_id must only contain lowercase letters, digits, hyphen, or underscore")
         return v
 
 
@@ -4871,9 +4750,7 @@ class ScopedSearchRequest(BaseModel):
     )
     category: Optional[str] = Field(default=None, description="Filter by category")
     tags: Optional[List[str]] = Field(default=None, description="Filter by tags")
-    min_score: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Minimum score threshold"
-    )
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Minimum score threshold")
     enable_rag: bool = Field(default=False, description="Enable RAG enhancement")
     enable_reranking: bool = Field(default=False, description="Enable reranking")
 
@@ -4908,6 +4785,7 @@ class KBQueryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 from datetime import datetime as _datetime
+
 from knowledge.audit_log import AuditEventType as _AuditEventType
 
 
@@ -4929,6 +4807,4 @@ class ComplianceReportRequest(BaseModel):
 
     start_date: _datetime = Field(description="Report start date")
     end_date: _datetime = Field(description="Report end date")
-    organization_id: Optional[str] = Field(
-        default=None, description="Organization ID (defaults to user's org)"
-    )
+    organization_id: Optional[str] = Field(default=None, description="Organization ID (defaults to user's org)")

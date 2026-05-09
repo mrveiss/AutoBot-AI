@@ -36,8 +36,8 @@ from autobot_shared.redis_client import get_redis_client
 from config import config as global_config_manager
 from event_manager import get_event_manager
 from knowledge_base import KnowledgeBase
-from services.llm_service import get_llm_service
 from security_layer import SecurityLayer
+from services.llm_service import get_llm_service
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
 

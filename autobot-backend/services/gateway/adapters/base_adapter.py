@@ -67,9 +67,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def denormalize_response(
-        self, unified_response: NormalizedResponse
-    ) -> Dict[str, Any]:
+    async def denormalize_response(self, unified_response: NormalizedResponse) -> Dict[str, Any]:
         """
         Convert unified response back to platform-specific format.
 

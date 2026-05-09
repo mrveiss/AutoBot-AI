@@ -22,12 +22,12 @@ import pytest
 from fastapi import HTTPException
 
 from api.marketplace import (
-    CatalogCategory,
-    CatalogSort,
     _BUILTIN_CATALOG,
     _CATALOG_KEY,
     _CATALOG_TTL,
     _INSTALLED_KEY,
+    CatalogCategory,
+    CatalogSort,
     _get_catalog,
     _plugin_source_url,
     get_catalog_entry,

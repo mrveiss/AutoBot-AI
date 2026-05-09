@@ -23,12 +23,8 @@ _UUID = postgresql.UUID(as_uuid=True)
 def _common_ts_cols():
     """Return created_at/updated_at Column defs. Helper (#1407)."""
     return [
-        sa.Column(
-            "created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
     ]
 
 
@@ -38,9 +34,7 @@ def _create_agent_runtime_state_table() -> None:
         "agent_runtime_state",
         sa.Column("id", _UUID, nullable=False),
         sa.Column("agent_id", sa.String(255), nullable=False),
-        sa.Column(
-            "heartbeat_enabled", sa.Boolean(), nullable=False, server_default=sa.false()
-        ),
+        sa.Column("heartbeat_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column(
             "heartbeat_interval_seconds",
             sa.Integer(),
@@ -61,9 +55,7 @@ def _create_agent_runtime_state_table() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("agent_id", name="uq_agent_runtime_state_agent_id"),
     )
-    op.create_index(
-        "ix_agent_runtime_state_agent_id", "agent_runtime_state", ["agent_id"]
-    )
+    op.create_index("ix_agent_runtime_state_agent_id", "agent_runtime_state", ["agent_id"])
     op.create_index(
         "ix_agent_runtime_state_current_task_id",
         "agent_runtime_state",
@@ -89,15 +81,11 @@ def _create_heartbeat_runs_table() -> None:
         sa.Column("provider", sa.String(100), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         *_common_ts_cols(),
-        sa.ForeignKeyConstraint(
-            ["runtime_state_id"], ["agent_runtime_state.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["runtime_state_id"], ["agent_runtime_state.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_heartbeat_runs_agent_id", "heartbeat_runs", ["agent_id"])
-    op.create_index(
-        "ix_heartbeat_runs_runtime_state_id", "heartbeat_runs", ["runtime_state_id"]
-    )
+    op.create_index("ix_heartbeat_runs_runtime_state_id", "heartbeat_runs", ["runtime_state_id"])
     op.create_index("ix_heartbeat_runs_status", "heartbeat_runs", ["status"])
 
 
@@ -114,12 +102,8 @@ def _create_heartbeat_run_events_table() -> None:
         sa.ForeignKeyConstraint(["run_id"], ["heartbeat_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_heartbeat_run_events_run_id", "heartbeat_run_events", ["run_id"]
-    )
-    op.create_index(
-        "ix_heartbeat_run_events_event_type", "heartbeat_run_events", ["event_type"]
-    )
+    op.create_index("ix_heartbeat_run_events_run_id", "heartbeat_run_events", ["run_id"])
+    op.create_index("ix_heartbeat_run_events_event_type", "heartbeat_run_events", ["event_type"])
 
 
 def _create_agent_wakeup_requests_table() -> None:
@@ -135,17 +119,11 @@ def _create_agent_wakeup_requests_table() -> None:
         sa.Column("consumed_at", sa.DateTime(), nullable=True),
         sa.Column("consumed_by_run_id", _UUID, nullable=True),
         *_common_ts_cols(),
-        sa.ForeignKeyConstraint(
-            ["runtime_state_id"], ["agent_runtime_state.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["runtime_state_id"], ["agent_runtime_state.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_agent_wakeup_requests_agent_id", "agent_wakeup_requests", ["agent_id"]
-    )
-    op.create_index(
-        "ix_agent_wakeup_requests_priority", "agent_wakeup_requests", ["priority"]
-    )
+    op.create_index("ix_agent_wakeup_requests_agent_id", "agent_wakeup_requests", ["agent_id"])
+    op.create_index("ix_agent_wakeup_requests_priority", "agent_wakeup_requests", ["priority"])
     op.create_index(
         "ix_agent_wakeup_requests_runtime_state_id",
         "agent_wakeup_requests",

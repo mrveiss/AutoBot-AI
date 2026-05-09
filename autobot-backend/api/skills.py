@@ -15,10 +15,6 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-
-from skills.manager import SkillManager
-from skills.registry import get_skill_registry
 from api.schemas_agent import (
     SkillActionRequest,
     SkillConfigUpdate,
@@ -33,18 +29,21 @@ from api.schemas_code import (
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     MCPSpanResponse,
-    SkillsListResponse,
-    SkillsCategoriesResponse,
-    SkillsAllHealthResponse,
-    SkillsInitializeResponse,
+    SkillActionsResponse,
     SkillDetailResponse,
     SkillHealthResponse,
-    SkillActionsResponse,
     SkillMetricsResponse,
+    SkillsAllHealthResponse,
+    SkillsCategoriesResponse,
+    SkillsInitializeResponse,
+    SkillsListResponse,
     SkillSuggestionsResponse,
     SkillTracesResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from skills.manager import SkillManager
+from skills.registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
 

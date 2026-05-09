@@ -235,9 +235,7 @@ class TestBenchmarkInvocation:
 
         scorer = AsyncMock()
         scorer.name = "llm_judge"
-        scorer.score.return_value = ScorerResult(
-            score=0.6, raw_score=6, metadata={}, scorer_name="llm_judge"
-        )
+        scorer.score.return_value = ScorerResult(score=0.6, raw_score=6, metadata={}, scorer_name="llm_judge")
 
         opt = PromptOptimizer(scorers={"llm_judge": scorer}, llm_service=llm)
         opt._redis = AsyncMock()
@@ -351,9 +349,7 @@ class TestAgentRegistration:
 
         scorer = AsyncMock()
         scorer.name = "mock"
-        scorer.score.return_value = ScorerResult(
-            score=0.5, raw_score=5, metadata={}, scorer_name="mock"
-        )
+        scorer.score.return_value = ScorerResult(score=0.5, raw_score=5, metadata={}, scorer_name="mock")
 
         llm = AsyncMock()
         mock_resp = MagicMock()

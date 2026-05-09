@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
-from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
 
 # Embedding analytics integration (Issue #285)
@@ -177,9 +177,7 @@ class BackgroundVectorizer:
         stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
         all_status = await self._get_vectorization_status(kb, batch)
-        facts_to_process, already_skipped = self._filter_pending_facts(
-            batch, all_status
-        )
+        facts_to_process, already_skipped = self._filter_pending_facts(batch, all_status)
         stats["skipped"] += already_skipped
 
         all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
@@ -219,9 +217,7 @@ class BackgroundVectorizer:
                 return
 
             total_batches = (len(fact_keys) + self.batch_size - 1) // self.batch_size
-            logger.info(
-                "Processing %s facts in %s batches", len(fact_keys), total_batches
-            )
+            logger.info("Processing %s facts in %s batches", len(fact_keys), total_batches)
 
             total_stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
@@ -269,10 +265,7 @@ class BackgroundVectorizer:
                 if self.is_running:
                     continue
 
-                if (
-                    self.last_run
-                    and (datetime.now(tz=timezone.utc) - self.last_run).seconds < self.check_interval
-                ):
+                if self.last_run and (datetime.now(tz=timezone.utc) - self.last_run).seconds < self.check_interval:
                     continue
 
                 logger.info("Periodic check: Looking for unvectorized facts...")

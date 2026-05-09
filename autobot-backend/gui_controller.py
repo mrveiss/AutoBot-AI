@@ -28,10 +28,7 @@ class GUIController:
         # Check if running under Xvfb or need virtual display
         if "DISPLAY" not in os.environ:
             self.virtual_display = True
-            logger.warning(
-                "DISPLAY environment variable not set. "
-                "Attempting to start virtual display."
-            )
+            logger.warning("DISPLAY environment variable not set. " "Attempting to start virtual display.")
             self.start_virtual_display()
 
     def __del__(self):
@@ -43,9 +40,7 @@ class GUIController:
         try:
             # Check if Xvfb is installed
             if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
-                logger.error(
-                    "Xvfb is not installed. Please install it to use the virtual display."
-                )
+                logger.error("Xvfb is not installed. Please install it to use the virtual display.")
                 return
 
             # Start Xvfb
@@ -95,9 +90,7 @@ class GUIController:
     async def locate_element_by_image(self, image_path, confidence=0.8):
         """Locate an element on the screen by matching an image."""
         try:
-            location = await asyncio.to_thread(
-                pyautogui.locateCenterOnScreen, image_path, confidence=confidence
-            )
+            location = await asyncio.to_thread(pyautogui.locateCenterOnScreen, image_path, confidence=confidence)
             if location:
                 logger.debug("Found element at %s", location)
                 return location
@@ -127,20 +120,12 @@ class GUIController:
             try:
                 import subprocess
 
-                result = subprocess.run(
-                    ["which", "kex"], capture_output=True, text=True
-                )
+                result = subprocess.run(["which", "kex"], capture_output=True, text=True)
                 if result.stdout.strip():
-                    logger.info(
-                        "Kex is available. If GUI fails, consider starting "
-                        "a Kex session."
-                    )
+                    logger.info("Kex is available. If GUI fails, consider starting " "a Kex session.")
                     return True
                 else:
-                    logger.warning(
-                        "Kex not found. GUI automation may fail without "
-                        "a VNC session."
-                    )
+                    logger.warning("Kex not found. GUI automation may fail without " "a VNC session.")
                     return False
             except Exception as e:
                 logger.error("Error checking for Kex: %s", e)

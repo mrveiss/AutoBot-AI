@@ -39,10 +39,10 @@ def _hardware_scan() -> dict[str, Any]:
     disk = psutil.disk_usage("/")
     cpu_cores: int = psutil.cpu_count(logical=True) or 1
     return {
-        "ram_gb": round(vmem.total / (1024 ** 3), 1),
-        "ram_available_gb": round(vmem.available / (1024 ** 3), 1),
-        "disk_total_gb": round(disk.total / (1024 ** 3), 1),
-        "disk_free_gb": round(disk.free / (1024 ** 3), 1),
+        "ram_gb": round(vmem.total / (1024**3), 1),
+        "ram_available_gb": round(vmem.available / (1024**3), 1),
+        "disk_total_gb": round(disk.total / (1024**3), 1),
+        "disk_free_gb": round(disk.free / (1024**3), 1),
         "cpu_cores": cpu_cores,
     }
 
@@ -101,9 +101,7 @@ async def run_doctor() -> dict[str, Any]:
     chromadb_port = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8100"))
 
     ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
-    chromadb_reachable, chromadb_detail = await _probe_http(
-        f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat"
-    )
+    chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat")
     redis_reachable, redis_detail = await _probe_redis()
 
     services = {

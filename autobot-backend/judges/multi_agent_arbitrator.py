@@ -169,11 +169,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
     def _get_consistency_score(self, judgment: JudgmentResult) -> float:
         """Extract consistency score from judgment criterion scores. Issue #620."""
         return next(
-            (
-                s.score
-                for s in judgment.criterion_scores
-                if s.dimension == JudgmentDimension.CONSISTENCY
-            ),
+            (s.score for s in judgment.criterion_scores if s.dimension == JudgmentDimension.CONSISTENCY),
             0.0,
         )
 
@@ -185,9 +181,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             return "medium"
         return "low"
 
-    def _build_conflict_result(
-        self, judgment: JudgmentResult, consistency_score: float
-    ) -> Dict[str, Any]:
+    def _build_conflict_result(self, judgment: JudgmentResult, consistency_score: float) -> Dict[str, Any]:
         """Build conflict detection result dictionary. Issue #620."""
         return {
             "has_conflicts": consistency_score < self.consensus_threshold,
@@ -283,9 +277,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             )
         return evaluations
 
-    def _select_consensus_response(
-        self, evaluations: List[Dict[str, Any]], consensus_method: str
-    ) -> Dict[str, Any]:
+    def _select_consensus_response(self, evaluations: List[Dict[str, Any]], consensus_method: str) -> Dict[str, Any]:
         """Select consensus response based on method.
 
         Issue #665: Extracted from coordinate_agent_consensus to reduce function length.
@@ -311,9 +303,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             evaluations = await self._evaluate_responses_for_consensus(
                 user_request, agent_responses, agent_types, context, consensus_method
             )
-            consensus_response = self._select_consensus_response(
-                evaluations, consensus_method
-            )
+            consensus_response = self._select_consensus_response(evaluations, consensus_method)
             consensus_confidence = self._calculate_consensus_confidence(evaluations)
 
             return {
@@ -323,10 +313,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 "consensus_method": consensus_method,
                 "evaluation_summary": {
                     "total_responses": len(evaluations),
-                    "average_quality": sum(
-                        e["evaluation"].overall_score for e in evaluations
-                    )
-                    / len(evaluations),
+                    "average_quality": sum(e["evaluation"].overall_score for e in evaluations) / len(evaluations),
                     "agreement_level": consensus_confidence,
                 },
                 "detailed_evaluations": evaluations,
@@ -398,9 +385,7 @@ Focus on selecting the response that provides the most value to the user while m
         analysis_type = context.get("analysis_type", "arbitration")
 
         if analysis_type == "conflict_detection":
-            return self._prepare_conflict_detection_prompt(
-                responses, agent_types, context
-            )
+            return self._prepare_conflict_detection_prompt(responses, agent_types, context)
 
         user_request_json = json.dumps(user_request, indent=2)
         arbitration_context_json = json.dumps(arbitration_context, indent=2)
@@ -461,11 +446,7 @@ AGENT RESPONSES:
 
         # Look for consistency issues in criterion scores
         consistency_score = next(
-            (
-                s
-                for s in judgment.criterion_scores
-                if s.dimension == JudgmentDimension.CONSISTENCY
-            ),
+            (s for s in judgment.criterion_scores if s.dimension == JudgmentDimension.CONSISTENCY),
             None,
         )
 
@@ -499,11 +480,7 @@ AGENT RESPONSES:
         quality_scores = []
         for eval_data in evaluations:
             quality_score = next(
-                (
-                    s.score
-                    for s in eval_data["evaluation"].criterion_scores
-                    if s.dimension == JudgmentDimension.QUALITY
-                ),
+                (s.score for s in eval_data["evaluation"].criterion_scores if s.dimension == JudgmentDimension.QUALITY),
                 0.0,
             )
             quality_scores.append((eval_data, quality_score))
@@ -532,17 +509,11 @@ AGENT RESPONSES:
             consistency_scores.append((eval_data, consistency_score))
 
         # If no response meets threshold, fall back to highest quality
-        threshold_met = [
-            e for e, s in consistency_scores if s >= self.consensus_threshold
-        ]
+        threshold_met = [e for e, s in consistency_scores if s >= self.consensus_threshold]
         if threshold_met:
-            best_evaluation = max(
-                threshold_met, key=lambda x: x["evaluation"].overall_score
-            )
+            best_evaluation = max(threshold_met, key=lambda x: x["evaluation"].overall_score)
         else:
-            best_evaluation = max(
-                evaluations, key=lambda x: x["evaluation"].overall_score
-            )
+            best_evaluation = max(evaluations, key=lambda x: x["evaluation"].overall_score)
 
         return {
             "response": best_evaluation["response"],
@@ -553,20 +524,12 @@ AGENT RESPONSES:
 
     def _simple_majority_consensus(self, evaluations: List[Dict]) -> Dict[str, Any]:
         """Simple majority based on recommendation approvals"""
-        approved_responses = [
-            e
-            for e in evaluations
-            if e["evaluation"].recommendation in _APPROVAL_RECOMMENDATIONS
-        ]
+        approved_responses = [e for e in evaluations if e["evaluation"].recommendation in _APPROVAL_RECOMMENDATIONS]
 
         if approved_responses:
-            best_evaluation = max(
-                approved_responses, key=lambda x: x["evaluation"].overall_score
-            )
+            best_evaluation = max(approved_responses, key=lambda x: x["evaluation"].overall_score)
         else:
-            best_evaluation = max(
-                evaluations, key=lambda x: x["evaluation"].overall_score
-            )
+            best_evaluation = max(evaluations, key=lambda x: x["evaluation"].overall_score)
 
         return {
             "response": best_evaluation["response"],

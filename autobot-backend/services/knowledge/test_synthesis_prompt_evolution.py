@@ -26,7 +26,6 @@ sys.modules.setdefault("autobot_shared.redis_client", MagicMock())
 
 from services.knowledge.kb_synthesizer import KBSynthesizer  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # _score_synthesis_output
 # ---------------------------------------------------------------------------
@@ -131,7 +130,12 @@ class TestSelectPromptVariant:
         """Entries for a different collection must not affect selection."""
         entries = [
             # All entries belong to a different collection.
-            {"prompt_template": "other_col", "collection_name": "other_col", "prompt_variant": "variant_0", "score": 0.95},
+            {
+                "prompt_template": "other_col",
+                "collection_name": "other_col",
+                "prompt_variant": "variant_0",
+                "score": 0.95,
+            },
         ]
         synth = _make_synthesizer(entries)
         variants = ["v_text"]

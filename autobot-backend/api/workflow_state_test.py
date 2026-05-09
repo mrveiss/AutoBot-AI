@@ -198,9 +198,7 @@ class TestWorkflowStateMachineCreate:
 
     @pytest.mark.asyncio
     @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
-    async def test_create_persists_to_redis(
-        self, mock_get_redis, mock_redis, sample_steps
-    ):
+    async def test_create_persists_to_redis(self, mock_get_redis, mock_redis, sample_steps):
         mock_get_redis.return_value = mock_redis
         sm = WorkflowStateMachine()
 
@@ -218,9 +216,7 @@ class TestWorkflowStateMachineCreate:
 
     @pytest.mark.asyncio
     @patch("api.workflow_state.get_async_redis_client", new_callable=AsyncMock)
-    async def test_create_adds_to_active_set(
-        self, mock_get_redis, mock_redis, sample_steps
-    ):
+    async def test_create_adds_to_active_set(self, mock_get_redis, mock_redis, sample_steps):
         mock_get_redis.return_value = mock_redis
         sm = WorkflowStateMachine()
 

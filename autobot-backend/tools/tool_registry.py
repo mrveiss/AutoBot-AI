@@ -581,10 +581,7 @@ class ToolRegistry:
         from tools.description_compressor import compress_description  # noqa: PLC0415
 
         tool_names = self.get_available_tools()
-        tasks = [
-            compress_description(name, {"description": self._tool_description(name)})
-            for name in tool_names
-        ]
+        tasks = [compress_description(name, {"description": self._tool_description(name)}) for name in tool_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         compressed: Dict[str, str] = {}
@@ -630,6 +627,7 @@ class ToolRegistry:
         #   chat_workflow -> tool_handler -> tools -> tool_registry -> chat_workflow
         # (#4557)
         from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
+
         return registry_tools + sorted(BROWSER_TOOL_NAMES)
 
 

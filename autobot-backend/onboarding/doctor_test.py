@@ -22,12 +22,12 @@ if "psutil" not in sys.modules:
     psutil_stub = types.ModuleType("psutil")
 
     _vmem = MagicMock()
-    _vmem.total = 8 * 1024 ** 3  # 8 GiB
-    _vmem.available = 4 * 1024 ** 3
+    _vmem.total = 8 * 1024**3  # 8 GiB
+    _vmem.available = 4 * 1024**3
 
     _disk = MagicMock()
-    _disk.total = 100 * 1024 ** 3  # 100 GiB
-    _disk.free = 50 * 1024 ** 3
+    _disk.total = 100 * 1024**3  # 100 GiB
+    _disk.free = 50 * 1024**3
 
     psutil_stub.virtual_memory = MagicMock(return_value=_vmem)
     psutil_stub.disk_usage = MagicMock(return_value=_disk)
@@ -36,11 +36,11 @@ if "psutil" not in sys.modules:
 
 
 from onboarding.doctor import (
-    _recommend_tier,
-    _hardware_scan,
-    TIER_POWERFUL,
     TIER_BALANCED,
     TIER_FAST,
+    TIER_POWERFUL,
+    _hardware_scan,
+    _recommend_tier,
 )
 
 

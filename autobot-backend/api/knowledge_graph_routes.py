@@ -15,18 +15,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import get_current_user
 from api.schemas_knowledge import (
     KnowledgeGraphDocumentOverviewResponse,
     KnowledgeGraphDrillDownResponse,
     KnowledgeGraphEntitiesResponse,
     KnowledgeGraphEntityRelationshipsResponse,
-    KnowledgeGraphEventTimelineResponse,
     KnowledgeGraphEventsResponse,
+    KnowledgeGraphEventTimelineResponse,
     KnowledgeGraphSummariesResponse,
     PipelineRunRequest,
     PipelineRunResponse,
 )
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -108,9 +108,7 @@ async def list_entities(
         from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="knowledge")
-        entities = await _list_entities_from_redis(
-            redis_client, entity_type, query, limit
-        )
+        entities = await _list_entities_from_redis(redis_client, entity_type, query, limit)
         return {"entities": entities, "total": len(entities)}
 
     except Exception as e:
@@ -135,9 +133,7 @@ async def get_entity_relationships(
         from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="knowledge")
-        relationships = await _get_relationships_from_redis(
-            redis_client, entity_id, relationship_type, limit
-        )
+        relationships = await _get_relationships_from_redis(redis_client, entity_id, relationship_type, limit)
         return {
             "entity_id": entity_id,
             "relationships": relationships,
@@ -179,9 +175,7 @@ async def search_events(
 
         start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
         end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
-        types_list = (
-            [t.strip() for t in event_types.split(",")] if event_types else None
-        )
+        types_list = [t.strip() for t in event_types.split(",")] if event_types else None
 
         events = await temporal_svc.search_events_in_range(
             start_date=start,
@@ -217,9 +211,7 @@ async def get_event_timeline(
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        events = await temporal_svc.get_event_timeline(
-            entity_name=entity_name, limit=limit
-        )
+        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=limit)
         return {
             "entity_name": entity_name,
             "events": events,
@@ -251,15 +243,13 @@ async def search_summaries(
 ):
     """Vector search on summary embeddings."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
 
-        summaries = await summary_svc.search_summaries(
-            query=query, level=level, top_k=top_k
-        )
+        summaries = await summary_svc.search_summaries(query=query, level=level, top_k=top_k)
         return {"summaries": summaries, "total": len(summaries)}
 
     except Exception as e:
@@ -279,8 +269,8 @@ async def get_document_overview(
 ):
     """Get document overview with hierarchical summaries."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
@@ -305,8 +295,8 @@ async def drill_down_summary(
 ):
     """Navigate from summary to children or source chunks."""
     try:
-        from knowledge.summary_search import SummarySearchService
         from knowledge.backends import get_async_default_client
+        from knowledge.summary_search import SummarySearchService
 
         chromadb_client = await get_async_default_client()
         summary_svc = SummarySearchService(chromadb_client)
@@ -362,9 +352,7 @@ async def _list_entities_from_redis(redis_client, entity_type, query, limit) -> 
     return entities
 
 
-async def _get_relationships_from_redis(
-    redis_client, entity_id, relationship_type, limit
-) -> list:
+async def _get_relationships_from_redis(redis_client, entity_id, relationship_type, limit) -> list:
     """Get relationships for an entity from Redis.
 
     Helper for get_entity_relationships endpoint (#759).
@@ -378,10 +366,7 @@ async def _get_relationships_from_redis(
             rel_data = await redis_client.json().get(f"relationship:{rel_id}")
             if not rel_data:
                 continue
-            if (
-                relationship_type
-                and rel_data.get("relationship_type") != relationship_type
-            ):
+            if relationship_type and rel_data.get("relationship_type") != relationship_type:
                 continue
             relationships.append(rel_data)
     except Exception as e:

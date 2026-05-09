@@ -35,12 +35,12 @@ class TestIsAvailableContract:
         except Exception as exc:  # pragma: no cover — env-dependent dep chain
             pytest.skip(f"base_agent dep chain unavailable: {exc}")
 
-        assert inspect.iscoroutinefunction(mod.BaseAgent.is_available), (
-            "BaseAgent.is_available must be an async coroutine function"
-        )
-        assert getattr(mod.BaseAgent.is_available, "__isabstractmethod__", False), (
-            "BaseAgent.is_available must be marked @abstractmethod"
-        )
+        assert inspect.iscoroutinefunction(
+            mod.BaseAgent.is_available
+        ), "BaseAgent.is_available must be an async coroutine function"
+        assert getattr(
+            mod.BaseAgent.is_available, "__isabstractmethod__", False
+        ), "BaseAgent.is_available must be marked @abstractmethod"
 
     def test_localagent_is_available_is_async(self):
         """LocalAgent.is_available was sync prior to #6659 — must be async now."""
@@ -50,9 +50,9 @@ class TestIsAvailableContract:
         except Exception as exc:  # pragma: no cover
             pytest.skip(f"base_agent dep chain unavailable: {exc}")
 
-        assert inspect.iscoroutinefunction(mod.LocalAgent.is_available), (
-            "LocalAgent.is_available must be async to match BaseAgent contract"
-        )
+        assert inspect.iscoroutinefunction(
+            mod.LocalAgent.is_available
+        ), "LocalAgent.is_available must be async to match BaseAgent contract"
 
     def test_containeragent_is_available_is_async(self):
         """ContainerAgent.is_available must remain async (network health check)."""
@@ -62,9 +62,9 @@ class TestIsAvailableContract:
         except Exception as exc:  # pragma: no cover
             pytest.skip(f"base_agent dep chain unavailable: {exc}")
 
-        assert inspect.iscoroutinefunction(mod.ContainerAgent.is_available), (
-            "ContainerAgent.is_available must be async — it does a remote health check"
-        )
+        assert inspect.iscoroutinefunction(
+            mod.ContainerAgent.is_available
+        ), "ContainerAgent.is_available must be async — it does a remote health check"
 
     @pytest.mark.asyncio
     async def test_localagent_returns_true_when_awaited(self):

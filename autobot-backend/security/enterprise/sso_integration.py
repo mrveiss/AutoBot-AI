@@ -28,9 +28,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
-from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
-
 from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -162,18 +161,10 @@ class SSOIntegrationFramework:
             "sls_url": "/api/auth/saml/sls",
             "name_id_format": ("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"),
             "attribute_mapping": {
-                "email": (
-                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-                ),
-                "first_name": (
-                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
-                ),
-                "last_name": (
-                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
-                ),
-                "groups": (
-                    "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
-                ),
+                "email": ("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"),
+                "first_name": ("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"),
+                "last_name": ("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"),
+                "groups": ("http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"),
             },
         }
 
@@ -252,12 +243,8 @@ class SSOIntegrationFramework:
                     provider_data = json.load(f)
 
                 # Convert datetime strings
-                provider_data["created_at"] = parse_utc_iso(
-                    provider_data["created_at"]
-                )
-                provider_data["updated_at"] = parse_utc_iso(
-                    provider_data["updated_at"]
-                )
+                provider_data["created_at"] = parse_utc_iso(provider_data["created_at"])
+                provider_data["updated_at"] = parse_utc_iso(provider_data["updated_at"])
                 provider_data["protocol"] = SSOProtocol(provider_data["protocol"])
 
                 provider = SSOProvider(**provider_data)
@@ -290,9 +277,7 @@ class SSOIntegrationFramework:
                     json.dump(provider_dict, f, indent=2, ensure_ascii=False)
 
             except Exception as e:
-                logger.error(
-                    "Failed to save SSO provider %s: %s", provider.provider_id, e
-                )
+                logger.error("Failed to save SSO provider %s: %s", provider.provider_id, e)
 
     def _initialize_crypto_keys(self):
         """Initialize cryptographic keys for SAML and JWT signing (thread-safe, Issue #378)"""
@@ -315,9 +300,7 @@ class SSOIntegrationFramework:
                     logger.info("Loaded existing SSO cryptographic keys")
                 else:
                     # Generate new keys
-                    self.private_key = rsa.generate_private_key(
-                        public_exponent=65537, key_size=2048
-                    )
+                    self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
                     self.public_key = self.private_key.public_key()
 
                     # Save keys
@@ -361,9 +344,7 @@ class SSOIntegrationFramework:
                     "tenant_id": self.config["azure_ad"]["tenant_id"],
                     "client_id": self.config["azure_ad"].get("client_id", ""),
                     "client_secret": self.config["azure_ad"].get("client_secret", ""),
-                    "authority": (
-                        f"https://login.microsoftonline.com/{self.config['azure_ad']['tenant_id']}"
-                    ),
+                    "authority": (f"https://login.microsoftonline.com/{self.config['azure_ad']['tenant_id']}"),
                     "scope": ["openid", "profile", "email", "User.Read"],
                 },
                 auto_enable=True,
@@ -455,9 +436,7 @@ class SSOIntegrationFramework:
         else:
             return {"error": "Unsupported protocol"}
 
-    async def _initiate_saml_auth(
-        self, provider: SSOProvider, redirect_uri: str, state: Optional[str]
-    ) -> Dict:
+    async def _initiate_saml_auth(self, provider: SSOProvider, redirect_uri: str, state: Optional[str]) -> Dict:
         """Initiate SAML authentication"""
         try:
             # Generate SAML AuthnRequest
@@ -496,10 +475,7 @@ class SSOIntegrationFramework:
             saml_request = urllib.parse.quote(encoded_request)
             relay_state = state or ""
             return {
-                "auth_url": (
-                    f"{provider.config['sso_url']}?SAMLRequest={saml_request}"
-                    f"&RelayState={relay_state}"
-                ),
+                "auth_url": (f"{provider.config['sso_url']}?SAMLRequest={saml_request}" f"&RelayState={relay_state}"),
                 "request_id": request_id,
                 "method": "redirect",
             }
@@ -508,9 +484,7 @@ class SSOIntegrationFramework:
             logger.error("SAML auth initiation failed: %s", e)
             return {"error": "Failed to initiate SAML authentication"}
 
-    async def _initiate_oauth_auth(
-        self, provider: SSOProvider, redirect_uri: str, state: Optional[str]
-    ) -> Dict:
+    async def _initiate_oauth_auth(self, provider: SSOProvider, redirect_uri: str, state: Optional[str]) -> Dict:
         """Initiate OAuth2/OpenID Connect authentication"""
         try:
             # Generate state for security
@@ -529,11 +503,7 @@ class SSOIntegrationFramework:
             params = {
                 "client_id": provider.config["client_id"],
                 "response_type": oauth_config.get("response_type", "code"),
-                "scope": " ".join(
-                    provider.config.get(
-                        "scope", oauth_config.get("default_scope", ["openid"])
-                    )
-                ),
+                "scope": " ".join(provider.config.get("scope", oauth_config.get("default_scope", ["openid"]))),
                 "redirect_uri": redirect_uri,
                 "state": auth_state,
             }
@@ -542,11 +512,7 @@ class SSOIntegrationFramework:
             if provider.protocol == SSOProtocol.AZURE_AD:
                 params["prompt"] = "select_account"
 
-            auth_url = (
-                provider.config["authorization_endpoint"]
-                + "?"
-                + urllib.parse.urlencode(params)
-            )
+            auth_url = provider.config["authorization_endpoint"] + "?" + urllib.parse.urlencode(params)
 
             return {"auth_url": auth_url, "state": auth_state, "method": "redirect"}
 
@@ -579,9 +545,7 @@ class SSOIntegrationFramework:
             self.stats["failed_authentications"] += 1
             return {"error": "Authentication failed"}
 
-    async def _handle_saml_callback(
-        self, provider: SSOProvider, callback_data: Dict
-    ) -> Dict:
+    async def _handle_saml_callback(self, provider: SSOProvider, callback_data: Dict) -> Dict:
         """Handle SAML authentication callback"""
         try:
             saml_response = callback_data.get("SAMLResponse", "")
@@ -598,9 +562,7 @@ class SSOIntegrationFramework:
             user_attributes = self._parse_saml_assertion(decoded_response, provider)
 
             if user_attributes:
-                return await self._create_sso_session(
-                    provider, user_attributes, relay_state
-                )
+                return await self._create_sso_session(provider, user_attributes, relay_state)
             else:
                 return {"error": "Failed to parse SAML assertion"}
 
@@ -608,9 +570,7 @@ class SSOIntegrationFramework:
             logger.error("SAML callback failed: %s", e)
             return {"error": "SAML authentication failed"}
 
-    async def _handle_oauth_callback(
-        self, provider: SSOProvider, callback_data: Dict
-    ) -> Dict:
+    async def _handle_oauth_callback(self, provider: SSOProvider, callback_data: Dict) -> Dict:
         """Handle OAuth2/OpenID Connect callback"""
         try:
             code = callback_data.get("code")
@@ -630,17 +590,13 @@ class SSOIntegrationFramework:
             state_data = self.oauth_states[state]
 
             # Exchange code for tokens
-            token_response = await self._exchange_oauth_code(
-                provider, code, state_data["redirect_uri"]
-            )
+            token_response = await self._exchange_oauth_code(provider, code, state_data["redirect_uri"])
 
             if "error" in token_response:
                 return token_response
 
             # Get user info
-            user_info = await self._get_oauth_user_info(
-                provider, token_response["access_token"]
-            )
+            user_info = await self._get_oauth_user_info(provider, token_response["access_token"])
 
             if user_info:
                 # Clean up state
@@ -654,9 +610,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth callback failed: %s", e)
             return {"error": "OAuth authentication failed"}
 
-    async def _exchange_oauth_code(
-        self, provider: SSOProvider, code: str, redirect_uri: str
-    ) -> Dict:
+    async def _exchange_oauth_code(self, provider: SSOProvider, code: str, redirect_uri: str) -> Dict:
         """Exchange OAuth authorization code for tokens"""
         try:
             oauth_config = self.config.get("oauth2", {})
@@ -679,26 +633,20 @@ class SSOIntegrationFramework:
                     return await response.json()
                 else:
                     error_text = await response.text()
-                    logger.error(
-                        "Token exchange failed: %s - %s", response.status, error_text
-                    )
+                    logger.error("Token exchange failed: %s - %s", response.status, error_text)
                     return {"error": "Token exchange failed"}
 
         except Exception as e:
             logger.error("OAuth code exchange failed: %s", e)
             return {"error": "Token exchange failed"}
 
-    async def _get_oauth_user_info(
-        self, provider: SSOProvider, access_token: str
-    ) -> Optional[Dict]:
+    async def _get_oauth_user_info(self, provider: SSOProvider, access_token: str) -> Optional[Dict]:
         """Get user information using OAuth access token"""
         try:
             headers = {"Authorization": f"Bearer {access_token}"}
 
             http_client = get_http_client()
-            async with await http_client.get(
-                provider.config["userinfo_endpoint"], headers=headers
-            ) as response:
+            async with await http_client.get(provider.config["userinfo_endpoint"], headers=headers) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -709,9 +657,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth user info failed: %s", e)
             return None
 
-    def _parse_saml_assertion(
-        self, saml_response: str, provider: SSOProvider
-    ) -> Optional[Dict]:
+    def _parse_saml_assertion(self, saml_response: str, provider: SSOProvider) -> Optional[Dict]:
         """Parse SAML assertion and extract user attributes"""
         # This is a simplified parser - production should use proper SAML library
         try:
@@ -732,9 +678,7 @@ class SSOIntegrationFramework:
             logger.error("SAML assertion parsing failed: %s", e)
             return None
 
-    async def _create_sso_session(
-        self, provider: SSOProvider, user_attributes: Dict, state: Optional[str]
-    ) -> Dict:
+    async def _create_sso_session(self, provider: SSOProvider, user_attributes: Dict, state: Optional[str]) -> Dict:
         """Create SSO session from successful authentication"""
         try:
             # Map attributes to internal user format
@@ -767,9 +711,7 @@ class SSOIntegrationFramework:
                 self.stats["authentications_by_provider"].get(provider_name, 0) + 1
             )
 
-            logger.info(
-                f"Created SSO session for user {mapped_user['user_id']} via {provider.name}"
-            )
+            logger.info(f"Created SSO session for user {mapped_user['user_id']} via {provider.name}")
 
             return {
                 "success": True,
@@ -809,9 +751,7 @@ class SSOIntegrationFramework:
 
         # Generate user ID if not present
         if "user_id" not in mapped_user:
-            mapped_user["user_id"] = mapped_user.get("username") or mapped_user.get(
-                "email", "unknown"
-            )
+            mapped_user["user_id"] = mapped_user.get("username") or mapped_user.get("email", "unknown")
 
         # Map roles based on groups
         mapped_user["role"] = self._map_user_role(attributes.get("groups", []))
@@ -864,9 +804,7 @@ class SSOIntegrationFramework:
             return True
         return False
 
-    async def authenticate_ldap(
-        self, provider_id: str, username: str, password: str
-    ) -> Dict:
+    async def authenticate_ldap(self, provider_id: str, username: str, password: str) -> Dict:
         """Authenticate user against LDAP provider"""
         if provider_id not in self.providers:
             return {"error": "Provider not found"}
@@ -931,29 +869,21 @@ class SSOIntegrationFramework:
     def _update_provider_statistics(self):
         """Update provider statistics"""
         self.stats["total_providers"] = len(self.providers)
-        self.stats["active_providers"] = len(
-            [p for p in self.providers.values() if p.enabled]
-        )
+        self.stats["active_providers"] = len([p for p in self.providers.values() if p.enabled])
 
     def get_statistics(self) -> Dict:
         """Get SSO integration statistics"""
         return {
             **self.stats,
             "providers_by_protocol": {
-                protocol.value: len(
-                    [p for p in self.providers.values() if p.protocol == protocol]
-                )
+                protocol.value: len([p for p in self.providers.values() if p.protocol == protocol])
                 for protocol in SSOProtocol
             },
             "session_statistics": {
                 "total_active": len(self.active_sessions),
                 "average_session_age_minutes": self._calculate_average_session_age(),
                 "sessions_expiring_soon": len(
-                    [
-                        s
-                        for s in self.active_sessions.values()
-                        if s.expires_at - now_utc() < timedelta(hours=1)
-                    ]
+                    [s for s in self.active_sessions.values() if s.expires_at - now_utc() < timedelta(hours=1)]
                 ),
             },
         }
@@ -964,8 +894,7 @@ class SSOIntegrationFramework:
             return 0.0
 
         total_age = sum(
-            (now_utc() - session.created_at).total_seconds() / 60
-            for session in self.active_sessions.values()
+            (now_utc() - session.created_at).total_seconds() / 60 for session in self.active_sessions.values()
         )
 
         return total_age / len(self.active_sessions)

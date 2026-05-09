@@ -13,8 +13,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.system_health import register_singleton_probe
-
 from api.schemas_agent import (
     LLMAnalyzeQueryResponse,
     LLMAwarenessHealthResponse,
@@ -29,6 +27,7 @@ from api.schemas_agent import (
     PromptInjectionRequest,
     QueryAnalysisRequest,
 )
+from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_self_awareness import get_llm_self_awareness
 
@@ -72,9 +71,7 @@ async def get_awareness_status():
     error_code_prefix="LLM_AWARENESS",
 )
 async def get_system_context(
-    level: str = Query(
-        "basic", description="Context detail level: basic, detailed, full"
-    ),
+    level: str = Query("basic", description="Context detail level: basic, detailed, full"),
     format: str = Query("json", description="Response format: json, summary"),
 ):
     """Get comprehensive system context for LLM awareness"""
@@ -103,18 +100,12 @@ async def get_system_context(
                 "system_maturity": context["system_identity"]["system_maturity"],
                 "capabilities": {
                     "total": context["current_capabilities"]["count"],
-                    "categories": list(
-                        context["current_capabilities"]["categories"].keys()
-                    ),
+                    "categories": list(context["current_capabilities"]["categories"].keys()),
                     "recent_activities": len(context.get("recent_activities", [])),
                 },
                 "status": {
-                    "auto_progression": context["operational_status"][
-                        "auto_progression_enabled"
-                    ],
-                    "milestones_achieved": context["operational_status"][
-                        "milestones_achieved"
-                    ],
+                    "auto_progression": context["operational_status"]["auto_progression_enabled"],
+                    "milestones_achieved": context["operational_status"]["milestones_achieved"],
                 },
             }
             return {
@@ -198,9 +189,7 @@ async def inject_awareness_context(request: PromptInjectionRequest):
             )
 
         # Inject context
-        enhanced_prompt = await awareness.inject_awareness_context(
-            request.prompt, context_level=request.context_level
-        )
+        enhanced_prompt = await awareness.inject_awareness_context(request.prompt, context_level=request.context_level)
 
         return {
             "status": "success",
@@ -317,9 +306,7 @@ async def get_awareness_metrics():
                 "cache_ttl": awareness._cache_ttl,
             },
             "context_categories": len(context["current_capabilities"]["categories"]),
-            "api_endpoints": len(
-                context["contextual_information"]["api_endpoints_available"]
-            ),
+            "api_endpoints": len(context["contextual_information"]["api_endpoints_available"]),
         }
 
         return {
@@ -382,9 +369,7 @@ async def llm_awareness_health():
             "awareness_module_loaded": awareness is not None,
             "context_available": context is not None,
             "capabilities_loaded": len(context["current_capabilities"]["active"]) > 0,
-            "phase_info_available": (
-                "current_phase" in context.get("phase_information", {})
-            ),
+            "phase_info_available": ("current_phase" in context.get("phase_information", {})),
             "cache_functional": awareness._context_cache is not None,
         }
 

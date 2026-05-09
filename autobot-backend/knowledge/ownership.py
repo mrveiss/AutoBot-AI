@@ -88,35 +88,25 @@ class KnowledgeOwnership:
         Writes all Redis index entries for a newly owned fact.
         """
         # Add to owner's facts index
-        await asyncio.to_thread(
-            self.redis_client.sadd, f"user:kb:facts:{owner_id}", fact_id
-        )
+        await asyncio.to_thread(self.redis_client.sadd, f"user:kb:facts:{owner_id}", fact_id)
 
         # Add to chat_knowledge category if source is chat
         if source_type == SourceType.CHAT:
-            await asyncio.to_thread(
-                self.redis_client.sadd, "kb:category:chat_knowledge", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.sadd, "kb:category:chat_knowledge", fact_id)
 
         # Add to organization index
         if organization_id:
-            await asyncio.to_thread(
-                self.redis_client.sadd, f"org:kb:facts:{organization_id}", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.sadd, f"org:kb:facts:{organization_id}", fact_id)
 
         # Add to group indexes
         if visibility == VisibilityLevel.GROUP and group_ids:
             for group_id in group_ids:
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id)
 
         # Add to shared users' indexes
         if visibility == VisibilityLevel.SHARED and shared_with:
             for user_id in shared_with:
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id)
 
         # Add to system-wide index
         if visibility == VisibilityLevel.SYSTEM:
@@ -213,11 +203,7 @@ class KnowledgeOwnership:
             return is_authenticated
 
         # Organization-level facts accessible to org members
-        if (
-            visibility == VisibilityLevel.ORGANIZATION
-            and user_org_id
-            and fact_org_id == user_org_id
-        ):
+        if visibility == VisibilityLevel.ORGANIZATION and user_org_id and fact_org_id == user_org_id:
             return True
 
         # Group-level facts accessible to group members
@@ -283,9 +269,7 @@ class KnowledgeOwnership:
             is_authenticated,
         )
 
-    async def _share_with_users(
-        self, fact_id: str, user_ids: List[str], shared_with: set
-    ) -> List[str]:
+    async def _share_with_users(self, fact_id: str, user_ids: List[str], shared_with: set) -> List[str]:
         """Helper for share_fact. Ref: #1088.
 
         Adds user_ids to the shared set and updates Redis indexes.
@@ -296,14 +280,10 @@ class KnowledgeOwnership:
             if user_id not in shared_with:
                 shared_with.add(user_id)
                 new_users.append(user_id)
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id)
         return new_users
 
-    async def _share_with_groups(
-        self, fact_id: str, group_ids: List[str], fact_group_ids: set
-    ) -> List[str]:
+    async def _share_with_groups(self, fact_id: str, group_ids: List[str], fact_group_ids: set) -> List[str]:
         """Helper for share_fact. Ref: #1088.
 
         Adds group_ids to the group set and updates Redis indexes.
@@ -314,9 +294,7 @@ class KnowledgeOwnership:
             if group_id not in fact_group_ids:
                 fact_group_ids.add(group_id)
                 new_groups.append(group_id)
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id)
         return new_groups
 
     async def share_fact(
@@ -372,9 +350,7 @@ class KnowledgeOwnership:
 
         return fact_metadata
 
-    async def _unshare_from_users(
-        self, fact_id: str, user_ids: List[str], shared_with: set
-    ) -> List[str]:
+    async def _unshare_from_users(self, fact_id: str, user_ids: List[str], shared_with: set) -> List[str]:
         """Helper for unshare_fact. Ref: #1088.
 
         Removes user_ids from the shared set and updates Redis indexes.
@@ -385,14 +361,10 @@ class KnowledgeOwnership:
             if user_id in shared_with:
                 shared_with.remove(user_id)
                 removed_users.append(user_id)
-                await asyncio.to_thread(
-                    self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id)
         return removed_users
 
-    async def _unshare_from_groups(
-        self, fact_id: str, group_ids: List[str], fact_group_ids: set
-    ) -> List[str]:
+    async def _unshare_from_groups(self, fact_id: str, group_ids: List[str], fact_group_ids: set) -> List[str]:
         """Helper for unshare_fact. Ref: #1088.
 
         Removes group_ids from the group set and updates Redis indexes.
@@ -403,9 +375,7 @@ class KnowledgeOwnership:
             if group_id in fact_group_ids:
                 fact_group_ids.remove(group_id)
                 removed_groups.append(group_id)
-                await asyncio.to_thread(
-                    self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id
-                )
+                await asyncio.to_thread(self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id)
         return removed_groups
 
     async def unshare_fact(
@@ -438,9 +408,7 @@ class KnowledgeOwnership:
         fact_group_ids = set(fact_metadata.get("group_ids", []))
 
         removed_users = await self._unshare_from_users(fact_id, user_ids, shared_with)
-        removed_groups = await self._unshare_from_groups(
-            fact_id, group_ids, fact_group_ids
-        )
+        removed_groups = await self._unshare_from_groups(fact_id, group_ids, fact_group_ids)
 
         # Update metadata
         fact_metadata["shared_with"] = list(shared_with)
@@ -465,9 +433,7 @@ class KnowledgeOwnership:
 
         return fact_metadata
 
-    async def get_user_facts(
-        self, user_id: str, limit: Optional[int] = None, offset: int = 0
-    ) -> List[str]:
+    async def get_user_facts(self, user_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
         """Get all fact IDs owned by a user.
 
         Args:
@@ -478,15 +444,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, f"user:kb:facts:{user_id}"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, f"user:kb:facts:{user_id}")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -499,9 +460,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_shared_facts(
-        self, user_id: str, limit: Optional[int] = None, offset: int = 0
-    ) -> List[str]:
+    async def get_shared_facts(self, user_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
         """Get all fact IDs shared with a user.
 
         Args:
@@ -512,15 +471,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, f"user:kb:shared:{user_id}"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, f"user:kb:shared:{user_id}")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -533,9 +487,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_chat_knowledge_facts(
-        self, limit: Optional[int] = None, offset: int = 0
-    ) -> List[str]:
+    async def get_chat_knowledge_facts(self, limit: Optional[int] = None, offset: int = 0) -> List[str]:
         """Get all chat-derived fact IDs.
 
         Args:
@@ -545,15 +497,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, "kb:category:chat_knowledge"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, "kb:category:chat_knowledge")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -581,15 +528,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, f"org:kb:facts:{organization_id}"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, f"org:kb:facts:{organization_id}")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -602,9 +544,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_group_facts(
-        self, group_id: str, limit: Optional[int] = None, offset: int = 0
-    ) -> List[str]:
+    async def get_group_facts(self, group_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
         """Get all fact IDs for a group/team.
 
         Issue #679: Group-level knowledge access.
@@ -617,15 +557,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, f"group:kb:facts:{group_id}"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, f"group:kb:facts:{group_id}")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -638,9 +573,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_system_facts(
-        self, limit: Optional[int] = None, offset: int = 0
-    ) -> List[str]:
+    async def get_system_facts(self, limit: Optional[int] = None, offset: int = 0) -> List[str]:
         """Get all system-wide fact IDs.
 
         Issue #679: System-level knowledge access.
@@ -652,15 +585,10 @@ class KnowledgeOwnership:
         Returns:
             List of fact IDs
         """
-        fact_ids = await asyncio.to_thread(
-            self.redis_client.smembers, "kb:system:facts"
-        )
+        fact_ids = await asyncio.to_thread(self.redis_client.smembers, "kb:system:facts")
 
         # Decode bytes to strings
-        fact_ids = [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in (fact_ids or [])
-        ]
+        fact_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in (fact_ids or [])]
 
         # Sort for consistent pagination
         fact_ids = sorted(fact_ids)
@@ -715,9 +643,7 @@ class KnowledgeOwnership:
                         metadata_str = metadata_str.decode("utf-8")
                     metadata = json.loads(metadata_str)
 
-                    if await self.check_access(
-                        fact_id, user_id, metadata, user_org_id, user_group_ids
-                    ):
+                    if await self.check_access(fact_id, user_id, metadata, user_org_id, user_group_ids):
                         accessible.add(fact_id)
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     # If metadata is malformed, skip this fact
@@ -801,33 +727,23 @@ class KnowledgeOwnership:
 
         # Remove from owner's index
         if owner_id:
-            await asyncio.to_thread(
-                self.redis_client.srem, f"user:kb:facts:{owner_id}", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.srem, f"user:kb:facts:{owner_id}", fact_id)
 
         # Remove from chat_knowledge category
         if source_type == SourceType.CHAT:
-            await asyncio.to_thread(
-                self.redis_client.srem, "kb:category:chat_knowledge", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.srem, "kb:category:chat_knowledge", fact_id)
 
         # Remove from organization index
         if organization_id:
-            await asyncio.to_thread(
-                self.redis_client.srem, f"org:kb:facts:{organization_id}", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.srem, f"org:kb:facts:{organization_id}", fact_id)
 
         # Remove from group indexes
         for group_id in group_ids:
-            await asyncio.to_thread(
-                self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id)
 
         # Remove from all shared users' indexes
         for user_id in shared_with:
-            await asyncio.to_thread(
-                self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id
-            )
+            await asyncio.to_thread(self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id)
 
         # Remove from system index
         if visibility == VisibilityLevel.SYSTEM:

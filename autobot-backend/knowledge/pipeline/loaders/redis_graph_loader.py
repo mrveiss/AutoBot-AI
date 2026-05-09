@@ -49,9 +49,7 @@ class RedisGraphLoader(BaseLoader):
         Args:
             context: Pipeline context with entities, relationships, events
         """
-        self.redis_client = get_redis_client(
-            async_client=True, database=self.database
-        )
+        self.redis_client = get_redis_client(async_client=True, database=self.database)
         # Wire PropertyGraph to the same Redis connection (no extra pool entry)
         self._property_graph._redis = self.redis_client
 
@@ -162,9 +160,7 @@ class RedisGraphLoader(BaseLoader):
 
                 if event.timestamp:
                     score = event.timestamp.timestamp()
-                    await self.redis_client.zadd(
-                        "timeline:global", {str(event.id): score}
-                    )
+                    await self.redis_client.zadd("timeline:global", {str(event.id): score})
 
                 for participant_id in event.participants:
                     participant_key = f"entity:{participant_id}:events"

@@ -127,9 +127,7 @@ class {name}:
             PatternType.VALIDATION_LOGIC: self._handle_validation,
         }
 
-    def generate_suggestions(
-        self, patterns: List[CodePattern]
-    ) -> List[RefactoringSuggestion]:
+    def generate_suggestions(self, patterns: List[CodePattern]) -> List[RefactoringSuggestion]:
         """Generate refactoring suggestions from detected patterns.
 
         Args:
@@ -150,9 +148,7 @@ class {name}:
         # Sort by priority (severity + estimated impact)
         return self._prioritize_suggestions(suggestions)
 
-    def generate_from_duplicates(
-        self, duplicates: List[DuplicatePattern]
-    ) -> List[RefactoringSuggestion]:
+    def generate_from_duplicates(self, duplicates: List[DuplicatePattern]) -> List[RefactoringSuggestion]:
         """Generate suggestions specifically for duplicate patterns.
 
         Args:
@@ -168,9 +164,7 @@ class {name}:
                 suggestions.append(suggestion)
         return self._prioritize_suggestions(suggestions)
 
-    def generate_from_hotspots(
-        self, hotspots: List[ComplexityHotspot]
-    ) -> List[RefactoringSuggestion]:
+    def generate_from_hotspots(self, hotspots: List[ComplexityHotspot]) -> List[RefactoringSuggestion]:
         """Generate suggestions specifically for complexity hotspots.
 
         Args:
@@ -186,9 +180,7 @@ class {name}:
                 suggestions.append(suggestion)
         return self._prioritize_suggestions(suggestions)
 
-    def _handle_duplicate(
-        self, pattern: DuplicatePattern
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_duplicate(self, pattern: DuplicatePattern) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for duplicate code.
 
         Args:
@@ -210,15 +202,11 @@ class {name}:
             suggested_name = self._suggest_decorator_name(pattern)
 
         # Generate code template
-        code_template = self._generate_extraction_template(
-            pattern, refactoring_type, suggested_name
-        )
+        code_template = self._generate_extraction_template(pattern, refactoring_type, suggested_name)
 
         # Calculate effort
         files_affected = len(set(loc.file_path for loc in pattern.locations))
-        effort = self._estimate_effort(
-            pattern.total_lines, files_affected, pattern.occurrence_count
-        )
+        effort = self._estimate_effort(pattern.total_lines, files_affected, pattern.occurrence_count)
 
         # Generate benefits list
         benefits = [
@@ -244,9 +232,7 @@ class {name}:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
-    def _handle_regex(
-        self, pattern: RegexOpportunity
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_regex(self, pattern: RegexOpportunity) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for regex optimization.
 
         Args:
@@ -321,9 +307,7 @@ def optimized_transform(text: str) -> str:
                 self._generate_extraction_template_for_complexity(pattern),
             )
 
-    def _handle_complexity(
-        self, pattern: ComplexityHotspot
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_complexity(self, pattern: ComplexityHotspot) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for complexity hotspot.
 
         Args:
@@ -368,9 +352,7 @@ def optimized_transform(text: str) -> str:
             requires_changes_in=[location.file_path],
         )
 
-    def _handle_modularization(
-        self, pattern: ModularizationSuggestion
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_modularization(self, pattern: ModularizationSuggestion) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for modularization.
 
         Args:
@@ -412,9 +394,7 @@ class {pattern.pattern_name.replace(' ', '')}Handler:
             requires_changes_in=pattern.repeated_in_files,
         )
 
-    def _handle_error_handling(
-        self, pattern: CodePattern
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_error_handling(self, pattern: CodePattern) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for error handling patterns.
 
         Args:
@@ -465,9 +445,7 @@ class ErrorHandler:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
-    def _handle_validation(
-        self, pattern: CodePattern
-    ) -> Optional[RefactoringSuggestion]:
+    def _handle_validation(self, pattern: CodePattern) -> Optional[RefactoringSuggestion]:
         """Generate suggestion for validation logic.
 
         Args:
@@ -576,9 +554,7 @@ class ValidatedInput(BaseModel):
 
         return any(indicator in code for indicator in decorator_indicators)
 
-    def _generate_extraction_template(
-        self, pattern: DuplicatePattern, refactoring_type: str, name: str
-    ) -> str:
+    def _generate_extraction_template(self, pattern: DuplicatePattern, refactoring_type: str, name: str) -> str:
         """Generate code template for extraction.
 
         Args:
@@ -700,9 +676,7 @@ class StrategySelector:
         raise ValueError(f"Unknown condition: {{condition}}")
 '''
 
-    def _generate_extraction_template_for_complexity(
-        self, pattern: ComplexityHotspot
-    ) -> str:
+    def _generate_extraction_template_for_complexity(self, pattern: ComplexityHotspot) -> str:
         """Generate template for extracting methods from complex function.
 
         Args:
@@ -711,9 +685,7 @@ class StrategySelector:
         Returns:
             Code template string
         """
-        func_name = (
-            pattern.locations[0].function_name if pattern.locations else "complex_func"
-        )
+        func_name = pattern.locations[0].function_name if pattern.locations else "complex_func"
         return f'''
 # Refactored {func_name}
 # Original CC: {pattern.cyclomatic_complexity}
@@ -741,9 +713,7 @@ def {func_name}_refactored(*args, **kwargs):
     return result
 '''
 
-    def _estimate_effort(
-        self, total_lines: int, files_affected: int, occurrences: int
-    ) -> str:
+    def _estimate_effort(self, total_lines: int, files_affected: int, occurrences: int) -> str:
         """Estimate refactoring effort.
 
         Args:
@@ -780,9 +750,7 @@ def {func_name}_refactored(*args, **kwargs):
             return "High"
         return "Very High"
 
-    def _prioritize_suggestions(
-        self, suggestions: List[RefactoringSuggestion]
-    ) -> List[RefactoringSuggestion]:
+    def _prioritize_suggestions(self, suggestions: List[RefactoringSuggestion]) -> List[RefactoringSuggestion]:
         """Sort suggestions by priority.
 
         Args:
@@ -807,9 +775,7 @@ def {func_name}_refactored(*args, **kwargs):
 
         return sorted(suggestions, key=priority_score, reverse=True)
 
-    def generate_report(
-        self, suggestions: List[RefactoringSuggestion]
-    ) -> Dict[str, Any]:
+    def generate_report(self, suggestions: List[RefactoringSuggestion]) -> Dict[str, Any]:
         """Generate summary report of refactoring suggestions.
 
         Args:

@@ -44,9 +44,7 @@ class AgentTerminalSession:
     pending_approval: Optional[Metadata] = None
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: Optional[str] = None  # PTY session for terminal display
-    running_command_task: Optional[asyncio.Task] = (
-        None  # Track running command for cancellation
-    )
+    running_command_task: Optional[asyncio.Task] = None  # Track running command for cancellation
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -119,9 +117,7 @@ class AgentTerminalSession:
             "state": self.state.value,
         }
 
-    def get_permission_denied_response(
-        self, permission_reason: str, command: str, risk_value: str
-    ) -> Metadata:
+    def get_permission_denied_response(self, permission_reason: str, command: str, risk_value: str) -> Metadata:
         """Build permission denied error response (Issue #372)."""
         return {
             "status": "error",
@@ -204,10 +200,7 @@ class AgentTerminalSession:
 
     def has_running_task(self) -> bool:
         """Check if session has a running command task (Issue #372)."""
-        return (
-            self.running_command_task is not None
-            and not self.running_command_task.done()
-        )
+        return self.running_command_task is not None and not self.running_command_task.done()
 
     async def cancel_running_task(self) -> bool:
         """Cancel the running command task if present (Issue #372)."""

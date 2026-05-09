@@ -139,13 +139,9 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
 async def get_fact_relations(
     req: Request,
     fact_id: str,
-    direction: str = Query(
-        "both", description="Direction: 'outgoing', 'incoming', or 'both'"
-    ),
+    direction: str = Query("both", description="Direction: 'outgoing', 'incoming', or 'both'"),
     relation_type: Optional[str] = Query(None, description="Filter by relation type"),
-    include_details: bool = Query(
-        False, description="Include full fact content for related facts"
-    ),
+    include_details: bool = Query(False, description="Include full fact content for related facts"),
 ):
     """
     Get all relations for a specific fact.

@@ -112,6 +112,7 @@ async def test_get_metrics_empty(skill_metrics):
 @pytest.mark.asyncio
 async def test_get_metrics_with_data(skill_metrics):
     """Test getting metrics with invocation data."""
+
     # Setup mock to return invocation counts for single day
     def mock_get(key):
         key_str = key.decode() if isinstance(key, bytes) else str(key)
@@ -147,6 +148,7 @@ async def test_health_score_untested(skill_metrics):
 @pytest.mark.asyncio
 async def test_health_score_healthy(skill_metrics):
     """Test health score for healthy skill."""
+
     # Setup mock metrics
     def mock_get(key):
         key_str = key.decode() if isinstance(key, bytes) else str(key)
@@ -169,6 +171,7 @@ async def test_health_score_healthy(skill_metrics):
 @pytest.mark.asyncio
 async def test_health_score_degraded(skill_metrics):
     """Test health score for degraded skill."""
+
     def mock_get(key):
         key_str = key.decode() if isinstance(key, bytes) else str(key)
         if "total" in key_str:
@@ -248,27 +251,33 @@ async def test_get_feedback_summary_empty(feedback_analyzer):
 async def test_get_feedback_summary_with_ratings(feedback_analyzer):
     """Test getting feedback summary with ratings."""
     feedback_entries = [
-        json.dumps({
-            "timestamp": "2025-04-13T00:00:00",
-            "skill_id": "test-skill",
-            "action": "test",
-            "rating": 5,
-            "feedback": "",
-        }).encode(),
-        json.dumps({
-            "timestamp": "2025-04-13T00:01:00",
-            "skill_id": "test-skill",
-            "action": "test",
-            "rating": 4,
-            "feedback": "",
-        }).encode(),
-        json.dumps({
-            "timestamp": "2025-04-13T00:02:00",
-            "skill_id": "test-skill",
-            "action": "test",
-            "rating": 5,
-            "feedback": "",
-        }).encode(),
+        json.dumps(
+            {
+                "timestamp": "2025-04-13T00:00:00",
+                "skill_id": "test-skill",
+                "action": "test",
+                "rating": 5,
+                "feedback": "",
+            }
+        ).encode(),
+        json.dumps(
+            {
+                "timestamp": "2025-04-13T00:01:00",
+                "skill_id": "test-skill",
+                "action": "test",
+                "rating": 4,
+                "feedback": "",
+            }
+        ).encode(),
+        json.dumps(
+            {
+                "timestamp": "2025-04-13T00:02:00",
+                "skill_id": "test-skill",
+                "action": "test",
+                "rating": 5,
+                "feedback": "",
+            }
+        ).encode(),
     ]
 
     # Mock to always return the entries for any lrange call
@@ -356,9 +365,7 @@ async def test_health_scheduler_auto_disable():
 
     with patch("services.skill_management.skill_health_scheduler.get_skill_registry") as mock_registry:
         mock_skill_registry = MagicMock()
-        mock_skill_registry.list_skills = MagicMock(
-            return_value=[{"name": "bad-skill"}]
-        )
+        mock_skill_registry.list_skills = MagicMock(return_value=[{"name": "bad-skill"}])
         mock_skill_registry.disable_skill = MagicMock(return_value={"success": True})
         mock_registry.return_value = mock_skill_registry
 

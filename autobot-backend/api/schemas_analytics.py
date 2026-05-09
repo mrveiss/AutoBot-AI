@@ -29,13 +29,13 @@ DFASeverity = Severity
 # Analytics schemas
 # ---------------------------------------------------------------------------
 
+
 class MetricsWorkflowResponse(BaseModel):
     """Response for GET /workflow/{workflow_id}."""
 
     success: bool
     workflow_id: str
     metrics: Optional[Any] = None
-
 
 
 class MetricsPerformanceSummaryResponse(BaseModel):
@@ -45,13 +45,11 @@ class MetricsPerformanceSummaryResponse(BaseModel):
     performance_summary: Optional[Any] = None
 
 
-
 class MetricsSystemCurrentResponse(BaseModel):
     """Response for GET /system/current."""
 
     success: bool
     system_metrics: Optional[Any] = None
-
 
 
 class MetricsSystemHistoryResponse(BaseModel):
@@ -63,13 +61,11 @@ class MetricsSystemHistoryResponse(BaseModel):
     time_range: Dict[str, str]
 
 
-
 class MetricsSystemSummaryResponse(BaseModel):
     """Response for GET /system/summary."""
 
     success: bool
     resource_summary: Optional[Any] = None
-
 
 
 class MetricsExportResponse(BaseModel):
@@ -80,7 +76,6 @@ class MetricsExportResponse(BaseModel):
     data: Optional[Any] = None
 
 
-
 class MetricsMonitoringStartResponse(BaseModel):
     """Response for POST /system/monitoring/start."""
 
@@ -89,10 +84,8 @@ class MetricsMonitoringStartResponse(BaseModel):
     collection_interval: Optional[Any] = None
 
 
-
 class MetricsMonitoringStopResponse(SuccessMessageResponse):
     """Response for POST /system/monitoring/stop."""
-
 
 
 class MetricsDashboardResponse(BaseModel):
@@ -102,11 +95,9 @@ class MetricsDashboardResponse(BaseModel):
     dashboard: Dict[str, Any]
 
 
-
 # ---------------------------------------------------------------------------
 # logs.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
-
 
 
 class UsageSummaryPeriod(BaseModel):
@@ -115,12 +106,10 @@ class UsageSummaryPeriod(BaseModel):
     end: str
 
 
-
 class UsageSummaryTokens(BaseModel):
     input: int
     output: int
     total: int
-
 
 
 class UsageSummaryResponse(BaseModel):
@@ -135,7 +124,6 @@ class UsageSummaryResponse(BaseModel):
     active_users: int
 
 
-
 class UsageByUserAllResponse(BaseModel):
     """Response for GET /usage/by-user."""
 
@@ -144,14 +132,12 @@ class UsageByUserAllResponse(BaseModel):
     total_users: int
 
 
-
 class AnalyticsTrackEventResponse(BaseModel):
     """Response for POST /events/track."""
 
     status: str
     event_id: str
     broadcast_count: int
-
 
 
 class AnalyticsCollectionStartResponse(BaseModel):
@@ -163,7 +149,6 @@ class AnalyticsCollectionStartResponse(BaseModel):
     metrics_collection: bool
 
 
-
 class AnalyticsCollectionStopResponse(BaseModel):
     """Response for POST /collection/stop."""
 
@@ -172,13 +157,11 @@ class AnalyticsCollectionStopResponse(BaseModel):
     session_duration: str
 
 
-
 class AnalyticsDashboardAnalyzeResponse(BaseModel):
     """Response for POST /dashboard/overview/analyze."""
 
     task_id: str
     status: str
-
 
 
 class AnalyticsClearStuckTasksResponse(BaseModel):
@@ -193,7 +176,6 @@ class AnalyticsClearStuckTasksResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class CostModelEntry(BaseModel):
     model: str
     cost_usd: float
@@ -201,7 +183,6 @@ class CostModelEntry(BaseModel):
     output_tokens: int
     call_count: int
     avg_cost_per_call: float
-
 
 
 class CostByModelResponse(BaseModel):
@@ -212,11 +193,9 @@ class CostByModelResponse(BaseModel):
     total_models: int
 
 
-
 class CostForecastPeriod(BaseModel):
     start: str
     days: int
-
 
 
 class CostForecastBaseline(BaseModel):
@@ -225,11 +204,9 @@ class CostForecastBaseline(BaseModel):
     growth_rate_percent: float
 
 
-
 class CostForecastValues(BaseModel):
     total_estimated_usd: float
     daily_estimates: Dict[str, Any]
-
 
 
 class CostForecastResponse(BaseModel):
@@ -241,13 +218,11 @@ class CostForecastResponse(BaseModel):
     confidence: str
 
 
-
 class RecentUsageResponse(BaseModel):
     """Response for GET /cost/usage/recent."""
 
     count: int
     records: List[Any]
-
 
 
 class ModelPricingEntry(BaseModel):
@@ -258,7 +233,6 @@ class ModelPricingEntry(BaseModel):
     is_free: bool
 
 
-
 class ModelPricingResponse(BaseModel):
     """Response for GET /cost/pricing."""
 
@@ -266,7 +240,6 @@ class ModelPricingResponse(BaseModel):
     currency: str
     models: List[ModelPricingEntry]
     total_models: int
-
 
 
 class CostEstimateResponse(BaseModel):
@@ -279,13 +252,11 @@ class CostEstimateResponse(BaseModel):
     total_tokens: int
 
 
-
 class BudgetAlertCreateResponse(BaseModel):
     """Response for POST /cost/budget-alert."""
 
     status: str
     alert: Dict[str, Any]
-
 
 
 class BudgetAlertsListResponse(BaseModel):
@@ -295,14 +266,12 @@ class BudgetAlertsListResponse(BaseModel):
     count: int
 
 
-
 class BudgetStatusResponse(BaseModel):
     """Response for GET /cost/budget-status."""
 
     timestamp: str
     current_costs: Dict[str, Any]
     budget_statuses: List[Any]
-
 
 
 class AllAgentCostsResponse(BaseModel):
@@ -316,7 +285,6 @@ class AllAgentCostsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_architecture.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class AnalyticsArchitecturePatternsResponse(BaseModel):
@@ -371,7 +339,6 @@ class AnalyticsArchitectureHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class BugPredictionAnalyzeResponse(BaseModel):
     """Response for POST /bug-prediction/analyze."""
 
@@ -414,7 +381,6 @@ class BugPredictionRecordBugResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_code.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class AnalyticsCodeIndexResponse(BaseModel):
@@ -482,7 +448,6 @@ class AnalyticsCodeQualityScoreResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_continuous_learning.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class ContinuousLearningStartStopResponse(BaseModel):
@@ -553,7 +518,6 @@ class ContinuousLearningHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_maintenance.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class MaintenanceRecommendationsResponse(BaseModel):
@@ -658,7 +622,6 @@ class MaintenanceTrendsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class PatternLearningFeedbackResponse(BaseModel):
     """Response for POST /pattern-learning/feedback.
 
@@ -721,7 +684,6 @@ class PatternLearningHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # analytics_performance.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class PerformanceAnalyzeContentResponse(BaseModel):
@@ -802,7 +764,6 @@ class PerformanceHotspotsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class ExportFormatsResponse(BaseModel):
     """Response for GET /export/formats."""
 
@@ -812,7 +773,6 @@ class ExportFormatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # usage.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class UsageByUserSingleResponse(BaseModel):
@@ -838,7 +798,6 @@ class UsageMyUsageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class CostTrackingRecordResponse(BaseModel):
     """Per-request cost tracking record returned by cost analytics endpoints (#5936).
 
@@ -862,7 +821,6 @@ class CostTrackingRecordResponse(BaseModel):
     metadata: Dict[str, Any] = {}
 
 
-
 class UsageRecentResponse(BaseModel):
     """Response for GET /cost/usage/recent — typed wrapper around CostTrackingRecordResponse (#5976)."""
 
@@ -875,14 +833,12 @@ class UsageRecentResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AgentAllPerformanceResponse(BaseModel):
     """Response for GET /agents/performance."""
 
     agents: List[Any]
     total_agents: int
     summary: Dict[str, Any]
-
 
 
 class AgentHistoryResponse(BaseModel):
@@ -893,7 +849,6 @@ class AgentHistoryResponse(BaseModel):
     count: int
 
 
-
 class AgentRecentTasksResponse(BaseModel):
     """Response for GET /agents/tasks/recent."""
 
@@ -901,12 +856,10 @@ class AgentRecentTasksResponse(BaseModel):
     count: int
 
 
-
 class AgentComparisonResponse(BaseModel):
     """Response for GET /agents/comparison — opaque analytics.compare_agents() result."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AgentRecommendationsResponse(BaseModel):
@@ -917,12 +870,10 @@ class AgentRecommendationsResponse(BaseModel):
     agents_with_issues: int
 
 
-
 class AgentPerformanceTrendsResponse(BaseModel):
     """Response for GET /agents/trends — opaque analytics.get_performance_trends() result."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AgentTypesResponse(BaseModel):
@@ -932,13 +883,11 @@ class AgentTypesResponse(BaseModel):
     statuses: List[str]
 
 
-
 class AgentTaskStartResponse(BaseModel):
     """Response for POST /agents/tasks/start."""
 
     status: str
     task: Dict[str, Any]
-
 
 
 class AgentTaskCompleteResponse(BaseModel):
@@ -957,12 +906,10 @@ class AgentTaskCompleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class AnalyticsDetailedHealthResponse(BaseModel):
     """Response for GET /analytics/system/health-detailed — opaque composite."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AnalyticsPerformanceMetricsResponse(BaseModel):
@@ -971,12 +918,10 @@ class AnalyticsPerformanceMetricsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class AnalyticsCommunicationPatternsResponse(BaseModel):
     """Response for GET /analytics/communication/patterns — opaque controller result."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AnalyticsUsageStatisticsResponse(BaseModel):
@@ -985,12 +930,10 @@ class AnalyticsUsageStatisticsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class AnalyticsRealtimeMetricsResponse(BaseModel):
     """Response for GET /analytics/realtime/metrics — opaque metrics snapshot."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AnalyticsHistoricalTrendsResponse(BaseModel):
@@ -999,19 +942,16 @@ class AnalyticsHistoricalTrendsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class AnalyticsStatusResponse(BaseModel):
     """Response for GET /analytics/status — opaque status dict."""
 
     model_config = {"extra": "allow"}
 
 
-
 class AnalyticsRootCauseResponse(BaseModel):
     """Response for GET /analytics/root-cause/{task_id} — opaque RootCauseReport dict."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AnalyticsDashboardStatusResponse(BaseModel):
@@ -1025,7 +965,6 @@ class AnalyticsDashboardStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class BehaviorTrackEventResponse(BaseModel):
     """Response for POST /behavior/track."""
 
@@ -1035,13 +974,11 @@ class BehaviorTrackEventResponse(BaseModel):
     timestamp: str
 
 
-
 class BehaviorRecentEventsResponse(BaseModel):
     """Response for GET /behavior/events/recent."""
 
     count: int
     events: List[Any]
-
 
 
 class BehaviorFeatureMetricsResponse(BaseModel):
@@ -1050,12 +987,10 @@ class BehaviorFeatureMetricsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class BehaviorFeatureComparisonResponse(BaseModel):
     """Response for GET /behavior/features/comparison."""
 
     model_config = {"extra": "allow"}
-
 
 
 class BehaviorEngagementResponse(BaseModel):
@@ -1064,12 +999,10 @@ class BehaviorEngagementResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class BehaviorDailyStatsResponse(BaseModel):
     """Response for GET /behavior/stats/daily — opaque analytics result."""
 
     model_config = {"extra": "allow"}
-
 
 
 class BehaviorHeatmapResponse(BaseModel):
@@ -1078,12 +1011,10 @@ class BehaviorHeatmapResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class BehaviorPeakUsageResponse(BaseModel):
     """Response for GET /behavior/stats/peak."""
 
     model_config = {"extra": "allow"}
-
 
 
 class BehaviorSummaryResponse(BaseModel):
@@ -1097,19 +1028,16 @@ class BehaviorSummaryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class SingleAgentCostResponse(BaseModel):
     """Response for GET /cost/by-agent/{agent_id} — opaque tracker result + budget."""
 
     model_config = {"extra": "allow"}
 
 
-
 class AgentBudgetSetResponse(BaseModel):
     """Response for PUT /cost/by-agent/{agent_id}/budget — opaque tracker result."""
 
     model_config = {"extra": "allow"}
-
 
 
 class AgentBudgetStatusResponse(BaseModel):
@@ -1151,9 +1079,7 @@ class CodeAnalysisRequest(BaseModel):
     """Code analysis request model"""
 
     target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
-    analysis_type: str = Field(
-        default="full", description="full, incremental, or communication_chains"
-    )
+    analysis_type: str = Field(default="full", description="full, incremental, or communication_chains")
     include_metrics: bool = True
 
 
@@ -2836,6 +2762,7 @@ class UsageRecordRequest(BaseModel):
     ) -> Dict[str, Any]:
         """Convert to record dictionary for storage."""
         from datetime import datetime, timezone
+
         return {
             "prompt_hash": prompt_hash,
             "prompt_preview": prompt_preview,
@@ -2881,12 +2808,8 @@ class DateRangeParams:
 
     def __init__(
         self,
-        start_date: Annotated[
-            Optional[str], Query(description="Start date (YYYY-MM-DD)")
-        ] = None,
-        end_date: Annotated[
-            Optional[str], Query(description="End date (YYYY-MM-DD)")
-        ] = None,
+        start_date: Annotated[Optional[str], Query(description="Start date (YYYY-MM-DD)")] = None,
+        end_date: Annotated[Optional[str], Query(description="End date (YYYY-MM-DD)")] = None,
     ):
         self.start_date = start_date
         self.end_date = end_date
@@ -3223,6 +3146,7 @@ class EmbeddingUsageRequest(BaseModel):
     def to_usage_record(self, operation_id: str, cost: float) -> Dict[str, Any]:
         """Convert to usage record dict for storage."""
         from datetime import datetime, timezone
+
         return {
             "operation_id": operation_id,
             "operation_type": self.operation_type,
@@ -3245,10 +3169,7 @@ class EmbeddingUsageRequest(BaseModel):
         return 0
 
     def get_log_summary(self) -> str:
-        return (
-            f"{self.document_count} docs, {self.token_count} tokens, "
-            f"{self.processing_time:.3f}s"
-        )
+        return f"{self.document_count} docs, {self.token_count} tokens, " f"{self.processing_time:.3f}s"
 
 
 class EmbeddingStatsBody(BaseModel):
@@ -3315,9 +3236,7 @@ class DebtCalculationRequest(BaseModel):
 
     target_path: str = Field(default=".", description="Path to analyze")
     hourly_rate: float = Field(default=75.0, description="Developer hourly rate in USD")
-    include_categories: List[str] = Field(
-        default_factory=list, description="Categories to include (empty = all)"
-    )
+    include_categories: List[str] = Field(default_factory=list, description="Categories to include (empty = all)")
 
 
 class DebtSummary(BaseModel):

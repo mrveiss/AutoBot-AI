@@ -12,6 +12,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from api.schemas_agent import (
     PasswordChangedResponse,
     RoleAssignmentResponse,
@@ -22,7 +23,6 @@ from api.schemas_agent import (
     UserSearchResponse,
     UserSearchResult,
 )
-
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
@@ -66,9 +66,7 @@ logger = logging.getLogger(__name__)
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(
-        None, description="Search by email, username, or name"
-    ),
+    search: Optional[str] = Query(None, description="Search by email, username, or name"),
     include_inactive: bool = Query(False, description="Include inactive users"),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -113,9 +111,7 @@ async def search_users_for_sharing(
     config = get_deployment_config()
 
     if config.mode == DeploymentMode.SINGLE_USER:
-        logger.debug(
-            "search_users_for_sharing: single_user mode, returning unavailable"
-        )
+        logger.debug("search_users_for_sharing: single_user mode, returning unavailable")
         return UserSearchResponse(
             users=[],
             available=False,
@@ -123,9 +119,7 @@ async def search_users_for_sharing(
         )
 
     if not config.postgres_enabled:
-        logger.debug(
-            "search_users_for_sharing: postgres disabled, returning unavailable"
-        )
+        logger.debug("search_users_for_sharing: postgres disabled, returning unavailable")
         return UserSearchResponse(
             users=[],
             available=False,
@@ -163,9 +157,7 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
                 )
                 for user in users
             ]
-            logger.debug(
-                "search_users_for_sharing: found %d results for %r", len(results), q
-            )
+            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
             return UserSearchResponse(
                 users=results,
                 available=True,
@@ -277,8 +269,7 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=current_user.get("role") == "admin"
-        or current_user.get("is_platform_admin", False),
+        is_platform_admin=current_user.get("role") == "admin" or current_user.get("is_platform_admin", False),
         preferences={},
         roles=[],
         created_at=None,
@@ -570,6 +561,7 @@ async def set_user_role(
 ):
     """Set a user's system role by name, replacing previous system role assignments."""
     from sqlalchemy import delete, select
+
     from user_management.models.role import Role, UserRole
 
     user = await user_service.get_user(user_id)
@@ -581,9 +573,7 @@ async def set_user_role(
 
     # Resolve target role from system roles
     session = user_service.session
-    target_role_result = await session.execute(
-        select(Role).where(Role.name == body.role, Role.is_system.is_(True))
-    )
+    target_role_result = await session.execute(select(Role).where(Role.name == body.role, Role.is_system.is_(True)))
     target_role = target_role_result.scalar_one_or_none()
     if not target_role:
         raise HTTPException(
@@ -592,9 +582,7 @@ async def set_user_role(
         )
 
     # Remove all existing system role assignments for this user
-    system_role_ids_result = await session.execute(
-        select(Role.id).where(Role.is_system.is_(True))
-    )
+    system_role_ids_result = await session.execute(select(Role.id).where(Role.is_system.is_(True)))
     system_role_ids = [r for (r,) in system_role_ids_result.all()]
     if system_role_ids:
         await session.execute(

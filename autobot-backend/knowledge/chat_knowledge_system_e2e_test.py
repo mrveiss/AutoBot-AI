@@ -69,9 +69,7 @@ class ChatKnowledgeSystemTester:
             "keywords": ["python", "fastapi", "async", "testing"],
         }
 
-        async with self.session.post(
-            f"{BASE_URL}/api/chat-knowledge/context/create", json=context_data
-        ) as response:
+        async with self.session.post(f"{BASE_URL}/api/chat-knowledge/context/create", json=context_data) as response:
             if response.status == 200:
                 data = await response.json()
                 assert data["success"], "Context creation should succeed"
@@ -104,9 +102,7 @@ if __name__ == "__main__":
         try:
             with open(test_file_path, "rb") as f:
                 data = aiohttp.FormData()
-                data.add_field(
-                    "file", f, filename="test_code.py", content_type="text/plain"
-                )
+                data.add_field("file", f, filename="test_code.py", content_type="text/plain")
                 data.add_field("association_type", "upload")
 
                 async with self.session.post(
@@ -178,16 +174,12 @@ if __name__ == "__main__":
         logger.info("📋 Test 4: Knowledge Retrieval and Decisions")
 
         # Get pending knowledge items
-        async with self.session.get(
-            f"{BASE_URL}/api/chat-knowledge/knowledge/pending/{self.test_chat_id}"
-        ) as response:
+        async with self.session.get(f"{BASE_URL}/api/chat-knowledge/knowledge/pending/{self.test_chat_id}") as response:
             if response.status == 200:
                 data = await response.json()
                 if data["success"]:
                     pending_items = data["pending_items"]
-                    logger.info(
-                        f"✅ Retrieved {len(pending_items)} pending knowledge items"
-                    )
+                    logger.info(f"✅ Retrieved {len(pending_items)} pending knowledge items")
 
                     # Apply decisions to knowledge items
                     decisions = [
@@ -217,17 +209,13 @@ if __name__ == "__main__":
                                     else:
                                         logger.error(f"❌ Decision failed: {result}")
                                 else:
-                                    logger.error(
-                                        f"❌ Decision request failed: {decision_response.status}"
-                                    )
+                                    logger.error(f"❌ Decision request failed: {decision_response.status}")
 
                     if success_count == len(decisions):
                         logger.info("✅ All knowledge decisions applied successfully")
                         return True
                     else:
-                        logger.error(
-                            f"❌ Only {success_count}/{len(decisions)} decisions applied"
-                        )
+                        logger.error(f"❌ Only {success_count}/{len(decisions)} decisions applied")
                         return False
                 else:
                     logger.error(f"❌ Failed to get pending knowledge: {data}")
@@ -254,23 +242,17 @@ if __name__ == "__main__":
                 "include_temporary": True,
             }
 
-            async with self.session.post(
-                f"{BASE_URL}/api/chat-knowledge/search", json=search_data
-            ) as response:
+            async with self.session.post(f"{BASE_URL}/api/chat-knowledge/search", json=search_data) as response:
                 if response.status == 200:
                     data = await response.json()
                     if data["success"]:
                         results = data["results"]
-                        logger.info(
-                            f"✅ Search '{query}' returned {len(results)} results"
-                        )
+                        logger.info(f"✅ Search '{query}' returned {len(results)} results")
                         success_count += 1
 
                         # Log first result for verification
                         if results:
-                            logger.info(
-                                f"   Top result: {results[0]['content'][:100]}..."
-                            )
+                            logger.info(f"   Top result: {results[0]['content'][:100]}...")
                     else:
                         logger.error(f"❌ Search failed: {data}")
                 else:
@@ -280,9 +262,7 @@ if __name__ == "__main__":
             logger.info("✅ All search queries completed successfully")
             return True
         else:
-            logger.error(
-                f"❌ Only {success_count}/{len(search_queries)} searches succeeded"
-            )
+            logger.error(f"❌ Only {success_count}/{len(search_queries)} searches succeeded")
             return False
 
     async def test_chat_compilation(self):
@@ -317,9 +297,7 @@ if __name__ == "__main__":
             "include_system_messages": False,
         }
 
-        async with self.session.post(
-            f"{BASE_URL}/api/chat-knowledge/compile", json=compile_data
-        ) as response:
+        async with self.session.post(f"{BASE_URL}/api/chat-knowledge/compile", json=compile_data) as response:
             if response.status == 200:
                 data = await response.json()
                 if data["success"]:
@@ -340,9 +318,7 @@ if __name__ == "__main__":
         """Test 7: Retrieve complete chat context"""
         logger.info("📋 Test 7: Context Retrieval")
 
-        async with self.session.get(
-            f"{BASE_URL}/api/chat-knowledge/context/{self.test_chat_id}"
-        ) as response:
+        async with self.session.get(f"{BASE_URL}/api/chat-knowledge/context/{self.test_chat_id}") as response:
             if response.status == 200:
                 data = await response.json()
                 if data["success"]:
@@ -351,12 +327,8 @@ if __name__ == "__main__":
                     logger.info(f"   Topic: {context.get('topic', 'N/A')}")
                     logger.info(f"   Keywords: {context.get('keywords', [])}")
                     logger.info(f"   Files: {context.get('file_count', 0)}")
-                    logger.info(
-                        f"   Temporary Knowledge: {context.get('temporary_knowledge_count', 0)}"
-                    )
-                    logger.info(
-                        f"   Persistent Knowledge: {context.get('persistent_knowledge_count', 0)}"
-                    )
+                    logger.info(f"   Temporary Knowledge: {context.get('temporary_knowledge_count', 0)}")
+                    logger.info(f"   Persistent Knowledge: {context.get('persistent_knowledge_count', 0)}")
                     return True
                 else:
                     logger.error(f"❌ Context retrieval failed: {data}")
@@ -415,9 +387,7 @@ if __name__ == "__main__":
         logger.info(f"🎯 OVERALL RESULT: {passed}/{total} tests passed")
 
         if passed == total:
-            logger.info(
-                "🎉 ALL TESTS PASSED - Chat Knowledge Management System is fully functional!"
-            )
+            logger.info("🎉 ALL TESTS PASSED - Chat Knowledge Management System is fully functional!")
         else:
             logger.warning(f"⚠️ {total - passed} tests failed - System needs attention")
 

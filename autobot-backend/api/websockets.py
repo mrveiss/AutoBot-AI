@@ -252,9 +252,7 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
 }
 
 
-def _format_event_for_chat(
-    message_type: str, raw_data: dict
-) -> Tuple[Optional[str], str]:
+def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[Optional[str], str]:
     """Format event data for chat history (Issue #336 - extracted dispatch helper).
 
     Args:
@@ -319,9 +317,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
         )
 
 
-async def _add_to_chat_history(
-    chat_history_manager, message_type: str, raw_data: dict
-) -> None:
+async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data: dict) -> None:
     """Add message to chat history if conditions are met (Issue #315 - extracted).
 
     Args:
@@ -333,11 +329,7 @@ async def _add_to_chat_history(
 
     # Add to chat history if we have meaningful text and chat_history_manager is available
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
-    if (
-        text
-        and chat_history_manager
-        and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES
-    ):
+    if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
         try:
             await chat_history_manager.add_message(sender, text, message_type, raw_data)
         except Exception as e:
@@ -386,9 +378,7 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
     while True:
         # Check connection state before each operation
         if websocket.client_state != WebSocketState.CONNECTED:
-            logger.info(
-                f"WebSocket state changed to {websocket.client_state}, ending loop"
-            )
+            logger.info(f"WebSocket state changed to {websocket.client_state}, ending loop")
             break
 
         try:
@@ -396,9 +386,7 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
             message = await websocket.receive_text()
             # No timeout needed - WebSocketDisconnect will be raised on disconnect
         except WebSocketDisconnect as e:
-            logger.info(
-                f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'"
-            )
+            logger.info(f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'")
             break
         except Exception as e:
             logger.error("Error receiving message: %s", e)
@@ -465,9 +453,7 @@ async def websocket_test_endpoint(websocket: WebSocket):
     try:
         await websocket.accept()
         logger.info("Test WebSocket connected successfully")
-        await websocket.send_json(
-            {"type": "connected", "message": "Test connection successful"}
-        )
+        await websocket.send_json({"type": "connected", "message": "Test connection successful"})
 
         # ROOT CAUSE FIX: Replace timeout-based handling with event-driven pattern
         while websocket.client_state == WebSocketState.CONNECTED:
@@ -502,9 +488,7 @@ def _get_chat_history_manager(websocket: WebSocket):
     """
     try:
         if hasattr(websocket.scope.get("app"), "state"):
-            manager = getattr(
-                websocket.scope["app"].state, "chat_history_manager", None
-            )
+            manager = getattr(websocket.scope["app"].state, "chat_history_manager", None)
             if manager:
                 logger.info("Successfully accessed chat_history_manager from app.state")
             else:
@@ -590,9 +574,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Issue #665: Use helper for chat history manager access
     chat_history_manager = _get_chat_history_manager(websocket)
 
-    broadcast_event = await _create_broadcast_event_handler(
-        websocket, chat_history_manager
-    )
+    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager)
 
     # Issue #665: Use helper for event manager registration
     _register_event_manager_broadcast(broadcast_event)
@@ -865,20 +847,14 @@ def init_npu_worker_websocket():
             from event_manager import get_event_manager
 
             # Subscribe to all NPU worker events
-            get_event_manager().subscribe(
-                "npu.worker.status.changed", broadcast_npu_worker_event
-            )
+            get_event_manager().subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
             get_event_manager().subscribe("npu.worker.added", broadcast_npu_worker_event)
             get_event_manager().subscribe("npu.worker.updated", broadcast_npu_worker_event)
             get_event_manager().subscribe("npu.worker.removed", broadcast_npu_worker_event)
-            get_event_manager().subscribe(
-                "npu.worker.metrics.updated", broadcast_npu_worker_event
-            )
+            get_event_manager().subscribe("npu.worker.metrics.updated", broadcast_npu_worker_event)
 
             _npu_events_subscribed = True
             logger.info("NPU worker WebSocket event subscriptions initialized")
 
         except Exception as e:
-            logger.error(
-                "Failed to subscribe to NPU worker events: %s", e, exc_info=True
-            )
+            logger.error("Failed to subscribe to NPU worker events: %s", e, exc_info=True)

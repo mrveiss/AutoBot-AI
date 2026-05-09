@@ -81,16 +81,12 @@ class KnowledgeBaseAdapter:
                 results = await self.kb.search(query=query, top_k=top_k, **kwargs)
             else:
                 # V1 uses 'similarity_top_k' parameter
-                results = await self.kb.search(
-                    query=query, similarity_top_k=top_k, mode=mode, **kwargs
-                )
+                results = await self.kb.search(query=query, similarity_top_k=top_k, mode=mode, **kwargs)
 
             # Normalize result format if needed
             normalized_results = self._normalize_results(results)
 
-            logger.debug(
-                f"Search completed: {len(normalized_results)} results for '{query[:50]}...'"
-            )
+            logger.debug(f"Search completed: {len(normalized_results)} results for '{query[:50]}...'")
             return normalized_results
 
         except Exception as e:
@@ -163,9 +159,7 @@ class KnowledgeBaseAdapter:
             else:
                 # Handle other formats (objects, tuples, etc.)
                 logger.warning("Unexpected result type: %s", type(result))
-                normalized.append(
-                    {"content": str(result), "metadata": {}, "score": 0.0}
-                )
+                normalized.append({"content": str(result), "metadata": {}, "score": 0.0})
 
         return normalized
 

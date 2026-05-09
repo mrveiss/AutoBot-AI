@@ -49,15 +49,9 @@ class FactExtractionService:
         self.fact_index_key = "atomic_facts_index"
         self.extraction_history_key = "fact_extraction_history"
         self.batch_size = config_manager.get("fact_extraction.batch_size", 50)
-        self.enable_deduplication = config_manager.get(
-            "fact_extraction.enable_deduplication", True
-        )
-        self.enable_entity_resolution = config_manager.get(
-            "fact_extraction.enable_entity_resolution", True
-        )
-        self.enable_temporal_invalidation = config_manager.get(
-            "fact_extraction.enable_temporal_invalidation", True
-        )
+        self.enable_deduplication = config_manager.get("fact_extraction.enable_deduplication", True)
+        self.enable_entity_resolution = config_manager.get("fact_extraction.enable_entity_resolution", True)
+        self.enable_temporal_invalidation = config_manager.get("fact_extraction.enable_temporal_invalidation", True)
 
         logger.info("Fact Extraction Service initialized")
 
@@ -76,9 +70,7 @@ class FactExtractionService:
         """
         if self.enable_deduplication:
             original_count = len(extraction_result.facts)
-            extraction_result.facts = await self._deduplicate_facts(
-                extraction_result.facts
-            )
+            extraction_result.facts = await self._deduplicate_facts(extraction_result.facts)
             logger.info(
                 "Deduplication: %s -> %s facts",
                 original_count,
@@ -86,16 +78,10 @@ class FactExtractionService:
             )
 
         if self.enable_entity_resolution:
-            extraction_result.facts = await entity_resolver.resolve_facts_entities(
-                extraction_result.facts
-            )
-            logger.info(
-                "Entity resolution: %s facts processed", len(extraction_result.facts)
-            )
+            extraction_result.facts = await entity_resolver.resolve_facts_entities(extraction_result.facts)
+            logger.info("Entity resolution: %s facts processed", len(extraction_result.facts))
 
-    def _build_extraction_result(
-        self, extraction_result, storage_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_extraction_result(self, extraction_result, storage_results: Dict[str, Any]) -> Dict[str, Any]:
         """Build the final extraction result dictionary (Issue #398: extracted).
 
         Args:
@@ -180,9 +166,7 @@ class FactExtractionService:
             if self.enable_temporal_invalidation and extraction_result.facts:
                 await self._handle_temporal_invalidation(extraction_result.facts)
 
-            await self._record_extraction_history(
-                source, extraction_result, storage_results
-            )
+            await self._record_extraction_history(source, extraction_result, storage_results)
 
             logger.info(
                 "Completed fact extraction: %s facts stored",
@@ -219,9 +203,7 @@ class FactExtractionService:
             "facts_stored": storage_results["stored_count"],
             "storage_errors": storage_results["error_count"],
             "chunks_processed": chunks_count,
-            "successful_chunks": extraction_result.extraction_metadata.get(
-                "successful_chunks", 0
-            ),
+            "successful_chunks": extraction_result.extraction_metadata.get("successful_chunks", 0),
             "processing_time": extraction_result.processing_time,
             "average_confidence": extraction_result.average_confidence,
             "fact_distributions": {
@@ -247,14 +229,10 @@ class FactExtractionService:
             Processed extraction result
         """
         if self.enable_deduplication:
-            extraction_result.facts = await self._deduplicate_facts(
-                extraction_result.facts
-            )
+            extraction_result.facts = await self._deduplicate_facts(extraction_result.facts)
 
         if self.enable_entity_resolution:
-            extraction_result.facts = await entity_resolver.resolve_facts_entities(
-                extraction_result.facts
-            )
+            extraction_result.facts = await entity_resolver.resolve_facts_entities(extraction_result.facts)
 
         return extraction_result
 
@@ -275,9 +253,7 @@ class FactExtractionService:
             "message": "No facts found in chunks",
         }
 
-    def _build_chunks_error_response(
-        self, error_msg: str, chunks_count: int
-    ) -> Dict[str, Any]:
+    def _build_chunks_error_response(self, error_msg: str, chunks_count: int) -> Dict[str, Any]:
         """Build error response for chunk processing failure.
 
         Args:
@@ -317,9 +293,7 @@ class FactExtractionService:
         try:
             logger.info("Processing %s chunks for fact extraction", len(chunks))
 
-            extraction_result = await self.extraction_agent.extract_facts_from_chunks(
-                chunks=chunks, source=source
-            )
+            extraction_result = await self.extraction_agent.extract_facts_from_chunks(chunks=chunks, source=source)
 
             if not extraction_result.facts:
                 return self._build_empty_chunks_response(len(chunks))
@@ -327,24 +301,18 @@ class FactExtractionService:
             # Process and store facts (Issue #620: uses helpers)
             extraction_result = await self._process_extracted_facts(extraction_result)
             storage_results = await self._store_facts(extraction_result.facts, metadata)
-            await self._record_extraction_history(
-                source, extraction_result, storage_results
-            )
+            await self._record_extraction_history(source, extraction_result, storage_results)
 
             logger.info(
                 "Processed %s chunks, extracted %s facts",
                 len(chunks),
                 len(extraction_result.facts),
             )
-            return self._build_extraction_success_response(
-                extraction_result, storage_results, len(chunks)
-            )
+            return self._build_extraction_success_response(extraction_result, storage_results, len(chunks))
 
         except Exception as e:
             logger.error("Error processing chunks for fact extraction: %s", e)
-            return self._build_chunks_error_response(
-                "Chunk fact extraction failed", len(chunks)
-            )
+            return self._build_chunks_error_response("Chunk fact extraction failed", len(chunks))
 
     async def _deduplicate_facts(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """
@@ -383,9 +351,7 @@ class FactExtractionService:
             logger.error("Error in fact deduplication: %s", e)
             return facts  # Return original list if deduplication fails
 
-    def _prepare_fact_for_pipeline(
-        self, pipe, fact: AtomicFact, metadata: Optional[Dict[str, Any]]
-    ) -> bool:
+    def _prepare_fact_for_pipeline(self, pipe, fact: AtomicFact, metadata: Optional[Dict[str, Any]]) -> bool:
         """Prepare single fact for pipeline storage (Issue #315: extracted helper).
 
         Args:
@@ -455,9 +421,7 @@ class FactExtractionService:
             logger.error("Error executing batch storage: %s", e)
             return 0, len(batch)
 
-    async def _store_facts(
-        self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def _store_facts(self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Store facts in Redis and knowledge base.
 
@@ -478,27 +442,21 @@ class FactExtractionService:
         try:
             for i in range(0, len(facts), self.batch_size):
                 batch = facts[i : i + self.batch_size]
-                batch_stored, batch_errors = await self._process_fact_batch(
-                    batch, metadata
-                )
+                batch_stored, batch_errors = await self._process_fact_batch(batch, metadata)
                 stored_count += batch_stored
                 error_count += batch_errors
 
             if self.knowledge_base and hasattr(self.knowledge_base, "store_fact"):
                 await self._store_facts_in_kb(facts, metadata)
 
-            logger.info(
-                "Fact storage complete: %s stored, %s errors", stored_count, error_count
-            )
+            logger.info("Fact storage complete: %s stored, %s errors", stored_count, error_count)
         except Exception as e:
             logger.error("Error in fact storage: %s", e)
             error_count = len(facts)
 
         return {"stored_count": stored_count, "error_count": error_count}
 
-    async def _store_facts_in_kb(
-        self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None
-    ):
+    async def _store_facts_in_kb(self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None):
         """
         Store facts in the main knowledge base as structured content.
 
@@ -537,9 +495,7 @@ class FactExtractionService:
             }
 
             await self.knowledge_base.store_fact(content, kb_metadata)
-            logger.debug(
-                "Stored %s facts in knowledge base as structured content", len(facts)
-            )
+            logger.debug("Stored %s facts in knowledge base as structured content", len(facts))
 
         except Exception as e:
             logger.error("Error storing facts in knowledge base: %s", e)
@@ -579,9 +535,7 @@ class FactExtractionService:
             }
 
             # Store in extraction history list (keep last 1000 entries)
-            await self.redis_client.lpush(
-                self.extraction_history_key, json.dumps(history_entry)
-            )
+            await self.redis_client.lpush(self.extraction_history_key, json.dumps(history_entry))
             await self.redis_client.ltrim(self.extraction_history_key, 0, 999)
 
             logger.debug("Recorded extraction history for source: %s", source)
@@ -646,9 +600,7 @@ class FactExtractionService:
             # Get all facts
             return await self.redis_client.smembers(self.fact_index_key)
 
-    async def _batch_retrieve_facts(
-        self, fact_ids_list: List[str]
-    ) -> List[Optional[str]]:
+    async def _batch_retrieve_facts(self, fact_ids_list: List[str]) -> List[Optional[str]]:
         """
         Batch retrieve fact data from Redis.
 
@@ -729,9 +681,7 @@ class FactExtractionService:
         """
         facts = []
         for fact_id, fact_data in zip(fact_ids_list, fact_data_list):
-            fact = self._filter_and_deserialize_fact(
-                fact_id, fact_data, active_only, min_confidence
-            )
+            fact = self._filter_and_deserialize_fact(fact_id, fact_data, active_only, min_confidence)
             if fact:
                 facts.append(fact)
                 if len(facts) >= limit:
@@ -766,9 +716,7 @@ class FactExtractionService:
                 logger.warning("Redis client not available")
                 return []
 
-            candidate_keys = self._build_criteria_candidate_keys(
-                source, fact_type, temporal_type
-            )
+            candidate_keys = self._build_criteria_candidate_keys(source, fact_type, temporal_type)
             fact_ids = await self._get_fact_ids_from_criteria(candidate_keys)
 
             if not fact_ids:
@@ -777,9 +725,7 @@ class FactExtractionService:
             fact_ids_list = list(fact_ids)[: limit * 2]
             fact_data_list = await self._batch_retrieve_facts(fact_ids_list)
 
-            facts = self._collect_filtered_facts(
-                fact_ids_list, fact_data_list, active_only, min_confidence, limit
-            )
+            facts = self._collect_filtered_facts(fact_ids_list, fact_data_list, active_only, min_confidence, limit)
             logger.debug("Retrieved %s facts matching criteria", len(facts))
             return facts
 
@@ -807,16 +753,12 @@ class FactExtractionService:
         # Aggregate fact type distribution
         fact_dist = history.get("distributions", {}).get("fact_types", {})
         for fact_type, count in fact_dist.items():
-            totals["fact_types"][fact_type] = (
-                totals["fact_types"].get(fact_type, 0) + count
-            )
+            totals["fact_types"][fact_type] = totals["fact_types"].get(fact_type, 0) + count
 
         # Aggregate temporal type distribution
         temporal_dist = history.get("distributions", {}).get("temporal_types", {})
         for temporal_type, count in temporal_dist.items():
-            totals["temporal_types"][temporal_type] = (
-                totals["temporal_types"].get(temporal_type, 0) + count
-            )
+            totals["temporal_types"][temporal_type] = totals["temporal_types"].get(temporal_type, 0) + count
 
     def _build_statistics_response(
         self,
@@ -836,16 +778,10 @@ class FactExtractionService:
         Returns:
             Statistics response dictionary
         """
-        avg_processing_time = (
-            totals["processing_time"] / extraction_count if extraction_count > 0 else 0
-        )
-        avg_facts_per_extraction = (
-            totals["facts_extracted"] / extraction_count if extraction_count > 0 else 0
-        )
+        avg_processing_time = totals["processing_time"] / extraction_count if extraction_count > 0 else 0
+        avg_facts_per_extraction = totals["facts_extracted"] / extraction_count if extraction_count > 0 else 0
         success_rate = (
-            (totals["facts_stored"] / totals["facts_extracted"] * 100)
-            if totals["facts_extracted"] > 0
-            else 0
+            (totals["facts_stored"] / totals["facts_extracted"] * 100) if totals["facts_extracted"] > 0 else 0
         )
 
         return {
@@ -877,9 +813,7 @@ class FactExtractionService:
             total_facts = await self.redis_client.scard(self.fact_index_key)
 
             # Get recent extraction history
-            recent_history = await self.redis_client.lrange(
-                self.extraction_history_key, 0, 99
-            )
+            recent_history = await self.redis_client.lrange(self.extraction_history_key, 0, 99)
 
             # Initialize totals for aggregation
             totals = {
@@ -898,9 +832,7 @@ class FactExtractionService:
                 except json.JSONDecodeError:
                     continue
 
-            return self._build_statistics_response(
-                total_facts, totals, len(recent_history)
-            )
+            return self._build_statistics_response(total_facts, totals, len(recent_history))
 
         except Exception as e:
             logger.error("Error getting extraction statistics: %s", e)
@@ -926,16 +858,11 @@ class FactExtractionService:
                 try:
                     result = await temporal_service.invalidate_contradictory_facts(fact)
 
-                    if (
-                        result["status"] == "success"
-                        and result["facts_invalidated"] > 0
-                    ):
+                    if result["status"] == "success" and result["facts_invalidated"] > 0:
                         logger.info("contradictory facts for new fact %s", fact.fact_id)
 
                 except Exception as e:
-                    logger.error(
-                        "Error checking contradictions for fact %s: %s", fact.fact_id, e
-                    )
+                    logger.error("Error checking contradictions for fact %s: %s", fact.fact_id, e)
                     continue
 
         except Exception as e:

@@ -360,8 +360,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
         """Helper for _extract_usage_params. Ref: #1088."""
         if provider is None or model is None or input_tokens is None or output_tokens is None:
             raise ValueError(
-                "Either 'request' object or 'provider', 'model', "
-                "'input_tokens', 'output_tokens' are required"
+                "Either 'request' object or 'provider', 'model', " "'input_tokens', 'output_tokens' are required"
             )
         return (
             provider,
@@ -664,9 +663,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
         """Check if any budget alerts should be triggered"""
         # Implementation for budget alerts - can be extended
 
-    async def _fetch_daily_costs(
-        self, redis, start_date: datetime, end_date: datetime
-    ) -> Dict[str, float]:
+    async def _fetch_daily_costs(self, redis, start_date: datetime, end_date: datetime) -> Dict[str, float]:
         """
         Fetch daily costs from Redis using pipeline (Issue #665: extracted helper).
 
@@ -730,12 +727,9 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
             model_costs[model_name] = {
                 "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
-                "input_tokens": int(
-                    model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
-                "output_tokens": int(
-                    model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
-                "call_count": int(
-                    model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
+                "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
+                "output_tokens": int(model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
+                "call_count": int(model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
             }
 
         return model_costs
@@ -855,9 +849,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
             "period_days": days,
             "total_cost_usd": summary.get("total_cost_usd", 0),
             "daily_costs": daily_costs,
-            "trend": (
-                "increasing" if growth_rate > 5 else "decreasing" if growth_rate < -5 else "stable"
-            ),
+            "trend": ("increasing" if growth_rate > 5 else "decreasing" if growth_rate < -5 else "stable"),
             "growth_rate_percent": round(growth_rate, 2),
             "avg_daily_cost": summary.get("avg_daily_cost", 0),
         }
@@ -900,7 +892,8 @@ class LLMCostTracker(AsyncRedisClientMixin):
             redis = await self.get_redis()
             pattern = f"{self.AGENT_TOTALS_KEY}:*"
             agent_keys = [
-                k async for k in redis.scan_iter(pattern)
+                k
+                async for k in redis.scan_iter(pattern)
                 if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
             ]
 
@@ -922,10 +915,8 @@ class LLMCostTracker(AsyncRedisClientMixin):
                     {
                         "agent_id": agent_id,
                         "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
-                        "input_tokens": int(
-                            data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
-                        "output_tokens": int(
-                            data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
+                        "input_tokens": int(data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
+                        "output_tokens": int(data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
                         "call_count": int(data.get(b"call_count", 0) or data.get("call_count", 0)),
                     }
                 )
@@ -1087,7 +1078,8 @@ class LLMCostTracker(AsyncRedisClientMixin):
             pattern = f"{self.USER_TOTALS_KEY}:*"
             # Exclude daily sub-keys; use SCAN to avoid O(N) block on large keyspaces (#4443)
             user_keys = [
-                k async for k in redis.scan_iter(pattern)
+                k
+                async for k in redis.scan_iter(pattern)
                 if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
             ]
 
@@ -1116,8 +1108,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
                         "user_id": user_id,
                         "cost_usd": _float(data.get(b"cost_usd") or data.get("cost_usd")),
                         "input_tokens": _int(data.get(b"input_tokens") or data.get("input_tokens")),
-                        "output_tokens": _int(
-                            data.get(b"output_tokens") or data.get("output_tokens")),
+                        "output_tokens": _int(data.get(b"output_tokens") or data.get("output_tokens")),
                         "call_count": _int(data.get(b"call_count") or data.get("call_count")),
                     }
                 )

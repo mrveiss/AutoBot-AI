@@ -38,15 +38,6 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from .schemas_system import (
-    NPUPoolReloadResponse,
-    NPUPoolWorkersResponse,
-    NPUStatusResponse,
-    NPUWorkerHeartbeatResponse,
-    NPUWorkerPairResponse,
-    NPUWorkerRepairResponse,
-    NPUWorkerUnpairResponse,
-)
 from api.schemas_common import DataResponse, SuccessResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -63,6 +54,16 @@ from models.npu_models import (
 )
 from services.npu_worker_manager import get_worker_manager
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+
+from .schemas_system import (
+    NPUPoolReloadResponse,
+    NPUPoolWorkersResponse,
+    NPUStatusResponse,
+    NPUWorkerHeartbeatResponse,
+    NPUWorkerPairResponse,
+    NPUWorkerRepairResponse,
+    NPUWorkerUnpairResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +101,7 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
         raise_internal_error("Failed to retrieve workers")
 
 
-@router.post(
-    "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
-)
+@router.post("/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_worker",
@@ -308,9 +307,7 @@ async def test_worker(
         # Test connection using worker config
         test_result = await manager.test_worker_connection(worker.config)
 
-        logger.info(
-            f"Worker {worker_id} test: {'SUCCESS' if test_result.success else 'FAILED'}"
-        )
+        logger.info(f"Worker {worker_id} test: {'SUCCESS' if test_result.success else 'FAILED'}")
         return test_result
 
     except HTTPException:
@@ -320,9 +317,7 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@router.get(
-    "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
-)
+@router.get("/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
@@ -418,16 +413,12 @@ async def get_worker_log_level(
         raise_internal_error("Failed to get log level")
 
 
-async def _send_log_level_to_worker(
-    worker_url: str, level: str, worker_id: str
-) -> dict:
+async def _send_log_level_to_worker(worker_url: str, level: str, worker_id: str) -> dict:
     """Helper for set_worker_log_level. Ref: #1088."""
     import httpx
 
     async with httpx.AsyncClient(timeout=5.0) as client:
-        response = await client.put(
-            f"{worker_url}/config/logging", params={"level": level}
-        )
+        response = await client.put(f"{worker_url}/config/logging", params={"level": level})
         if response.status_code != 200:
             raise_internal_error(f"Worker returned error: {response.status_code}")
         logger.info("Set log level to %s for worker %s", level, worker_id)
@@ -584,9 +575,7 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
         # Aggregate statistics
         total_workers = len(workers)
         online_workers = sum(1 for w in workers if w.status.status == "online")
-        total_capacity = sum(
-            w.config.max_concurrent_tasks for w in workers if w.config.enabled
-        )
+        total_capacity = sum(w.config.max_concurrent_tasks for w in workers if w.config.enabled)
         current_load = sum(w.status.current_load for w in workers)
 
         return {
@@ -596,9 +585,7 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
             "offline_workers": total_workers - online_workers,
             "total_capacity": total_capacity,
             "current_load": current_load,
-            "utilization_percent": round(
-                (current_load / total_capacity * 100) if total_capacity > 0 else 0, 2
-            ),
+            "utilization_percent": round((current_load / total_capacity * 100) if total_capacity > 0 else 0, 2),
             "load_balancing_strategy": manager.get_load_balancing_config().strategy,
         }
 
@@ -742,9 +729,7 @@ def _generate_repair_bootstrap_config() -> dict:
     }
 
 
-async def _handle_existing_worker_removal(
-    manager, worker, worker_id: str, force: bool
-) -> tuple[str, str]:
+async def _handle_existing_worker_removal(manager, worker, worker_id: str, force: bool) -> tuple[str, str]:
     """
     Handle removal of existing worker registration.
 
@@ -760,9 +745,7 @@ async def _handle_existing_worker_removal(
     platform = worker.config.platform
 
     if worker.status.status == "online" and not force:
-        logger.warning(
-            "Attempted to re-pair active worker %s without force flag", worker_id
-        )
+        logger.warning("Attempted to re-pair active worker %s without force flag", worker_id)
         raise_invalid_input("worker", "Worker is currently active. Use force=true to re-pair anyway.")
 
     await manager.remove_worker(worker_id)
@@ -771,9 +754,7 @@ async def _handle_existing_worker_removal(
     return worker_url, platform
 
 
-async def _resolve_repair_worker_info(
-    manager, worker_id: str, request: dict
-) -> tuple[str, str, str]:
+async def _resolve_repair_worker_info(manager, worker_id: str, request: dict) -> tuple[str, str, str]:
     """Helper for repair_worker. Ref: #1088."""
     import uuid
 
@@ -781,9 +762,7 @@ async def _resolve_repair_worker_info(
     force = request.get("force", False)
 
     if worker:
-        worker_url, platform = await _handle_existing_worker_removal(
-            manager, worker, worker_id, force
-        )
+        worker_url, platform = await _handle_existing_worker_removal(manager, worker, worker_id, force)
         worker_url = request.get("url", "") or worker_url
     else:
         worker_url = request.get("url", "")
@@ -834,13 +813,9 @@ async def repair_worker(
     try:
         manager = await get_worker_manager()
         request = request or {}
-        worker_url, platform, new_worker_id = await _resolve_repair_worker_info(
-            manager, worker_id, request
-        )
+        worker_url, platform, new_worker_id = await _resolve_repair_worker_info(manager, worker_id, request)
 
-        logger.info(
-            "Re-pair initiated for worker %s -> new ID: %s", worker_id, new_worker_id
-        )
+        logger.info("Re-pair initiated for worker %s -> new ID: %s", worker_id, new_worker_id)
 
         return {
             "success": True,
@@ -879,9 +854,7 @@ class WorkerHealthInfo:
     already_paired: bool
 
 
-async def _check_worker_health(
-    client: httpx.AsyncClient, worker_url: str
-) -> WorkerHealthInfo:
+async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> WorkerHealthInfo:
     """
     Check if worker is reachable and get health information.
 
@@ -1042,21 +1015,15 @@ async def _register_worker_in_backend(
         logger.info("Registered new worker: %s", worker_id)
 
 
-async def _execute_worker_pairing(
-    worker_url: str, worker_name: str, enabled: bool
-) -> dict:
+async def _execute_worker_pairing(worker_url: str, worker_name: str, enabled: bool) -> dict:
     """Helper for pair_worker. Ref: #1088."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         health_info = await _check_worker_health(client, worker_url)
         worker_id = _generate_worker_id(health_info)
         worker_config, main_host = _build_pairing_config()
-        device_info = await _send_pairing_request(
-            client, worker_url, worker_id, worker_config, main_host
-        )
+        device_info = await _send_pairing_request(client, worker_url, worker_id, worker_config, main_host)
 
-    await _register_worker_in_backend(
-        worker_id, worker_url, health_info.platform, worker_name, enabled
-    )
+    await _register_worker_in_backend(worker_id, worker_url, health_info.platform, worker_name, enabled)
 
     return {
         "success": True,
@@ -1161,8 +1128,7 @@ def _update_prometheus_heartbeat_metrics(heartbeat: WorkerHeartbeat) -> None:
 def _reject_unpaired_heartbeat(heartbeat: WorkerHeartbeat) -> None:
     """Helper for worker_heartbeat. Ref: #1088."""
     logger.warning(
-        "Heartbeat from unpaired worker %s at %s - ignoring. "
-        "Worker must be paired via /npu/workers/pair endpoint.",
+        "Heartbeat from unpaired worker %s at %s - ignoring. " "Worker must be paired via /npu/workers/pair endpoint.",
         heartbeat.worker_id,
         heartbeat.url,
     )
@@ -1321,9 +1287,7 @@ def _resolve_bootstrap_worker_id(request: dict) -> tuple[str, str, str]:
     return worker_id, platform, worker_url
 
 
-def _build_bootstrap_response(
-    worker_id: str, platform: str, worker_url: str, ssot_config
-) -> dict:
+def _build_bootstrap_response(worker_id: str, platform: str, worker_url: str, ssot_config) -> dict:
     """Helper for worker_bootstrap. Ref: #1088."""
     from datetime import datetime
 

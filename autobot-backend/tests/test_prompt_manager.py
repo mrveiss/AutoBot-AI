@@ -11,7 +11,8 @@ Issue #4346: Smart context truncation for large files
 """
 
 import pytest
-from prompt_manager import _truncate_large_file, PromptManager
+
+from prompt_manager import PromptManager, _truncate_large_file
 
 
 class TestTruncateLargeFile:
@@ -74,7 +75,8 @@ class TestTruncateLargeFile:
 
         # Extract truncated count from marker
         import re
-        match = re.search(r'\.\.\.([\d]+) chars TRUNCATED', result)
+
+        match = re.search(r"\.\.\.([\d]+) chars TRUNCATED", result)
         assert match is not None
         truncated_count = int(match.group(1))
         assert truncated_count > 0

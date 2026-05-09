@@ -82,16 +82,12 @@ async def save_config_async(manager, config_type: str, data: Dict[str, Any]) -> 
     await manager.save_config_async(config_type, data)
 
 
-async def get_config_value_async(
-    manager, config_type: str, key: str, default: Any = None
-) -> Any:
+async def get_config_value_async(manager, config_type: str, key: str, default: Any = None) -> Any:
     """Get configuration value asynchronously"""
     return await manager.get_config_value_async(config_type, key, default)
 
 
-async def set_config_value_async(
-    manager, config_type: str, key: str, value: Any
-) -> None:
+async def set_config_value_async(manager, config_type: str, key: str, value: Any) -> None:
     """Set configuration value asynchronously"""
     await manager.set_config_value_async(config_type, key, value)
 
@@ -107,16 +103,12 @@ OLLAMA_URL = f"http://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
 
 # Backend/API service constants
 BACKEND_HOST_IP = ConfigRegistry.get("vm.main", NetworkConstants.MAIN_MACHINE_IP)
-BACKEND_PORT = int(
-    ConfigRegistry.get("port.backend", str(NetworkConstants.BACKEND_PORT))
-)
+BACKEND_PORT = int(ConfigRegistry.get("port.backend", str(NetworkConstants.BACKEND_PORT)))
 API_BASE_URL = f"http://{BACKEND_HOST_IP}:{BACKEND_PORT}"
 
 # Playwright/Browser service constants
 PLAYWRIGHT_HOST_IP = ConfigRegistry.get("vm.browser", NetworkConstants.BROWSER_VM_IP)
-PLAYWRIGHT_VNC_PORT = int(
-    ConfigRegistry.get("port.vnc", str(NetworkConstants.VNC_PORT))
-)
+PLAYWRIGHT_VNC_PORT = int(ConfigRegistry.get("port.vnc", str(NetworkConstants.VNC_PORT)))
 PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
 
 

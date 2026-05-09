@@ -121,9 +121,7 @@ class MetaEvalHarness:
         result = MetaEvalResult(patch_id=patch.patch_id)
 
         if not patch.has_changes:
-            logger.info(
-                "MetaEvalHarness: patch %s has no changes — skipping", patch.patch_id
-            )
+            logger.info("MetaEvalHarness: patch %s has no changes — skipping", patch.patch_id)
             result.decision = "skipped"
             self._add_to_archive(archive, patch, result)
             return result
@@ -139,9 +137,7 @@ class MetaEvalHarness:
             result.test_output = output
             result.score = self._compute_score(passed, total)
         except Exception as exc:
-            logger.exception(
-                "MetaEvalHarness: test run failed for patch %s", patch.patch_id
-            )
+            logger.exception("MetaEvalHarness: test run failed for patch %s", patch.patch_id)
             result.error = str(exc)
             result.decision = "rejected"
             self._add_to_archive(archive, patch, result)
@@ -164,21 +160,16 @@ class MetaEvalHarness:
         # Consult ApprovalGate if improvement is significant.
         # If the gate is required but no session_id is provided we reject
         # rather than auto-approve — never silently apply to live code.
-        needs_approval = self._gate.check_approval_needed(
-            result.score, self.config.meta_agent_approval_threshold
-        )
+        needs_approval = self._gate.check_approval_needed(result.score, self.config.meta_agent_approval_threshold)
         if needs_approval:
             if not session_id:
                 logger.warning(
-                    "MetaEvalHarness: approval required for patch %s but "
-                    "no session_id provided — rejecting",
+                    "MetaEvalHarness: approval required for patch %s but " "no session_id provided — rejecting",
                     patch.patch_id,
                 )
                 result.decision = "rejected"
             else:
-                result.decision = await self._request_and_wait(
-                    session_id, patch, result
-                )
+                result.decision = await self._request_and_wait(session_id, patch, result)
         else:
             result.decision = "approved"
 
@@ -231,9 +222,7 @@ class MetaEvalHarness:
         test_files = list(parent.glob("*_test.py"))
         return [str(f) for f in test_files] if test_files else [str(parent)]
 
-    async def _run_tests(
-        self, tmp_module: Path, test_paths: List[str]
-    ) -> tuple[int, int, str]:
+    async def _run_tests(self, tmp_module: Path, test_paths: List[str]) -> tuple[int, int, str]:
         """Run pytest and return (passed, total, output).
 
         The temporary module is exposed to pytest via the ``PYTHONPATH``
@@ -271,9 +260,7 @@ class MetaEvalHarness:
                 await process.wait()
             except Exception:
                 pass
-            raise RuntimeError(
-                f"Test run timed out after {self.config.meta_agent_test_timeout}s"
-            )
+            raise RuntimeError(f"Test run timed out after {self.config.meta_agent_test_timeout}s")
 
         output = stdout.decode("utf-8", errors="replace") if stdout else ""
         passed, total = self._parse_pytest_summary(output)
@@ -308,9 +295,7 @@ class MetaEvalHarness:
             return 0.0
         return passed / total
 
-    def _add_to_archive(
-        self, archive: Archive, patch: MetaPatch, result: MetaEvalResult
-    ) -> None:
+    def _add_to_archive(self, archive: Archive, patch: MetaPatch, result: MetaEvalResult) -> None:
         """Record the evaluation result as a VariantArchiveEntry."""
         entry = VariantArchiveEntry(
             variant_id=patch.patch_id,
@@ -322,9 +307,7 @@ class MetaEvalHarness:
         )
         archive.add(entry)
 
-    async def _request_and_wait(
-        self, session_id: str, patch: MetaPatch, result: MetaEvalResult
-    ) -> str:
+    async def _request_and_wait(self, session_id: str, patch: MetaPatch, result: MetaEvalResult) -> str:
         """Request ApprovalGate decision and wait up to test_timeout seconds."""
         details = {
             "patch_id": patch.patch_id,
@@ -346,9 +329,7 @@ class MetaEvalHarness:
                 timeout=float(self.config.meta_agent_test_timeout),
             )
         except Exception:
-            logger.exception(
-                "MetaEvalHarness: ApprovalGate error for patch %s", patch.patch_id
-            )
+            logger.exception("MetaEvalHarness: ApprovalGate error for patch %s", patch.patch_id)
             return "timeout"
 
     @staticmethod

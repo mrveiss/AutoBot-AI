@@ -25,8 +25,8 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Type
 
-from knowledge.connectors.models import ConnectorConfig
 from autobot_shared.time_utils import now_utc
+from knowledge.connectors.models import ConnectorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +67,7 @@ class ConnectorRegistry:
         klass = cls._connectors.get(config.connector_type)
         if klass is None:
             registered = list(cls._connectors.keys())
-            raise ValueError(
-                "Unknown connector type '%s'. Registered types: %s"
-                % (config.connector_type, registered)
-            )
+            raise ValueError("Unknown connector type '%s'. Registered types: %s" % (config.connector_type, registered))
         instance = klass(config)
         logger.info(
             "Created connector instance: id=%s type=%s",
@@ -113,9 +110,7 @@ class ConnectorRegistry:
         return MappingProxyType(cls._connectors)
 
     @classmethod
-    def get_registered_class(
-        cls, type_name: str
-    ) -> Optional[Type["AbstractConnector"]]:
+    def get_registered_class(cls, type_name: str) -> Optional[Type["AbstractConnector"]]:
         """Return the registered connector class for *type_name*, or None (Issue #5057).
 
         Public accessor that replaces ``ConnectorRegistry._connectors.get(...)``

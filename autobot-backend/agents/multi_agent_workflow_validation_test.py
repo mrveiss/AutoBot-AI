@@ -6,8 +6,8 @@ Tests the complete multi-agent coordination system for production readiness
 
 import asyncio
 import json
-import sys
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -81,9 +81,7 @@ class MultiAgentWorkflowValidator:
                     "Backend Availability",
                     "pass",
                     "Backend is accessible and responding",
-                    performance_metrics={
-                        "response_time": f"{response.elapsed.total_seconds():.3f}s"
-                    },
+                    performance_metrics={"response_time": f"{response.elapsed.total_seconds():.3f}s"},
                 )
                 return True
             else:
@@ -135,9 +133,7 @@ class MultiAgentWorkflowValidator:
                         "pass",
                         f"{agent_name} is accessible",
                         agents_involved=[agent_name],
-                        performance_metrics={
-                            "response_time": f"{response.elapsed.total_seconds():.3f}s"
-                        },
+                        performance_metrics={"response_time": f"{response.elapsed.total_seconds():.3f}s"},
                     )
                 else:
                     self.log_result(
@@ -224,11 +220,7 @@ class MultiAgentWorkflowValidator:
             loop.close()
 
             total_time = time.time() - start_time
-            successful_requests = sum(
-                1
-                for r in parallel_results
-                if isinstance(r, dict) and r.get("success", False)
-            )
+            successful_requests = sum(1 for r in parallel_results if isinstance(r, dict) and r.get("success", False))
 
             if successful_requests >= len(test_endpoints) * 0.8:  # 80% success rate
                 self.log_result(
@@ -325,15 +317,11 @@ class MultiAgentWorkflowValidator:
             return
 
         # Test chat workflow that involves multiple agents
-        chat_payload = {
-            "message": "What Redis configuration does AutoBot use for distributed VMs?"
-        }
+        chat_payload = {"message": "What Redis configuration does AutoBot use for distributed VMs?"}
 
         try:
             start_time = time.time()
-            response = requests.post(
-                f"{self.base_url}/api/chat/direct", json=chat_payload, timeout=30
-            )
+            response = requests.post(f"{self.base_url}/api/chat/direct", json=chat_payload, timeout=30)
             processing_time = time.time() - start_time
 
             if response.status_code == 200:
@@ -414,9 +402,7 @@ class MultiAgentWorkflowValidator:
                 "pass",
                 f"System handles errors gracefully ({resilience_percentage:.0f}% resilience)",
                 agents_involved=["Error Handler", "API Gateway"],
-                performance_metrics={
-                    "resilience_score": f"{resilience_percentage:.0f}%"
-                },
+                performance_metrics={"resilience_score": f"{resilience_percentage:.0f}%"},
             )
         else:
             self.log_result(
@@ -424,9 +410,7 @@ class MultiAgentWorkflowValidator:
                 "warning",
                 f"System resilience could be improved ({resilience_percentage:.0f}% resilience)",
                 agents_involved=["Error Handler", "API Gateway"],
-                performance_metrics={
-                    "resilience_score": f"{resilience_percentage:.0f}%"
-                },
+                performance_metrics={"resilience_score": f"{resilience_percentage:.0f}%"},
             )
 
     def generate_workflow_report(self) -> Dict:
@@ -452,9 +436,7 @@ class MultiAgentWorkflowValidator:
                 except Exception:
                     pass
 
-        avg_response_time = (
-            sum(response_times) / len(response_times) if response_times else 0
-        )
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
 
         return {
             "test_summary": {
@@ -463,9 +445,7 @@ class MultiAgentWorkflowValidator:
                 "failed": failed,
                 "warnings": warnings,
                 "skipped": skipped,
-                "success_rate": (
-                    f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"
-                ),
+                "success_rate": (f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"),
             },
             "agent_analysis": {
                 "agents_tested": list(all_agents),
@@ -474,28 +454,20 @@ class MultiAgentWorkflowValidator:
             },
             "performance_metrics": {
                 "average_response_time": f"{avg_response_time:.3f}s",
-                "fastest_response": (
-                    f"{min(response_times):.3f}s" if response_times else "N/A"
-                ),
-                "slowest_response": (
-                    f"{max(response_times):.3f}s" if response_times else "N/A"
-                ),
+                "fastest_response": (f"{min(response_times):.3f}s" if response_times else "N/A"),
+                "slowest_response": (f"{max(response_times):.3f}s" if response_times else "N/A"),
             },
             "production_readiness": {
                 "multi_agent_coordination": passed >= 5,
                 "performance_acceptable": avg_response_time < 5.0,
-                "resilience_verified": any(
-                    "resilience" in r.test_name.lower() for r in self.results
-                ),
+                "resilience_verified": any("resilience" in r.test_name.lower() for r in self.results),
             },
         }
 
     def run_multi_agent_validation(self):
         """Run complete multi-agent workflow validation"""
         print("🚀 AutoBot Multi-Agent Workflow Validation")  # noqa: print
-        print(  # noqa: print
-            f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )  # noqa: print
+        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # noqa: print  # noqa: print
         print("=" * 60)  # noqa: print
 
         # Run all multi-agent tests
@@ -521,17 +493,13 @@ class MultiAgentWorkflowValidator:
         print(f"Success Rate: {report['test_summary']['success_rate']}")  # noqa: print
 
         print("\n🤖 AGENT ANALYSIS:")  # noqa: print
-        print(  # noqa: print
-            f"Agents Tested: {report['agent_analysis']['agent_count']}"
-        )  # noqa: print
+        print(f"Agents Tested: {report['agent_analysis']['agent_count']}")  # noqa: print  # noqa: print
         print(  # noqa: print
             f"Coordination Capable: {'✅ Yes' if report['agent_analysis']['coordination_capable'] else '⚠️ Limited'}"
         )
 
         print("\n⚡ PERFORMANCE:")  # noqa: print
-        print(  # noqa: print
-            f"Average Response Time: {report['performance_metrics']['average_response_time']}"
-        )
+        print(f"Average Response Time: {report['performance_metrics']['average_response_time']}")  # noqa: print
         print(  # noqa: print
             f"Range: {report['performance_metrics']['fastest_response']} - {report['performance_metrics']['slowest_response']}"
         )
@@ -548,9 +516,7 @@ class MultiAgentWorkflowValidator:
 
     def save_workflow_results(self, report: Dict):
         """Save workflow validation results"""
-        results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -579,9 +545,7 @@ class MultiAgentWorkflowValidator:
         with open(results_file, "w") as f:
             json.dump(full_report, f, indent=2)
 
-        print(  # noqa: print
-            f"\n💾 Multi-agent validation results saved to: {results_file}"
-        )  # noqa: print
+        print(f"\n💾 Multi-agent validation results saved to: {results_file}")  # noqa: print  # noqa: print
 
 
 def main():
@@ -598,14 +562,10 @@ def main():
             print("\n✅ Multi-agent system is production ready!")  # noqa: print
             sys.exit(0)
         elif report["test_summary"]["failed"] > 0:
-            print(  # noqa: print
-                "\n❌ Multi-agent validation failed with critical issues"
-            )  # noqa: print
+            print("\n❌ Multi-agent validation failed with critical issues")  # noqa: print  # noqa: print
             sys.exit(1)
         else:
-            print(  # noqa: print
-                "\n⚠️ Multi-agent system needs review before production"
-            )  # noqa: print
+            print("\n⚠️ Multi-agent system needs review before production")  # noqa: print  # noqa: print
             sys.exit(2)
 
     except KeyboardInterrupt:

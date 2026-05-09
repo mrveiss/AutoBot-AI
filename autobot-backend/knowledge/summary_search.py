@@ -27,9 +27,7 @@ class SummarySearchService:
         self.client = chromadb_client
         self.collection_name = "knowledge_summaries"
 
-    async def search_summaries(
-        self, query: str, level: Optional[str] = None, top_k: int = 10
-    ) -> List[dict]:
+    async def search_summaries(self, query: str, level: Optional[str] = None, top_k: int = 10) -> List[dict]:
         """
         Vector search on summary embeddings.
 
@@ -46,9 +44,7 @@ class SummarySearchService:
 
             where_filter = {"level": level} if level else None
 
-            results = await collection.query(
-                query_texts=[query], n_results=top_k, where=where_filter
-            )
+            results = await collection.query(query_texts=[query], n_results=top_k, where=where_filter)
 
             summaries = self._format_results(results)
             logger.info("Found %s matching summaries", len(summaries))
@@ -72,14 +68,10 @@ class SummarySearchService:
             collection = await self.client.get_collection(name=self.collection_name)
 
             # Get document-level summary
-            doc_results = await collection.get(
-                where={"document_id": str(document_id), "level": "document"}
-            )
+            doc_results = await collection.get(where={"document_id": str(document_id), "level": "document"})
 
             # Get section-level summaries
-            section_results = await collection.get(
-                where={"document_id": str(document_id), "level": "section"}
-            )
+            section_results = await collection.get(where={"document_id": str(document_id), "level": "section"})
 
             overview = {
                 "document_id": str(document_id),

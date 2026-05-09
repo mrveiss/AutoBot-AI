@@ -327,9 +327,7 @@ def upgrade() -> None:
         sa.Column("is_social", sa.Boolean, nullable=False, default=False),
         sa.Column("allow_user_creation", sa.Boolean, nullable=False, default=True),
         sa.Column("default_role", sa.String(100), nullable=True, default="user"),
-        sa.Column(
-            "group_mapping", postgresql.JSONB, nullable=False, server_default="{}"
-        ),
+        sa.Column("group_mapping", postgresql.JSONB, nullable=False, server_default="{}"),
         sa.Column("last_sync_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
@@ -379,9 +377,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
-        sa.UniqueConstraint(
-            "provider_id", "external_id", name="uq_provider_external_id"
-        ),
+        sa.UniqueConstraint("provider_id", "external_id", name="uq_provider_external_id"),
     )
 
     # Create user_mfa table

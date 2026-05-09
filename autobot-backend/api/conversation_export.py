@@ -20,6 +20,8 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
+from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
+from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.conversation_export import (
@@ -30,8 +32,6 @@ from services.conversation_export import (
 )
 from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
-from api.schemas_common import DataResponse
-from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +65,7 @@ def _validate_format_or_raise(export_format: str) -> None:
     """Raise ValidationError when the requested format is not supported."""
     if export_format not in _VALID_EXPORT_FORMATS:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid format {export_format!r}. Supported: json, markdown"
-        )
+        raise ValidationError(f"Invalid format {export_format!r}. Supported: json, markdown")
 
 
 def _validate_session_id_or_raise(session_id: str) -> None:
@@ -81,9 +79,7 @@ def _validate_on_conflict_or_raise(on_conflict: str) -> None:
     """Raise ValidationError when on_conflict value is not recognised."""
     if on_conflict not in _VALID_ON_CONFLICT:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(
-            f"Invalid on_conflict {on_conflict!r}. Supported: skip, replace, rename"
-        )
+        raise ValidationError(f"Invalid on_conflict {on_conflict!r}. Supported: skip, replace, rename")
 
 
 # ---------------------------------------------------------------------------
@@ -109,19 +105,13 @@ async def _run_export(
     return result
 
 
-def _build_export_response(
-    content: str, session_id: str, export_format: str
-) -> Response:
+def _build_export_response(content: str, session_id: str, export_format: str) -> Response:
     """Wrap export content in a download Response with correct headers."""
     ext = _FILE_EXTENSIONS[export_format]
     return Response(
         content=content.encode("utf-8"),
         media_type=_CONTENT_TYPES[export_format],
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=conversation_{session_id}.{ext}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename=conversation_{session_id}.{ext}")},
     )
 
 
@@ -192,9 +182,7 @@ async def export_all_conversations(
     return Response(
         content=archive.encode("utf-8"),
         media_type="application/json",
-        headers={
-            "Content-Disposition": "attachment; filename=conversations_export.json"
-        },
+        headers={"Content-Disposition": "attachment; filename=conversations_export.json"},
     )
 
 

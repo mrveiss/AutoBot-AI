@@ -40,19 +40,19 @@ from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.types import Task
-from auth_middleware import check_admin_permission
 from api.schemas_agent import (
     A2AAgentCardResponse,
+    A2ACancelTaskResponse,
+    A2ACapabilitiesResponse,
     A2ASignedAgentCardResponse,
+    A2AStatsResponse,
     A2ASubmitTaskResponse,
     A2ATaskResponse,
     A2ATaskTraceResponse,
     RemoteVerifyRequest,
     TaskSendRequest,
-    A2ACancelTaskResponse,
-    A2AStatsResponse,
-    A2ACapabilitiesResponse,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

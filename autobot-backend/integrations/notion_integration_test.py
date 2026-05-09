@@ -168,9 +168,7 @@ class TestNotionIntegration:
             },
         )
         integration = NotionIntegration(_make_config())
-        result = await integration.execute_action(
-            "query_database", {"database_id": "db-abc"}
-        )
+        result = await integration.execute_action("query_database", {"database_id": "db-abc"})
 
         assert "rows" in result
         assert len(result["rows"]) == 1
@@ -195,9 +193,7 @@ class TestNotionIntegration:
             "url": "https://notion.so/page-xyz",
             "created_time": "2024-01-01T00:00:00.000Z",
             "last_edited_time": "2024-06-01T00:00:00.000Z",
-            "properties": {
-                "Name": {"title": [{"plain_text": "My Doc"}]}
-            },
+            "properties": {"Name": {"title": [{"plain_text": "My Doc"}]}},
         }
         blocks_body = {
             "results": [
@@ -246,9 +242,7 @@ class TestNotionIntegration:
     async def test_create_page_missing_fields(self):
         """Returns error when required fields are absent."""
         integration = NotionIntegration(_make_config())
-        result = await integration.execute_action(
-            "create_page", {"database_id": "db-1"}
-        )
+        result = await integration.execute_action("create_page", {"database_id": "db-1"})
         assert "error" in result
 
     @patch("aiohttp.ClientSession")
@@ -267,9 +261,7 @@ class TestNotionIntegration:
             "create_page",
             {
                 "database_id": "db-1",
-                "properties": {
-                    "Name": {"title": [{"text": {"content": "New Task"}}]}
-                },
+                "properties": {"Name": {"title": [{"text": {"content": "New Task"}}]}},
             },
         )
 
@@ -289,9 +281,7 @@ class TestNotionIntegration:
     async def test_update_page_no_fields(self):
         """Returns error when no update fields are provided."""
         integration = NotionIntegration(_make_config())
-        result = await integration.execute_action(
-            "update_page", {"page_id": "page-1"}
-        )
+        result = await integration.execute_action("update_page", {"page_id": "page-1"})
         assert "error" in result
 
     @patch("aiohttp.ClientSession")
@@ -306,9 +296,7 @@ class TestNotionIntegration:
             },
         )
         integration = NotionIntegration(_make_config())
-        result = await integration.execute_action(
-            "update_page", {"page_id": "page-1", "archived": True}
-        )
+        result = await integration.execute_action("update_page", {"page_id": "page-1", "archived": True})
         assert result["id"] == "page-1"
 
 
@@ -337,11 +325,7 @@ class TestExtractTitle:
         assert _extract_title(obj) == "My DB"
 
     def test_page_name_property(self):
-        obj = {
-            "properties": {
-                "Name": {"title": [{"plain_text": "Page Title"}]}
-            }
-        }
+        obj = {"properties": {"Name": {"title": [{"plain_text": "Page Title"}]}}}
         assert _extract_title(obj) == "Page Title"
 
     def test_empty_object(self):

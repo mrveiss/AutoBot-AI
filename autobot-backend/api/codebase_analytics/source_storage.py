@@ -51,9 +51,7 @@ async def get_source(source_id: str) -> Optional[CodeSource]:
     data = await redis.get(key)
     if data is None:
         return None
-    return CodeSource.model_validate_json(
-        data.decode("utf-8") if isinstance(data, bytes) else data
-    )
+    return CodeSource.model_validate_json(data.decode("utf-8") if isinstance(data, bytes) else data)
 
 
 def _is_visible(source: CodeSource, owner_id: Optional[str]) -> bool:

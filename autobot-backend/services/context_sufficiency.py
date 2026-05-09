@@ -283,9 +283,7 @@ def _build_sufficiency_messages(query: str, context: str) -> List[Dict]:
         {
             "role": "user",
             "content": (
-                f"Question: {query}\n\n"
-                f"Context: {context[:2000]}\n\n"
-                "Does this context fully answer the question?"
+                f"Question: {query}\n\n" f"Context: {context[:2000]}\n\n" "Does this context fully answer the question?"
             ),
         },
     ]
@@ -410,9 +408,7 @@ class ContextSufficiencyEvaluator:
             self._inconclusive_count += 1
 
             if self._config.enable_llm_pass:
-                llm_result = await _llm_evaluate(
-                    query, context, self._config.llm_timeout
-                )
+                llm_result = await _llm_evaluate(query, context, self._config.llm_timeout)
                 if llm_result is not None:
                     self._llm_calls += 1
                     llm_result.keyword_coverage = result.keyword_coverage
@@ -428,12 +424,7 @@ class ContextSufficiencyEvaluator:
 
     def get_stats(self) -> Dict[str, Any]:
         """Return evaluation metrics."""
-        total = (
-            self._sufficient_count
-            + self._insufficient_count
-            + self._inconclusive_count
-            + self._bypassed_count
-        )
+        total = self._sufficient_count + self._insufficient_count + self._inconclusive_count + self._bypassed_count
         return {
             "enabled": self._config.enabled,
             "total_evaluations": total,

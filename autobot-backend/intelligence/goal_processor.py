@@ -274,9 +274,7 @@ class GoalProcessor:
             # Low risk patterns are default
         }
 
-    def _find_best_intent_match(
-        self, user_input_lower: str
-    ) -> tuple[tuple[str, Dict] | None, float]:
+    def _find_best_intent_match(self, user_input_lower: str) -> tuple[tuple[str, Dict] | None, float]:
         """
         Find the best matching intent for user input.
 
@@ -292,9 +290,7 @@ class GoalProcessor:
         for intent_name, intent_data in self._intent_patterns.items():
             for pattern in intent_data["patterns"]:
                 if re.search(pattern, user_input_lower):
-                    confidence = self._calculate_pattern_confidence(
-                        pattern, user_input_lower
-                    )
+                    confidence = self._calculate_pattern_confidence(pattern, user_input_lower)
                     if confidence > best_confidence:
                         best_confidence = confidence
                         best_match = (intent_name, intent_data)
@@ -335,9 +331,7 @@ class GoalProcessor:
             warnings=warnings,
         )
 
-    def _build_unknown_goal(
-        self, user_input: str, user_input_lower: str
-    ) -> ProcessedGoal:
+    def _build_unknown_goal(self, user_input: str, user_input_lower: str) -> ProcessedGoal:
         """
         Build ProcessedGoal for an unknown/unmatched intent.
 
@@ -378,9 +372,7 @@ class GoalProcessor:
 
         if best_match:
             intent_name, intent_data = best_match
-            return self._build_matched_goal(
-                user_input, user_input_lower, intent_name, intent_data, best_confidence
-            )
+            return self._build_matched_goal(user_input, user_input_lower, intent_name, intent_data, best_confidence)
         else:
             return self._build_unknown_goal(user_input, user_input_lower)
 
@@ -390,9 +382,7 @@ class GoalProcessor:
         base_confidence = 0.6
 
         # Boost confidence based on input length and pattern specificity
-        pattern_specificity = len(
-            pattern.replace(r".{0,10}", "").replace(r".{0,20}", "")
-        )
+        pattern_specificity = len(pattern.replace(r".{0,10}", "").replace(r".{0,20}", ""))
         input_length = len(user_input)
 
         # Longer, more specific patterns get higher confidence
@@ -419,15 +409,10 @@ class GoalProcessor:
         warnings = []
 
         if risk_level == RiskLevel.CRITICAL:
-            warnings.append(
-                "⚠️ CRITICAL: This operation could cause " "permanent data loss"
-            )
+            warnings.append("⚠️ CRITICAL: This operation could cause " "permanent data loss")
             warnings.append("Please ensure you have backups before proceeding")
         elif risk_level == RiskLevel.HIGH:
-            warnings.append(
-                "This operation requires elevated privileges and "
-                "could affect system stability"
-            )
+            warnings.append("This operation requires elevated privileges and " "could affect system stability")
         elif risk_level == RiskLevel.MEDIUM:
             warnings.append("This operation will make changes to your system")
 
@@ -436,9 +421,7 @@ class GoalProcessor:
             warnings.append("Administrative privileges will be required")
 
         if _INSTALL_DOWNLOAD_RE.search(user_input):
-            warnings.append(
-                "Software will be downloaded and installed " "from external sources"
-            )
+            warnings.append("Software will be downloaded and installed " "from external sources")
 
         if _NETWORK_SCAN_PORT_RE.search(user_input):
             warnings.append("Network operations may be detected by security systems")
@@ -499,9 +482,7 @@ class GoalProcessor:
                 return category
         return GoalCategory.UNKNOWN
 
-    async def get_similar_intents(
-        self, user_input: str, limit: int = 5
-    ) -> List[ProcessedGoal]:
+    async def get_similar_intents(self, user_input: str, limit: int = 5) -> List[ProcessedGoal]:
         """
         Get similar intents for partially understood goals.
 
@@ -517,9 +498,7 @@ class GoalProcessor:
 
         for intent_name, intent_data in self._intent_patterns.items():
             # Calculate similarity with explanation text
-            similarity = SequenceMatcher(
-                None, user_input_lower, intent_data["explanation"].lower()
-            ).ratio()
+            similarity = SequenceMatcher(None, user_input_lower, intent_data["explanation"].lower()).ratio()
 
             if similarity > 0.2:  # Minimum similarity threshold
                 goal = ProcessedGoal(
@@ -538,11 +517,7 @@ class GoalProcessor:
 
     def get_supported_categories(self) -> List[str]:
         """Get list of supported goal categories."""
-        return [
-            category.value
-            for category in GoalCategory
-            if category != GoalCategory.UNKNOWN
-        ]
+        return [category.value for category in GoalCategory if category != GoalCategory.UNKNOWN]
 
     def get_supported_intents(self) -> List[str]:
         """Get list of supported intents."""
@@ -621,9 +596,6 @@ if __name__ == "__main__":
         similar = await processor.get_similar_intents("show network info", limit=3)
 
         for suggestion in similar:
-            print(  # noqa: print
-                f"- {suggestion.explanation} "
-                f"(confidence: {suggestion.confidence:.2f})"
-            )
+            print(f"- {suggestion.explanation} " f"(confidence: {suggestion.confidence:.2f})")  # noqa: print
 
     asyncio.run(test_processor())

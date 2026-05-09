@@ -66,9 +66,7 @@ def _load_bridge(bridge_module: str) -> Any:
     return importlib.import_module(mod_path)
 
 
-async def _invoke_tool(
-    bridge: Any, tool_name: str, arguments: Dict[str, Any]
-) -> Dict[str, Any]:
+async def _invoke_tool(bridge: Any, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Dispatch *tool_name* on *bridge* module.
 
     Prefers a module-level ``mcp_call_tool(name, arguments)`` coroutine.
@@ -137,9 +135,7 @@ async def _serve(bridge_module: str) -> None:
         raise
 
     try:
-        writer_transport, writer_protocol = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout
-        )
+        writer_transport, writer_protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, sys.stdout)
     except Exception as exc:
         logger.error("worker: failed to connect stdout: %s", exc)
         raise

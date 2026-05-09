@@ -10,6 +10,7 @@ in the router registry, ensuring all cost analysis endpoints are accessible.
 Issue #4252: Ensure analytics_cost router is registered and functional.
 """
 
+
 def test_analytics_cost_router_exists():
     """Test that analytics_cost module has a router object."""
     from api import analytics_cost

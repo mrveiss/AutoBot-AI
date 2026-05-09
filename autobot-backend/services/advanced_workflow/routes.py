@@ -31,13 +31,9 @@ async def get_orchestrator_instance(request: Request = None):
 
     # Try to use pre-initialized coordinator from app state first
     if request is not None:
-        app_coordinator = getattr(
-            request.app.state, "advanced_workflow_orchestrator", None
-        )
+        app_coordinator = getattr(request.app.state, "advanced_workflow_orchestrator", None)
         if app_coordinator is not None:
-            logger.debug(
-                "Using pre-initialized WorkflowCoordinator from app.state"
-            )
+            logger.debug("Using pre-initialized WorkflowCoordinator from app.state")
             return app_coordinator
 
     # Try to use global instance
@@ -46,9 +42,7 @@ async def get_orchestrator_instance(request: Request = None):
         return _coordinator
 
     # Create new instance as last resort
-    logger.info(
-        "Creating new WorkflowCoordinator instance (expensive operation)"
-    )
+    logger.info("Creating new WorkflowCoordinator instance (expensive operation)")
     _coordinator = WorkflowCoordinator()
 
     # Cache in app state if request available
@@ -75,13 +69,9 @@ async def generate_intelligent_workflow(
         context = request_data.get("context", {})
 
         if not user_request or not session_id:
-            raise HTTPException(
-                status_code=400, detail="user_request and session_id required"
-            )
+            raise HTTPException(status_code=400, detail="user_request and session_id required")
 
-        workflow_id = await orchestrator.generate_intelligent_workflow(
-            user_request, session_id, context
-        )
+        workflow_id = await orchestrator.generate_intelligent_workflow(user_request, session_id, context)
 
         return {
             "success": True,
@@ -108,9 +98,7 @@ async def get_workflow_intelligence(
         orchestrator = await get_orchestrator_instance(request)
 
         if workflow_id not in orchestrator.workflow_intelligence:
-            raise HTTPException(
-                status_code=404, detail="Workflow intelligence not found"
-            )
+            raise HTTPException(status_code=404, detail="Workflow intelligence not found")
 
         intelligence = orchestrator.workflow_intelligence[workflow_id]
 
@@ -146,12 +134,8 @@ async def get_advanced_analytics(
             "success": True,
             "analytics": orchestrator.analytics,
             "learning_insights": {
-                "total_patterns_learned": len(
-                    orchestrator.learning_model.learning_data["user_patterns"]
-                ),
-                "optimization_effectiveness": orchestrator.learning_model.learning_data[
-                    "optimization_effectiveness"
-                ],
+                "total_patterns_learned": len(orchestrator.learning_model.learning_data["user_patterns"]),
+                "optimization_effectiveness": orchestrator.learning_model.learning_data["optimization_effectiveness"],
                 "top_intents": [
                     "installation",
                     "configuration",
@@ -177,10 +161,7 @@ async def get_workflow_templates(
         orchestrator = await get_orchestrator_instance(request)
 
         # Issue #372: Use model method to reduce feature envy
-        templates = [
-            template.to_summary_dict()
-            for template in orchestrator.workflow_templates.values()
-        ]
+        templates = [template.to_summary_dict() for template in orchestrator.workflow_templates.values()]
 
         return {"success": True, "templates": templates, "total_count": len(templates)}
 
@@ -202,9 +183,7 @@ async def execute_workflow_template(
         orchestrator = await get_orchestrator_instance(request)
 
         if template_id not in orchestrator.workflow_templates:
-            raise HTTPException(
-                status_code=404, detail=f"Template {template_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
 
         session_id = request_data.get("session_id", "")
         customizations = request_data.get("customizations", {})

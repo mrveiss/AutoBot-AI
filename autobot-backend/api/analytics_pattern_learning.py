@@ -23,11 +23,10 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from api.system_health import ComponentHealth, register_health_probe
+
 from api.schemas_analytics import (
     ActiveLearningQuery,
     ConfidenceLevel,
@@ -46,7 +45,9 @@ from api.schemas_analytics import (
     PatternLearningRegisterResponse,
     PatternUpdate,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +153,7 @@ class PatternStats:
     def total_feedback_count(self) -> int:
         """Get total feedback count (Issue #372 - reduces feature envy)."""
         return (
-            self.correct_count
-            + self.incorrect_count
-            + self.missed_count
-            + self.partial_count
-            + self.irrelevant_count
+            self.correct_count + self.incorrect_count + self.missed_count + self.partial_count + self.irrelevant_count
         )
 
     @property
@@ -197,9 +194,7 @@ class PatternStats:
         """Get most recent code snippet from feedback (Issue #372)."""
         if not self.feedback_history:
             return ""
-        sorted_feedback = sorted(
-            self.feedback_history, key=lambda x: x.timestamp, reverse=True
-        )
+        sorted_feedback = sorted(self.feedback_history, key=lambda x: x.timestamp, reverse=True)
         return sorted_feedback[0].code_snippet or "" if sorted_feedback else ""
 
 
@@ -232,9 +227,7 @@ class PatternLearningEngine:
             try:
                 from autobot_shared.redis_client import get_redis_client
 
-                self.redis_client = get_redis_client(
-                    async_client=True, database="analytics"
-                )
+                self.redis_client = get_redis_client(async_client=True, database="analytics")
                 # Issue #379: Parallelize independent Redis loading operations
                 await asyncio.gather(
                     self._load_patterns_from_redis(),
@@ -258,9 +251,7 @@ class PatternLearningEngine:
             pattern_keys = []
             cursor = 0
             while True:
-                cursor, keys = await self.redis_client.scan(
-                    cursor, match="pattern:definition:*", count=100
-                )
+                cursor, keys = await self.redis_client.scan(cursor, match="pattern:definition:*", count=100)
                 pattern_keys.extend(keys)
                 if cursor == 0:
                     break
@@ -289,9 +280,7 @@ class PatternLearningEngine:
             irrelevant_count=stats_data.get("irrelevant_count", 0),
             raw_score=stats_data.get("raw_score", 0.5),
             confidence_score=stats_data.get("confidence_score", 0.5),
-            last_updated=parse_utc_iso(
-                stats_data.get("last_updated", datetime.now(tz=timezone.utc).isoformat())
-            ),
+            last_updated=parse_utc_iso(stats_data.get("last_updated", datetime.now(tz=timezone.utc).isoformat())),
             version=stats_data.get("version", 1),
         )
 
@@ -304,9 +293,7 @@ class PatternLearningEngine:
             stats_keys = []
             cursor = 0
             while True:
-                cursor, keys = await self.redis_client.scan(
-                    cursor, match="pattern:stats:*", count=100
-                )
+                cursor, keys = await self.redis_client.scan(cursor, match="pattern:stats:*", count=100)
                 stats_keys.extend(keys)
                 if cursor == 0:
                     break
@@ -422,11 +409,7 @@ class PatternLearningEngine:
 
         # Weighted score calculation
         positive = stats.correct_count + (stats.partial_count * 0.5)
-        negative = (
-            stats.incorrect_count
-            + (stats.missed_count * 0.5)
-            + (stats.irrelevant_count * 0.3)
-        )
+        negative = stats.incorrect_count + (stats.missed_count * 0.5) + (stats.irrelevant_count * 0.3)
 
         score = positive / (positive + negative) if (positive + negative) > 0 else 0.5
         return max(0.0, min(1.0, score))
@@ -446,9 +429,7 @@ class PatternLearningEngine:
 
         # Issue #372: Use stats property instead of accessing len() directly
         # Volume factor: confidence in score increases with more feedback
-        volume_factor = min(
-            1.0, stats.feedback_count / 20
-        )  # Max out at 20 feedback items
+        volume_factor = min(1.0, stats.feedback_count / 20)  # Max out at 20 feedback items
 
         # Time-weighted score
         now = datetime.now(tz=timezone.utc)
@@ -499,9 +480,7 @@ class PatternLearningEngine:
                 "timestamp": record.timestamp.isoformat(),
                 "weight": record.weight,
             }
-            await self.redis_client.set(
-                key, json.dumps(data), ex=60 * 60 * 24 * 90
-            )  # 90 day TTL
+            await self.redis_client.set(key, json.dumps(data), ex=60 * 60 * 24 * 90)  # 90 day TTL
         except Exception as e:
             logger.warning("Failed to store feedback in Redis: %s", e)
 
@@ -539,9 +518,7 @@ class PatternLearningEngine:
 
         return new_feedback_count >= 10
 
-    async def get_confidence_scores(
-        self, pattern_ids: Optional[List[str]] = None
-    ) -> List[ConfidenceScore]:
+    async def get_confidence_scores(self, pattern_ids: Optional[List[str]] = None) -> List[ConfidenceScore]:
         """Get confidence scores for patterns."""
         await self.initialize()
 
@@ -557,9 +534,7 @@ class PatternLearningEngine:
 
             # Determine confidence level
             level = ConfidenceLevel.VERY_LOW
-            for lvl, threshold in sorted(
-                CONFIDENCE_THRESHOLDS.items(), key=lambda x: x[1], reverse=True
-            ):
+            for lvl, threshold in sorted(CONFIDENCE_THRESHOLDS.items(), key=lambda x: x[1], reverse=True):
                 if score >= threshold:
                     level = lvl
                     break
@@ -618,9 +593,7 @@ class PatternLearningEngine:
         await self.initialize()
 
         total_patterns = len(self.pattern_stats)
-        total_feedback = sum(
-            len(s.feedback_history) for s in self.pattern_stats.values()
-        )
+        total_feedback = sum(len(s.feedback_history) for s in self.pattern_stats.values())
 
         scores = [s.confidence_score for s in self.pattern_stats.values()]
         avg_confidence = sum(scores) / len(scores) if scores else 0.5
@@ -682,9 +655,7 @@ class PatternLearningEngine:
 
         return sum(improvements) / len(improvements) if improvements else 0.0
 
-    async def get_active_learning_queries(
-        self, limit: int = 10
-    ) -> List[ActiveLearningQuery]:
+    async def get_active_learning_queries(self, limit: int = 10) -> List[ActiveLearningQuery]:
         """
         Generate active learning queries for patterns that need more feedback.
 
@@ -735,10 +706,7 @@ class PatternLearningEngine:
         # Issue #372: Use PatternStats property to reduce feature envy
         if stats.has_conflicting_feedback:
             ratio = stats.correct_count / (stats.correct_count + stats.incorrect_count)
-            return (
-                f"Pattern '{pattern_id}' has mixed feedback "
-                f"({ratio:.1%} positive). Is this match accurate?"
-            )
+            return f"Pattern '{pattern_id}' has mixed feedback " f"({ratio:.1%} positive). Is this match accurate?"
 
         # Issue #372: Use PatternStats properties
         if not stats.has_sufficient_feedback:
@@ -757,9 +725,7 @@ class PatternLearningEngine:
 
         # Initialize stats if not exists
         if pattern.pattern_id not in self.pattern_stats:
-            self.pattern_stats[pattern.pattern_id] = PatternStats(
-                pattern_id=pattern.pattern_id
-            )
+            self.pattern_stats[pattern.pattern_id] = PatternStats(pattern_id=pattern.pattern_id)
 
         # Persist to Redis
         if self.redis_client:
@@ -775,9 +741,7 @@ class PatternLearningEngine:
             "initial_confidence": 0.5,
         }
 
-    async def get_pattern_history(
-        self, pattern_id: str, limit: int = 50
-    ) -> List[Dict[str, Any]]:
+    async def get_pattern_history(self, pattern_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Get feedback history for a pattern."""
         await self.initialize()
 
@@ -785,9 +749,7 @@ class PatternLearningEngine:
             return []
 
         stats = self.pattern_stats[pattern_id]
-        history = sorted(
-            stats.feedback_history, key=lambda x: x.timestamp, reverse=True
-        )[:limit]
+        history = sorted(stats.feedback_history, key=lambda x: x.timestamp, reverse=True)[:limit]
 
         # Issue #372: Use FeedbackRecord.to_dict() to reduce feature envy
         return [r.to_dict() for r in history]
@@ -849,9 +811,7 @@ class PatternLearningEngine:
                 "patterns_analyzed": patterns_analyzed,
             }
 
-    def _analyze_pattern_feedback(
-        self, pattern_id: str, stats: PatternStats
-    ) -> Dict[str, Any]:
+    def _analyze_pattern_feedback(self, pattern_id: str, stats: PatternStats) -> Dict[str, Any]:
         """Analyze feedback to determine if pattern needs updates."""
         analysis = {
             "pattern_id": pattern_id,
@@ -861,10 +821,7 @@ class PatternLearningEngine:
         }
 
         # Check for consistently poor performance
-        if (
-            stats.confidence_score < 0.3
-            and len(stats.feedback_history) >= MIN_FEEDBACK_FOR_CONFIDENCE
-        ):
+        if stats.confidence_score < 0.3 and len(stats.feedback_history) >= MIN_FEEDBACK_FOR_CONFIDENCE:
             analysis["needs_update"] = True
             analysis["update_type"] = "disable_pattern"
             analysis["reason"] = "Consistently low confidence, pattern may be too broad"
@@ -886,9 +843,7 @@ class PatternLearningEngine:
 
         return analysis
 
-    async def _apply_pattern_update(
-        self, pattern_id: str, analysis: Dict[str, Any]
-    ) -> Optional[PatternUpdate]:
+    async def _apply_pattern_update(self, pattern_id: str, analysis: Dict[str, Any]) -> Optional[PatternUpdate]:
         """Apply an update to a pattern based on learning analysis."""
         if not analysis.get("needs_update"):
             return None
@@ -996,7 +951,9 @@ async def get_learning_metrics() -> PatternLearningMetrics:
     return await engine.get_learning_metrics()
 
 
-@router.get("/active-learning", response_model=PatternLearningActiveLearningResponse, summary="Get active learning queries")
+@router.get(
+    "/active-learning", response_model=PatternLearningActiveLearningResponse, summary="Get active learning queries"
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_learning_queries",
@@ -1032,7 +989,11 @@ async def register_pattern(pattern: PatternDefinition) -> Dict[str, Any]:
     return await engine.register_pattern(pattern)
 
 
-@router.get("/patterns/{pattern_id}/history", response_model=PatternLearningHistoryResponse, summary="Get pattern feedback history")
+@router.get(
+    "/patterns/{pattern_id}/history",
+    response_model=PatternLearningHistoryResponse,
+    summary="Get pattern feedback history",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_history",

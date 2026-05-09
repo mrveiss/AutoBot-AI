@@ -118,9 +118,7 @@ async def _check_redis_service_status(conn) -> Optional[ConfigurationResult]:
     return None
 
 
-def _create_redis_error_result(
-    error: Exception, is_ssh_error: bool = False
-) -> ConfigurationResult:
+def _create_redis_error_result(error: Exception, is_ssh_error: bool = False) -> ConfigurationResult:
     """
     Create an error ConfigurationResult for Redis TLS configuration.
 
@@ -357,9 +355,7 @@ class ServiceConfigurator:
 
         WARNING: Ensure all clients have valid certificates before calling this.
         """
-        logger.info(
-            "Enforcing mTLS: requiring client certificates, disabling plain port"
-        )
+        logger.info("Enforcing mTLS: requiring client certificates, disabling plain port")
         return await self.configure_redis_tls(
             auth_clients="yes",
             disable_plain_port=True,

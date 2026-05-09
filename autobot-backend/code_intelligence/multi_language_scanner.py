@@ -93,13 +93,9 @@ class CodebaseScanner:
 
         return result
 
-    def _filter_issues_by_language(
-        self, result: AnalysisResult, languages: Set[Language]
-    ) -> AnalysisResult:
+    def _filter_issues_by_language(self, result: AnalysisResult, languages: Set[Language]) -> AnalysisResult:
         """Filter analysis result to only include specified languages. Issue #620."""
-        filtered_issues = [
-            issue for issue in result.issues if issue.language in languages
-        ]
+        filtered_issues = [issue for issue in result.issues if issue.language in languages]
         new_result = AnalysisResult(
             files_analyzed=result.files_analyzed,
             errors=result.errors,
@@ -240,9 +236,7 @@ class CodebaseScanner:
         """
         from code_intelligence.base_analyzer import IssueCategory
 
-        return [
-            issue for issue in result.issues if issue.category == IssueCategory.SECURITY
-        ]
+        return [issue for issue in result.issues if issue.category == IssueCategory.SECURITY]
 
     def get_performance_issues(self, result: AnalysisResult) -> List[AnalysisIssue]:
         """Get all performance-related issues.
@@ -255,11 +249,7 @@ class CodebaseScanner:
         """
         from code_intelligence.base_analyzer import IssueCategory
 
-        return [
-            issue
-            for issue in result.issues
-            if issue.category == IssueCategory.PERFORMANCE
-        ]
+        return [issue for issue in result.issues if issue.category == IssueCategory.PERFORMANCE]
 
     def generate_report(self, result: AnalysisResult) -> Dict[str, Any]:
         """Generate a comprehensive scan report.
@@ -305,12 +295,8 @@ class CodebaseScanner:
             "by_category": category_counts,
             "by_language": result.issues_by_language,
             "top_files": [{"file": f, "issues": c} for f, c in top_files],
-            "high_priority": [
-                issue.to_dict() for issue in self.get_high_severity_issues(result)[:20]
-            ],
-            "security_issues": [
-                issue.to_dict() for issue in self.get_security_issues(result)[:20]
-            ],
+            "high_priority": [issue.to_dict() for issue in self.get_high_severity_issues(result)[:20]],
+            "security_issues": [issue.to_dict() for issue in self.get_security_issues(result)[:20]],
         }
 
     def get_scan_history(self) -> List[Dict[str, Any]]:

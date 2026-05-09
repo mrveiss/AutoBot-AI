@@ -11,11 +11,11 @@ with confidence.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from tests.fixtures import make_async_redis, patch_async_redis
+import pytest
 
+from tests.fixtures import make_async_redis, patch_async_redis
 
 # ---------------------------------------------------------------------------
 # make_async_redis — defaults + override + extras
@@ -150,9 +150,7 @@ async def test_patch_async_redis_basic_use() -> None:
     """The patched callable returns the mock when awaited — the #7216
     bug class (``patch(..., return_value=mock)`` returns default
     AsyncMock when awaited) cannot recur with this helper."""
-    with patch_async_redis(
-        "autobot_shared.redis_client.get_async_redis_client"
-    ) as redis:
+    with patch_async_redis("autobot_shared.redis_client.get_async_redis_client") as redis:
         redis.get = AsyncMock(return_value=b"hit")
         result = await _fake_production_function()
         assert result == b"hit"
@@ -163,9 +161,7 @@ async def test_patch_async_redis_with_preconfigured() -> None:
     """Passing a pre-configured redis lets callers set up state
     declaratively and reuse the same mock across multiple patches."""
     redis = make_async_redis(get_returns=b"shared")
-    with patch_async_redis(
-        "autobot_shared.redis_client.get_async_redis_client", redis=redis
-    ):
+    with patch_async_redis("autobot_shared.redis_client.get_async_redis_client", redis=redis):
         assert await _fake_production_function() == b"shared"
 
 
@@ -178,11 +174,10 @@ async def test_patch_async_redis_returns_async_callable() -> None:
     """
     from autobot_shared.redis_client import get_async_redis_client as orig
 
-    with patch_async_redis(
-        "autobot_shared.redis_client.get_async_redis_client"
-    ) as redis:
+    with patch_async_redis("autobot_shared.redis_client.get_async_redis_client") as redis:
         # The patched function is now an AsyncMock; awaiting it returns redis.
         from autobot_shared.redis_client import get_async_redis_client
+
         awaited = await get_async_redis_client(database="main")
         assert awaited is redis  # ← THE pin: not just truthy, the same object
 

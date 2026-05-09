@@ -114,9 +114,7 @@ class TestRiskFactorScore:
 
     def test_weighted_score_calculation(self):
         """Test weighted score property."""
-        score = RiskFactorScore(
-            factor=RiskFactor.COMPLEXITY, score=80.0, weight=0.2, details="High"
-        )
+        score = RiskFactorScore(factor=RiskFactor.COMPLEXITY, score=80.0, weight=0.2, details="High")
         assert score.weighted_score == 16.0
 
     def test_to_dict(self):
@@ -161,9 +159,7 @@ class TestFileRiskAssessment:
             file_path="src/example.py",
             risk_score=75.0,
             risk_level=RiskLevel.HIGH,
-            factor_scores=[
-                RiskFactorScore(factor=RiskFactor.COMPLEXITY, score=80.0, weight=0.15)
-            ],
+            factor_scores=[RiskFactorScore(factor=RiskFactor.COMPLEXITY, score=80.0, weight=0.15)],
             bug_count_history=5,
             prevention_tips=["Add tests"],
             suggested_tests=["Test edge cases"],

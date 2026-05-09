@@ -20,9 +20,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Ensure the autobot-backend package root is on sys.path
 # ---------------------------------------------------------------------------
-_BACKEND_DIR = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
@@ -59,9 +57,7 @@ class TestRegisteredTypes:
             "notion",
             "database",
         ):
-            assert type_name in view, (
-                "registered_types() missing built-in %s" % type_name
-            )
+            assert type_name in view, "registered_types() missing built-in %s" % type_name
 
     def test_classes_match_private_dict(self):
         # Source of truth inside this test is the private dict — the public

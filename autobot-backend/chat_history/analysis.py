@@ -24,9 +24,7 @@ _BOT_SENDER_TYPES = frozenset({"bot", "assistant"})
 TOPIC_PATTERNS = {
     "installation": frozenset(["install", "setup", "configure", "deployment"]),
     "troubleshooting": frozenset(["error", "issue", "problem", "fix", "debug"]),
-    "architecture": frozenset(
-        ["architecture", "design", "vm", "distributed", "service"]
-    ),
+    "architecture": frozenset(["architecture", "design", "vm", "distributed", "service"]),
     "api": frozenset(["api", "endpoint", "request", "integration"]),
     "knowledge_base": frozenset(["knowledge", "document", "upload", "vectorize"]),
     "chat": frozenset(["chat", "conversation", "message", "response"]),
@@ -107,9 +105,7 @@ class AnalysisMixin:
             "bot_message_count": bot_message_count,
         }
 
-    def _extract_conversation_metadata(
-        self, messages: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _extract_conversation_metadata(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Extract metadata from conversation messages for Memory Graph entity.
 
@@ -121,13 +117,9 @@ class AnalysisMixin:
         """
         try:
             if not messages:
-                return self._build_metadata_result(
-                    [], [], "Empty conversation", 0, 0, 0
-                )
+                return self._build_metadata_result([], [], "Empty conversation", 0, 0, 0)
 
-            all_text, user_messages, bot_messages = self._categorize_messages_by_sender(
-                messages
-            )
+            all_text, user_messages, bot_messages = self._categorize_messages_by_sender(messages)
 
             topics = self._extract_topics(all_text)
             entity_mentions = self._detect_entity_mentions(all_text)
@@ -206,9 +198,7 @@ class AnalysisMixin:
 
         return list(mentions)
 
-    def _generate_conversation_summary(
-        self, user_messages: List[str], bot_messages: List[str]
-    ) -> str:
+    def _generate_conversation_summary(self, user_messages: List[str], bot_messages: List[str]) -> str:
         """
         Generate brief summary of conversation.
 

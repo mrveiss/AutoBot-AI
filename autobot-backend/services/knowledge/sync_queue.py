@@ -90,12 +90,8 @@ class SyncQueueEntry:
     status: SyncStatus = SyncStatus.PENDING
     attempts: int = 0
     last_error: Optional[str] = None
-    created_at: str = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
     def to_redis_mapping(self) -> Dict[str, str]:
         """Serialize to a flat string mapping suitable for Redis HSET."""
@@ -184,9 +180,7 @@ class DocumentSyncQueue:
     # Public API
     # ------------------------------------------------------------------
 
-    async def enqueue_sync(
-        self, document_path: str, reason: SyncReason
-    ) -> SyncQueueEntry:
+    async def enqueue_sync(self, document_path: str, reason: SyncReason) -> SyncQueueEntry:
         """Create a pending entry for ``document_path`` and return it.
 
         Dedups by ``document_path``: if an entry for this path is already
@@ -381,9 +375,7 @@ class DocumentSyncQueue:
     # Admin / introspection
     # ------------------------------------------------------------------
 
-    async def list_entries(
-        self, status: SyncStatus, limit: int = 100, offset: int = 0
-    ) -> List[SyncQueueEntry]:
+    async def list_entries(self, status: SyncStatus, limit: int = 100, offset: int = 0) -> List[SyncQueueEntry]:
         """List entries with the given status, newest first for non-pending.
 
         For ``pending`` the queue order (priority ascending) is returned so
@@ -505,9 +497,7 @@ async def _reindex_processor(entry: SyncQueueEntry) -> None:
     result = await indexer.index_file(Path(entry.document_path), force=True)
     if result.failed:
         # Surface the underlying reason so mark_failed has a useful message.
-        raise RuntimeError(
-            "; ".join(result.errors) if result.errors else "indexing failed"
-        )
+        raise RuntimeError("; ".join(result.errors) if result.errors else "indexing failed")
 
 
 class SyncQueueWorker:

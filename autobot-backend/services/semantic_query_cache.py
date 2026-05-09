@@ -306,9 +306,7 @@ class SemanticQueryCache(AsyncInitializable):
                 if embedding is None:
                     return False
 
-            success = await self._persist_entry(
-                query, response_text, model, embedding, metadata
-            )
+            success = await self._persist_entry(query, response_text, model, embedding, metadata)
             if not success:
                 return False
 

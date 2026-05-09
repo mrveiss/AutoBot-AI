@@ -21,7 +21,10 @@ async def test_simple_terminal():
     session_id = f"test_{int(time.time())}"
     print(f"📝 Session ID: {session_id}")  # noqa: print
 
-    uri = get_test_backend_url().replace("https://", "wss://").replace("http://", "ws://") + f"/api/terminal/ws/{session_id}"
+    uri = (
+        get_test_backend_url().replace("https://", "wss://").replace("http://", "ws://")
+        + f"/api/terminal/ws/{session_id}"
+    )
     print(f"🔗 Connecting to: {uri}")  # noqa: print
 
     try:
@@ -36,9 +39,7 @@ async def test_simple_terminal():
 
                     data = json.loads(response)
                     if data.get("type") == "output" and "$" in data.get("content", ""):
-                        print(  # noqa: print
-                            "✅ Got initial prompt - ready to send commands!"
-                        )  # noqa: print
+                        print("✅ Got initial prompt - ready to send commands!")  # noqa: print  # noqa: print
                         break
 
                 except asyncio.TimeoutError:
@@ -82,9 +83,7 @@ async def test_simple_terminal():
                             elif "Simple terminal test" in content:
                                 print("✅ echo command worked!")  # noqa: print
                                 output_received = True
-                            elif cmd.startswith("ls") and (
-                                "total" in content or "drwx" in content
-                            ):
+                            elif cmd.startswith("ls") and ("total" in content or "drwx" in content):
                                 print("✅ ls command worked!")  # noqa: print
                                 output_received = True
                             elif cmd.startswith("cd /tmp") and "/tmp" in content:
@@ -124,14 +123,10 @@ async def test_sessions_api():
     import requests
 
     try:
-        response = requests.get(
-            get_test_backend_url() + "/api/terminal/sessions", timeout=5
-        )
+        response = requests.get(get_test_backend_url() + "/api/terminal/sessions", timeout=5)
         if response.status_code == 200:
             sessions = response.json()
-            print(  # noqa: print
-                f"✅ Simple sessions API working: {json.dumps(sessions, indent=2)}"
-            )  # noqa: print
+            print(f"✅ Simple sessions API working: {json.dumps(sessions, indent=2)}")  # noqa: print  # noqa: print
             return True
         else:
             print(f"❌ Sessions API failed: {response.status_code}")  # noqa: print
@@ -174,9 +169,7 @@ async def main():
         print(  # noqa: print
             f"  WebSocket: {_base.replace('https://', 'wss://').replace('http://', 'ws://')}/api/terminal/ws/{{session_id}}"
         )  # noqa: print
-        print(  # noqa: print
-            f"  Sessions:  {_base}/api/terminal/sessions"
-        )  # noqa: print
+        print(f"  Sessions:  {_base}/api/terminal/sessions")  # noqa: print  # noqa: print
     else:
         print("\n💥 Some tests failed - simple terminal needs fixes")  # noqa: print
 

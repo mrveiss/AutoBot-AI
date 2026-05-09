@@ -156,11 +156,7 @@ class AgentEvent:
         return cls(
             event_id=data["event_id"],
             event_type=EventType[data["event_type"]],
-            timestamp=(
-                parse_utc_iso(data["timestamp"])
-                if isinstance(data["timestamp"], str)
-                else data["timestamp"]
-            ),
+            timestamp=(parse_utc_iso(data["timestamp"]) if isinstance(data["timestamp"], str) else data["timestamp"]),
             content=data.get("content", {}),
             source=data.get("source", "unknown"),
             agent_id=data.get("agent_id"),
@@ -407,16 +403,14 @@ def _validate_artifact_serialization(artifacts: list["TaskArtifact"]) -> None:
             serialized = json.dumps(artifact_dict, ensure_ascii=False)
         except (TypeError, ValueError) as exc:
             raise ValueError(
-                f"Artifact at index {idx} (label={artifact.label!r}) is not "
-                f"JSON-serializable: {exc}"
+                f"Artifact at index {idx} (label={artifact.label!r}) is not " f"JSON-serializable: {exc}"
             ) from exc
 
         try:
             restored_dict = json.loads(serialized)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"Artifact at index {idx} (label={artifact.label!r}) produced "
-                f"invalid JSON: {exc}"
+                f"Artifact at index {idx} (label={artifact.label!r}) produced " f"invalid JSON: {exc}"
             ) from exc
 
         if restored_dict != artifact_dict:

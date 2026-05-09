@@ -46,11 +46,7 @@ def _find_message_field(request_data: Dict[str, Any]) -> Optional[str]:
 def _update_request_headers(request: Request, modified_body: bytes) -> None:
     """Update request headers with new content length (Issue #337 - extracted helper)."""
     request.headers.__dict__["_list"] = [
-        (
-            (k.encode(), v.encode())
-            if k.lower() != "content-length"
-            else (k.encode(), str(len(modified_body)).encode())
-        )
+        ((k.encode(), v.encode()) if k.lower() != "content-length" else (k.encode(), str(len(modified_body)).encode()))
         for k, v in request.headers.items()
     ]
 
@@ -90,9 +86,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             logger.error("Failed to initialize LLM awareness: %s", e)
             return False
 
-    async def _inject_awareness_into_field(
-        self, request_data: Dict[str, Any], field: str
-    ) -> bytes:
+    async def _inject_awareness_into_field(self, request_data: Dict[str, Any], field: str) -> bytes:
         """Inject awareness context into a message field (Issue #337 - extracted helper)."""
         context_level = request_data.get("context_level", "basic")
         enhanced_message = await self.awareness.inject_awareness_context(
@@ -123,9 +117,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             modified_body = await self._inject_awareness_into_field(request_data, field)
             request._body = modified_body
             _update_request_headers(request, modified_body)
-            logger.debug(
-                "Injected awareness context for %s in %s", field, request.url.path
-            )
+            logger.debug("Injected awareness context for %s in %s", field, request.url.path)
 
         except Exception as e:
             logger.error("Error injecting awareness context: %s", e)
@@ -146,15 +138,9 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             try:
                 context = await self._get_cached_context()
                 if context:
-                    response.headers["X-AutoBot-Phase"] = context["system_identity"][
-                        "current_phase"
-                    ]
-                    response.headers["X-AutoBot-Maturity"] = str(
-                        context["system_identity"]["system_maturity"]
-                    )
-                    response.headers["X-AutoBot-Capabilities"] = str(
-                        context["current_capabilities"]["count"]
-                    )
+                    response.headers["X-AutoBot-Phase"] = context["system_identity"]["current_phase"]
+                    response.headers["X-AutoBot-Maturity"] = str(context["system_identity"]["system_maturity"])
+                    response.headers["X-AutoBot-Capabilities"] = str(context["current_capabilities"]["count"])
             except Exception as e:
                 logger.error("Error adding awareness headers: %s", e)
 
@@ -173,9 +159,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
 
             # Refresh cache
             if self.awareness:
-                self.context_cache = await self.awareness.get_system_context(
-                    include_detailed=False
-                )
+                self.context_cache = await self.awareness.get_system_context(include_detailed=False)
                 self.cache_timestamp = datetime.now(tz=timezone.utc)
                 return self.context_cache
 
@@ -192,14 +176,10 @@ class LLMAwarenessInjector:
         """Initialize LLM awareness injector with self-awareness module."""
         self.awareness = get_llm_self_awareness()
 
-    async def inject_into_message(
-        self, message: str, context_level: str = "basic"
-    ) -> str:
+    async def inject_into_message(self, message: str, context_level: str = "basic") -> str:
         """Manually inject awareness context into a message"""
         try:
-            return await self.awareness.inject_awareness_context(
-                message, context_level=context_level
-            )
+            return await self.awareness.inject_awareness_context(message, context_level=context_level)
         except Exception as e:
             logger.error("Error in manual awareness injection: %s", e)
             return message
@@ -216,16 +196,12 @@ Active capabilities ({context['current_capabilities']['count']}):"""
             # Add capability categories using list + join (O(n)) instead of += (O(n²))
             cap_lines = [
                 f"- {category.title()}: {len(caps)} capabilities"
-                for category, caps in context["current_capabilities"][
-                    "categories"
-                ].items()
+                for category, caps in context["current_capabilities"]["categories"].items()
                 if caps
             ]
             prefix += "\n" + "\n".join(cap_lines) if cap_lines else ""
 
-            prefix += (
-                "\n\nRespond based on your current capabilities and system state.\n"
-            )
+            prefix += "\n\nRespond based on your current capabilities and system state.\n"
 
             return prefix
 

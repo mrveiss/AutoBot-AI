@@ -14,8 +14,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from auth_middleware import check_admin_permission
-from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
+
 from api.schemas_agent import (
     PersonalityProfileCreate,
     PersonalityProfileDetail,
@@ -24,7 +23,9 @@ from api.schemas_agent import (
     PersonalityStatusResponse,
     PersonalityToggleRequest,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
@@ -194,9 +195,7 @@ async def delete_profile(pid: str) -> None:
     except ValueError as exc:
         detail = str(exc)
         if "system profile" in detail:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=detail
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
         raise _not_found(pid) from exc
 
 

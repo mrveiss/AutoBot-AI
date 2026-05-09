@@ -133,13 +133,9 @@ class OptimizedLLMMiddleware:
 
         # Execute with appropriate strategy
         if self._router.is_cloud_provider(provider_type):
-            response = await self._execute_cloud_optimized(
-                optimized_request, handler, provider_type
-            )
+            response = await self._execute_cloud_optimized(optimized_request, handler, provider_type)
         else:
-            response = await self._execute_local_optimized(
-                optimized_request, handler, provider_type
-            )
+            response = await self._execute_local_optimized(optimized_request, handler, provider_type)
 
         # Post-request optimizations
         response = await self._apply_post_optimizations(response, provider_type)
@@ -150,21 +146,15 @@ class OptimizedLLMMiddleware:
 
         return response
 
-    async def _apply_pre_optimizations(
-        self, request: LLMRequest, provider_type: ProviderType
-    ) -> LLMRequest:
+    async def _apply_pre_optimizations(self, request: LLMRequest, provider_type: ProviderType) -> LLMRequest:
         """Apply pre-request optimizations."""
         # Apply prompt compression if enabled
-        if self._router.should_apply(
-            OptimizationCategory.PROMPT_COMPRESSION, provider_type
-        ):
+        if self._router.should_apply(OptimizationCategory.PROMPT_COMPRESSION, provider_type):
             request = await self._compress_request_prompts(request)
 
         return request
 
-    def _compress_single_message(
-        self, msg: Dict[str, Any]
-    ) -> tuple[Dict[str, Any], int, int]:
+    def _compress_single_message(self, msg: Dict[str, Any]) -> tuple[Dict[str, Any], int, int]:
         """Compress a single message and return compressed message with token counts. Issue #620."""
         content = msg.get("content", "")
         if not content:
@@ -228,9 +218,7 @@ class OptimizedLLMMiddleware:
                 self._metrics.requests_with_compression += 1
                 self._metrics.compression_tokens_saved += tokens_saved
 
-        return self._build_compressed_request(
-            request, compressed_messages, original_tokens, compressed_tokens
-        )
+        return self._build_compressed_request(request, compressed_messages, original_tokens, compressed_tokens)
 
     async def _execute_cloud_optimized(
         self,
@@ -242,9 +230,7 @@ class OptimizedLLMMiddleware:
         provider_name = provider_type.value
 
         # Apply rate limit handling
-        if self._router.should_apply(
-            OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
-        ):
+        if self._router.should_apply(OptimizationCategory.RATE_LIMIT_HANDLING, provider_type):
             try:
                 response = await self._rate_limiter.execute_with_retry(
                     lambda: handler(request),
@@ -270,9 +256,7 @@ class OptimizedLLMMiddleware:
         # prompt compression is applied.
         return await handler(request)
 
-    async def _apply_post_optimizations(
-        self, response: LLMResponse, provider_type: ProviderType
-    ) -> LLMResponse:
+    async def _apply_post_optimizations(self, response: LLMResponse, provider_type: ProviderType) -> LLMResponse:
         """Apply post-response optimizations."""
         # Currently no post-response optimizations needed
         # Future: Response validation, token counting, etc.
@@ -284,9 +268,7 @@ class OptimizedLLMMiddleware:
             total = self._metrics.total_requests
             current_avg = self._metrics.avg_latency_improvement_ms
             # Rolling average
-            self._metrics.avg_latency_improvement_ms = (
-                current_avg * (total - 1) + latency_ms
-            ) / total
+            self._metrics.avg_latency_improvement_ms = (current_avg * (total - 1) + latency_ms) / total
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get optimization metrics."""

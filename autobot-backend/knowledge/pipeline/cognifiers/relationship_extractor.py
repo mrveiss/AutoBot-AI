@@ -242,12 +242,8 @@ class RelationshipExtractor(BaseCognifier):
         """Extract relationships from a single chunk."""
         try:
             entity_list = self._format_entity_list(entities, chunk)
-            prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(
-                entities=entity_list, text=chunk.content
-            )
-            response = await self.llm.chat(
-                [{"role": "user", "content": prompt}]
-            )
+            prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
+            response = await self.llm.chat([{"role": "user", "content": prompt}])
             parsed = parse_llm_json_response(response.content)
             raw_rels = parsed if isinstance(parsed, list) else []
             return self._convert_to_relationships(raw_rels, chunk, entity_map)
@@ -297,9 +293,7 @@ class RelationshipExtractor(BaseCognifier):
                 if rel_type not in RelationType.__args__:
                     rel_type = "RELATES_TO"
 
-                bidirectional = (
-                    raw.get("bidirectional", False) or rel_type in SYMMETRIC_RELATIONS
-                )
+                bidirectional = raw.get("bidirectional", False) or rel_type in SYMMETRIC_RELATIONS
 
                 rel = Relationship(
                     source_entity_id=source_entity.id,

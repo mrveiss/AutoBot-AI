@@ -17,8 +17,8 @@ from typing import Any, Dict, Optional
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from models.process_run import AgentSession
 from autobot_shared.time_utils import now_utc
+from models.process_run import AgentSession
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +46,11 @@ class AgentSessionService:
         """
         now = now_utc()
         expires_at = now + timedelta(seconds=ttl_seconds)
-        session_id = await self._upsert_session(
-            agent_id, task_id, state, ttl_seconds, expires_at
-        )
-        logger.info(
-            "Session saved: agent=%s task=%s ttl=%ss", agent_id, task_id, ttl_seconds
-        )
+        session_id = await self._upsert_session(agent_id, task_id, state, ttl_seconds, expires_at)
+        logger.info("Session saved: agent=%s task=%s ttl=%ss", agent_id, task_id, ttl_seconds)
         return str(session_id)
 
-    async def load_session(
-        self, agent_id: str, task_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def load_session(self, agent_id: str, task_id: str) -> Optional[Dict[str, Any]]:
         """
         Return session state for (agent_id, task_id), or None if absent/expired (#1406).
 
@@ -79,9 +73,7 @@ class AgentSessionService:
         """
         now = now_utc()
         async with self._session_factory() as session:
-            result = await session.execute(
-                delete(AgentSession).where(AgentSession.expires_at < now)
-            )
+            result = await session.execute(delete(AgentSession).where(AgentSession.expires_at < now))
             await session.commit()
             count = result.rowcount
         logger.info("Cleaned up %s expired agent sessions", count)
@@ -124,9 +116,7 @@ class AgentSessionService:
 # -- Module-level helpers --------------------------------------------------
 
 
-async def _fetch_session(
-    session: Any, agent_id: str, task_id: str
-) -> Optional[AgentSession]:
+async def _fetch_session(session: Any, agent_id: str, task_id: str) -> Optional[AgentSession]:
     """Fetch an AgentSession row for (agent_id, task_id) (#1406)."""
     result = await session.execute(
         select(AgentSession)

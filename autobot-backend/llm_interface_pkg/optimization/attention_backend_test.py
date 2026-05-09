@@ -94,9 +94,7 @@ class TestBlocklist:
     def test_blocklist_matches_model_name(self):
         """Blocklist should match on model_name as well as model_type."""
         sel = _make_selector()
-        cfg = ModelConfig(
-            model_name="mistralai/Mixtral-8x7B-Instruct-v0.1", model_type=""
-        )
+        cfg = ModelConfig(model_name="mistralai/Mixtral-8x7B-Instruct-v0.1", model_type="")
         assert sel._is_blocklisted(cfg)
 
     def test_blocklist_is_case_insensitive(self):
@@ -187,9 +185,7 @@ class TestSelectBackend:
         "llm_interface_pkg.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
         return_value=False,
     )
-    def test_blocklisted_model_falls_to_vanilla_without_sdpa(
-        self, _mock_sdpa, _mock_bt
-    ):
+    def test_blocklisted_model_falls_to_vanilla_without_sdpa(self, _mock_sdpa, _mock_bt):
         """Blocklisted model without SDPA must still get Vanilla."""
         sel = _make_selector()
         result = sel.select_backend(ModelConfig(model_type="mistral"))
@@ -204,9 +200,7 @@ class TestSelectBackend:
 class TestApplyBackend:
     """Tests for AttentionBackendSelector.apply_backend fallback chain."""
 
-    @patch(
-        "llm_interface_pkg.optimization.attention_backend._import_better_transformer"
-    )
+    @patch("llm_interface_pkg.optimization.attention_backend._import_better_transformer")
     def test_bt_applied_successfully(self, mock_bt_import):
         """apply_backend returns the transformed model on BT success."""
         transformed_model = MagicMock(name="transformed_model")
@@ -219,9 +213,7 @@ class TestApplyBackend:
         assert result is transformed_model
         mock_bt_cls.transform.assert_called_once()
 
-    @patch(
-        "llm_interface_pkg.optimization.attention_backend._import_better_transformer"
-    )
+    @patch("llm_interface_pkg.optimization.attention_backend._import_better_transformer")
     @patch(
         "llm_interface_pkg.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
         return_value=True,
@@ -256,9 +248,7 @@ class TestApplyBackend:
         result = sel.apply_backend(model, AttentionBackend.VANILLA)
         assert result is model
 
-    @patch(
-        "llm_interface_pkg.optimization.attention_backend._import_better_transformer"
-    )
+    @patch("llm_interface_pkg.optimization.attention_backend._import_better_transformer")
     @patch(
         "llm_interface_pkg.optimization.attention_backend.AttentionBackendSelector._try_apply_sdpa",
         return_value=None,

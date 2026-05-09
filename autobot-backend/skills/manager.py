@@ -225,9 +225,7 @@ class SkillManager:
                 packages = []
                 for entry in catalog_entries:
                     try:
-                        pkg = await importer.install_from_catalog(
-                            entry.get("name", "unknown"), entry, repo_id=repo_id
-                        )
+                        pkg = await importer.install_from_catalog(entry.get("name", "unknown"), entry, repo_id=repo_id)
                         packages.append(pkg)
                     except ValueError as exc:
                         logger.warning("Skipping catalog entry: %s", exc)
@@ -239,9 +237,7 @@ class SkillManager:
 
             imported: List[Dict[str, Any]] = []
             for pkg in packages:
-                existing = await session.scalar(
-                    select(SkillPackage).where(SkillPackage.name == pkg.name)
-                )
+                existing = await session.scalar(select(SkillPackage).where(SkillPackage.name == pkg.name))
                 if existing is not None:
                     logger.debug("Skill '%s' already in DB, skipping", pkg.name)
                     continue

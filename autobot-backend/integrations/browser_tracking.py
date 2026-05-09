@@ -57,10 +57,7 @@ async def _invoke_browser_activity_tracker(
             secrets_used=secrets_used,
             metadata=metadata,
         )
-        logger.info(
-            f"Browser activity tracked: user={user_id}, "
-            f"action={action}, url={url[:50]}"
-        )
+        logger.info(f"Browser activity tracked: user={user_id}, " f"action={action}, url={url[:50]}")
         return activity_id
     except Exception as e:
         logger.error(

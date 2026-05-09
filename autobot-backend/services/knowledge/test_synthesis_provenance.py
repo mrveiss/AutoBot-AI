@@ -408,9 +408,7 @@ class TestGetBestRunIdForCollection:
             svc = SynthesisProvenanceLog()
             result = await svc.get_best_run_id_for_collection("kb_synthesis")
         assert result == "run-best"
-        mock_redis.zrevrange.assert_called_once_with(
-            "kb:synthesis:best:kb_synthesis", 0, 0
-        )
+        mock_redis.zrevrange.assert_called_once_with("kb:synthesis:best:kb_synthesis", 0, 0)
 
     @pytest.mark.asyncio
     async def test_returns_none_on_redis_error(self):
@@ -448,9 +446,7 @@ class TestLogRunCollectionIndex:
                 collection_name="kb_synthesis",
                 score=0.75,
             )
-        mock_redis._pipe.zadd.assert_called_once_with(
-            "kb:synthesis:best:kb_synthesis", {"run-1": 0.75}
-        )
+        mock_redis._pipe.zadd.assert_called_once_with("kb:synthesis:best:kb_synthesis", {"run-1": 0.75})
 
     @pytest.mark.asyncio
     async def test_zadd_not_called_when_no_collection_name(self):

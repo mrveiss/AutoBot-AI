@@ -157,14 +157,10 @@ class ConversationContextAnalyzer:
                 last_assistant_msg = msg.get("content", "")
                 break
 
-        has_recent_question = (
-            self._has_question(last_assistant_msg) if last_assistant_msg else False
-        )
+        has_recent_question = self._has_question(last_assistant_msg) if last_assistant_msg else False
         has_active_task = self._has_active_task(conversation_history)
         has_confusion_signals = self._has_confusion_signals(current_message)
-        engagement_level = self._assess_engagement(
-            conversation_history, current_message
-        )
+        engagement_level = self._assess_engagement(conversation_history, current_message)
         topic = self._determine_topic(conversation_history)
 
         return ConversationContext(
@@ -198,11 +194,7 @@ class ConversationContextAnalyzer:
     def _has_active_task(self, conversation_history: List[Dict[str, str]]) -> bool:
         """Check if there's an active task in recent conversation"""
         # Look at last 3 messages
-        recent_messages = (
-            conversation_history[-3:]
-            if len(conversation_history) >= 3
-            else conversation_history
-        )
+        recent_messages = conversation_history[-3:] if len(conversation_history) >= 3 else conversation_history
 
         for msg in recent_messages:
             content = msg.get("content", "").lower()
@@ -214,9 +206,7 @@ class ConversationContextAnalyzer:
     def _has_confusion_signals(self, message: str) -> bool:
         """Check if user is expressing confusion"""
         message_lower = message.lower()
-        return any(
-            indicator in message_lower for indicator in self.CONFUSION_INDICATORS
-        )
+        return any(indicator in message_lower for indicator in self.CONFUSION_INDICATORS)
 
     def _assess_engagement(
         self,
@@ -237,9 +227,7 @@ class ConversationContextAnalyzer:
             return "high"
 
         # Questions or task requests = high engagement
-        if "?" in current_message or any(
-            word in current_message.lower() for word in _ENGAGEMENT_KEYWORDS
-        ):
+        if "?" in current_message or any(word in current_message.lower() for word in _ENGAGEMENT_KEYWORDS):
             return "high"
 
         # Short conversation but engaged message = medium
@@ -249,9 +237,7 @@ class ConversationContextAnalyzer:
         # Default to medium
         return "medium"
 
-    def _determine_topic(
-        self, conversation_history: List[Dict[str, str]]
-    ) -> Optional[str]:
+    def _determine_topic(self, conversation_history: List[Dict[str, str]]) -> Optional[str]:
         """
         Determine current conversation topic.
 
@@ -261,9 +247,7 @@ class ConversationContextAnalyzer:
             return None
 
         # Simple topic detection based on keywords in recent messages
-        recent_content = " ".join(
-            msg.get("content", "").lower() for msg in conversation_history[-3:]
-        )
+        recent_content = " ".join(msg.get("content", "").lower() for msg in conversation_history[-3:])
 
         # Issue #380: Use module-level topic keywords constant
         for topic, keywords in _TOPIC_KEYWORDS.items():
@@ -272,9 +256,7 @@ class ConversationContextAnalyzer:
 
         return "general"
 
-    def trigger_skill_extraction_async(
-        self, session_id: str, conversation_history: List[Dict[str, str]]
-    ) -> None:
+    def trigger_skill_extraction_async(self, session_id: str, conversation_history: List[Dict[str, str]]) -> None:
         """
         Trigger post-completion skill extraction (non-blocking).
 
@@ -290,9 +272,7 @@ class ConversationContextAnalyzer:
 
         try:
             # Fire-and-forget: schedule as background task
-            asyncio.create_task(
-                self.on_conversation_complete(session_id, conversation_history)
-            )
+            asyncio.create_task(self.on_conversation_complete(session_id, conversation_history))
             logger.debug(
                 "Enqueued skill extraction for session %s (%d messages)",
                 session_id,

@@ -77,10 +77,7 @@ class JSONFormatterAgent(StandardizedAgent):
 
     def _get_system_prompt(self) -> str:
         """Return agent system prompt."""
-        return (
-            "You are a JSON formatting assistant. "
-            "Parse, validate, and repair malformed JSON responses from LLMs."
-        )
+        return "You are a JSON formatting assistant. " "Parse, validate, and repair malformed JSON responses from LLMs."
 
     def get_capabilities(self) -> List[str]:
         """Return list of supported agent capabilities."""
@@ -152,9 +149,7 @@ class JSONFormatterAgent(StandardizedAgent):
             logger.debug("Direct JSON parse failed, trying extraction: %s", e)
         return None
 
-    def parse_llm_response(
-        self, response: str, expected_schema: Optional[Dict[str, Any]] = None
-    ) -> JSONParseResult:
+    def parse_llm_response(self, response: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
         """
         Parse JSON from an LLM response using multiple strategies.
 
@@ -187,9 +182,7 @@ class JSONFormatterAgent(StandardizedAgent):
             return fixed_result
 
         # Strategy 4: Pattern-based reconstruction
-        reconstructed_result = self._reconstruct_from_patterns(
-            response, expected_schema
-        )
+        reconstructed_result = self._reconstruct_from_patterns(response, expected_schema)
         if reconstructed_result.success:
             return reconstructed_result
 
@@ -229,9 +222,7 @@ class JSONFormatterAgent(StandardizedAgent):
                     self.successful_parses += 1
                 confidence = 0.9 if matches_count == 1 else 0.7
                 if matches_count > 1:
-                    warnings.append(
-                        "Multiple JSON objects found, using first valid one"
-                    )
+                    warnings.append("Multiple JSON objects found, using first valid one")
 
                 return JSONParseResult(
                     success=True,
@@ -378,9 +369,7 @@ class JSONFormatterAgent(StandardizedAgent):
 
         return reconstructed
 
-    def _create_failed_parse_result(
-        self, text: str, method: str, warning_msg: str
-    ) -> JSONParseResult:
+    def _create_failed_parse_result(self, text: str, method: str, warning_msg: str) -> JSONParseResult:
         """
         Create a failed JSONParseResult with standard structure.
 
@@ -418,9 +407,7 @@ class JSONFormatterAgent(StandardizedAgent):
                 "Could not reconstruct from patterns",
             )
 
-        reconstructed = self._reconstruct_values_from_matches(
-            matches, expected_schema, warnings
-        )
+        reconstructed = self._reconstruct_values_from_matches(matches, expected_schema, warnings)
 
         if not reconstructed:
             return self._create_failed_parse_result(
@@ -459,9 +446,7 @@ class JSONFormatterAgent(StandardizedAgent):
             logger.debug("Type conversion failed for field %s: %s", field, e)
             return None
 
-    def _create_fallback_json(
-        self, text: str, expected_schema: Optional[Dict[str, Any]] = None
-    ) -> JSONParseResult:
+    def _create_fallback_json(self, text: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
         """Create a minimal valid JSON as last resort"""
         warnings = ["Using fallback JSON creation"]
 
@@ -483,9 +468,7 @@ class JSONFormatterAgent(StandardizedAgent):
 
         # Try to extract any meaningful values from the text
         for field, expected_type in expected_schema.items():
-            extracted = self._extract_field_value_from_text(
-                text, field, expected_type, warnings
-            )
+            extracted = self._extract_field_value_from_text(text, field, expected_type, warnings)
             if extracted is not None:
                 fallback[field] = extracted
 
@@ -504,9 +487,7 @@ class JSONFormatterAgent(StandardizedAgent):
 
     def _convert_float(self, value: str) -> float:
         """Convert string to float (Issue #334 - extracted helper)."""
-        return (
-            float(value) if value.replace(".", "").replace("-", "").isdigit() else 0.0
-        )
+        return float(value) if value.replace(".", "").replace("-", "").isdigit() else 0.0
 
     def _convert_list(self, value: str) -> list:
         """Convert string to list (Issue #334 - extracted helper)."""
@@ -536,18 +517,14 @@ class JSONFormatterAgent(StandardizedAgent):
         defaults = {str: "unknown", int: 0, float: 0.0, bool: False, list: [], dict: {}}
         return defaults.get(expected_type, None)
 
-    def validate_against_schema(
-        self, data: Dict[str, Any], schema: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def validate_against_schema(self, data: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and fix data against expected schema"""
         validated = {}
 
         for field, expected_type in schema.items():
             if field in data:
                 try:
-                    validated[field] = self._convert_to_type(
-                        str(data[field]), expected_type
-                    )
+                    validated[field] = self._convert_to_type(str(data[field]), expected_type)
                 except Exception:
                     validated[field] = self._get_default_value(expected_type)
             else:
@@ -557,11 +534,7 @@ class JSONFormatterAgent(StandardizedAgent):
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get parsing statistics"""
-        success_rate = (
-            (self.successful_parses / self.parse_attempts)
-            if self.parse_attempts > 0
-            else 0
-        )
+        success_rate = (self.successful_parses / self.parse_attempts) if self.parse_attempts > 0 else 0
 
         return {
             "total_attempts": self.parse_attempts,
@@ -575,9 +548,7 @@ class JSONFormatterAgent(StandardizedAgent):
 json_formatter = JSONFormatterAgent()
 
 
-def parse_llm_json(
-    response: str, expected_schema: Optional[Dict[str, Any]] = None
-) -> JSONParseResult:
+def parse_llm_json(response: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
     """
     Convenience function to parse JSON from LLM response.
 

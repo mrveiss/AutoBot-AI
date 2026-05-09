@@ -5,7 +5,9 @@
 
 import asyncio
 import threading
+
 import pytest
+
 from autobot_shared.singleton_factory import async_lazy_singleton, lazy_optional_singleton, lazy_singleton
 
 

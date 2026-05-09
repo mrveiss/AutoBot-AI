@@ -123,9 +123,7 @@ class TestCreateObservationEvent:
 
     def test_artifacts_carried_in_event_content(self):
         art = build_artifact(ArtifactType.TEST_OUTPUT, "3 passed")
-        evt = create_observation_event(
-            "act-2", "pytest_runner", True, task_id="t-1", artifacts=[art]
-        )
+        evt = create_observation_event("act-2", "pytest_runner", True, task_id="t-1", artifacts=[art])
         obs = ObservationContent.from_dict(evt.content)
         assert len(obs.artifacts) == 1
         assert obs.artifacts[0].artifact_type == ArtifactType.TEST_OUTPUT

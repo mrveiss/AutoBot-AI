@@ -469,9 +469,7 @@ def _should_exclude(file_path: str) -> bool:
     return False
 
 
-def _discover_files(
-    root_dir: Path, tier: Optional[int] = None
-) -> List[Tuple[str, int]]:
+def _discover_files(root_dir: Path, tier: Optional[int] = None) -> List[Tuple[str, int]]:
     """Discover markdown files to index by tier."""
     files: List[Tuple[str, int]] = []
 
@@ -648,9 +646,7 @@ class DocIndexerService:
         """Load synthesis schema from YAML; warn and return empty schema if absent."""
         schema = load_synthesis_schema()
         if not schema.collections:
-            logger.warning(
-                "Synthesis schema is absent or empty — schema-driven synthesis disabled"
-            )
+            logger.warning("Synthesis schema is absent or empty — schema-driven synthesis disabled")
         else:
             logger.debug(
                 "Loaded synthesis schema: %d collection(s)",
@@ -678,9 +674,7 @@ class DocIndexerService:
             # get_default_client takes only **kwargs (#6613) — pass db_path
             # explicitly. Positional call raised TypeError at init, falling
             # the indexer back to slow SCAN paths.
-            self._client = await asyncio.to_thread(
-                get_default_client, db_path=str(chromadb_path)
-            )
+            self._client = await asyncio.to_thread(get_default_client, db_path=str(chromadb_path))
 
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
@@ -694,15 +688,11 @@ class DocIndexerService:
                 get_org_knowledge_config_service,
             )
 
-            effective = await get_org_knowledge_config_service().get_effective(
-                self._org_id
-            )
+            effective = await get_org_knowledge_config_service().get_effective(self._org_id)
             embed_model_name = effective.embedding_model or "nomic-embed-text"
             self.embedding_model_name = embed_model_name
 
-            self._embed_model = OllamaEmbedding(
-                model_name=embed_model_name, base_url=ollama_url
-            )
+            self._embed_model = OllamaEmbedding(model_name=embed_model_name, base_url=ollama_url)
 
             doc_count = self._collection.count()
             logger.info(
@@ -825,8 +815,7 @@ class DocIndexerService:
                 return False
 
         logger.warning(
-            "Oversized chunk — splitting at depth %d "
-            "(doc=%s, chunk_id=%s, chars=%d)",
+            "Oversized chunk — splitting at depth %d " "(doc=%s, chunk_id=%s, chars=%d)",
             depth,
             rel_path,
             chunk_id,
@@ -873,9 +862,7 @@ class DocIndexerService:
         Returns True when at least one (sub-)chunk was stored successfully.
         """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(
-            f"{rel_path}:{chunk['section']}:{chunk_index}".encode()
-        ).hexdigest()[:12]
+        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{chunk_index}".encode()).hexdigest()[:12]
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
@@ -924,9 +911,7 @@ class DocIndexerService:
         _save_hash_cache(cache)
         return False
 
-    async def _index_file_chunks(
-        self, file_str: str, content: str, rel_path: str, tier: int
-    ) -> tuple[int, int]:
+    async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
         """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735.
 
         Extracted from index_file to keep parent under 65 lines.
@@ -944,16 +929,12 @@ class DocIndexerService:
         file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
         indexed = 0
         for i, chunk in enumerate(chunks):
-            ok = await asyncio.to_thread(
-                self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier
-            )
+            ok = await asyncio.to_thread(self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier)
             if ok:
                 indexed += 1
         return indexed, len(chunks)
 
-    async def index_file(
-        self, file_path: Path, tier: int = 3, force: bool = False
-    ) -> IndexResult:
+    async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
         """Index a single documentation file into ChromaDB.
 
         Args:
@@ -986,9 +967,7 @@ class DocIndexerService:
                 return result
 
             rel_path = os.path.relpath(file_str, self._root_dir)
-            indexed, total_chunks = await self._index_file_chunks(
-                file_str, content, rel_path, tier
-            )
+            indexed, total_chunks = await self._index_file_chunks(file_str, content, rel_path, tier)
 
             if total_chunks == 0:
                 result.skipped = 1
@@ -1004,9 +983,7 @@ class DocIndexerService:
             result.errors.append(f"{file_str}: {e}")
             return result
 
-    async def _index_single_file_content(
-        self, file_path: str, tier: int, result: IndexResult
-    ) -> None:
+    async def _index_single_file_content(self, file_path: str, tier: int, result: IndexResult) -> None:
         """Read, chunk, and index a single file. Helper for index_all (#1385)."""
         import asyncio
 
@@ -1138,17 +1115,14 @@ class DocIndexerService:
         # If collection is empty, force full indexing regardless of cache (#4350)
         if not force and self.needs_indexing():
             logger.info(
-                "Collection empty — forcing full indexing despite cache to ensure "
-                "documentation is available"
+                "Collection empty — forcing full indexing despite cache to ensure " "documentation is available"
             )
             force = True
 
         # Incremental mode: filter to changed files
         new_hashes: Dict[str, str] = {}
         if not force:
-            files, new_hashes, early = self._apply_incremental_filter(
-                files, total_result, start_time
-            )
+            files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
             if early:
                 return total_result
         else:
@@ -1166,9 +1140,7 @@ class DocIndexerService:
 
         # Issue #4564: trigger KBSynthesizer after ingest (best-effort, non-blocking)
         if indexed_paths:
-            asyncio.ensure_future(
-                self._run_kb_synthesis(indexed_paths)
-            )
+            asyncio.ensure_future(self._run_kb_synthesis(indexed_paths))
 
         if new_hashes:
             existing_cache = _load_hash_cache()
@@ -1235,9 +1207,7 @@ class DocIndexerService:
 
         k = min(n_results, doc_count)
         try:
-            embedding: list = await asyncio.to_thread(
-                self._embed_model.get_text_embedding, query
-            )
+            embedding: list = await asyncio.to_thread(self._embed_model.get_text_embedding, query)
             raw = await asyncio.to_thread(
                 self._collection.query,
                 query_embeddings=[embedding],
@@ -1298,8 +1268,7 @@ def get_doc_indexer_service(llm_service: Optional[Any] = None) -> DocIndexerServ
                         llm_service = get_llm_service()
                     except Exception:
                         logger.warning(
-                            "get_doc_indexer_service: could not resolve LLM service "
-                            "— KB synthesis will be disabled"
+                            "get_doc_indexer_service: could not resolve LLM service " "— KB synthesis will be disabled"
                         )
                 _doc_indexer = DocIndexerService(llm_service=llm_service)
     return _doc_indexer

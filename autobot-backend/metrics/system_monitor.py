@@ -10,10 +10,11 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import Any, Dict, List
 
 import psutil
+
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +64,9 @@ class SystemResourceMonitor:
         Issue #281: Extracted from collect_system_metrics to reduce function length.
         """
         autobot_processes = []
-        for proc in psutil.process_iter(
-            ["pid", "name", "cpu_percent", "memory_percent", "memory_info"]
-        ):
+        for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent", "memory_info"]):
             try:
-                if "python" in proc.info["name"].lower() or "autobot" in proc.info.get(
-                    "cmdline", []
-                ):
+                if "python" in proc.info["name"].lower() or "autobot" in proc.info.get("cmdline", []):
                     autobot_processes.append(
                         {
                             "pid": proc.info["pid"],
@@ -77,9 +74,7 @@ class SystemResourceMonitor:
                             "cpu_percent": proc.info["cpu_percent"],
                             "memory_percent": proc.info["memory_percent"],
                             "memory_mb": (
-                                proc.info["memory_info"].rss / 1024 / 1024
-                                if proc.info["memory_info"]
-                                else 0
+                                proc.info["memory_info"].rss / 1024 / 1024 if proc.info["memory_info"] else 0
                             ),
                         }
                     )
@@ -166,9 +161,7 @@ class SystemResourceMonitor:
             "network": self._build_network_metrics(network_io),
             "autobot_processes": autobot_processes,
             "total_autobot_memory_mb": sum(p["memory_mb"] for p in autobot_processes),
-            "total_autobot_cpu_percent": sum(
-                p["cpu_percent"] for p in autobot_processes if p["cpu_percent"]
-            ),
+            "total_autobot_cpu_percent": sum(p["cpu_percent"] for p in autobot_processes if p["cpu_percent"]),
         }
 
     async def collect_system_metrics(self) -> Dict[str, Any]:
@@ -226,9 +219,7 @@ class SystemResourceMonitor:
                 "cpu_percent": psutil.cpu_percent(),
                 "memory_mb": psutil.virtual_memory().used / 1024 / 1024,
                 "memory_percent": psutil.virtual_memory().percent,
-                "disk_percent": (
-                    psutil.disk_usage("/").used / psutil.disk_usage("/").total * 100
-                ),
+                "disk_percent": (psutil.disk_usage("/").used / psutil.disk_usage("/").total * 100),
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
@@ -278,9 +269,7 @@ class SystemResourceMonitor:
             "min_percent": min(values),
         }
 
-    def _extract_metric_values(
-        self, recent_data: List[Dict[str, Any]]
-    ) -> Dict[str, List[float]]:
+    def _extract_metric_values(self, recent_data: List[Dict[str, Any]]) -> Dict[str, List[float]]:
         """
         Extract metric value arrays from recent data points.
 
@@ -292,24 +281,10 @@ class SystemResourceMonitor:
             Issue #620.
         """
         return {
-            "cpu": [
-                d["cpu"]["percent"]
-                for d in recent_data
-                if "cpu" in d and "percent" in d["cpu"]
-            ],
-            "memory": [
-                d["memory"]["percent"]
-                for d in recent_data
-                if "memory" in d and "percent" in d["memory"]
-            ],
-            "disk": [
-                d["disk"]["percent"]
-                for d in recent_data
-                if "disk" in d and "percent" in d["disk"]
-            ],
-            "autobot_memory": [
-                d.get("total_autobot_memory_mb", 0) for d in recent_data
-            ],
+            "cpu": [d["cpu"]["percent"] for d in recent_data if "cpu" in d and "percent" in d["cpu"]],
+            "memory": [d["memory"]["percent"] for d in recent_data if "memory" in d and "percent" in d["memory"]],
+            "disk": [d["disk"]["percent"] for d in recent_data if "disk" in d and "percent" in d["disk"]],
+            "autobot_memory": [d.get("total_autobot_memory_mb", 0) for d in recent_data],
             "autobot_cpu": [d.get("total_autobot_cpu_percent", 0) for d in recent_data],
         }
 
@@ -340,17 +315,11 @@ class SystemResourceMonitor:
             },
             "autobot": {
                 "memory": {
-                    "avg_mb": (
-                        sum(autobot_memory) / len(autobot_memory)
-                        if autobot_memory
-                        else 0
-                    ),
+                    "avg_mb": (sum(autobot_memory) / len(autobot_memory) if autobot_memory else 0),
                     "max_mb": max(autobot_memory) if autobot_memory else 0,
                 },
                 "cpu": {
-                    "avg_percent": (
-                        sum(autobot_cpu) / len(autobot_cpu) if autobot_cpu else 0
-                    ),
+                    "avg_percent": (sum(autobot_cpu) / len(autobot_cpu) if autobot_cpu else 0),
                     "max_percent": max(autobot_cpu) if autobot_cpu else 0,
                 },
             },
@@ -394,14 +363,9 @@ class SystemResourceMonitor:
                 if metric in current:
                     value = current[metric]
                     if value > threshold:
-                        critical.append(
-                            f"{metric}: {value:.1f}% (threshold: {threshold}%)"
-                        )
+                        critical.append(f"{metric}: {value:.1f}% (threshold: {threshold}%)")
                     elif value > threshold * 0.8:  # 80% of threshold as warning
-                        warnings.append(
-                            f"{metric}: {value:.1f}% "
-                            f"(approaching threshold: {threshold}%)"
-                        )
+                        warnings.append(f"{metric}: {value:.1f}% " f"(approaching threshold: {threshold}%)")
 
             return {
                 "status": "critical" if critical else ("warning" if warnings else "ok"),
@@ -423,9 +387,7 @@ class SystemResourceMonitor:
                     "monitoring_active": self.monitoring_active,
                     "collection_interval": self.collection_interval,
                     "history_length": len(self.resource_history),
-                    "latest_metrics": (
-                        self.resource_history[-1] if self.resource_history else None
-                    ),
+                    "latest_metrics": (self.resource_history[-1] if self.resource_history else None),
                     "summary": self.get_resource_summary(),
                     "thresholds_check": self.check_resource_thresholds(),
                     "export_timestamp": datetime.now(tz=timezone.utc).isoformat(),

@@ -82,10 +82,7 @@ class ValidationResult:
         warnings = len(self.warnings())
         infos = len(self.infos())
         status = "VALID" if self.valid else "INVALID"
-        return (
-            f"Workflow {self.workflow_id}: {status} "
-            f"({errors} errors, {warnings} warnings, {infos} infos)"
-        )
+        return f"Workflow {self.workflow_id}: {status} " f"({errors} errors, {warnings} warnings, {infos} infos)"
 
     def __str__(self) -> str:
         return self.summary()
@@ -127,11 +124,7 @@ class CausalValidator:
         # Build node ordering (topological sort)
         node_order = self._topological_sort(dag)
         if node_order is None:
-            result.add_issue(
-                ValidationIssue(
-                    "error", "topology", "DAG contains a cycle (detected by executor)"
-                )
-            )
+            result.add_issue(ValidationIssue("error", "topology", "DAG contains a cycle (detected by executor)"))
             return result
 
         step_ids = set(dag.nodes.keys())

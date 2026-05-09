@@ -134,9 +134,7 @@ class AutoBotMemoryGraphCore:
         rely on it but the method had been removed in a refactor.
         """
         if not self._initialized:
-            raise RuntimeError(
-                "AutoBotMemoryGraph not initialized — call await initialize() first"
-            )
+            raise RuntimeError("AutoBotMemoryGraph not initialized — call await initialize() first")
 
     async def initialize(self) -> None:
         """
@@ -151,9 +149,7 @@ class AutoBotMemoryGraphCore:
 
             try:
                 # Initialize Redis client
-                self.redis_client = get_redis_client(
-                    async_client=True, database="knowledge"
-                )
+                self.redis_client = get_redis_client(async_client=True, database="knowledge")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()

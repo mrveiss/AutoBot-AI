@@ -84,9 +84,7 @@ class TestExtractSplitsIntoSentences:
     @pytest.mark.asyncio
     async def test_extract_splits_into_sentences(self):
         """A chunk with three sentences must produce three Evidence objects."""
-        chunk = _make_chunk(
-            "Redis is fast. It uses memory. Data expires automatically.", "c2"
-        )
+        chunk = _make_chunk("Redis is fast. It uses memory. Data expires automatically.", "c2")
         extractor = _make_extractor(scores=[0.9, 0.3, 0.6])
 
         results = await extractor.extract("redis speed", [chunk])
@@ -256,9 +254,7 @@ class TestScoredSentencesSortedByRelevance:
     @pytest.mark.asyncio
     async def test_scored_sentences_sorted_by_relevance(self):
         """The item with the highest raw logit must appear first."""
-        chunk = _make_chunk(
-            "Low relevance sentence. High relevance sentence. Medium sentence.", "c5"
-        )
+        chunk = _make_chunk("Low relevance sentence. High relevance sentence. Medium sentence.", "c5")
         # logits: low=0.1, high=5.0, medium=1.5 — after sigmoid: high > medium > low
         extractor = _make_extractor(scores=[0.1, 5.0, 1.5])
 

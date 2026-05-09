@@ -98,10 +98,7 @@ class BloaterDetector:
                 f"Class '{node.name}' has {method_count} methods, "
                 f"exceeds threshold of {self.god_class_method_threshold}"
             ),
-            suggestion=(
-                "Consider breaking into smaller, focused classes "
-                "using composition or inheritance"
-            ),
+            suggestion=("Consider breaking into smaller, focused classes " "using composition or inheritance"),
             metrics={
                 "method_count": method_count,
                 "line_count": class_lines,
@@ -137,8 +134,7 @@ class BloaterDetector:
             line_number=node.lineno,
             entity_name=node.name,
             description=(
-                f"Class '{node.name}' has {class_lines} lines, "
-                f"exceeds threshold of {self.god_class_line_threshold}"
+                f"Class '{node.name}' has {class_lines} lines, " f"exceeds threshold of {self.god_class_line_threshold}"
             ),
             suggestion="Consider extracting methods or splitting responsibilities",
             metrics={"method_count": method_count, "line_count": class_lines},
@@ -164,13 +160,9 @@ class BloaterDetector:
             AntiPatternResult if god class detected, None otherwise
         """
         if method_count > self.god_class_method_threshold:
-            return self._create_god_class_by_methods(
-                node, file_path, method_count, class_lines
-            )
+            return self._create_god_class_by_methods(node, file_path, method_count, class_lines)
         elif class_lines > self.god_class_line_threshold:
-            return self._create_god_class_by_lines(
-                node, file_path, method_count, class_lines
-            )
+            return self._create_god_class_by_lines(node, file_path, method_count, class_lines)
         return None
 
     # =========================================================================
@@ -227,10 +219,7 @@ class BloaterDetector:
                 f"Function '{node.name}' has {param_count} parameters, "
                 f"exceeds threshold of {self.long_param_threshold}"
             ),
-            suggestion=(
-                "Consider using a configuration object or "
-                "dataclass to group related parameters"
-            ),
+            suggestion=("Consider using a configuration object or " "dataclass to group related parameters"),
             metrics={
                 "param_count": param_count,
                 "threshold": self.long_param_threshold,
@@ -270,8 +259,7 @@ class BloaterDetector:
             line_number=node.lineno,
             entity_name=node.name,
             description=(
-                f"Function '{node.name}' has {func_lines} lines, "
-                f"exceeds threshold of {self.long_method_threshold}"
+                f"Function '{node.name}' has {func_lines} lines, " f"exceeds threshold of {self.long_method_threshold}"
             ),
             suggestion="Consider extracting smaller, focused functions",
             metrics={
@@ -347,10 +335,7 @@ class BloaterDetector:
                 f"Function '{node.name}' has nesting depth of "
                 f"{max_depth}, exceeds threshold of {self.deep_nesting_threshold}"
             ),
-            suggestion=(
-                "Consider early returns, guard clauses, or "
-                "extracting nested logic to separate functions"
-            ),
+            suggestion=("Consider early returns, guard clauses, or " "extracting nested logic to separate functions"),
             metrics={
                 "nesting_depth": max_depth,
                 "threshold": self.deep_nesting_threshold,
@@ -385,10 +370,7 @@ class BloaterDetector:
             file_path=file_path,
             line_number=1,
             entity_name=file_path,
-            description=(
-                f"File has {line_count} lines, "
-                f"exceeds threshold of {self.large_file_threshold}"
-            ),
+            description=(f"File has {line_count} lines, " f"exceeds threshold of {self.large_file_threshold}"),
             suggestion="Consider splitting into multiple modules by responsibility",
             metrics={
                 "line_count": line_count,
@@ -414,9 +396,7 @@ class BloaterDetector:
                         param_groups[key].append((node.name, node.lineno))
         return param_groups
 
-    def _build_clump_result(
-        self, param_combo: tuple, occurrences: list, file_path: str
-    ) -> AntiPatternResult:
+    def _build_clump_result(self, param_combo: tuple, occurrences: list, file_path: str) -> AntiPatternResult:
         """Build AntiPatternResult for a detected data clump. Issue #620."""
         func_names = [occ[0] for occ in occurrences]
         first_line = occurrences[0][1]
@@ -431,9 +411,7 @@ class BloaterDetector:
                 f"in {len(occurrences)} functions: {', '.join(func_names[:3])}"
                 f"{'...' if len(func_names) > 3 else ''}"
             ),
-            suggestion=(
-                "Consider grouping these parameters into a dataclass " "or named tuple"
-            ),
+            suggestion=("Consider grouping these parameters into a dataclass " "or named tuple"),
             metrics={
                 "parameters": list(param_combo),
                 "occurrence_count": len(occurrences),
@@ -441,9 +419,7 @@ class BloaterDetector:
             },
         )
 
-    def detect_data_clumps(
-        self, tree: ast.AST, file_path: str
-    ) -> List[AntiPatternResult]:
+    def detect_data_clumps(self, tree: ast.AST, file_path: str) -> List[AntiPatternResult]:
         """Detect data clumps - groups of parameters that appear together.
 
         Args:
@@ -457,9 +433,7 @@ class BloaterDetector:
         results: List[AntiPatternResult] = []
         for param_combo, occurrences in param_groups.items():
             if len(occurrences) >= self.data_clump_threshold:
-                results.append(
-                    self._build_clump_result(param_combo, occurrences, file_path)
-                )
+                results.append(self._build_clump_result(param_combo, occurrences, file_path))
         return results
 
     def _extract_param_names(self, node: ast.FunctionDef) -> List[str]:
@@ -503,11 +477,7 @@ class BloaterDetector:
         Returns:
             List of function definition nodes
         """
-        return [
-            child
-            for child in node.body
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
+        return [child for child in node.body if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
     def calculate_class_size(self, node: ast.ClassDef) -> int:
         """

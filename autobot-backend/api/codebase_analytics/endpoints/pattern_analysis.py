@@ -46,21 +46,11 @@ class PatternAnalysisRequest(BaseModel):
         default=None,
         description="#1772: source_id for API consistency",
     )
-    enable_clone_detection: bool = Field(
-        default=True, description="Enable clone/duplicate detection"
-    )
-    enable_anti_pattern_detection: bool = Field(
-        default=True, description="Enable anti-pattern detection"
-    )
-    enable_regex_detection: bool = Field(
-        default=True, description="Enable regex optimization detection"
-    )
-    enable_complexity_analysis: bool = Field(
-        default=True, description="Enable complexity analysis"
-    )
-    similarity_threshold: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Similarity threshold for clustering"
-    )
+    enable_clone_detection: bool = Field(default=True, description="Enable clone/duplicate detection")
+    enable_anti_pattern_detection: bool = Field(default=True, description="Enable anti-pattern detection")
+    enable_regex_detection: bool = Field(default=True, description="Enable regex optimization detection")
+    enable_complexity_analysis: bool = Field(default=True, description="Enable complexity analysis")
+    similarity_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Similarity threshold for clustering")
 
 
 class PatternAnalysisStatus(BaseModel):
@@ -100,9 +90,7 @@ async def _get_checkpoint_redis():
         return None
 
 
-async def _save_checkpoint(
-    task_id: str, phase: str, batch_idx: int, partial_results: dict
-) -> None:
+async def _save_checkpoint(task_id: str, phase: str, batch_idx: int, partial_results: dict) -> None:
     """Save analysis checkpoint to Redis for resume capability."""
     redis = await _get_checkpoint_redis()
     if not redis:
@@ -345,9 +333,7 @@ async def get_pattern_summary(
 
 
 # Background task manager for pattern summary (#1304)
-_summary_manager = BackgroundTaskManager(
-    redis_prefix="patsummary_task:", task_timeout=TIMEOUT_TASK_ANALYSIS
-)
+_summary_manager = BackgroundTaskManager(redis_prefix="patsummary_task:", task_timeout=TIMEOUT_TASK_ANALYSIS)
 
 
 async def _run_summary_analysis(task_id: str, path: str) -> None:
@@ -521,11 +507,7 @@ async def get_complexity_hotspots(
         report = await analyzer.analyze_directory(path)
 
         # Filter by minimum complexity
-        filtered = [
-            h
-            for h in report.complexity_hotspots
-            if h.cyclomatic_complexity >= min_complexity
-        ]
+        filtered = [h for h in report.complexity_hotspots if h.cyclomatic_complexity >= min_complexity]
 
         return [ch.to_dict() for ch in filtered[:limit]]
 
@@ -554,11 +536,7 @@ async def get_refactoring_suggestions(
 
         # Generate refactoring suggestions
         generator = RefactoringSuggestionGenerator()
-        all_patterns = (
-            report.duplicate_patterns
-            + report.regex_opportunities
-            + report.complexity_hotspots
-        )
+        all_patterns = report.duplicate_patterns + report.regex_opportunities + report.complexity_hotspots
         suggestions = generator.generate_suggestions(all_patterns)
 
         return [s.to_dict() for s in suggestions[:limit]]
@@ -794,9 +772,7 @@ def _format_pattern_results(
         pattern = {
             "id": pattern_id,
             "metadata": results["metadatas"][i] if results.get("metadatas") else {},
-            "code_snippet": (
-                results["documents"][i][:500] if results.get("documents") else ""
-            ),
+            "code_snippet": (results["documents"][i][:500] if results.get("documents") else ""),
         }
         patterns.append(pattern)
 
@@ -813,9 +789,7 @@ async def get_cached_patterns(
         le=200,
         description="Maximum results",
     ),
-    offset: int = Query(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"
-    ),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
 ) -> Dict[str, Any]:
     """Get cached patterns from ChromaDB with filtering and pagination.
 

@@ -22,9 +22,7 @@ def test_health():
     response = requests.get(f"{BASE_URL}/health")  # nosec B113
     data = response.json()
     print("✅ Test 1: Health Check - PASSED")  # noqa: print
-    print(  # noqa: print
-        f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}"
-    )
+    print(f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}")  # noqa: print
     return True
 
 
@@ -51,14 +49,10 @@ def test_statistics():
 
 def test_list_hosts_empty():
     """Test 4: List Hosts (Empty Database)"""
-    response = requests.get(
-        f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20}
-    )  # nosec B113
+    response = requests.get(f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20})  # nosec B113
     data = response.json()
     print("✅ Test 4: List Hosts (Empty) - PASSED")  # noqa: print
-    print(  # noqa: print
-        f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}"
-    )
+    print(f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}")  # noqa: print
     return True
 
 
@@ -76,17 +70,13 @@ def test_create_host():
     response = requests.post(f"{BASE_URL}/hosts", data=form_data)  # nosec B113
 
     if response.status_code != 201:
-        print(  # noqa: print
-            f"❌ Test 5: Create Host - FAILED (HTTP {response.status_code})"
-        )  # noqa: print
+        print(f"❌ Test 5: Create Host - FAILED (HTTP {response.status_code})")  # noqa: print  # noqa: print
         print(f"   Error: {response.text}")  # noqa: print
         return None
 
     data = response.json()
     print("✅ Test 5: Create Host - PASSED")  # noqa: print
-    print(  # noqa: print
-        f"   Created host ID={data['id']}, hostname={data['hostname']}, status={data['status']}"
-    )
+    print(f"   Created host ID={data['id']}, hostname={data['hostname']}, status={data['status']}")  # noqa: print
     return data["id"]
 
 
@@ -107,9 +97,7 @@ def test_list_hosts_after_create():
     data = response.json()
     first_host = data["hosts"][0]["hostname"] if data["hosts"] else "None"
     print("✅ Test 7: List Hosts After Creation - PASSED")  # noqa: print
-    print(  # noqa: print
-        f"   Total hosts: {data['pagination']['total']}, First host: {first_host}"
-    )  # noqa: print
+    print(f"   Total hosts: {data['pagination']['total']}, First host: {first_host}")  # noqa: print  # noqa: print
     return True
 
 
@@ -122,9 +110,7 @@ def test_delete_host(host_id):
     # Verify deletion
     response = requests.get(f"{BASE_URL}/hosts")  # nosec B113
     data = response.json()
-    print(  # noqa: print
-        f"   Remaining hosts after deletion: {data['pagination']['total']}"
-    )  # noqa: print
+    print(f"   Remaining hosts after deletion: {data['pagination']['total']}")  # noqa: print  # noqa: print
     return True
 
 
@@ -139,9 +125,7 @@ def test_celery_worker_status():
             logs = f.read()
             if "ready" in logs and "autobot-worker" in logs:
                 print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
-                print(  # noqa: print
-                    "   Worker is running with queues: deployments, provisioning, services"
-                )
+                print("   Worker is running with queues: deployments, provisioning, services")  # noqa: print
                 return True
             else:
                 print("❌ Test 9: Celery Worker - FAILED")  # noqa: print
@@ -196,9 +180,7 @@ def main():
         print("  ✅ Relationship Loading: Working")  # noqa: print
         print("  ✅ Celery Worker: Running")  # noqa: print
         print()  # noqa: print
-        print(  # noqa: print
-            "🎉 Infrastructure system ready for production host provisioning!"
-        )  # noqa: print
+        print("🎉 Infrastructure system ready for production host provisioning!")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"\n❌ TEST SUITE FAILED: {e}")  # noqa: print

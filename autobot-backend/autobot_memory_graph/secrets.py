@@ -43,10 +43,7 @@ class SecretManagementMixin:
         valid_scopes = {"user", "session", "shared"}
 
         if secret_type not in valid_secret_types:
-            raise ValueError(
-                f"Invalid secret_type: {secret_type}. "
-                f"Must be one of {valid_secret_types}"
-            )
+            raise ValueError(f"Invalid secret_type: {secret_type}. " f"Must be one of {valid_secret_types}")
         if scope not in valid_scopes:
             raise ValueError(f"Invalid scope: {scope}. Must be one of {valid_scopes}")
         if scope == "session" and not session_id:
@@ -139,9 +136,7 @@ class SecretManagementMixin:
         metadata: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Create secret entity and its relations. Issue #620."""
-        secret_metadata = self._build_secret_metadata(
-            owner_id, secret_type, scope, session_id, shared_with, metadata
-        )
+        secret_metadata = self._build_secret_metadata(owner_id, secret_type, scope, session_id, shared_with, metadata)
         entity = await self.create_entity(
             entity_type="secret",
             name=name,
@@ -150,9 +145,7 @@ class SecretManagementMixin:
             tags=["secret", secret_type, scope],
         )
         await self._create_secret_owner_relations(owner_id, entity["id"])
-        await self._create_secret_scope_relations(
-            entity["id"], scope, session_id, shared_with
-        )
+        await self._create_secret_scope_relations(entity["id"], scope, session_id, shared_with)
         return entity
 
     async def create_secret_entity(

@@ -283,9 +283,7 @@ class TestConversationContextAnalyzer:
 
     def test_detect_active_task(self):
         """Should detect active task indicators"""
-        history = [
-            {"role": "assistant", "content": "Currently processing your request..."}
-        ]
+        history = [{"role": "assistant", "content": "Currently processing your request..."}]
         message = "okay"
         context = self.analyzer.analyze(history, message)
 
@@ -420,9 +418,7 @@ class TestConversationSafetyGuards:
 
     def test_block_end_on_active_task(self):
         """SAFETY RULE 4: Never end on active tasks"""
-        history = [
-            {"role": "assistant", "content": "Currently processing your request..."}
-        ]
+        history = [{"role": "assistant", "content": "Currently processing your request..."}]
         message = "bye"
 
         classification = self.classifier.classify(message)
@@ -459,10 +455,7 @@ class TestConversationSafetyGuards:
         safety_check = self.guards.check(classification, context)
 
         # Even though "goodbye" is in message, high engagement should block
-        if (
-            context.user_engagement_level == "high"
-            and classification.intent == ConversationIntent.END
-        ):
+        if context.user_engagement_level == "high" and classification.intent == ConversationIntent.END:
             assert safety_check.is_safe_to_end is False
             assert "high_engagement" in safety_check.violated_rules
 
@@ -510,19 +503,14 @@ class TestIntegrationScenarios:
         self.analyzer = ConversationContextAnalyzer()
         self.guards = ConversationSafetyGuards()
 
-    def classify_with_safety(
-        self, message: str, history: List[Dict[str, str]]
-    ) -> tuple:
+    def classify_with_safety(self, message: str, history: List[Dict[str, str]]) -> tuple:
         """Helper to run complete classification with safety checks"""
         classification = self.classifier.classify(message, history)
         context = self.analyzer.analyze(history, message)
         safety_check = self.guards.check(classification, context)
 
         # Determine final decision
-        should_exit = (
-            classification.intent == ConversationIntent.END
-            and safety_check.is_safe_to_end
-        )
+        should_exit = classification.intent == ConversationIntent.END and safety_check.is_safe_to_end
 
         return classification, context, safety_check, should_exit
 
@@ -531,9 +519,7 @@ class TestIntegrationScenarios:
         history = []
         message = "Tell me the capabilities of autobot"
 
-        classification, context, safety_check, should_exit = self.classify_with_safety(
-            message, history
-        )
+        classification, context, safety_check, should_exit = self.classify_with_safety(message, history)
 
         assert should_exit is False
         assert classification.intent == ConversationIntent.CONTINUE
@@ -543,9 +529,7 @@ class TestIntegrationScenarios:
         # Conversation 1: User asks question
         history1 = []
         message1 = "What is AutoBot?"
-        classification1, context1, safety1, exit1 = self.classify_with_safety(
-            message1, history1
-        )
+        classification1, context1, safety1, exit1 = self.classify_with_safety(message1, history1)
         assert exit1 is False
 
         # Conversation 2: Assistant responds, user asks follow-up
@@ -554,9 +538,7 @@ class TestIntegrationScenarios:
             {"role": "assistant", "content": "AutoBot is an AI automation platform..."},
         ]
         message2 = "How do I install it?"
-        classification2, context2, safety2, exit2 = self.classify_with_safety(
-            message2, history2
-        )
+        classification2, context2, safety2, exit2 = self.classify_with_safety(message2, history2)
         assert exit2 is False
 
         # Conversation 3: User satisfied, says goodbye (but conversation still too short)
@@ -567,18 +549,13 @@ class TestIntegrationScenarios:
             {"role": "assistant", "content": "You can install AutoBot by running..."},
         ]
         message3 = "Thanks, that's all I needed. Goodbye!"
-        classification3, context3, safety3, exit3 = self.classify_with_safety(
-            message3, history3
-        )
+        classification3, context3, safety3, exit3 = self.classify_with_safety(message3, history3)
 
         # Should be classified as END intent
         assert classification3.intent == ConversationIntent.END
         # But blocked by safety guards (conversation too short: only 2 exchanges < 3 minimum)
         assert safety3.is_safe_to_end is False
-        assert (
-            "conversation_too_short" in safety3.violated_rules
-            or "active_task" in safety3.violated_rules
-        )
+        assert "conversation_too_short" in safety3.violated_rules or "active_task" in safety3.violated_rules
         assert exit3 is False
 
         # Conversation 4: Longer conversation, no active tasks or questions
@@ -600,9 +577,7 @@ class TestIntegrationScenarios:
             },
         ]
         message4 = "Perfect, thank you for the information. Goodbye!"
-        classification4, context4, safety4, exit4 = self.classify_with_safety(
-            message4, history4
-        )
+        classification4, context4, safety4, exit4 = self.classify_with_safety(message4, history4)
 
         # Now with 3+ exchanges and no blocking conditions, should be allowed to exit
         assert classification4.intent == ConversationIntent.END
@@ -622,9 +597,7 @@ class TestIntegrationScenarios:
         ]
         message = "Actually, nevermind. Bye!"
 
-        classification, context, safety_check, should_exit = self.classify_with_safety(
-            message, history
-        )
+        classification, context, safety_check, should_exit = self.classify_with_safety(message, history)
 
         # Should be blocked because assistant asked a question
         assert classification.intent == ConversationIntent.END
@@ -640,9 +613,7 @@ class TestIntegrationScenarios:
         ]
         message = "I'm confused about that, bye"
 
-        classification, context, safety_check, should_exit = self.classify_with_safety(
-            message, history
-        )
+        classification, context, safety_check, should_exit = self.classify_with_safety(message, history)
 
         # Should be blocked because user is confused
         assert context.has_confusion_signals is True

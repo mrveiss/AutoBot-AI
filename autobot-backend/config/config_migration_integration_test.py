@@ -51,9 +51,7 @@ class TestConfigurationMigration:
 
         # Create test config with system environment
         test_config = ConfigManager()
-        test_config.set(
-            "system.environment", {"CUSTOM_VAR": "test_value", "DISPLAY": ":99"}
-        )
+        test_config.set("system.environment", {"CUSTOM_VAR": "test_value", "DISPLAY": ":99"})
 
         with patch("desktop_streaming_manager.config_manager", test_config):
             DesktopStreamingManager()
@@ -178,9 +176,7 @@ class TestConfigurationMigration:
 
         for section in required_sections:
             config_section = cm.get_section(section)
-            assert isinstance(
-                config_section, dict
-            ), f"Section {section} should be a dict"
+            assert isinstance(config_section, dict), f"Section {section} should be a dict"
             assert len(config_section) > 0, f"Section {section} should not be empty"
 
     def test_config_type_consistency(self):
@@ -198,9 +194,7 @@ class TestConfigurationMigration:
         assert isinstance(cm.get("llm.ollama.port"), int)
 
         # Test float values
-        assert isinstance(
-            cm.get("multimodal.vision.confidence_threshold"), (int, float)
-        )
+        assert isinstance(cm.get("multimodal.vision.confidence_threshold"), (int, float))
         assert isinstance(cm.get("multimodal.voice.confidence_threshold"), (int, float))
 
         # Test string values
@@ -222,9 +216,7 @@ class TestConfigurationMigration:
         assert hasattr(config, "get")  # Old interface
 
         # Should return same values as new interface
-        assert config.get("llm.orchestrator_llm") == config_manager.get(
-            "llm.orchestrator_llm"
-        )
+        assert config.get("llm.orchestrator_llm") == config_manager.get("llm.orchestrator_llm")
 
     def test_config_default_value_handling(self):
         """Test proper handling of default values across components"""

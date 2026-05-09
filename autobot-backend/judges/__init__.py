@@ -118,30 +118,20 @@ class BaseLLMJudge:
         start_time = datetime.now(tz=timezone.utc)
 
         try:
-            judgment_prompt = await self._prepare_judgment_prompt(
-                subject, criteria, context, alternatives, **kwargs
-            )
+            judgment_prompt = await self._prepare_judgment_prompt(subject, criteria, context, alternatives, **kwargs)
             llm_response = await self._get_llm_evaluation(judgment_prompt)
-            judgment_result = await self._parse_llm_response(
-                llm_response, subject, criteria, context, alternatives
-            )
+            judgment_result = await self._parse_llm_response(llm_response, subject, criteria, context, alternatives)
             return await self._finalize_judgment_result(judgment_result, start_time)
 
         except Exception as e:
             logger.error("Error in %s judgment: %s", self.judge_type, e)
-            return await self._create_error_judgment(
-                subject, "Judgment evaluation failed"
-            )
+            return await self._create_error_judgment(subject, "Judgment evaluation failed")
 
-    async def _finalize_judgment_result(
-        self, judgment_result: JudgmentResult, start_time: datetime
-    ) -> JudgmentResult:
+    async def _finalize_judgment_result(self, judgment_result: JudgmentResult, start_time: datetime) -> JudgmentResult:
         """Add metadata, store in history, and log the judgment result. Issue #620."""
         judgment_result.judge_type = self.judge_type
         judgment_result.timestamp = start_time
-        judgment_result.processing_time_ms = (
-            datetime.now(tz=timezone.utc) - start_time
-        ).total_seconds() * 1000
+        judgment_result.processing_time_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
 
         self.judgment_history.append(judgment_result)
         await self._log_judgment(judgment_result)
@@ -270,9 +260,7 @@ Be precise, objective, and helpful in your judgments."""
         logger.debug("Judgment reasoning: %s", judgment.reasoning)
         logger.debug("Improvement suggestions: %s", judgment.improvement_suggestions)
 
-    async def _create_error_judgment(
-        self, subject: Any, error_message: str
-    ) -> JudgmentResult:
+    async def _create_error_judgment(self, subject: Any, error_message: str) -> JudgmentResult:
         """Create a judgment result for error cases"""
         return JudgmentResult(
             subject_id=str(hash(str(subject))),
@@ -304,14 +292,10 @@ Be precise, objective, and helpful in your judgments."""
         total = len(self.judgment_history)
         avg_score = sum(j.overall_score for j in self.judgment_history) / total
         avg_confidence = self._average_confidence()
-        avg_processing_time = (
-            sum(j.processing_time_ms for j in self.judgment_history) / total
-        )
+        avg_processing_time = sum(j.processing_time_ms for j in self.judgment_history) / total
 
         recommendations = [j.recommendation for j in self.judgment_history]
-        recommendation_distribution = {
-            rec: recommendations.count(rec) for rec in set(recommendations)
-        }
+        recommendation_distribution = {rec: recommendations.count(rec) for rec in set(recommendations)}
 
         return {
             "total_judgments": total,
@@ -331,9 +315,7 @@ Be precise, objective, and helpful in your judgments."""
             JudgmentConfidence.VERY_HIGH: 5,
         }
 
-        avg_value = sum(
-            confidence_values[j.confidence] for j in self.judgment_history
-        ) / len(self.judgment_history)
+        avg_value = sum(confidence_values[j.confidence] for j in self.judgment_history) / len(self.judgment_history)
 
         # Convert back to confidence level
         if avg_value <= 1.5:

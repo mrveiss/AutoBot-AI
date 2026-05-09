@@ -497,11 +497,7 @@ class TestCacheOpportunityDetector:
         ]
         opportunities = CacheOpportunityDetector.detect_opportunities(patterns)
 
-        embedding_opps = [
-            o
-            for o in opportunities
-            if o.cache_type == CacheOpportunityType.EMBEDDING_CACHE
-        ]
+        embedding_opps = [o for o in opportunities if o.cache_type == CacheOpportunityType.EMBEDDING_CACHE]
         assert len(embedding_opps) > 0
 
     def test_detect_static_prompt_cache(self):
@@ -518,11 +514,7 @@ class TestCacheOpportunityDetector:
         ]
         opportunities = CacheOpportunityDetector.detect_opportunities(patterns)
 
-        static_opps = [
-            o
-            for o in opportunities
-            if o.cache_type == CacheOpportunityType.STATIC_PROMPT
-        ]
+        static_opps = [o for o in opportunities if o.cache_type == CacheOpportunityType.STATIC_PROMPT]
         assert len(static_opps) > 0
 
     def test_no_opportunities_empty_patterns(self):
@@ -556,9 +548,7 @@ def generate():
 
             patterns, retries = CodePatternScanner.scan_file(Path(f.name))
             assert len(patterns) > 0
-            assert any(
-                p.pattern_type == UsagePatternType.CHAT_COMPLETION for p in patterns
-            )
+            assert any(p.pattern_type == UsagePatternType.CHAT_COMPLETION for p in patterns)
 
     def test_scan_file_with_retry_pattern(self):
         """Test scanning a file with retry patterns."""
@@ -594,9 +584,7 @@ response = client.chat.completions.create(
             f.flush()
 
             patterns, _ = CodePatternScanner.scan_file(Path(f.name))
-            streaming = [
-                p for p in patterns if p.pattern_type == UsagePatternType.STREAMING
-            ]
+            streaming = [p for p in patterns if p.pattern_type == UsagePatternType.STREAMING]
             assert len(streaming) > 0
 
 
@@ -1034,10 +1022,7 @@ def get_embedding(text):
 
         # Check that we found chat and embedding patterns
         pattern_types = {p.pattern_type for p in result.patterns_found}
-        assert (
-            UsagePatternType.CHAT_COMPLETION in pattern_types
-            or UsagePatternType.EMBEDDING in pattern_types
-        )
+        assert UsagePatternType.CHAT_COMPLETION in pattern_types or UsagePatternType.EMBEDDING in pattern_types
 
     def test_token_tracker_integration(self):
         """Test TokenTracker with realistic usage."""

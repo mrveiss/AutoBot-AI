@@ -26,6 +26,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
 from api.schemas_code import (
     ChatCompletionChunk,
     ChatCompletionRequest,
@@ -41,9 +42,9 @@ from api.schemas_code import (
     OAIUsage,
 )
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from llm_interface_pkg.models import LLMRequest
 from llm_providers.provider_registry import get_provider_registry
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,6 @@ from knowledge.backends import (
     InMemoryClient,
 )
 
-
 # --- fixture factories ------------------------------------------------------
 #
 # ChromaDB 1.x ``EphemeralClient()`` shares an in-memory database across
@@ -29,6 +28,7 @@ from knowledge.backends import (
 # state between parametrized cases. We use a per-test ``PersistentClient``
 # pointed at a fresh temp directory to get full isolation — still fast
 # (~20ms per instantiation), still avoids any network/HTTP dependency.
+
 
 def _memory_client(tmp_path) -> BaseClient:  # tmp_path unused, kept for uniform signature
     return InMemoryClient()
@@ -59,6 +59,7 @@ def collection(client: BaseClient) -> BaseCollection:
 
 # --- collection contract ----------------------------------------------------
 
+
 def test_add_then_count(collection: BaseCollection) -> None:
     collection.add(
         ids=["a", "b", "c"],
@@ -72,12 +73,8 @@ def test_add_then_count(collection: BaseCollection) -> None:
 def test_add_duplicate_retains_original(collection: BaseCollection) -> None:
     """ChromaDB 1.x contract: add() on a duplicate id is a no-op.
     Callers that want replace semantics must use upsert()."""
-    collection.add(
-        ids=["dup"], documents=["first"], embeddings=[[1.0, 0.0]]
-    )
-    collection.add(
-        ids=["dup"], documents=["second"], embeddings=[[0.0, 1.0]]
-    )
+    collection.add(ids=["dup"], documents=["first"], embeddings=[[1.0, 0.0]])
+    collection.add(ids=["dup"], documents=["second"], embeddings=[[0.0, 1.0]])
     assert collection.count() == 1
     assert collection.get(ids=["dup"])["documents"] == ["first"]
 
@@ -115,21 +112,15 @@ def test_query_returns_nested_lists_ordered_by_distance(
 
 
 def test_delete_by_ids_reduces_count(collection: BaseCollection) -> None:
-    collection.add(
-        ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]]
-    )
+    collection.add(ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]])
     collection.delete(ids=["a"])
     assert collection.count() == 1
     assert collection.get(ids=["a"])["ids"] == []
 
 
 def test_upsert_replaces_existing(collection: BaseCollection) -> None:
-    collection.add(
-        ids=["a"], documents=["first"], embeddings=[[1.0, 0.0]]
-    )
-    collection.upsert(
-        ids=["a"], documents=["second"], embeddings=[[0.0, 1.0]]
-    )
+    collection.add(ids=["a"], documents=["first"], embeddings=[[1.0, 0.0]])
+    collection.upsert(ids=["a"], documents=["second"], embeddings=[[0.0, 1.0]])
     assert collection.count() == 1
     got = collection.get(ids=["a"])
     assert got["documents"] == ["second"]
@@ -143,15 +134,14 @@ def test_empty_query_returns_empty_inner_lists(
 
 
 def test_peek_returns_flat_lists(collection: BaseCollection) -> None:
-    collection.add(
-        ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]]
-    )
+    collection.add(ids=["a", "b"], documents=["x", "y"], embeddings=[[1.0, 0.0], [0.0, 1.0]])
     peek = collection.peek(limit=1)
     assert len(peek["ids"]) == 1
     assert not isinstance(peek["ids"][0], list)
 
 
 # --- client contract --------------------------------------------------------
+
 
 def test_get_or_create_is_idempotent(client: BaseClient) -> None:
     a = client.get_or_create_collection("dup-collection")
@@ -192,12 +182,11 @@ def test_list_collections_returns_base_collection_instances(
     cols = client.list_collections()
     assert cols, "list_collections returned empty"
     for col in cols:
-        assert isinstance(col, BaseCollection), (
-            f"list_collections must wrap raw backend objects, got {type(col)!r}"
-        )
+        assert isinstance(col, BaseCollection), f"list_collections must wrap raw backend objects, got {type(col)!r}"
 
 
 # --- update / where-filter / pagination contract (Issue #5135) --------------
+
 
 def test_update_replaces_document_and_metadata(
     collection: BaseCollection,

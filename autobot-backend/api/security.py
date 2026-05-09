@@ -15,6 +15,8 @@ import logging
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
+
+from api.schemas_common import DataResponse
 from api.schemas_system import (
     CommandApprovalRequest,
     CommandApprovalResponse,
@@ -24,18 +26,14 @@ from api.schemas_system import (
     URLCheckRequest,
     URLCheckResponse,
 )
-
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
-from api.schemas_common import DataResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
-
-
 
 
 @router.get("/status", response_model=SecurityStatusResponse)
@@ -315,12 +313,8 @@ async def get_domain_security_stats(request: Request):
             "suspicious_tlds_count": len(domain_manager._suspicious_tlds),
             "threat_intelligence": {
                 "enabled": threat_service.is_any_service_configured,
-                "virustotal_configured": threat_status.get("virustotal", {}).get(
-                    "configured", False
-                ),
-                "urlvoid_configured": threat_status.get("urlvoid", {}).get(
-                    "configured", False
-                ),
+                "virustotal_configured": threat_status.get("virustotal", {}).get("configured", False),
+                "urlvoid_configured": threat_status.get("urlvoid", {}).get("configured", False),
                 "cache_size": threat_status.get("cache", {}).get("size", 0),
             },
             "settings": {

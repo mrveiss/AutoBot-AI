@@ -53,9 +53,7 @@ def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
         allow_headers=["*"],
     )
 
-    logger.info(
-        f"✅ CORS middleware configured with {len(allow_origins)} allowed origins"
-    )
+    logger.info(f"✅ CORS middleware configured with {len(allow_origins)} allowed origins")
 
 
 def configure_gzip(app: FastAPI, minimum_size: int = 1000):
@@ -111,9 +109,7 @@ def configure_service_auth(app: FastAPI):
         from middleware.service_auth_logging import ServiceAuthLoggingMiddleware
 
         app.add_middleware(ServiceAuthLoggingMiddleware)
-        logger.info(
-            "✅ Service Authentication Middleware (LOGGING MODE - fallback) enabled"
-        )
+        logger.info("✅ Service Authentication Middleware (LOGGING MODE - fallback) enabled")
         return
 
     except ImportError as e2:

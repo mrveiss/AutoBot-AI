@@ -67,11 +67,9 @@ _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _STANDARD_DELAY = 1.0
 
-from retry_mechanism import (
-    RetryConfig as _RetryConfig,
-    RetryMechanism as _RetryMechanism,
-    RetryStrategy as _RetryStrategy,
-)
+from retry_mechanism import RetryConfig as _RetryConfig
+from retry_mechanism import RetryMechanism as _RetryMechanism
+from retry_mechanism import RetryStrategy as _RetryStrategy
 
 
 def _get_config_manager():

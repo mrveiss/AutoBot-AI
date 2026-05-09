@@ -24,10 +24,10 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import statistics
 import subprocess
 import sys
-import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -42,9 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.test_helpers import get_test_backend_url
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -154,9 +152,7 @@ class MonitoringAndAlertingTester:
         ]
 
         # Create results directory
-        self.results_dir = Path(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
-        )
+        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         self.results_dir.mkdir(exist_ok=True)
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -216,13 +212,7 @@ class MonitoringAndAlertingTester:
                         data = response.json()
                         status = "PASS"
                         message = "Health endpoint accessible with valid JSON"
-                        details = {
-                            "response_keys": (
-                                list(data.keys())
-                                if isinstance(data, dict)
-                                else "non-dict"
-                            )
-                        }
+                        details = {"response_keys": (list(data.keys()) if isinstance(data, dict) else "non-dict")}
                     except json.JSONDecodeError:
                         status = "WARNING"
                         message = "Health endpoint accessible but returned non-JSON"
@@ -286,9 +276,7 @@ class MonitoringAndAlertingTester:
                         extract_fields(metrics_data)
 
                         found_fields = sum(
-                            1
-                            for field in expected_fields
-                            if any(field in af for af in available_fields)
+                            1 for field in expected_fields if any(field in af for af in available_fields)
                         )
 
                         if found_fields >= 2:
@@ -310,11 +298,7 @@ class MonitoringAndAlertingTester:
                     except json.JSONDecodeError:
                         status = "WARNING"
                         message = "Metrics endpoint returned non-JSON data"
-                        details = {
-                            "content_type": response.headers.get(
-                                "content-type", "unknown"
-                            )
-                        }
+                        details = {"content_type": response.headers.get("content-type", "unknown")}
 
                 else:
                     status = "FAIL"
@@ -438,20 +422,14 @@ class MonitoringAndAlertingTester:
 
                     if response.status_code in [200, 201, 202]:
                         # Check if alert was triggered (simplified simulation)
-                        return (
-                            test_config["simulated_value"] > 80.0
-                        )  # Basic threshold simulation
+                        return test_config["simulated_value"] > 80.0  # Basic threshold simulation
 
                 except requests.RequestException:
                     continue  # Try next endpoint
 
             # If no test endpoint available, simulate based on thresholds
             metric_config = next(
-                (
-                    m
-                    for m in self.critical_metrics
-                    if m["name"] == test_config["metric"]
-                ),
+                (m for m in self.critical_metrics if m["name"] == test_config["metric"]),
                 None,
             )
             if metric_config:
@@ -491,11 +469,7 @@ class MonitoringAndAlertingTester:
         if response_time_tests:
             baseline_time = statistics.mean(response_time_tests)
             median_time = statistics.median(response_time_tests)
-            std_dev = (
-                statistics.stdev(response_time_tests)
-                if len(response_time_tests) > 1
-                else 0
-            )
+            std_dev = statistics.stdev(response_time_tests) if len(response_time_tests) > 1 else 0
 
             # Evaluate response time consistency
             if std_dev < baseline_time * 0.2:  # Less than 20% variation
@@ -576,16 +550,12 @@ class MonitoringAndAlertingTester:
                                 "timestamp",
                             ]
                             found_keys = sum(
-                                1
-                                for key in expected_keys
-                                if any(k for k in data.keys() if key in k.lower())
+                                1 for key in expected_keys if any(k for k in data.keys() if key in k.lower())
                             )
 
                             data_accuracy = found_keys >= 1
                         else:
-                            data_accuracy = (
-                                True  # Non-dict response might be valid HTML dashboard
-                            )
+                            data_accuracy = True  # Non-dict response might be valid HTML dashboard
                             widget_count = 1
 
                     except json.JSONDecodeError:
@@ -593,9 +563,7 @@ class MonitoringAndAlertingTester:
                         content = response.text
                         if "dashboard" in content.lower() or "chart" in content.lower():
                             data_accuracy = True
-                            widget_count = content.count("chart") + content.count(
-                                "widget"
-                            )
+                            widget_count = content.count("chart") + content.count("widget")
 
                 dashboard_result = DashboardValidation(
                     dashboard_name=dashboard_name,
@@ -691,12 +659,8 @@ class MonitoringAndAlertingTester:
                             recent_lines = lines[-100:] if len(lines) > 100 else lines
 
                         # Analyze log content
-                        error_count = sum(
-                            1 for line in recent_lines if "ERROR" in line.upper()
-                        )
-                        warning_count = sum(
-                            1 for line in recent_lines if "WARNING" in line.upper()
-                        )
+                        error_count = sum(1 for line in recent_lines if "ERROR" in line.upper())
+                        warning_count = sum(1 for line in recent_lines if "WARNING" in line.upper())
                         info_count = len(recent_lines) - error_count - warning_count
 
                         log_analysis_results[log_source["name"]] = {
@@ -739,16 +703,8 @@ class MonitoringAndAlertingTester:
 
                     if result.returncode == 0:
                         lines = result.stdout.split("\n")
-                        error_count = sum(
-                            1
-                            for line in lines
-                            if "ERROR" in line.upper() or "FAIL" in line.upper()
-                        )
-                        warning_count = sum(
-                            1
-                            for line in lines
-                            if "WARNING" in line.upper() or "WARN" in line.upper()
-                        )
+                        error_count = sum(1 for line in lines if "ERROR" in line.upper() or "FAIL" in line.upper())
+                        warning_count = sum(1 for line in lines if "WARNING" in line.upper() or "WARN" in line.upper())
 
                         log_analysis_results[log_source["name"]] = {
                             "accessible": True,
@@ -759,9 +715,7 @@ class MonitoringAndAlertingTester:
 
                         if error_count > 5:
                             status = "WARNING"
-                            message = (
-                                f"Errors found in container logs ({error_count} errors)"
-                            )
+                            message = f"Errors found in container logs ({error_count} errors)"
                             severity = "warning"
                         else:
                             status = "PASS"
@@ -859,9 +813,7 @@ class MonitoringAndAlertingTester:
                     "trigger": scenario["trigger"],
                     "expected_actions": scenario["expected_actions"],
                     "incident_triggered": incident_triggered,
-                    "response_initiated": (
-                        response_initiated if incident_triggered else None
-                    ),
+                    "response_initiated": (response_initiated if incident_triggered else None),
                 }
 
             except Exception as e:
@@ -1044,16 +996,12 @@ class MonitoringAndAlertingTester:
         }
 
         # Save report
-        report_file = (
-            self.results_dir / f"monitoring_alerting_report_{self.timestamp}.json"
-        )
+        report_file = self.results_dir / f"monitoring_alerting_report_{self.timestamp}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2)
 
         # Create human-readable summary
-        summary_file = (
-            self.results_dir / f"monitoring_alerting_summary_{self.timestamp}.txt"
-        )
+        summary_file = self.results_dir / f"monitoring_alerting_summary_{self.timestamp}.txt"
         with open(summary_file, "w") as f:
             f.write("AutoBot Phase 9 Monitoring and Alerting Report\n")
             f.write("=" * 50 + "\n\n")
@@ -1069,14 +1017,8 @@ class MonitoringAndAlertingTester:
 
             f.write("Category Breakdown:\n")
             for category, stats in test_categories.items():
-                pass_rate = (
-                    (stats["passed"] / stats["total"]) * 100
-                    if stats["total"] > 0
-                    else 0
-                )
-                f.write(
-                    f"  {category}: {stats['passed']}/{stats['total']} ({pass_rate:.1f}%)\n"
-                )
+                pass_rate = (stats["passed"] / stats["total"]) * 100 if stats["total"] > 0 else 0
+                f.write(f"  {category}: {stats['passed']}/{stats['total']} ({pass_rate:.1f}%)\n")
             f.write("\n")
 
             f.write("Recommendations:\n")
@@ -1094,9 +1036,7 @@ class MonitoringAndAlertingTester:
 
         for metric in self.critical_metrics:
             # Analyze test results related to this metric
-            related_tests = [
-                r for r in self.results if metric["name"] in r.test_name.lower()
-            ]
+            related_tests = [r for r in self.results if metric["name"] in r.test_name.lower()]
 
             if related_tests:
                 passed_tests = sum(1 for t in related_tests if t.status == "PASS")
@@ -1135,81 +1075,51 @@ class MonitoringAndAlertingTester:
 
         # Health monitoring recommendations
         if "Health Monitoring" in failed_by_category:
-            recommendations.append(
-                "🏥 Fix health monitoring endpoints - critical for system visibility"
-            )
+            recommendations.append("🏥 Fix health monitoring endpoints - critical for system visibility")
 
         # Metrics collection recommendations
         if "Metrics Collection" in failed_by_category:
-            recommendations.append(
-                "📊 Improve metrics collection - essential for performance monitoring"
-            )
+            recommendations.append("📊 Improve metrics collection - essential for performance monitoring")
 
         # Alert system recommendations
         if "Alert Thresholds" in failed_by_category:
-            recommendations.append(
-                "🚨 Configure alert threshold system - required for proactive monitoring"
-            )
+            recommendations.append("🚨 Configure alert threshold system - required for proactive monitoring")
 
         # Dashboard recommendations
         if "Dashboard Accessibility" in failed_by_category:
-            recommendations.append(
-                "📈 Set up monitoring dashboards - needed for operational visibility"
-            )
+            recommendations.append("📈 Set up monitoring dashboards - needed for operational visibility")
 
         # Log aggregation recommendations
         if "Log Aggregation" in failed_by_category:
-            recommendations.append(
-                "📝 Implement log aggregation - crucial for troubleshooting"
-            )
+            recommendations.append("📝 Implement log aggregation - crucial for troubleshooting")
 
         # Incident response recommendations
         if "Incident Response" in failed_by_category:
-            recommendations.append(
-                "🚑 Implement automated incident response - reduces MTTR"
-            )
+            recommendations.append("🚑 Implement automated incident response - reduces MTTR")
 
         # Overall assessment
-        success_rate = (
-            sum(1 for r in self.results if r.status == "PASS") / len(self.results)
-        ) * 100
+        success_rate = (sum(1 for r in self.results if r.status == "PASS") / len(self.results)) * 100
 
         if success_rate >= 95:
             recommendations.append("✅ Monitoring system excellent - production ready")
         elif success_rate >= 85:
             recommendations.append("✅ Monitoring system good - address minor issues")
         elif success_rate >= 75:
-            recommendations.append(
-                "⚠️ Monitoring system needs improvement - address warnings"
-            )
+            recommendations.append("⚠️ Monitoring system needs improvement - address warnings")
         else:
-            recommendations.append(
-                "❌ Monitoring system requires significant work before production"
-            )
+            recommendations.append("❌ Monitoring system requires significant work before production")
 
         return recommendations
 
 
 async def main():
     """Main entry point for monitoring and alerting testing"""
-    parser = argparse.ArgumentParser(
-        description="AutoBot Phase 9 Monitoring and Alerting Testing"
-    )
-    parser.add_argument(
-        "--alerts", action="store_true", help="Focus on alert system testing"
-    )
-    parser.add_argument(
-        "--metrics", action="store_true", help="Focus on metrics collection testing"
-    )
-    parser.add_argument(
-        "--dashboards", action="store_true", help="Focus on dashboard testing"
-    )
-    parser.add_argument(
-        "--logs", action="store_true", help="Focus on log aggregation testing"
-    )
-    parser.add_argument(
-        "--incidents", action="store_true", help="Focus on incident response testing"
-    )
+    parser = argparse.ArgumentParser(description="AutoBot Phase 9 Monitoring and Alerting Testing")
+    parser.add_argument("--alerts", action="store_true", help="Focus on alert system testing")
+    parser.add_argument("--metrics", action="store_true", help="Focus on metrics collection testing")
+    parser.add_argument("--dashboards", action="store_true", help="Focus on dashboard testing")
+    parser.add_argument("--logs", action="store_true", help="Focus on log aggregation testing")
+    parser.add_argument("--incidents", action="store_true", help="Focus on incident response testing")
 
     args = parser.parse_args()
 

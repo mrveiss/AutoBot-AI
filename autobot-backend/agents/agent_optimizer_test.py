@@ -52,9 +52,7 @@ description: Test agent
 ---
 This is the body content."""
 
-        frontmatter, body = self.optimizer._extract_frontmatter(
-            content_with_frontmatter
-        )
+        frontmatter, body = self.optimizer._extract_frontmatter(content_with_frontmatter)
 
         self.assertIn("name: test-agent", frontmatter)
         self.assertIn("This is the body content", body)
@@ -65,9 +63,7 @@ This is the body content."""
         """Test content without frontmatter."""
         content_without_frontmatter = "This is just body content."
 
-        frontmatter, body = self.optimizer._extract_frontmatter(
-            content_without_frontmatter
-        )
+        frontmatter, body = self.optimizer._extract_frontmatter(content_without_frontmatter)
 
         self.assertEqual(frontmatter, "")
         self.assertEqual(body, content_without_frontmatter)
@@ -83,9 +79,7 @@ def hello():
 
 Some text after."""
 
-        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(
-            content
-        )
+        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(content)
 
         self.assertEqual(blocks_removed, 1)
         self.assertNotIn("def hello()", processed)
@@ -109,9 +103,7 @@ echo "World"
 
 End of examples."""
 
-        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(
-            content
-        )
+        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(content)
 
         self.assertEqual(blocks_removed, 2)
         self.assertNotIn("console.log", processed)
@@ -127,9 +119,7 @@ End of examples."""
 print("test")  # noqa: print
 ```"""
 
-        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(
-            content
-        )
+        processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(content)
 
         self.assertEqual(blocks_removed, 1)
         self.assertIn("(python)", processed)
@@ -400,9 +390,7 @@ class TestAgentOptimizerEdgeCases(unittest.TestCase):
 
     def test_nested_code_blocks(self):
         """Test handling of nested code blocks (edge case)."""
-        optimizer = AgentOptimizer(
-            source_dir=self.source_dir, target_dir=self.target_dir
-        )
+        optimizer = AgentOptimizer(source_dir=self.source_dir, target_dir=self.target_dir)
 
         content = """Example:
 
@@ -421,9 +409,7 @@ end markdown
 
     def test_empty_code_blocks(self):
         """Test handling of empty code blocks."""
-        optimizer = AgentOptimizer(
-            source_dir=self.source_dir, target_dir=self.target_dir
-        )
+        optimizer = AgentOptimizer(source_dir=self.source_dir, target_dir=self.target_dir)
 
         # Empty code blocks need at least one newline to match pattern
         content = """Example:
@@ -441,9 +427,7 @@ End."""
 
     def test_malformed_agent_file(self):
         """Test handling of malformed agent files."""
-        optimizer = AgentOptimizer(
-            source_dir=self.source_dir, target_dir=self.target_dir
-        )
+        optimizer = AgentOptimizer(source_dir=self.source_dir, target_dir=self.target_dir)
 
         # Create malformed file (missing closing frontmatter)
         test_file = self.source_dir / "malformed.md"

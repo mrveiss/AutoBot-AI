@@ -135,9 +135,7 @@ def test_entity_extractor_initialization(mock_extraction_agent, mock_memory_grap
 
 
 @pytest.mark.asyncio
-async def test_extract_and_populate_basic(
-    entity_extractor, mock_extraction_agent, mock_memory_graph
-):
+async def test_extract_and_populate_basic(entity_extractor, mock_extraction_agent, mock_memory_graph):
     """Test basic entity extraction and graph population."""
     messages = [
         {"role": "user", "content": "Redis is timing out"},
@@ -164,9 +162,7 @@ async def test_extract_and_populate_basic(
 
 
 @pytest.mark.asyncio
-async def test_extract_and_populate_with_relationships(
-    entity_extractor, mock_memory_graph
-):
+async def test_extract_and_populate_with_relationships(entity_extractor, mock_memory_graph):
     """Test relationship inference during extraction."""
     messages = [
         {"role": "user", "content": "Need to fix Redis timeout"},
@@ -197,9 +193,7 @@ async def test_extract_and_populate_empty_messages(entity_extractor):
 
 
 @pytest.mark.asyncio
-async def test_extract_and_populate_confidence_threshold(
-    entity_extractor, mock_extraction_agent, mock_memory_graph
-):
+async def test_extract_and_populate_confidence_threshold(entity_extractor, mock_extraction_agent, mock_memory_graph):
     """Test confidence threshold filtering."""
     # Mock low-confidence facts
     mock_result = Mock()
@@ -488,9 +482,7 @@ def test_deduplicate_relations(entity_extractor):
     assert len(unique) == 2  # Two unique relations
 
     # Verify highest confidence version kept
-    relation_ab = [
-        r for r in unique if r.from_entity == "Entity A" and r.to_entity == "Entity B"
-    ]
+    relation_ab = [r for r in unique if r.from_entity == "Entity A" and r.to_entity == "Entity B"]
     assert len(relation_ab) == 1
     assert relation_ab[0].confidence == 0.9
 
@@ -547,14 +539,10 @@ def test_generate_entity_name(entity_extractor):
 
 
 @pytest.mark.asyncio
-async def test_extract_and_populate_handles_extraction_error(
-    entity_extractor, mock_extraction_agent
-):
+async def test_extract_and_populate_handles_extraction_error(entity_extractor, mock_extraction_agent):
     """Test handling of extraction errors."""
     # Mock extraction failure
-    mock_extraction_agent.extract_facts = AsyncMock(
-        side_effect=Exception("Extraction failed")
-    )
+    mock_extraction_agent.extract_facts = AsyncMock(side_effect=Exception("Extraction failed"))
 
     messages = [{"role": "user", "content": "test"}]
 

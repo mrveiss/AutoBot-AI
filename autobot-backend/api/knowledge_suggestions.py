@@ -25,19 +25,17 @@ from fastapi import APIRouter, HTTPException
 from api.schemas_knowledge import (
     AutoApplySuggestionsRequest,
     ContextSuggestionsRequest,
-    SuggestAllRequest,
-    SuggestCategoriesRequest,
-    SuggestTagsRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeAutoApplySuggestionsResponse,
     KnowledgeSuggestionsAllResponse,
     KnowledgeSuggestionsCategoriesResponse,
     KnowledgeSuggestionsContextResponse,
     KnowledgeSuggestionsTagsResponse,
+    SuggestAllRequest,
+    SuggestCategoriesRequest,
+    SuggestTagsRequest,
 )
-from knowledge import get_knowledge_base
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -322,9 +320,7 @@ def _validate_fact_id(fact_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid fact_id")
 
 
-async def _call_auto_apply_kb(
-    fact_id: str, request: AutoApplySuggestionsRequest
-) -> dict:
+async def _call_auto_apply_kb(fact_id: str, request: AutoApplySuggestionsRequest) -> dict:
     """Helper for auto_apply_suggestions. Ref: #1088."""
     kb = await get_knowledge_base()
     result = await kb.auto_apply_suggestions(

@@ -107,13 +107,9 @@ class SlackApprovalManager:
         }
 
         try:
-            client = await get_redis_client(
-                async_client=True, database=_APPROVAL_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
             if client is None:
-                self._record_redis_failure(
-                    "store_approval_thread", "Redis client is None"
-                )
+                self._record_redis_failure("store_approval_thread", "Redis client is None")
                 return None
 
             key = f"{_APPROVAL_THREAD_PREFIX}:{thread_id}"
@@ -138,9 +134,7 @@ class SlackApprovalManager:
             )
             return None
 
-    async def load_approval_thread(
-        self, thread_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def load_approval_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
         """
         Load approval thread metadata from Redis.
 
@@ -160,13 +154,9 @@ class SlackApprovalManager:
             return None
 
         try:
-            client = await get_redis_client(
-                async_client=True, database=_APPROVAL_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
             if client is None:
-                self._record_redis_failure(
-                    "load_approval_thread", "Redis client is None"
-                )
+                self._record_redis_failure("load_approval_thread", "Redis client is None")
                 return None
 
             key = f"{_APPROVAL_THREAD_PREFIX}:{thread_id}"
@@ -180,9 +170,7 @@ class SlackApprovalManager:
             logger.debug("Loaded approval thread %s", thread_id)
             return record
         except json.JSONDecodeError as exc:
-            logger.error(
-                "Malformed JSON in approval thread %s: %s", thread_id, exc
-            )
+            logger.error("Malformed JSON in approval thread %s: %s", thread_id, exc)
             return None
         except Exception as exc:
             self._record_redis_failure("load_approval_thread", str(exc))
@@ -221,18 +209,12 @@ class SlackApprovalManager:
             return False
 
         try:
-            client = await get_redis_client(
-                async_client=True, database=_APPROVAL_REDIS_DB
-            )
+            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
             if client is None:
-                self._record_redis_failure(
-                    "manage_channel_mapping", "Redis client is None"
-                )
+                self._record_redis_failure("manage_channel_mapping", "Redis client is None")
                 return False
 
-            mapping_key = (
-                f"{_CHANNEL_MAPPING_PREFIX}:{workspace_id}:{workflow_name}"
-            )
+            mapping_key = f"{_CHANNEL_MAPPING_PREFIX}:{workspace_id}:{workflow_name}"
 
             if operation == "set":
                 mapping_data = json.dumps(
@@ -268,9 +250,7 @@ class SlackApprovalManager:
                 )
                 return True
             else:
-                logger.warning(
-                    "Unknown manage_channel_mapping operation: %s", operation
-                )
+                logger.warning("Unknown manage_channel_mapping operation: %s", operation)
                 return False
         except json.JSONDecodeError as exc:
             logger.error(
@@ -311,13 +291,9 @@ class SlackApprovalManager:
         elif self._circuit_state == CircuitState.HALF_OPEN:
             # In half-open: allow operation, will transition to CLOSED or OPEN
             # Reset half-open timeout if too long has passed
-            if now - self._last_failure_time >= self._RECOVERY_TIMEOUT + (
-                self._HALF_OPEN_TIMEOUT
-            ):
+            if now - self._last_failure_time >= self._RECOVERY_TIMEOUT + (self._HALF_OPEN_TIMEOUT):
                 self._circuit_state = CircuitState.OPEN
-                logger.warning(
-                    "Circuit breaker timeout — returning to OPEN state"
-                )
+                logger.warning("Circuit breaker timeout — returning to OPEN state")
                 return False
             return True
         return False

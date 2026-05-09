@@ -19,10 +19,10 @@ from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
 from type_defs.common import Metadata
 
-
 # ---------------------------------------------------------------------------
 # System schemas
 # ---------------------------------------------------------------------------
+
 
 class SystemFrontendConfigResponse(BaseModel):
     """Response for GET /frontend-config."""
@@ -30,7 +30,6 @@ class SystemFrontendConfigResponse(BaseModel):
     status: str
     config: Dict[str, Any]
     timestamp: str
-
 
 
 class SystemHealthResponse(BaseModel):
@@ -46,7 +45,6 @@ class SystemHealthResponse(BaseModel):
     timestamp: str
 
 
-
 class SystemInfoResponse(BaseModel):
     """Response for GET /info."""
 
@@ -57,14 +55,12 @@ class SystemInfoResponse(BaseModel):
     features: Dict[str, Any]
 
 
-
 class SystemReloadConfigResponse(BaseModel):
     """Response for POST /reload_config."""
 
     status: str
     message: str
     timestamp: str
-
 
 
 class SystemPromptReloadResponse(BaseModel):
@@ -75,14 +71,12 @@ class SystemPromptReloadResponse(BaseModel):
     timestamp: str
 
 
-
 class SystemAdminCheckResponse(BaseModel):
     """Response for GET /admin_check."""
 
     user: str
     admin: bool
     timestamp: str
-
 
 
 class SystemDynamicImportResponse(BaseModel):
@@ -92,7 +86,6 @@ class SystemDynamicImportResponse(BaseModel):
     message: str
     module_info: Dict[str, Any]
     timestamp: str
-
 
 
 class SystemCacheStatsResponse(BaseModel):
@@ -107,7 +100,6 @@ class SystemCacheStatsResponse(BaseModel):
     cache: Dict[str, Any]
 
 
-
 class SystemCacheActivityResponse(BaseModel):
     """Response for GET /cache/activity."""
 
@@ -115,7 +107,6 @@ class SystemCacheActivityResponse(BaseModel):
 
     timestamp: str
     activity: Dict[str, Any]
-
 
 
 class SystemMetricsResponse(BaseModel):
@@ -129,7 +120,6 @@ class SystemMetricsResponse(BaseModel):
     timestamp: str
 
 
-
 class SystemCacheCoordinatorStatsResponse(BaseModel):
     """Response for GET /api/cache/stats.
 
@@ -137,7 +127,6 @@ class SystemCacheCoordinatorStatsResponse(BaseModel):
     """
 
     model_config = {"extra": "allow"}
-
 
 
 class SystemCacheEvictResponse(BaseModel):
@@ -148,14 +137,12 @@ class SystemCacheEvictResponse(BaseModel):
     timestamp: str
 
 
-
 class SystemCacheClearResponse(BaseModel):
     """Response for POST /api/cache/clear/{cache_name}."""
 
     status: str
     cache: str
     timestamp: str
-
 
 
 class SystemBackupStatusResponse(BaseModel):
@@ -174,7 +161,6 @@ class SystemBackupStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class FeatureFlagStatusResponse(BaseModel):
     """Response for GET /feature-flags/status."""
 
@@ -182,20 +168,16 @@ class FeatureFlagStatusResponse(BaseModel):
     data: Optional[Any] = None
 
 
-
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
-
 
 
 class FeatureFlagEndpointSetResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/endpoint/{endpoint:path}."""
 
 
-
 class FeatureFlagEndpointRemoveResponse(SuccessDataResponse):
     """Response for DELETE /feature-flags/endpoint/{endpoint:path}."""
-
 
 
 class NPUStatusResponse(BaseModel):
@@ -211,12 +193,10 @@ class NPUStatusResponse(BaseModel):
     load_balancing_strategy: str
 
 
-
 class NPUWorkerUnpairResponse(SuccessMessageResponse):
     """Response for POST /npu/workers/{worker_id}/unpair."""
 
     worker_id: str
-
 
 
 class NPUWorkerRepairResponse(SuccessMessageResponse):
@@ -226,7 +206,6 @@ class NPUWorkerRepairResponse(SuccessMessageResponse):
     new_worker_id: str
     config: Dict[str, Any]
     server_timestamp: str
-
 
 
 class NPUWorkerPairResponse(SuccessMessageResponse):
@@ -239,7 +218,6 @@ class NPUWorkerPairResponse(SuccessMessageResponse):
     paired_at: str
 
 
-
 class NPUWorkerHeartbeatResponse(BaseModel):
     """Response for POST /npu/workers/heartbeat."""
 
@@ -249,12 +227,10 @@ class NPUWorkerHeartbeatResponse(BaseModel):
     message: str
 
 
-
 class NPUPoolWorkersResponse(BaseModel):
     """Response for GET /npu/pool/workers."""
 
     workers: List[Any]
-
 
 
 class NPUPoolReloadResponse(SuccessMessageResponse):
@@ -263,12 +239,9 @@ class NPUPoolReloadResponse(SuccessMessageResponse):
     workers_loaded: int
 
 
-
-
 # ---------------------------------------------------------------------------
 # wake_word.py schemas  (Issue #5317)
 # ---------------------------------------------------------------------------
-
 
 
 class WakeWordListResponse(BaseModel):
@@ -278,12 +251,10 @@ class WakeWordListResponse(BaseModel):
     total: int
 
 
-
 class WakeWordMutateResponse(SuccessMessageResponse):
     """Response for POST /words and DELETE /words/{wake_word}."""
 
     wake_words: List[str]
-
 
 
 class WakeWordConfigUpdateResponse(SuccessMessageResponse):
@@ -292,12 +263,10 @@ class WakeWordConfigUpdateResponse(SuccessMessageResponse):
     config: Dict[str, Any]
 
 
-
 class WakeWordStatsResetResponse(SuccessMessageResponse):
     """Response for POST /stats/reset."""
 
     stats: Dict[str, Any]
-
 
 
 class WakeWordFeedbackResponse(SuccessMessageResponse):
@@ -306,12 +275,10 @@ class WakeWordFeedbackResponse(SuccessMessageResponse):
     stats: Dict[str, Any]
 
 
-
 class WakeWordToggleResponse(SuccessMessageResponse):
     """Response for POST /enable and POST /disable."""
 
     config: Dict[str, Any]
-
 
 
 class WakeWordListeningToggleResponse(SuccessMessageResponse):
@@ -325,12 +292,10 @@ class WakeWordListeningToggleResponse(SuccessMessageResponse):
 # ---------------------------------------------------------------------------
 
 
-
 class AdminFileListResponse(BaseModel):
     """Response for GET /files (admin list directory)."""
 
     files: List[Any]
-
 
 
 class AdminFileReadResponse(BaseModel):
@@ -342,7 +307,6 @@ class AdminFileReadResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # secrets.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class SecretsStatusResponse(BaseModel):
@@ -360,7 +324,6 @@ class SecretsStatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # log_forwarding.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
-
 
 
 class LogForwardingDestinationItem(BaseModel):
@@ -389,7 +352,6 @@ class LogForwardingDestinationsListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class FileViewResponse(BaseModel):
     """Response for GET /files/view/{path} — file info + optional text content."""
 
@@ -398,13 +360,11 @@ class FileViewResponse(BaseModel):
     is_text: bool
 
 
-
 class FileRenameResponse(BaseModel):
     """Response for POST /files/rename."""
 
     message: str
     item_info: Any
-
 
 
 class FilePreviewResponse(BaseModel):
@@ -418,7 +378,6 @@ class FilePreviewResponse(BaseModel):
     name: Optional[str] = None
 
 
-
 class FileDeleteResponse(BaseModel):
     """Response for DELETE /files/delete.
 
@@ -430,7 +389,6 @@ class FileDeleteResponse(BaseModel):
     message: str
 
 
-
 class DirectoryCreateResponse(BaseModel):
     """Response for POST /files/create_directory."""
 
@@ -438,13 +396,11 @@ class DirectoryCreateResponse(BaseModel):
     directory_info: Any
 
 
-
 class DirectoryTreeResponse(BaseModel):
     """Response for GET /files/tree."""
 
     path: str
     tree: List[Any]
-
 
 
 class FileStatsResponse(BaseModel):
@@ -464,12 +420,10 @@ class FileStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class GitHubPullRequestsResponse(BaseModel):
     """Response for GET /{owner}/{repo}/pull-requests — opaque GitHub list."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubPullRequestResponse(BaseModel):
@@ -478,12 +432,10 @@ class GitHubPullRequestResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubPullRequestDiffResponse(BaseModel):
     """Response for GET /{owner}/{repo}/pull-requests/{pull_number}/diff — opaque."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubPRCommentsResponse(BaseModel):
@@ -492,12 +444,10 @@ class GitHubPRCommentsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubPRCommentResponse(BaseModel):
     """Response for POST /{owner}/{repo}/pull-requests/{pull_number}/comments — opaque."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubPRReviewResponse(BaseModel):
@@ -506,12 +456,10 @@ class GitHubPRReviewResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubIssuesResponse(BaseModel):
     """Response for GET /{owner}/{repo}/issues — opaque GitHub list."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubIssueResponse(BaseModel):
@@ -520,12 +468,10 @@ class GitHubIssueResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubRepositoryResponse(BaseModel):
     """Response for GET /{owner}/{repo} — opaque GitHub repo metadata."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubCommitsResponse(BaseModel):
@@ -534,12 +480,10 @@ class GitHubCommitsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubCommitResponse(BaseModel):
     """Response for GET /{owner}/{repo}/commits/{ref} — opaque."""
 
     model_config = {"extra": "allow"}
-
 
 
 class GitHubRepositoryTreeResponse(BaseModel):
@@ -548,12 +492,10 @@ class GitHubRepositoryTreeResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-
 class GitHubFileContentsResponse(BaseModel):
     """Response for GET /{owner}/{repo}/contents/{path} — opaque."""
 
     model_config = {"extra": "allow"}
-
 
 
 # #6792: GitHubProviderInfo is identical in shape to VCSProviderInfo
@@ -562,7 +504,6 @@ class GitHubFileContentsResponse(BaseModel):
 # continues to import the GitHubProviderInfo name from this module so the
 # OpenAPI label stays domain-specific while the runtime type is shared.
 from api.schemas_workflows import VCSProviderInfo as GitHubProviderInfo  # noqa: E402, F401
-
 
 # ---------------------------------------------------------------------------
 # redis.py schemas  (Issue #5990)
@@ -644,7 +585,6 @@ class VisionElementItem(BaseModel):
     possible_interactions: List[str]
 
 
-
 class VisionDetectElementsResponse(BaseModel):
     """Response for POST /vision/elements."""
 
@@ -652,7 +592,6 @@ class VisionDetectElementsResponse(BaseModel):
     filtered_count: int
     elements: List[VisionElementItem]
     filter_applied: Dict[str, Any]
-
 
 
 class VisionOCRResponse(BaseModel):
@@ -664,7 +603,6 @@ class VisionOCRResponse(BaseModel):
     region: Optional[Dict[str, Any]] = None
 
 
-
 class VisionAutomationOpportunitiesResponse(BaseModel):
     """Response for GET /vision/automation-opportunities."""
 
@@ -672,7 +610,6 @@ class VisionAutomationOpportunitiesResponse(BaseModel):
     total_opportunities: int
     context: Any
     confidence: float
-
 
 
 class VisionElementTypeItem(BaseModel):
@@ -683,13 +620,11 @@ class VisionElementTypeItem(BaseModel):
     description: str
 
 
-
 class VisionElementTypesResponse(BaseModel):
     """Response for GET /vision/element-types."""
 
     element_types: List[VisionElementTypeItem]
     total_types: int
-
 
 
 class VisionInteractionTypeItem(BaseModel):
@@ -700,13 +635,11 @@ class VisionInteractionTypeItem(BaseModel):
     description: str
 
 
-
 class VisionInteractionTypesResponse(BaseModel):
     """Response for GET /vision/interaction-types."""
 
     interaction_types: List[VisionInteractionTypeItem]
     total_types: int
-
 
 
 class VisionLayoutResponse(BaseModel):
@@ -715,7 +648,6 @@ class VisionLayoutResponse(BaseModel):
     layout_structure: Any
     dominant_colors: Any
     timestamp: Any
-
 
 
 class VisionStatusFeaturesResponse(BaseModel):
@@ -728,11 +660,10 @@ class VisionStatusFeaturesResponse(BaseModel):
     multimodal_processing: bool
 
 
-
 class VisionStatusResponse(BaseModel):
     """Response for GET /vision/status.
 
-    Error path returns only service+status+error — extra fields allowed.    """
+    Error path returns only service+status+error — extra fields allowed."""
 
     model_config = {"extra": "allow"}
 
@@ -1024,7 +955,6 @@ class ProjectStateHealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-
 class PlaywrightEmbeddedResultResponse(BaseModel):
     """Response for POST /playwright/search, /test-frontend, /send-test-message,
     and /screenshot.
@@ -1041,7 +971,6 @@ class PlaywrightEmbeddedResultResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # multimodal.py schemas  (Issue #5991)
 # ---------------------------------------------------------------------------
-
 
 
 class MultimodalHealthResponse(BaseModel):
@@ -1299,36 +1228,20 @@ class ClipboardSyncRequest(BaseModel):
 
 
 class ConnectionQualitySettings(BaseModel):
-    compression_level: int = Field(
-        default=6, ge=0, le=9, description="Compression level (0=none, 9=max)"
-    )
-    quality: int = Field(
-        default=6, ge=0, le=9, description="JPEG quality (0=poor, 9=best)"
-    )
-    encoding: str = Field(
-        default="tight", description="Encoding method: tight, hextile, raw"
-    )
+    compression_level: int = Field(default=6, ge=0, le=9, description="Compression level (0=none, 9=max)")
+    quality: int = Field(default=6, ge=0, le=9, description="JPEG quality (0=poor, 9=best)")
+    encoding: str = Field(default="tight", description="Encoding method: tight, hextile, raw")
 
 
 class ConnectionSettings(BaseModel):
-    auto_reconnect: bool = Field(
-        default=True, description="Enable auto-reconnect on disconnect"
-    )
-    reconnect_delay_ms: int = Field(
-        default=3000, ge=1000, le=30000, description="Delay before reconnect"
-    )
-    max_reconnect_attempts: int = Field(
-        default=10, ge=1, le=100, description="Max reconnect attempts"
-    )
-    quality: ConnectionQualitySettings = Field(
-        default_factory=ConnectionQualitySettings
-    )
+    auto_reconnect: bool = Field(default=True, description="Enable auto-reconnect on disconnect")
+    reconnect_delay_ms: int = Field(default=3000, ge=1000, le=30000, description="Delay before reconnect")
+    max_reconnect_attempts: int = Field(default=10, ge=1, le=100, description="Max reconnect attempts")
+    quality: ConnectionQualitySettings = Field(default_factory=ConnectionQualitySettings)
 
 
 class MacroAction(BaseModel):
-    action_type: str = Field(
-        ..., description="Action type: click, type, key, scroll, drag"
-    )
+    action_type: str = Field(..., description="Action type: click, type, key, scroll, drag")
     params: Dict = Field(default_factory=dict, description="Action parameters")
     timestamp: float = Field(..., description="Timestamp when action was recorded")
 
@@ -1597,12 +1510,8 @@ class OptimizationRecommendation(BaseModel):
 
 
 class MetricsQuery(BaseModel):
-    categories: Optional[List[str]] = Field(
-        None, description="Metric categories to include"
-    )
-    time_range_minutes: int = Field(
-        10, ge=1, le=1440, description="Time range in minutes"
-    )
+    categories: Optional[List[str]] = Field(None, description="Metric categories to include")
+    time_range_minutes: int = Field(10, ge=1, le=1440, description="Time range in minutes")
     include_trends: bool = Field(True, description="Include trend analysis")
     include_alerts: bool = Field(True, description="Include recent alerts")
 
@@ -1633,9 +1542,7 @@ class VNCStatusRequest(BaseModel):
 
 class VNCObservationRequest(BaseModel):
     vnc_type: str = Field("browser", description="VNC type: 'desktop' or 'browser'")
-    duration_seconds: int = Field(
-        5, description="How many seconds of recent activity to return"
-    )
+    duration_seconds: int = Field(5, description="How many seconds of recent activity to return")
 
 
 class VncStatusMcpResponse(BaseModel):
@@ -1831,9 +1738,7 @@ class CacheHealthResponse(BaseModel):
 
 class BrowserNavigateRequest(BaseModel):
     url: str = Field(..., description="URL to navigate to")
-    wait_until: Optional[str] = Field(
-        "load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'"
-    )
+    wait_until: Optional[str] = Field("load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'")
     timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
 
 
@@ -1849,9 +1754,7 @@ class BrowserFillRequest(BaseModel):
 
 
 class BrowserScreenshotRequest(BaseModel):
-    selector: Optional[str] = Field(
-        None, description="CSS selector for element (full page if omitted)"
-    )
+    selector: Optional[str] = Field(None, description="CSS selector for element (full page if omitted)")
     full_page: Optional[bool] = Field(False, description="Capture full scrollable page")
 
 
@@ -1862,9 +1765,7 @@ class BrowserEvaluateRequest(BaseModel):
 class BrowserWaitForSelectorRequest(BaseModel):
     selector: str = Field(..., description="CSS selector to wait for")
     timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-    state: Optional[str] = Field(
-        "visible", description="State: 'attached', 'detached', 'visible', 'hidden'"
-    )
+    state: Optional[str] = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
 
 
 class BrowserGetTextRequest(BaseModel):
@@ -2039,9 +1940,7 @@ class RBACInitRequest(BaseModel):
         if len(v) < 3 or len(v) > 32:
             raise ValueError("Username must be 3-32 characters")
         if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
-            raise ValueError(
-                "Username must start with a letter and contain only letters, numbers, and underscores"
-            )
+            raise ValueError("Username must start with a letter and contain only letters, numbers, and underscores")
         return v
 
     def __init__(self, **data):
@@ -2109,31 +2008,19 @@ class LogFwdDestinationCreate(BaseModel):
     api_key: Optional[str] = Field(None, description="API key for authentication")
     username: Optional[str] = Field(None, description="Username for authentication")
     password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field(
-        "autobot-logs", description="Index name (Elasticsearch)"
-    )
+    index: Optional[str] = Field("autobot-logs", description="Index name (Elasticsearch)")
     file_path: Optional[str] = Field(None, description="File path (file destination)")
     min_level: str = Field("Information", description="Minimum log level to forward")
     batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(
-        5.0, ge=0.1, le=60.0, description="Batch timeout in seconds"
-    )
+    batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
     retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(
-        1.0, ge=0.1, le=30.0, description="Delay between retries"
-    )
+    retry_delay: float = Field(1.0, ge=0.1, le=30.0, description="Delay between retries")
     scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(
-        default_factory=list, description="Target hosts for per_host scope"
-    )
-    syslog_protocol: str = Field(
-        "udp", description="Syslog protocol: udp, tcp, tcp_tls"
-    )
+    target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
+    syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
     ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
     ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(
-        None, description="Path to client certificate"
-    )
+    ssl_client_cert: Optional[str] = Field(None, description="Path to client certificate")
     ssl_client_key: Optional[str] = Field(None, description="Path to client key")
 
 
@@ -2364,7 +2251,9 @@ class TerminalCreateSessionRequest(BaseModel):
     """Request to create agent terminal session"""
 
     agent_id: str = Field(..., description="Unique identifier for the agent")
-    agent_role: str = Field(..., description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)")
+    agent_role: str = Field(
+        ..., description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)"
+    )
     conversation_id: Optional[str] = Field(None, description="Chat conversation ID to link")
     host: str = Field("main", description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)")
     metadata: Optional[Dict] = Field(None, description="Additional session metadata")
@@ -2560,10 +2449,7 @@ class OCRRequest(BaseModel):
 
     region: Optional[Dict[str, int]] = Field(
         None,
-        description=(
-            "Region to extract text from {x, y, width, height}. If None,"
-            "analyzes full screen."
-        ),
+        description=("Region to extract text from {x, y, width, height}. If None," "analyzes full screen."),
     )
     session_id: Optional[str] = None
 
@@ -2651,9 +2537,7 @@ class AddWakeWordRequest(BaseModel):
 class WakeWordReportFeedbackRequest(BaseModel):
     """Request to report wake word detection feedback"""
 
-    is_correct: bool = Field(
-        ..., description="True if detection was correct, False if false positive"
-    )
+    is_correct: bool = Field(..., description="True if detection was correct, False if false positive")
 
 
 # ---------------------------------------------------------------------------
@@ -2887,10 +2771,7 @@ class ProcessThoughtRequest(BaseModel):
 
     def get_progress_message(self) -> str:
         """Get formatted progress message."""
-        return (
-            f"Processed thought {self.thought_number}/{self.total_thoughts} "
-            f"in {self.stage.value} stage"
-        )
+        return f"Processed thought {self.thought_number}/{self.total_thoughts} " f"in {self.stage.value} stage"
 
 
 class GenerateSummaryRequest(BaseModel):
@@ -3324,10 +3205,7 @@ _SECRET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 def _validate_secret_name(name: str) -> str:
     """Validate and sanitize secret name."""
     if not _SECRET_NAME_PATTERN.match(name):
-        raise ValueError(
-            "Secret name must contain only alphanumeric characters, "
-            "underscores, hyphens, and dots"
-        )
+        raise ValueError("Secret name must contain only alphanumeric characters, " "underscores, hyphens, and dots")
     return name
 
 
@@ -3546,6 +3424,7 @@ class ReloadResponse(BaseModel):
     results: Metadata = {}
     reloaded_modules: list = []
     errors: list = []
+
 
 # ---------------------------------------------------------------------------
 # config_revisions.py schemas

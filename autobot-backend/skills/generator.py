@@ -75,9 +75,7 @@ class SkillGenerator:
         try:
             result = json.loads(response.content)
         except json.JSONDecodeError as e:
-            raise ValueError(
-                f"LLM returned invalid JSON: {e}\nResponse: {response.content[:500]}"
-            ) from e
+            raise ValueError(f"LLM returned invalid JSON: {e}\nResponse: {response.content[:500]}") from e
         if not isinstance(result, dict) or "skill_md" not in result or "skill_py" not in result:
             raise ValueError(f"LLM response missing required keys: {list(result.keys())}")
         manifest = _parse_manifest(result["skill_md"])

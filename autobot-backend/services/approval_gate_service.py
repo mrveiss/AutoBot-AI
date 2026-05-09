@@ -12,13 +12,13 @@ notifications for pending approvals.
 import logging
 import uuid
 from datetime import datetime, timezone
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 
 logger = logging.getLogger(__name__)
@@ -143,10 +143,7 @@ class ApprovalGateService:
         """Resubmit after revision request, reset to pending."""
         approval = await self._get_or_raise(approval_id)
         if approval.status != ApprovalStatus.REVISION_REQUESTED.value:
-            raise ValueError(
-                f"Cannot resubmit: status is {approval.status}, "
-                "expected revision_requested"
-            )
+            raise ValueError(f"Cannot resubmit: status is {approval.status}, " "expected revision_requested")
 
         approval.status = ApprovalStatus.PENDING.value
         approval.decided_by_user = None
@@ -312,9 +309,7 @@ class ApprovalGateService:
 
         allowed = _VALID_TRANSITIONS.get(approval.status, set())
         if new_status.value not in allowed:
-            raise ValueError(
-                f"Cannot transition from {approval.status} " f"to {new_status.value}"
-            )
+            raise ValueError(f"Cannot transition from {approval.status} " f"to {new_status.value}")
 
         approval.status = new_status.value
         approval.decided_by_user = decided_by

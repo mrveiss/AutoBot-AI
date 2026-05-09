@@ -149,9 +149,7 @@ class TestTaskPlan:
     """Tests for TaskPlan dataclass."""
 
     def test_creation(self):
-        step = AgentTask(
-            task_id="t1", step_number=1, total_steps=1, description="step 1"
-        )
+        step = AgentTask(task_id="t1", step_number=1, total_steps=1, description="step 1")
         plan = TaskPlan(
             plan_id="plan_abc",
             original_query="show disk usage",

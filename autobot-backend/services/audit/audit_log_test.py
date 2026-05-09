@@ -16,18 +16,18 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Module-level stubs — keep import chain clean without a full backend venv
-# ---------------------------------------------------------------------------
-
 from services.audit.audit_log import (
+    _GLOBAL_KEY,
     AUDIT_LOG_TTL_SECONDS,
     AuditAction,
-    _GLOBAL_KEY,
     audit_record,
     query_audit_log,
     record_event,
 )
+
+# ---------------------------------------------------------------------------
+# Module-level stubs — keep import chain clean without a full backend venv
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +220,7 @@ class TestQueryAuditLog:
             "services.audit.audit_log.get_async_redis_client",
             new=AsyncMock(return_value=redis),
         ):
-            results = await query_audit_log(
-                user_id="frank", action=AuditAction.SESSION_CREATE
-            )
+            results = await query_audit_log(user_id="frank", action=AuditAction.SESSION_CREATE)
 
         assert len(results) == 1
         assert results[0]["action"] == AuditAction.SESSION_CREATE.value
@@ -250,10 +248,7 @@ class TestQueryAuditLog:
     @pytest.mark.asyncio
     async def test_limit_and_offset(self):
         t = 1_700_000_000.0
-        raws = [
-            self._make_raw_entry("hank", AuditAction.USER_CREATE, t + i)
-            for i in range(10)
-        ]
+        raws = [self._make_raw_entry("hank", AuditAction.USER_CREATE, t + i) for i in range(10)]
         redis = _make_redis_mock()
         redis.zrangebyscore = AsyncMock(return_value=raws)
 

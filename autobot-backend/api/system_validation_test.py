@@ -28,24 +28,18 @@ async def test_system_validation():
         # Test cache validation
         cache_results = await validator.validate_knowledge_base_caching()
         cache_success = all(r.status for r in cache_results) if cache_results else False
-        logger.info(
-            f"Cache Validation: {'✅ PASSED' if cache_success else '❌ FAILED'} ({len(cache_results)} checks)"
-        )
+        logger.info(f"Cache Validation: {'✅ PASSED' if cache_success else '❌ FAILED'} ({len(cache_results)} checks)")
 
         # Test search validation
         search_results = await validator.validate_hybrid_search()
-        search_success = (
-            all(r.status for r in search_results) if search_results else False
-        )
+        search_success = all(r.status for r in search_results) if search_results else False
         logger.info(
             f"Search Validation: {'✅ PASSED' if search_success else '❌ FAILED'} ({len(search_results)} checks)"
         )
 
         # Test monitoring validation
         monitoring_results = await validator.validate_monitoring_system()
-        monitoring_success = (
-            all(r.status for r in monitoring_results) if monitoring_results else False
-        )
+        monitoring_success = all(r.status for r in monitoring_results) if monitoring_results else False
         logger.info(
             f"Monitoring Validation: {'✅ PASSED' if monitoring_success else '❌ FAILED'} ({len(monitoring_results)} checks)"
         )
@@ -78,10 +72,7 @@ async def test_system_validation():
         logger.info(f"  - Health Score: {comprehensive_result.health_score:.1f}%")
         logger.info(f"  - Production Ready: {comprehensive_result.production_ready}")
 
-        if (
-            hasattr(comprehensive_result, "recommendations")
-            and comprehensive_result.recommendations
-        ):
+        if hasattr(comprehensive_result, "recommendations") and comprehensive_result.recommendations:
             logger.info("Top Recommendations:")
             for rec in comprehensive_result.recommendations[:3]:
                 logger.info(f"  - {rec}")
@@ -103,9 +94,7 @@ async def main():
     success = await test_system_validation()
 
     if success:
-        logger.info(
-            "✅ System validation test PASSED - System is ready for production!"
-        )
+        logger.info("✅ System validation test PASSED - System is ready for production!")
     else:
         logger.error("❌ System validation test FAILED - Issues need to be resolved")
 

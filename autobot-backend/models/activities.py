@@ -20,12 +20,12 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from autobot_shared.time_utils import now_utc
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
 if TYPE_CHECKING:
@@ -101,10 +101,7 @@ class TerminalActivityModel(Base):
     user: Mapped["User"] = relationship("User", back_populates="terminal_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<TerminalActivity(id={self.id}, user_id={self.user_id}, "
-            f"command={self.command[:50]}...)>"
-        )
+        return f"<TerminalActivity(id={self.id}, user_id={self.user_id}, " f"command={self.command[:50]}...)>"
 
 
 class FileActivityModel(Base):
@@ -178,10 +175,7 @@ class FileActivityModel(Base):
     user: Mapped["User"] = relationship("User", back_populates="file_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<FileActivity(id={self.id}, user_id={self.user_id}, "
-            f"operation={self.operation}, path={self.path})>"
-        )
+        return f"<FileActivity(id={self.id}, user_id={self.user_id}, " f"operation={self.operation}, path={self.path})>"
 
 
 class BrowserActivityModel(Base):
@@ -258,8 +252,7 @@ class BrowserActivityModel(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<BrowserActivity(id={self.id}, user_id={self.user_id}, "
-            f"action={self.action}, url={self.url[:50]}...)>"
+            f"<BrowserActivity(id={self.id}, user_id={self.user_id}, " f"action={self.action}, url={self.url[:50]}...)>"
         )
 
 
@@ -337,10 +330,7 @@ class DesktopActivityModel(Base):
     user: Mapped["User"] = relationship("User", back_populates="desktop_activities")
 
     def __repr__(self) -> str:
-        return (
-            f"<DesktopActivity(id={self.id}, user_id={self.user_id}, "
-            f"action={self.action})>"
-        )
+        return f"<DesktopActivity(id={self.id}, user_id={self.user_id}, " f"action={self.action})>"
 
 
 class SecretUsageModel(Base):

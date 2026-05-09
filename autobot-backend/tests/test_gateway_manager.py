@@ -14,19 +14,20 @@ Tests verify:
 """
 
 import asyncio
-import pytest
 import time
 from unittest.mock import AsyncMock
 
+import pytest
+
 from services.gateway import (
-    GatewayManager,
-    SlackAdapter,
     DiscordAdapter,
-    WhatsAppAdapter,
-    TeamsAdapter,
-    WebAdapter,
-    UnifiedMessage,
+    GatewayManager,
     NormalizedResponse,
+    SlackAdapter,
+    TeamsAdapter,
+    UnifiedMessage,
+    WebAdapter,
+    WhatsAppAdapter,
 )
 from services.gateway.message_queue import RateLimiter
 
@@ -419,9 +420,7 @@ class TestGatewayManager:
             metadata={},
         )
 
-        agent_handler = AsyncMock(
-            return_value={"response": "Response text", "type": "message"}
-        )
+        agent_handler = AsyncMock(return_value={"response": "Response text", "type": "message"})
 
         handler = AsyncMock()
         gateway.register_response_handler("slack", handler)

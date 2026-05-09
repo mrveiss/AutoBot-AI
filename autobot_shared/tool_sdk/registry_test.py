@@ -9,6 +9,7 @@ singleton behaviour, and the get_tool_sdk_registry alias.
 
 import pytest
 
+from tool_sdk import get_tool_sdk_registry
 from tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 from tool_sdk.registry import (
     PermissionDeniedError,
@@ -16,7 +17,6 @@ from tool_sdk.registry import (
     ToolSDKRegistry,
     get_tool_registry,
 )
-from tool_sdk import get_tool_sdk_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

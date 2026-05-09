@@ -74,9 +74,7 @@ class TaskRetryStrategy:
         """
         try:
             llm = await self._get_llm()
-            prompt = self._build_retry_prompt(
-                task_type, goal, original_strategy, failure_reason, previous_score
-            )
+            prompt = self._build_retry_prompt(task_type, goal, original_strategy, failure_reason, previous_score)
             response = await llm.chat(
                 messages=[
                     {"role": "system", "content": self._system_prompt()},
@@ -84,14 +82,10 @@ class TaskRetryStrategy:
                 ],
                 temperature=0.3,
             )
-            return self._parse_retry_response(
-                response, task_type, goal, original_strategy, failure_reason
-            )
+            return self._parse_retry_response(response, task_type, goal, original_strategy, failure_reason)
         except Exception as exc:
             logger.warning("Error generating retry strategy: %s", exc)
-            return self._fallback_retry(
-                task_type, goal, original_strategy, failure_reason
-            )
+            return self._fallback_retry(task_type, goal, original_strategy, failure_reason)
 
     def _build_retry_prompt(
         self,
@@ -134,11 +128,7 @@ class TaskRetryStrategy:
     ) -> RetryApproach:
         """Parse LLM response into a RetryApproach."""
         try:
-            content = (
-                response
-                if isinstance(response, (str, dict))
-                else getattr(response, "content", "{}")
-            )
+            content = response if isinstance(response, (str, dict)) else getattr(response, "content", "{}")
             data = content if isinstance(content, dict) else json.loads(content)
             return RetryApproach(
                 task_type=task_type,
@@ -153,9 +143,7 @@ class TaskRetryStrategy:
             )
         except Exception as exc:
             logger.warning("Failed to parse retry response: %s", exc)
-            return self._fallback_retry(
-                task_type, goal, original_strategy, failure_reason
-            )
+            return self._fallback_retry(task_type, goal, original_strategy, failure_reason)
 
     def _fallback_retry(
         self,
@@ -170,9 +158,7 @@ class TaskRetryStrategy:
             goal=goal,
             original_strategy=original_strategy,
             failure_reason=failure_reason,
-            suggested_prompt=(
-                f"Retry: {goal}. Previous approach failed. Try a different angle."
-            ),
+            suggested_prompt=(f"Retry: {goal}. Previous approach failed. Try a different angle."),
             suggested_approach="Use a step-by-step decomposition approach",
             rationale="Fallback strategy due to LLM unavailability",
             confidence=0.3,

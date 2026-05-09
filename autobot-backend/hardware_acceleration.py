@@ -17,8 +17,8 @@ from typing import Any, Dict
 
 import psutil
 
-from config import config_manager
 from autobot_shared.singleton_factory import lazy_singleton
+from config import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -112,18 +112,13 @@ class HardwareAccelerationManager:
         self.available_devices[AccelerationType.CPU] = self._get_cpu_info()
 
         logger.info(
-            f"Hardware detection complete - NPU: {self.npu_available}, "
-            f"GPU: {self.gpu_available}, CPU: Available"
+            f"Hardware detection complete - NPU: {self.npu_available}, " f"GPU: {self.gpu_available}, CPU: Available"
         )
 
     def _detect_npu(self) -> bool:
         """Detect Intel NPU availability."""
         try:
-            return (
-                self._check_npu_device_files()
-                or self._check_npu_via_lspci()
-                or self._check_npu_via_openvino()
-            )
+            return self._check_npu_device_files() or self._check_npu_via_lspci() or self._check_npu_via_openvino()
         except Exception as e:
             logger.error("NPU detection error: %s", e)
             return False
@@ -133,11 +128,7 @@ class HardwareAccelerationManager:
         if not os.path.exists("/dev"):
             return False
 
-        npu_devices = [
-            device
-            for device in os.listdir("/dev")
-            if "intel_npu" in device or "npu" in device.lower()
-        ]
+        npu_devices = [device for device in os.listdir("/dev") if "intel_npu" in device or "npu" in device.lower()]
 
         if npu_devices:
             logger.info("Intel NPU devices detected: %s", npu_devices)
@@ -147,9 +138,7 @@ class HardwareAccelerationManager:
     def _check_npu_via_lspci(self) -> bool:
         """Check for NPU hardware via lspci command."""
         try:
-            result = subprocess.run(  # nosec B607 - lspci is safe
-                ["lspci"], capture_output=True, text=True, timeout=5
-            )
+            result = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5)  # nosec B607 - lspci is safe
             if result.returncode == 0:
                 output = result.stdout.lower()
                 if any(keyword in output for keyword in NPU_HARDWARE_KEYWORDS):
@@ -347,9 +336,7 @@ class HardwareAccelerationManager:
                 with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
                     cpuinfo = f.read()
                     if "model name" in cpuinfo:
-                        model_line = [
-                            line for line in cpuinfo.split("\n") if "model name" in line
-                        ][0]
+                        model_line = [line for line in cpuinfo.split("\n") if "model name" in line][0]
                         cpu_info["model"] = model_line.split(":")[1].strip()
             except (FileNotFoundError, IndexError) as e:
                 logger.debug("Detailed CPU info not available: %s", e)
@@ -377,9 +364,7 @@ class HardwareAccelerationManager:
         self._configure_agent_device_assignments()
 
         # Build fallback chain
-        self.current_config["fallback_chain"] = self.current_config[
-            "priority_order"
-        ].copy()
+        self.current_config["fallback_chain"] = self.current_config["priority_order"].copy()
 
     def _configure_agent_device_assignments(self):
         """Configure optimal device assignments for each agent type."""
@@ -448,9 +433,7 @@ class HardwareAccelerationManager:
                 "num_thread": 1,  # NPU uses specialized threads
             }
         )
-        config["environment_vars"].update(
-            {"OLLAMA_DEVICE": "npu", "OPENVINO_DEVICE": "NPU"}
-        )
+        config["environment_vars"].update({"OLLAMA_DEVICE": "npu", "OPENVINO_DEVICE": "NPU"})
 
     def _apply_gpu_config(self, config: Dict[str, Any]) -> None:
         """
@@ -465,9 +448,7 @@ class HardwareAccelerationManager:
                 "num_gpu": 1,  # Use one GPU
             }
         )
-        config["environment_vars"].update(
-            {"OLLAMA_DEVICE": "gpu", "CUDA_VISIBLE_DEVICES": "0"}
-        )
+        config["environment_vars"].update({"OLLAMA_DEVICE": "gpu", "CUDA_VISIBLE_DEVICES": "0"})
 
     def _apply_cpu_config(self, config: Dict[str, Any]) -> None:
         """
@@ -483,9 +464,7 @@ class HardwareAccelerationManager:
                 "num_thread": optimal_threads,
             }
         )
-        config["environment_vars"].update(
-            {"OLLAMA_DEVICE": "cpu", "OMP_NUM_THREADS": str(optimal_threads)}
-        )
+        config["environment_vars"].update({"OLLAMA_DEVICE": "cpu", "OMP_NUM_THREADS": str(optimal_threads)})
 
     def get_ollama_device_config(self, agent_type: str) -> Dict[str, Any]:
         """
@@ -537,17 +516,11 @@ class HardwareAccelerationManager:
         """
         optimizations = []
         if not self.npu_available:
-            optimizations.append(
-                "Consider Intel NPU for efficient small model execution (1B models)"
-            )
+            optimizations.append("Consider Intel NPU for efficient small model execution (1B models)")
         if not self.gpu_available:
-            optimizations.append(
-                "Consider GPU for faster large model execution (3B+ models)"
-            )
+            optimizations.append("Consider GPU for faster large model execution (3B+ models)")
         if self.cpu_cores < 8:
-            optimizations.append(
-                "Consider upgrading to 8+ CPU cores for better multi-agent performance"
-            )
+            optimizations.append("Consider upgrading to 8+ CPU cores for better multi-agent performance")
         return optimizations
 
     def _generate_performance_tips(self) -> list:
@@ -559,14 +532,9 @@ class HardwareAccelerationManager:
         """
         tips = []
         if self.npu_available:
-            tips.append(
-                "NPU excels at 1B models - use for Chat, Knowledge Retrieval, "
-                "System Commands agents"
-            )
+            tips.append("NPU excels at 1B models - use for Chat, Knowledge Retrieval, " "System Commands agents")
         if self.gpu_available:
-            tips.append(
-                "GPU optimal for 3B models - use for RAG, Orchestrator, Research agents"
-            )
+            tips.append("GPU optimal for 3B models - use for RAG, Orchestrator, Research agents")
         tips.extend(
             [
                 "Reserve CPU for Redis, system operations, and fallback processing",
@@ -652,8 +620,7 @@ class HardwareAccelerationManager:
         given = set(priority_order)
         if given != valid_values or len(priority_order) != len(valid_values):
             raise ValueError(
-                f"priority_order must be a permutation of {sorted(valid_values)}, "
-                f"got {priority_order}"
+                f"priority_order must be a permutation of {sorted(valid_values)}, " f"got {priority_order}"
             )
 
         self.device_priorities = [AccelerationType(v) for v in priority_order]

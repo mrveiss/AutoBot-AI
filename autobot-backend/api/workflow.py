@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+
 from api.schemas_workflows import (
     WorkflowApprovalResponse,
     WorkflowApproveResponse,
@@ -69,13 +70,9 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
-        request = ResearchRequest(
-            query="network security scanning tools", focus="tools"
-        )
+        request = ResearchRequest(query="network security scanning tools", focus="tools")
         result = await research_agent.research_specific_tools(request)
-        ctx.step["result"] = (
-            f"Research completed: {result.get('summary', 'Tools researched')}"
-        )
+        ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
         result = await research_agent.get_tool_installation_guide("nmap")
         guide = result.get("installation_guide", "Guide obtained")
@@ -182,9 +179,7 @@ async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
     result = await network_discovery_agent.execute(ctx.action, discovery_context)
     status = result.get("status")
     hosts_found = result.get("hosts_found", 0)
-    ctx.step["result"] = (
-        f"Network discovery completed: {status} - Found {hosts_found} hosts"
-    )
+    ctx.step["result"] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
     ctx.step["discovery_results"] = result
 
 
@@ -198,31 +193,19 @@ async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
     if "install tool" in action_lower:
         tool_info = {"name": "nmap", "package_name": "nmap"}
         result = await cmd_agent.install_tool(tool_info, ctx.workflow_id)
-        ctx.step["result"] = (
-            f"Installation result: {result.get('response', 'Tool installed')}"
-        )
+        ctx.step["result"] = f"Installation result: {result.get('response', 'Tool installed')}"
     elif "verify installation" in action_lower:
-        result = await cmd_agent.execute_command_with_output(
-            "nmap --version", ctx.workflow_id
-        )
-        ctx.step["result"] = (
-            f"Verification result: {result.get('output', 'Tool verified')}"
-        )
+        result = await cmd_agent.execute_command_with_output("nmap --version", ctx.workflow_id)
+        ctx.step["result"] = f"Verification result: {result.get('output', 'Tool verified')}"
     else:
-        result = await cmd_agent.execute_command_with_output(
-            ctx.action, ctx.workflow_id
-        )
-        ctx.step["result"] = (
-            f"Command executed: {result.get('output', 'Command completed')}"
-        )
+        result = await cmd_agent.execute_command_with_output(ctx.action, ctx.workflow_id)
+        ctx.step["result"] = f"Command executed: {result.get('output', 'Command completed')}"
 
 
 async def _handle_fallback_step(ctx: WorkflowStepContext, agent_type: str) -> None:
     """Handle unknown agent type with fallback (Issue #336 - extracted handler, Issue #322 - context)."""
     result = await ctx.orchestrator.execute_goal(f"{agent_type}: {ctx.action}")
-    ctx.step["result"] = (
-        f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
-    )
+    ctx.step["result"] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
 
 
 # Issue #336: Dispatch table for agent step handlers
@@ -301,9 +284,7 @@ async def _execute_complex_workflow(
     from services.workflow_automation.routes import get_workflow_manager
 
     manager = get_workflow_manager()
-    workflow_id = await manager.create_workflow_from_chat_request(
-        workflow_request.user_message, session_id
-    )
+    workflow_id = await manager.create_workflow_from_chat_request(workflow_request.user_message, session_id)
 
     if not workflow_id:
         logger.error(
@@ -326,9 +307,7 @@ async def _execute_complex_workflow(
     }
 
 
-def _prepare_workflow_data(
-    workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool
-) -> Dict:
+def _prepare_workflow_data(workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool) -> Dict:
     """Prepare workflow data structure (Issue #281: extracted)."""
     return {
         "workflow_id": workflow_id,
@@ -355,9 +334,7 @@ def _convert_preview_to_steps(workflow_preview: list) -> list:
             "status": "pending",
             "requires_approval": "requires your approval" in step_desc,
             "agent_type": step_desc.split(":")[0].lower(),
-            "action": (
-                step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
-            ),
+            "action": (step_desc.split(":")[1].strip() if ":" in step_desc else step_desc),
             "started_at": None,
             "completed_at": None,
         }
@@ -452,9 +429,7 @@ async def list_active_workflows(admin_check: bool = Depends(check_admin_permissi
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
-async def get_workflow_details(
-    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_workflow_details(workflow_id: str, admin_check: bool = Depends(check_admin_permission)):
     """Get detailed information about a specific workflow.
 
     Issue #744: Requires admin authentication."""
@@ -474,9 +449,7 @@ async def get_workflow_details(
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
-async def get_workflow_status(
-    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_workflow_status(workflow_id: str, admin_check: bool = Depends(check_admin_permission)):
     """Get current status of a workflow.
 
     Issue #744: Requires admin authentication."""
@@ -504,9 +477,7 @@ async def get_workflow_status(
     }
 
 
-async def _resolve_approval_future(
-    approval_key: str, approval: "WorkflowApprovalResponse"
-) -> None:
+async def _resolve_approval_future(approval_key: str, approval: "WorkflowApprovalResponse") -> None:
     """Helper for approve_workflow_step. Ref: #1088.
 
     Pop and resolve the pending approval future for approval_key.
@@ -514,9 +485,7 @@ async def _resolve_approval_future(
     """
     async with _approvals_lock:
         if approval_key not in pending_approvals:
-            raise HTTPException(
-                status_code=404, detail="No pending approval for this workflow step"
-            )
+            raise HTTPException(status_code=404, detail="No pending approval for this workflow step")
         future = pending_approvals.pop(approval_key)
     if not future.done():
         future.set_result(
@@ -528,9 +497,7 @@ async def _resolve_approval_future(
         )
 
 
-async def _update_step_status_and_metrics(
-    workflow_id: str, approval: "WorkflowApprovalResponse"
-) -> None:
+async def _update_step_status_and_metrics(workflow_id: str, approval: "WorkflowApprovalResponse") -> None:
     """Helper for approve_workflow_step. Ref: #1088.
 
     Update the current step's status and user_response in the workflow,
@@ -542,9 +509,7 @@ async def _update_step_status_and_metrics(
         current_step = workflow.get("current_step", 0)
 
         if current_step < len(steps):
-            steps[current_step]["status"] = (
-                "approved" if approval.approved else "denied"
-            )
+            steps[current_step]["status"] = "approved" if approval.approved else "denied"
             steps[current_step]["user_response"] = approval.user_input
 
         # Get workflow type for metrics
@@ -595,9 +560,7 @@ async def approve_workflow_step(
     return {
         "success": True,
         "message": f"Workflow step {'approved' if approval.approved else 'denied'}",
-        "next_action": (
-            "continue_execution" if approval.approved else "workflow_cancelled"
-        ),
+        "next_action": ("continue_execution" if approval.approved else "workflow_cancelled"),
     }
 
 
@@ -636,17 +599,13 @@ async def execute_workflow(
     # Complex workflow — delegate to the workflow_automation service (#1770)
     try:
         session_id = str(uuid.uuid4())
-        return await _execute_complex_workflow(
-            workflow_request, background_tasks, session_id
-        )
+        return await _execute_complex_workflow(workflow_request, background_tasks, session_id)
     except Exception as e:
         logger.error("Workflow execution error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
-async def _handle_approval_result(
-    approval_result: dict, step: dict, workflow: dict
-) -> bool:
+async def _handle_approval_result(approval_result: dict, step: dict, workflow: dict) -> bool:
     """Handle approval result and update status (Issue #315: extracted).
 
     Returns:
@@ -663,9 +622,7 @@ async def _handle_approval_result(
     return True
 
 
-async def _wait_for_step_approval(
-    workflow_id: str, workflow: dict, step: dict
-) -> bool | None:
+async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) -> bool | None:
     """Wait for step approval with timeout handling (Issue #315: extracted).
 
     Returns:
@@ -695,9 +652,7 @@ async def _wait_for_step_approval(
     )
 
     try:
-        approval_result = await execute_with_cancellation(
-            approval_future, f"workflow_approval_{workflow['id']}"
-        )
+        approval_result = await execute_with_cancellation(approval_future, f"workflow_approval_{workflow['id']}")
         return await _handle_approval_result(approval_result, step, workflow)
     except asyncio.TimeoutError:
         async with _workflows_lock:
@@ -706,9 +661,7 @@ async def _wait_for_step_approval(
         return None
 
 
-async def _publish_step_started(
-    workflow_id: str, step: Metadata, step_index: int, total_steps: int
-) -> None:
+async def _publish_step_started(workflow_id: str, step: Metadata, step_index: int, total_steps: int) -> None:
     """
     Publish workflow step started event.
 
@@ -753,9 +706,7 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
     )
 
 
-def _record_workflow_metrics(
-    workflow_type: str, workflow_start_time: float, status: str
-) -> None:
+def _record_workflow_metrics(workflow_type: str, workflow_start_time: float, status: str) -> None:
     """
     Record Prometheus metrics for workflow completion.
 
@@ -768,23 +719,14 @@ def _record_workflow_metrics(
     """
     if workflow_start_time:
         duration = time.time() - workflow_start_time
-        prometheus_metrics.record_workflow_execution(
-            workflow_type=workflow_type, status=status, duration=duration
-        )
+        prometheus_metrics.record_workflow_execution(workflow_type=workflow_type, status=status, duration=duration)
 
         # Update active workflows count (decrement)
         prometheus_metrics.update_active_workflows(
             workflow_type=workflow_type,
             count=max(
                 0,
-                len(
-                    [
-                        w
-                        for w in active_workflows.values()
-                        if w.get("classification") == workflow_type
-                    ]
-                )
-                - 1,
+                len([w for w in active_workflows.values() if w.get("classification") == workflow_type]) - 1,
             ),
         )
 
@@ -855,9 +797,7 @@ async def _execute_step_iteration(
     await _publish_step_started(workflow_id, step, step_index, len(steps))
 
     # Execute step with approval handling (Issue #281: uses helper)
-    if not await _execute_step_with_approval(
-        workflow_id, workflow, step, step_index, orchestrator
-    ):
+    if not await _execute_step_with_approval(workflow_id, workflow, step, step_index, orchestrator):
         return False  # Timeout or cancelled
 
     # Publish step completion event (Issue #281: uses helper)
@@ -865,9 +805,7 @@ async def _execute_step_iteration(
     return True
 
 
-async def _finalize_workflow_completed(
-    workflow_id: str, workflow: Metadata, steps: list
-) -> None:
+async def _finalize_workflow_completed(workflow_id: str, workflow: Metadata, steps: list) -> None:
     """Helper for execute_workflow_steps. Ref: #1088.
 
     Mark the workflow as completed, record metrics, and publish the
@@ -893,9 +831,7 @@ async def _finalize_workflow_completed(
     )
 
 
-async def _finalize_workflow_failed(
-    workflow_id: str, workflow: Metadata, error: Exception
-) -> None:
+async def _finalize_workflow_failed(workflow_id: str, workflow: Metadata, error: Exception) -> None:
     """Helper for execute_workflow_steps. Ref: #1088.
 
     Mark the workflow as failed, record metrics, and publish the
@@ -937,9 +873,7 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
     try:
         for step_index, step in enumerate(steps):
             # Execute one step: init state, approval, publish (Issue #1088: extracted)
-            if not await _execute_step_iteration(
-                workflow_id, workflow, steps, step_index, step, orchestrator
-            ):
+            if not await _execute_step_iteration(workflow_id, workflow, steps, step_index, step, orchestrator):
                 return  # Timeout or cancelled
 
         # Workflow completed (Issue #1088: extracted)
@@ -952,11 +886,7 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
 
 async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     """Execute a single workflow step with real agent integration."""
-    agent_type = (
-        step["agent_type"].split(".")[1]
-        if "." in step["agent_type"]
-        else step["agent_type"]
-    )
+    agent_type = step["agent_type"].split(".")[1] if "." in step["agent_type"] else step["agent_type"]
     action = step["action"]
     step_id = step.get("step_id", f"step_{agent_type}")
 
@@ -989,27 +919,19 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
         step["status"] = "failed"
 
         # End step timing with failure
-        workflow_metrics.end_step_timing(
-            workflow_id, step_id, success=False, error="Internal server error"
-        )
+        workflow_metrics.end_step_timing(workflow_id, step_id, success=False, error="Internal server error")
 
         # Record Prometheus workflow step metric (failed)
         if workflow_id in active_workflows:
-            workflow_type = active_workflows[workflow_id].get(
-                "classification", "unknown"
-            )
-            prometheus_metrics.record_workflow_step(
-                workflow_type=workflow_type, step_type=agent_type, status="failed"
-            )
+            workflow_type = active_workflows[workflow_id].get("classification", "unknown")
+            prometheus_metrics.record_workflow_step(workflow_type=workflow_type, step_type=agent_type, status="failed")
     else:
         # End step timing with success
         workflow_metrics.end_step_timing(workflow_id, step_id, success=True)
 
         # Record Prometheus workflow step metric (success)
         if workflow_id in active_workflows:
-            workflow_type = active_workflows[workflow_id].get(
-                "classification", "unknown"
-            )
+            workflow_type = active_workflows[workflow_id].get("classification", "unknown")
             prometheus_metrics.record_workflow_step(
                 workflow_type=workflow_type, step_type=agent_type, status="completed"
             )
@@ -1021,9 +943,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
-async def cancel_workflow(
-    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def cancel_workflow(workflow_id: str, admin_check: bool = Depends(check_admin_permission)):
     """Cancel an active workflow.
 
     Issue #744: Requires admin authentication."""
@@ -1061,9 +981,7 @@ async def cancel_workflow(
     operation="get_pending_approvals",
     error_code_prefix="WORKFLOW",
 )
-async def get_pending_approvals(
-    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_pending_approvals(workflow_id: str, admin_check: bool = Depends(check_admin_permission)):
     """Get pending approval requests for a workflow.
 
     Issue #744: Requires admin authentication."""

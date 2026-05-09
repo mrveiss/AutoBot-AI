@@ -203,10 +203,7 @@ LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
         severity="high",
     ),
     SSOTMapping(
-        pattern=(
-            r"(llama3|mistral|dolphin|openchat|gemma|phi"
-            r"|deepseek|qwen).*:[0-9]+(b|B)"
-        ),
+        pattern=(r"(llama3|mistral|dolphin|openchat|gemma|phi" r"|deepseek|qwen).*:[0-9]+(b|B)"),
         is_regex=True,
         category=SSOTCategory.LLM_MODEL,
         python_config="config.llm.default_model",
@@ -218,9 +215,7 @@ LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
 ]
 
 # All mappings combined
-ALL_MAPPINGS: List[SSOTMapping] = (
-    VM_IP_MAPPINGS + PORT_MAPPINGS + URL_MAPPINGS + LLM_MODEL_MAPPINGS
-)
+ALL_MAPPINGS: List[SSOTMapping] = VM_IP_MAPPINGS + PORT_MAPPINGS + URL_MAPPINGS + LLM_MODEL_MAPPINGS
 
 
 def get_mapping_for_value(value: str) -> Optional[SSOTMapping]:
@@ -367,9 +362,7 @@ def _count_violations_by_severity(
     return by_severity
 
 
-def _get_high_priority_violations(
-    violations: List[Dict], limit: int = 20
-) -> List[Dict]:
+def _get_high_priority_violations(violations: List[Dict], limit: int = 20) -> List[Dict]:
     """
     Extract top high-priority violations with fix suggestions.
 
@@ -402,9 +395,7 @@ def generate_ssot_coverage_report(
     validated = validate_against_ssot(hardcoded_values)
 
     with_ssot = [v for v in validated if v["ssot_mapping"]["has_ssot_equivalent"]]
-    without_ssot = [
-        v for v in validated if not v["ssot_mapping"]["has_ssot_equivalent"]
-    ]
+    without_ssot = [v for v in validated if not v["ssot_mapping"]["has_ssot_equivalent"]]
 
     by_category = _group_violations_by_category(with_ssot)
     by_severity = _count_violations_by_severity(with_ssot)
@@ -432,20 +423,10 @@ def generate_ssot_coverage_report(
 # =============================================================================
 
 SSOT_VALUES_FOR_SHELL = {
-    **{
-        _vm_default(f): (f"config.{p} ({VMConfig.model_fields[f].alias})")
-        for f, p, _, _ in _VM_REGISTRY
-    },
-    **{
-        str(_port_default(f)): (f"config.{p} ({PortConfig.model_fields[f].alias})")
-        for f, p, _, _ in _PORT_REGISTRY
-    },
-    _llm_default("default_model"): (
-        "config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)"
-    ),
-    _llm_default("embedding_model"): (
-        "config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)"
-    ),
+    **{_vm_default(f): (f"config.{p} ({VMConfig.model_fields[f].alias})") for f, p, _, _ in _VM_REGISTRY},
+    **{str(_port_default(f)): (f"config.{p} ({PortConfig.model_fields[f].alias})") for f, p, _, _ in _PORT_REGISTRY},
+    _llm_default("default_model"): ("config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)"),
+    _llm_default("embedding_model"): ("config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)"),
 }
 
 

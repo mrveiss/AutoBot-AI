@@ -21,9 +21,9 @@ from api.schemas_knowledge import (
     SeedRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

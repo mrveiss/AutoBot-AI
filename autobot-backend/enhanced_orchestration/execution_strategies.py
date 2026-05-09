@@ -96,9 +96,7 @@ class ExecutionStrategyHandler:
             for task in ready_tasks:
                 if len(running_tasks) < self.max_parallel_tasks:
                     logger.info("Starting parallel task %s", task.task_id)
-                    task_future = asyncio.create_task(
-                        self._safe_execute(task, results)
-                    )
+                    task_future = asyncio.create_task(self._safe_execute(task, results))
                     running_tasks.append((task, task_future))
 
             # Wait for any task to complete
@@ -139,10 +137,7 @@ class ExecutionStrategyHandler:
             logger.info("Executing pipeline stage %d/%d", stage_num + 1, len(stages))
 
             stage_results = await asyncio.gather(
-                *[
-                    self._safe_execute(task, {**results, **pipeline_data})
-                    for task in stage_tasks
-                ]
+                *[self._safe_execute(task, {**results, **pipeline_data}) for task in stage_tasks]
             )
 
             stage_failed = False
@@ -167,17 +162,13 @@ class ExecutionStrategyHandler:
         collab_channel = f"{self.coordination_prefix}collab:{plan.plan_id}"
 
         # Start collaboration coordinator
-        coordinator_task = asyncio.create_task(
-            self._coordinate_collaboration(collab_channel)
-        )
+        coordinator_task = asyncio.create_task(self._coordinate_collaboration(collab_channel))
 
         # Execute tasks with collaboration
         task_futures = []
         for task in plan.tasks:
             enhanced_task = self._enhance_task_for_collaboration(task, collab_channel)
-            future = asyncio.create_task(
-                self._safe_execute(enhanced_task, results)
-            )
+            future = asyncio.create_task(self._safe_execute(enhanced_task, results))
             task_futures.append((task, future))
 
         # Wait for all tasks
@@ -224,17 +215,13 @@ class ExecutionStrategyHandler:
             logger.exception("Task %s raised during execution", task.task_id)
             return task.to_failed_result(repr(exc))
 
-    async def _execute_parallel_batch(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_parallel_batch(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute tasks in parallel batch."""
         batch_size = min(self.max_parallel_tasks, len(pending_tasks))
         batch_tasks = pending_tasks[:batch_size]
         ready_tasks = [t for t in batch_tasks if self._dependencies_met(t, results)]
 
-        batch_results = await asyncio.gather(
-            *[self._safe_execute(task, results) for task in ready_tasks]
-        )
+        batch_results = await asyncio.gather(*[self._safe_execute(task, results) for task in ready_tasks])
 
         completed, failed = 0, 0
         for task, result in zip(ready_tasks, batch_results):
@@ -247,9 +234,7 @@ class ExecutionStrategyHandler:
 
         return completed, failed
 
-    async def _execute_sequential_step(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> Tuple[int, int]:
+    async def _execute_sequential_step(self, pending_tasks: list, results: Dict[str, Any]) -> Tuple[int, int]:
         """Execute one sequential task step."""
         for task in pending_tasks[:]:
             if not self._dependencies_met(task, results):
@@ -275,9 +260,7 @@ class ExecutionStrategyHandler:
         while pending_tasks:
             progress_ratio = completed_tasks / len(plan.tasks)
             failure_ratio = failed_tasks / max(completed_tasks, 1)
-            current_strategy = self._adapt_strategy(
-                progress_ratio, failure_ratio, current_strategy
-            )
+            current_strategy = self._adapt_strategy(progress_ratio, failure_ratio, current_strategy)
 
             if current_strategy == ExecutionStrategy.PARALLEL:
                 c, f = await self._execute_parallel_batch(pending_tasks, results)
@@ -299,19 +282,15 @@ class ExecutionStrategyHandler:
 
         return results
 
-    async def _wait_for_dependencies(
-        self, task: AgentTask, results: Dict[str, Any]
-    ) -> None:
+    async def _wait_for_dependencies(self, task: AgentTask, results: Dict[str, Any]) -> None:
         """Wait for task dependencies to complete, or raise if a dep is in any terminal non-completed state."""
         while not self._dependencies_met(task, results):
             terminal_deps = [
-                dep for dep in task.dependencies
-                if dep in results and results[dep].get("status") != "completed"
+                dep for dep in task.dependencies if dep in results and results[dep].get("status") != "completed"
             ]
             if terminal_deps:
                 status = results[terminal_deps[0]].get("status")
                 raise RuntimeError(
-                    f"Task {task.task_id} cannot run: dependency {terminal_deps[0]}"
-                    f" is terminal (status={status})"
+                    f"Task {task.task_id} cannot run: dependency {terminal_deps[0]}" f" is terminal (status={status})"
                 )
             await asyncio.sleep(TimingConstants.SHORT_DELAY)

@@ -116,9 +116,7 @@ async def test_ensure_permission_success(mock_db, session_id, owner_id):
 
     with patch("api.collaboration._get_session_collab", return_value=collab):
         # Act
-        result = await _ensure_permission(
-            session_id, owner_id, PermissionLevel.OWNER, mock_db
-        )
+        result = await _ensure_permission(session_id, owner_id, PermissionLevel.OWNER, mock_db)
 
         # Assert
         assert result == collab
@@ -131,17 +129,13 @@ async def test_ensure_permission_not_found(mock_db, session_id, owner_id):
     with patch("api.collaboration._get_session_collab", return_value=None):
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
-            await _ensure_permission(
-                session_id, owner_id, PermissionLevel.OWNER, mock_db
-            )
+            await _ensure_permission(session_id, owner_id, PermissionLevel.OWNER, mock_db)
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_ensure_permission_insufficient(
-    mock_db, session_id, owner_id, collaborator_id
-):
+async def test_ensure_permission_insufficient(mock_db, session_id, owner_id, collaborator_id):
     """Test permission check with insufficient permission."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
@@ -196,15 +190,11 @@ async def test_get_or_create_collab_new(mock_db, session_id, owner_id):
 
 
 @pytest.mark.asyncio
-async def test_invite_user_success(
-    mock_db, session_id, owner_id, collaborator_id, current_user_owner
-):
+async def test_invite_user_success(mock_db, session_id, owner_id, collaborator_id, current_user_owner):
     """Test successfully inviting user."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
-    invite = InviteRequest(
-        user_id=str(collaborator_id), permission=PermissionLevel.EDITOR
-    )
+    invite = InviteRequest(user_id=str(collaborator_id), permission=PermissionLevel.EDITOR)
 
     with patch("api.collaboration._ensure_permission", return_value=collab):
         # Act
@@ -237,9 +227,7 @@ async def test_invite_user_invalid_uuid(mock_db, session_id, current_user_owner)
 
 
 @pytest.mark.asyncio
-async def test_remove_collaborator_success(
-    mock_db, session_id, owner_id, collaborator_id, current_user_owner
-):
+async def test_remove_collaborator_success(mock_db, session_id, owner_id, collaborator_id, current_user_owner):
     """Test successfully removing collaborator."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
@@ -249,9 +237,7 @@ async def test_remove_collaborator_success(
 
     with patch("api.collaboration._ensure_permission", return_value=collab):
         # Act
-        response = await remove_collaborator(
-            session_id, remove, mock_db, current_user_owner
-        )
+        response = await remove_collaborator(session_id, remove, mock_db, current_user_owner)
 
         # Assert
         assert response.success is True
@@ -261,9 +247,7 @@ async def test_remove_collaborator_success(
 
 
 @pytest.mark.asyncio
-async def test_remove_collaborator_cannot_remove_owner(
-    mock_db, session_id, owner_id, current_user_owner
-):
+async def test_remove_collaborator_cannot_remove_owner(mock_db, session_id, owner_id, current_user_owner):
     """Test cannot remove session owner."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
@@ -279,9 +263,7 @@ async def test_remove_collaborator_cannot_remove_owner(
 
 
 @pytest.mark.asyncio
-async def test_remove_collaborator_not_found(
-    mock_db, session_id, owner_id, current_user_owner
-):
+async def test_remove_collaborator_not_found(mock_db, session_id, owner_id, current_user_owner):
     """Test removing non-existent collaborator."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
@@ -301,9 +283,7 @@ async def test_remove_collaborator_not_found(
 
 
 @pytest.mark.asyncio
-async def test_get_participants_success(
-    mock_db, session_id, owner_id, collaborator_id, current_user_owner
-):
+async def test_get_participants_success(mock_db, session_id, owner_id, collaborator_id, current_user_owner):
     """Test getting participants list."""
     # Arrange
     collab = SessionCollaboration(session_id=session_id, owner_id=owner_id)
@@ -326,9 +306,7 @@ async def test_get_participants_success(
 
 
 @pytest.mark.asyncio
-async def test_share_secret_with_all_editors(
-    mock_db, session_id, owner_id, collaborator_id, current_user_owner
-):
+async def test_share_secret_with_all_editors(mock_db, session_id, owner_id, collaborator_id, current_user_owner):
     """Test sharing secret with all editors."""
     # Arrange
     secret_id = uuid.uuid4()
@@ -352,9 +330,7 @@ async def test_share_secret_with_all_editors(
 
     with patch("api.collaboration._ensure_permission", return_value=collab):
         # Act
-        response = await share_secret_with_session(
-            session_id, share, mock_db, current_user_owner
-        )
+        response = await share_secret_with_session(session_id, share, mock_db, current_user_owner)
 
         # Assert
         assert response["success"] is True
@@ -363,9 +339,7 @@ async def test_share_secret_with_all_editors(
 
 
 @pytest.mark.asyncio
-async def test_share_secret_not_owner(
-    mock_db, session_id, owner_id, collaborator_id, current_user_editor
-):
+async def test_share_secret_not_owner(mock_db, session_id, owner_id, collaborator_id, current_user_editor):
     """Test sharing secret user doesn't own."""
     # Arrange
     secret_id = uuid.uuid4()
@@ -390,18 +364,14 @@ async def test_share_secret_not_owner(
     with patch("api.collaboration._ensure_permission", return_value=collab):
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
-            await share_secret_with_session(
-                session_id, share, mock_db, current_user_editor
-            )
+            await share_secret_with_session(session_id, share, mock_db, current_user_editor)
 
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
         assert "only share secrets you own" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
-async def test_share_secret_not_found(
-    mock_db, session_id, owner_id, current_user_owner
-):
+async def test_share_secret_not_found(mock_db, session_id, owner_id, current_user_owner):
     """Test sharing non-existent secret."""
     # Arrange
     secret_id = uuid.uuid4()
@@ -416,8 +386,6 @@ async def test_share_secret_not_found(
     with patch("api.collaboration._ensure_permission", return_value=collab):
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
-            await share_secret_with_session(
-                session_id, share, mock_db, current_user_owner
-            )
+            await share_secret_with_session(session_id, share, mock_db, current_user_owner)
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND

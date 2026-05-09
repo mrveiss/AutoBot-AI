@@ -136,42 +136,31 @@ class EventHistory:
 
     events: deque
 
-    def count_recent_failures(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
+    def count_recent_failures(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent authentication failures"""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
         count = 0
 
         for event in reversed(self.events):
-            event_time = parse_utc_iso(
-                event.get("timestamp", utc_timestamp())
-            )
+            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
             if event_time < cutoff_time:
                 break
             if (
                 event.get("action") == "authentication"
                 and event.get("outcome") == "failure"
-                and (
-                    event.get("user_id") == user_id
-                    or event.get("source_ip") == source_ip
-                )
+                and (event.get("user_id") == user_id or event.get("source_ip") == source_ip)
             ):
                 count += 1
 
         return count
 
-    def count_recent_api_requests(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
+    def count_recent_api_requests(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent API requests"""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
         count = 0
 
         for event in reversed(self.events):
-            event_time = parse_utc_iso(
-                event.get("timestamp", utc_timestamp())
-            )
+            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
             if event_time < cutoff_time:
                 break
             if event.get("action") == "api_request" and (
@@ -181,17 +170,13 @@ class EventHistory:
 
         return count
 
-    def get_recent_action_frequency(
-        self, user_id: str, action: str, hours: int = 1
-    ) -> int:
+    def get_recent_action_frequency(self, user_id: str, action: str, hours: int = 1) -> int:
         """Count recent action frequency for a user"""
         cutoff_time = now_utc() - timedelta(hours=hours)
         count = 0
 
         for event in reversed(self.events):
-            event_time = parse_utc_iso(
-                event.get("timestamp", utc_timestamp())
-            )
+            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
             if event_time < cutoff_time:
                 break
             if event.get("user_id") == user_id and event.get("action") == action:
@@ -199,17 +184,13 @@ class EventHistory:
 
         return count
 
-    def get_recent_endpoint_usage(
-        self, user_id: str, endpoint: str, hours: int = 24
-    ) -> int:
+    def get_recent_endpoint_usage(self, user_id: str, endpoint: str, hours: int = 24) -> int:
         """Get recent endpoint usage count"""
         cutoff_time = now_utc() - timedelta(hours=hours)
         count = 0
 
         for event in reversed(self.events):
-            event_time = parse_utc_iso(
-                event.get("timestamp", utc_timestamp())
-            )
+            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
             if event_time < cutoff_time:
                 break
             if (
@@ -233,10 +214,7 @@ class EventHistory:
             "privilege_escalation",
         ]
         return sum(
-            1
-            for event in self.events
-            if event.get("user_id") == user_id
-            and event.get("action") in high_risk_actions
+            1 for event in self.events if event.get("user_id") == user_id and event.get("action") in high_risk_actions
         )
 
     def count_off_hours_activity(self, user_id: str) -> int:
@@ -244,11 +222,7 @@ class EventHistory:
         return sum(
             1
             for event in self.events
-            if event.get("user_id") == user_id
-            and parse_utc_iso(
-                event.get("timestamp", utc_timestamp())
-            ).hour
-            < 6
+            if event.get("user_id") == user_id and parse_utc_iso(event.get("timestamp", utc_timestamp())).hour < 6
         )
 
 
@@ -292,9 +266,7 @@ class UserProfile:
         """Check if IP is anomalous for this user"""
         return ip not in self.typical_ips
 
-    def is_anomalous_action_frequency(
-        self, action: str, current_frequency: int, deviation_threshold: float
-    ) -> bool:
+    def is_anomalous_action_frequency(self, action: str, current_frequency: int, deviation_threshold: float) -> bool:
         """Check if action frequency is anomalous"""
         normal_frequency = self.baseline_actions.get(action, 0)
         return current_frequency > normal_frequency * deviation_threshold
@@ -322,9 +294,7 @@ class UserProfile:
         """Update profile with new event data"""
         # Update action frequency
         if event.action:
-            self.baseline_actions[event.action] = (
-                self.baseline_actions.get(event.action, 0) + 1
-            )
+            self.baseline_actions[event.action] = self.baseline_actions.get(event.action, 0) + 1
 
         # Update typical hours
         event_hour = event.get_timestamp_hour()
@@ -337,15 +307,11 @@ class UserProfile:
 
         # Update file access patterns
         if event.is_file_operation() and event.resource:
-            self.file_access_patterns[event.resource] = (
-                self.file_access_patterns.get(event.resource, 0) + 1
-            )
+            self.file_access_patterns[event.resource] = self.file_access_patterns.get(event.resource, 0) + 1
 
         # Update API usage patterns
         if event.is_api_request() and event.resource:
-            self.api_usage_patterns[event.resource] = (
-                self.api_usage_patterns.get(event.resource, 0) + 1
-            )
+            self.api_usage_patterns[event.resource] = self.api_usage_patterns.get(event.resource, 0) + 1
 
         self.last_updated = now_utc()
 
@@ -381,11 +347,7 @@ class UserProfile:
         return {
             "user_id": self.user_id,
             "risk_score": self.risk_score,
-            "risk_level": (
-                "high"
-                if self.risk_score > 0.7
-                else "medium" if self.risk_score > 0.4 else "low"
-            ),
+            "risk_level": ("high" if self.risk_score > 0.7 else "medium" if self.risk_score > 0.4 else "low"),
             "profile_age_days": (now_utc() - self.last_updated).days,
             "total_actions": sum(self.baseline_actions.values()),
             "unique_actions": len(self.baseline_actions),
@@ -413,30 +375,18 @@ class AnalysisContext:
         """Get user profile if exists"""
         return self.user_profiles.get(user_id)
 
-    def get_recent_action_frequency(
-        self, user_id: str, action: str, hours: int = 1
-    ) -> int:
+    def get_recent_action_frequency(self, user_id: str, action: str, hours: int = 1) -> int:
         """Count recent action frequency for a user"""
         return self.event_history.get_recent_action_frequency(user_id, action, hours)
 
-    def count_recent_failures(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
+    def count_recent_failures(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent authentication failures"""
-        return self.event_history.count_recent_failures(
-            user_id, source_ip, window_minutes
-        )
+        return self.event_history.count_recent_failures(user_id, source_ip, window_minutes)
 
-    def count_recent_api_requests(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
+    def count_recent_api_requests(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent API requests"""
-        return self.event_history.count_recent_api_requests(
-            user_id, source_ip, window_minutes
-        )
+        return self.event_history.count_recent_api_requests(user_id, source_ip, window_minutes)
 
-    def get_recent_endpoint_usage(
-        self, user_id: str, endpoint: str, hours: int = 24
-    ) -> int:
+    def get_recent_endpoint_usage(self, user_id: str, endpoint: str, hours: int = 24) -> int:
         """Get recent endpoint usage count"""
         return self.event_history.get_recent_endpoint_usage(user_id, endpoint, hours)

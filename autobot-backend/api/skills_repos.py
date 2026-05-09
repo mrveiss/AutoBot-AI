@@ -10,10 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from skills.db import get_skills_engine
-from skills.models import RepoType, SkillRepo
 from api.schemas_code import (
     AddRepoRequest,
     SkillRepoAddResponse,
@@ -21,6 +17,10 @@ from api.schemas_code import (
     SkillRepoItem,
     SkillRepoSyncResponse,
 )
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from skills.db import get_skills_engine
+from skills.models import RepoType, SkillRepo
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -67,13 +67,9 @@ async def add_repo(
     """Register a new skill repository in the skills database."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
-        existing = await session.scalar(
-            select(SkillRepo).where(SkillRepo.name == body.name)
-        )
+        existing = await session.scalar(select(SkillRepo).where(SkillRepo.name == body.name))
         if existing is not None:
-            raise HTTPException(
-                status_code=409, detail=f"Repo '{body.name}' already registered"
-            )
+            raise HTTPException(status_code=409, detail=f"Repo '{body.name}' already registered")
         repo = SkillRepo(
             name=body.name,
             url=body.url,
@@ -133,13 +129,9 @@ async def sync_repo(
         repo = await _get_repo_by_id(session, repo_id)
         try:
             packages = await _sync_packages(repo)
-        except (
-            Exception
-        ) as exc:  # intentionally broad: can be network, git, or filesystem error
+        except Exception as exc:  # intentionally broad: can be network, git, or filesystem error
             logger.error("Sync failed for repo '%s': %s", repo.name, exc)
-            raise HTTPException(
-                status_code=502, detail="Upstream service unavailable"
-            ) from exc
+            raise HTTPException(status_code=502, detail="Upstream service unavailable") from exc
         repo.skill_count = len(packages)
         await session.commit()
     logger.info("Synced %d packages from repo: %s", len(packages), repo.name)

@@ -53,9 +53,7 @@ class TestTaskPatternLearner:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_learn_from_outcomes_triggers_synthesis(
-        self, learner, sample_outcomes
-    ):
+    async def test_learn_from_outcomes_triggers_synthesis(self, learner, sample_outcomes):
         mock_llm = AsyncMock()
         mock_llm.chat_completion = AsyncMock(
             return_value=json.dumps(
@@ -80,9 +78,7 @@ class TestTaskPatternLearner:
         mock_redis.set.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_learn_from_outcomes_fallback_on_llm_error(
-        self, learner, sample_outcomes
-    ):
+    async def test_learn_from_outcomes_fallback_on_llm_error(self, learner, sample_outcomes):
         mock_llm = AsyncMock()
         mock_llm.chat_completion = AsyncMock(side_effect=Exception("LLM down"))
         learner._llm = mock_llm

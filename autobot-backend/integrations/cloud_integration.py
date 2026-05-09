@@ -13,12 +13,12 @@ import hmac
 import logging
 import time
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
 
+from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -55,9 +55,7 @@ class AWSIntegration(BaseIntegration):
 
             if result.get("status_code") == 200:
                 identity = (
-                    result.get("body", {})
-                    .get("GetCallerIdentityResponse", {})
-                    .get("GetCallerIdentityResult", {})
+                    result.get("body", {}).get("GetCallerIdentityResponse", {}).get("GetCallerIdentityResult", {})
                 )
                 self._status = IntegrationStatus.CONNECTED
                 return IntegrationHealth(
@@ -100,9 +98,7 @@ class AWSIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute an AWS action."""
         action_map = {
             "list_ec2_instances": self._list_ec2_instances,
@@ -122,10 +118,7 @@ class AWSIntegration(BaseIntegration):
             return {"instances": [], "error": result.get("error")}
 
         reservations = (
-            result.get("body", {})
-            .get("DescribeInstancesResponse", {})
-            .get("reservationSet", {})
-            .get("item", [])
+            result.get("body", {}).get("DescribeInstancesResponse", {}).get("reservationSet", {}).get("item", [])
         )
 
         instances = []
@@ -144,10 +137,7 @@ class AWSIntegration(BaseIntegration):
         buckets_xml = result.get("body", {}).get("ListAllMyBucketsResult", {})
         bucket_items = buckets_xml.get("Buckets", {}).get("Bucket", [])
 
-        buckets = [
-            {"name": b.get("Name"), "created": b.get("CreationDate")}
-            for b in bucket_items
-        ]
+        buckets = [{"name": b.get("Name"), "created": b.get("CreationDate")} for b in bucket_items]
         return {"buckets": buckets}
 
     async def _get_account_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -156,11 +146,7 @@ class AWSIntegration(BaseIntegration):
         if result.get("status_code") != 200:
             return {"error": result.get("error")}
 
-        identity = (
-            result.get("body", {})
-            .get("GetCallerIdentityResponse", {})
-            .get("GetCallerIdentityResult", {})
-        )
+        identity = result.get("body", {}).get("GetCallerIdentityResponse", {}).get("GetCallerIdentityResult", {})
 
         return {
             "account_id": identity.get("Account"),
@@ -214,8 +200,7 @@ class AWSIntegration(BaseIntegration):
         payload_hash = hashlib.sha256(b"").hexdigest()
 
         canonical_request = (
-            f"{method}\n{canonical_uri}\n{query}\n"
-            f"{canonical_headers}\n{signed_headers}\n{payload_hash}"
+            f"{method}\n{canonical_uri}\n{query}\n" f"{canonical_headers}\n{signed_headers}\n{payload_hash}"
         )
 
         credential_scope = f"{date_stamp}/{self.region}/{service}/aws4_request"
@@ -224,12 +209,8 @@ class AWSIntegration(BaseIntegration):
             f"{hashlib.sha256(canonical_request.encode()).hexdigest()}"
         )
 
-        signing_key = self._get_signature_key(
-            self.secret_key, date_stamp, self.region, service
-        )
-        signature = hmac.new(
-            signing_key, string_to_sign.encode(), hashlib.sha256
-        ).hexdigest()
+        signing_key = self._get_signature_key(self.secret_key, date_stamp, self.region, service)
+        signature = hmac.new(signing_key, string_to_sign.encode(), hashlib.sha256).hexdigest()
 
         authorization = (
             f"AWS4-HMAC-SHA256 Credential={self.access_key}/{credential_scope}, "
@@ -242,21 +223,15 @@ class AWSIntegration(BaseIntegration):
             "Host": host,
         }
 
-    def _get_signature_key(
-        self, key: str, date_stamp: str, region: str, service: str
-    ) -> bytes:
+    def _get_signature_key(self, key: str, date_stamp: str, region: str, service: str) -> bytes:
         """Derive AWS signing key."""
-        k_date = hmac.new(
-            f"AWS4{key}".encode(), date_stamp.encode(), hashlib.sha256
-        ).digest()
+        k_date = hmac.new(f"AWS4{key}".encode(), date_stamp.encode(), hashlib.sha256).digest()
         k_region = hmac.new(k_date, region.encode(), hashlib.sha256).digest()
         k_service = hmac.new(k_region, service.encode(), hashlib.sha256).digest()
         k_signing = hmac.new(k_service, b"aws4_request", hashlib.sha256).digest()
         return k_signing
 
-    async def _make_aws_request(
-        self, method: str, url: str, headers: Dict[str, str]
-    ) -> Dict[str, Any]:
+    async def _make_aws_request(self, method: str, url: str, headers: Dict[str, str]) -> Dict[str, Any]:
         """Make HTTP request to AWS API."""
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
@@ -332,10 +307,7 @@ class AzureIntegration(BaseIntegration):
             )
 
         try:
-            url = (
-                f"https://management.azure.com/subscriptions/"
-                f"{self.subscription_id}?api-version=2020-01-01"
-            )
+            url = f"https://management.azure.com/subscriptions/" f"{self.subscription_id}?api-version=2020-01-01"
             result = await self._make_azure_request("GET", url)
             latency = (time.monotonic() - start_time) * 1000
 
@@ -382,9 +354,7 @@ class AzureIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute an Azure action."""
         action_map = {
             "list_vms": self._list_vms,
@@ -435,10 +405,7 @@ class AzureIntegration(BaseIntegration):
 
     async def _get_subscription_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get Azure subscription information."""
-        url = (
-            f"https://management.azure.com/subscriptions/"
-            f"{self.subscription_id}?api-version=2020-01-01"
-        )
+        url = f"https://management.azure.com/subscriptions/" f"{self.subscription_id}?api-version=2020-01-01"
         result = await self._make_azure_request("GET", url)
 
         if result.get("status_code") != 200:
@@ -516,10 +483,7 @@ class GCPIntegration(BaseIntegration):
             )
 
         try:
-            url = (
-                f"https://cloudresourcemanager.googleapis.com/v1/"
-                f"projects/{self.project_id}"
-            )
+            url = f"https://cloudresourcemanager.googleapis.com/v1/" f"projects/{self.project_id}"
             result = await self._make_gcp_request("GET", url)
             latency = (time.monotonic() - start_time) * 1000
 
@@ -566,9 +530,7 @@ class GCPIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a GCP action."""
         action_map = {
             "list_instances": self._list_instances,
@@ -584,10 +546,7 @@ class GCPIntegration(BaseIntegration):
     async def _list_instances(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List GCP compute instances."""
         zone = params.get("zone", "us-central1-a")
-        url = (
-            f"https://compute.googleapis.com/compute/v1/projects/"
-            f"{self.project_id}/zones/{zone}/instances"
-        )
+        url = f"https://compute.googleapis.com/compute/v1/projects/" f"{self.project_id}/zones/{zone}/instances"
         result = await self._make_gcp_request("GET", url)
 
         if result.get("status_code") != 200:
@@ -602,9 +561,7 @@ class GCPIntegration(BaseIntegration):
 
     async def _list_storage_buckets(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List GCP storage buckets."""
-        url = (
-            f"https://storage.googleapis.com/storage/v1/b?" f"project={self.project_id}"
-        )
+        url = f"https://storage.googleapis.com/storage/v1/b?" f"project={self.project_id}"
         result = await self._make_gcp_request("GET", url)
 
         if result.get("status_code") != 200:
@@ -618,10 +575,7 @@ class GCPIntegration(BaseIntegration):
 
     async def _get_project_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get GCP project information."""
-        url = (
-            f"https://cloudresourcemanager.googleapis.com/v1/"
-            f"projects/{self.project_id}"
-        )
+        url = f"https://cloudresourcemanager.googleapis.com/v1/" f"projects/{self.project_id}"
         result = await self._make_gcp_request("GET", url)
 
         if result.get("status_code") != 200:

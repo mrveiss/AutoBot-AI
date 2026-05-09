@@ -27,7 +27,6 @@ import pytest
 
 import agent_loop.slack_hook as slack_hook_module
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -73,12 +72,14 @@ class TestNullSlackHook:
         with patch.dict("os.environ", {}, clear=False):
             # Ensure token absent
             import os
+
             os.environ.pop("SLACK_BOT_TOKEN", None)
             hook = slack_hook_module.get_slack_hook()
         assert isinstance(hook, slack_hook_module._NullSlackHook)
 
     def test_singleton_returned_on_second_call(self):
         import os
+
         os.environ.pop("SLACK_BOT_TOKEN", None)
         hook1 = slack_hook_module.get_slack_hook()
         hook2 = slack_hook_module.get_slack_hook()
@@ -87,6 +88,7 @@ class TestNullSlackHook:
     @pytest.mark.asyncio
     async def test_post_agent_status_is_noop(self):
         import os
+
         os.environ.pop("SLACK_BOT_TOKEN", None)
         hook = slack_hook_module.get_slack_hook()
         result = await hook.post_agent_status("BotA", "running", "Working…")
@@ -95,16 +97,16 @@ class TestNullSlackHook:
     @pytest.mark.asyncio
     async def test_post_task_completion_is_noop(self):
         import os
+
         os.environ.pop("SLACK_BOT_TOKEN", None)
         hook = slack_hook_module.get_slack_hook()
-        result = await hook.post_task_completion(
-            "t-1", "Deploy", "BotA", "done", "completed", 10.0
-        )
+        result = await hook.post_task_completion("t-1", "Deploy", "BotA", "done", "completed", 10.0)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_request_approval_is_noop(self):
         import os
+
         os.environ.pop("SLACK_BOT_TOKEN", None)
         hook = slack_hook_module.get_slack_hook()
         result = await hook.request_approval("a-1", "Gate", "Need approval")
@@ -130,9 +132,11 @@ class TestGetSlackHookWithToken:
         fake_config_cls = MagicMock()
         fake_integration = MagicMock()
         fake_integration_cls = MagicMock(return_value=fake_integration)
-        with patch.dict("os.environ", env, clear=False), \
-             patch("integrations.base.IntegrationConfig", fake_config_cls), \
-             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls):
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
+        ):
             hook = slack_hook_module.get_slack_hook()
         assert isinstance(hook, slack_hook_module._SlackHook)
 
@@ -140,9 +144,11 @@ class TestGetSlackHookWithToken:
         env = self._env()
         fake_integration_cls = MagicMock(return_value=MagicMock())
         fake_config_cls = MagicMock()
-        with patch.dict("os.environ", env, clear=False), \
-             patch("integrations.base.IntegrationConfig", fake_config_cls), \
-             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls):
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
+        ):
             h1 = slack_hook_module.get_slack_hook()
             h2 = slack_hook_module.get_slack_hook()
             # SlackNotificationIntegration must be called exactly once
@@ -154,10 +160,13 @@ class TestGetSlackHookWithToken:
         env.pop("SLACK_NOTIFICATIONS_CHANNEL", None)
         fake_integration_cls = MagicMock(return_value=MagicMock())
         fake_config_cls = MagicMock()
-        with patch.dict("os.environ", env, clear=False), \
-             patch("integrations.base.IntegrationConfig", fake_config_cls), \
-             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls):
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
+        ):
             import os
+
             os.environ.pop("SLACK_NOTIFICATIONS_CHANNEL", None)
             os.environ.pop("SLACK_APPROVALS_CHANNEL", None)
             hook = slack_hook_module.get_slack_hook()
@@ -168,24 +177,31 @@ class TestGetSlackHookWithToken:
         env.pop("SLACK_APPROVALS_CHANNEL", None)
         fake_integration_cls = MagicMock(return_value=MagicMock())
         fake_config_cls = MagicMock()
-        with patch.dict("os.environ", env, clear=False), \
-             patch("integrations.base.IntegrationConfig", fake_config_cls), \
-             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls):
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
+        ):
             import os
+
             os.environ.pop("SLACK_APPROVALS_CHANNEL", None)
             hook = slack_hook_module.get_slack_hook()
         assert hook._approvals_channel == "#notifs"
 
     def test_approvals_channel_overridden(self):
-        env = self._env({
-            "SLACK_NOTIFICATIONS_CHANNEL": "#notifs",
-            "SLACK_APPROVALS_CHANNEL": "#approvals",
-        })
+        env = self._env(
+            {
+                "SLACK_NOTIFICATIONS_CHANNEL": "#notifs",
+                "SLACK_APPROVALS_CHANNEL": "#approvals",
+            }
+        )
         fake_integration_cls = MagicMock(return_value=MagicMock())
         fake_config_cls = MagicMock()
-        with patch.dict("os.environ", env, clear=False), \
-             patch("integrations.base.IntegrationConfig", fake_config_cls), \
-             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls):
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
+        ):
             hook = slack_hook_module.get_slack_hook()
         assert hook._approvals_channel == "#approvals"
 
@@ -217,18 +233,14 @@ class TestSlackHookDelegation:
         assert params["channel"] == "#notifs"
 
     @pytest.mark.asyncio
-    async def test_post_agent_status_includes_thread_ts_when_provided(
-        self, mock_slack_integration
-    ):
+    async def test_post_agent_status_includes_thread_ts_when_provided(self, mock_slack_integration):
         hook = self._make_hook(mock_slack_integration)
         await hook.post_agent_status("BotA", "done", "Finished", thread_ts="123.456")
         params = mock_slack_integration.post_agent_status.call_args[0][0]
         assert params["thread_ts"] == "123.456"
 
     @pytest.mark.asyncio
-    async def test_post_agent_status_omits_thread_ts_when_absent(
-        self, mock_slack_integration
-    ):
+    async def test_post_agent_status_omits_thread_ts_when_absent(self, mock_slack_integration):
         hook = self._make_hook(mock_slack_integration)
         await hook.post_agent_status("BotA", "running", "Working")
         params = mock_slack_integration.post_agent_status.call_args[0][0]
@@ -236,9 +248,7 @@ class TestSlackHookDelegation:
 
     @pytest.mark.asyncio
     async def test_post_agent_status_swallows_exception(self, mock_slack_integration):
-        mock_slack_integration.post_agent_status = AsyncMock(
-            side_effect=RuntimeError("network down")
-        )
+        mock_slack_integration.post_agent_status = AsyncMock(side_effect=RuntimeError("network down"))
         hook = self._make_hook(mock_slack_integration)
         # Must not raise
         await hook.post_agent_status("BotA", "running", "msg")
@@ -246,9 +256,7 @@ class TestSlackHookDelegation:
     @pytest.mark.asyncio
     async def test_post_task_completion_delegates(self, mock_slack_integration):
         hook = self._make_hook(mock_slack_integration)
-        await hook.post_task_completion(
-            "t-1", "Deploy", "BotA", "All done", "completed", 42.5
-        )
+        await hook.post_task_completion("t-1", "Deploy", "BotA", "All done", "completed", 42.5)
         mock_slack_integration.post_task_completion.assert_awaited_once()
         params = mock_slack_integration.post_task_completion.call_args[0][0]
         assert params["task_id"] == "t-1"
@@ -256,16 +264,10 @@ class TestSlackHookDelegation:
         assert params["channel"] == "#notifs"
 
     @pytest.mark.asyncio
-    async def test_post_task_completion_swallows_exception(
-        self, mock_slack_integration
-    ):
-        mock_slack_integration.post_task_completion = AsyncMock(
-            side_effect=ConnectionError("timeout")
-        )
+    async def test_post_task_completion_swallows_exception(self, mock_slack_integration):
+        mock_slack_integration.post_task_completion = AsyncMock(side_effect=ConnectionError("timeout"))
         hook = self._make_hook(mock_slack_integration)
-        await hook.post_task_completion(
-            "t-2", "Deploy", "BotA", "summary", "failed", 5.0
-        )
+        await hook.post_task_completion("t-2", "Deploy", "BotA", "summary", "failed", 5.0)
 
     @pytest.mark.asyncio
     async def test_request_approval_delegates(self, mock_slack_integration):
@@ -279,8 +281,6 @@ class TestSlackHookDelegation:
 
     @pytest.mark.asyncio
     async def test_request_approval_swallows_exception(self, mock_slack_integration):
-        mock_slack_integration.request_approval = AsyncMock(
-            side_effect=Exception("Slack down")
-        )
+        mock_slack_integration.request_approval = AsyncMock(side_effect=Exception("Slack down"))
         hook = self._make_hook(mock_slack_integration)
         await hook.request_approval("a-2", "Gate", "Needs sign-off")

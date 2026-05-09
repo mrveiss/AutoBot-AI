@@ -91,9 +91,7 @@ class MessageQueue:
             requests_per_second=rps,
             burst_size=burst_size,
         )
-        self.logger.info(
-            f"Registered platform {platform}: {rps} req/s, burst {burst_size}"
-        )
+        self.logger.info(f"Registered platform {platform}: {rps} req/s, burst {burst_size}")
 
     async def enqueue(self, message: Dict) -> None:
         """
@@ -107,9 +105,7 @@ class MessageQueue:
         except asyncio.QueueFull:
             self.logger.error("Message queue full, dropping message")
 
-    async def process_queue(
-        self, handler: Callable[[Dict], None], workers: int = 5
-    ) -> None:
+    async def process_queue(self, handler: Callable[[Dict], None], workers: int = 5) -> None:
         """
         Process queued messages with multiple workers and rate limiting.
 
@@ -118,9 +114,7 @@ class MessageQueue:
             workers: Number of concurrent workers
         """
         self.processing = True
-        worker_tasks = [
-            asyncio.create_task(self._worker(handler, i)) for i in range(workers)
-        ]
+        worker_tasks = [asyncio.create_task(self._worker(handler, i)) for i in range(workers)]
 
         try:
             await asyncio.gather(*worker_tasks)

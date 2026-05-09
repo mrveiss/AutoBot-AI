@@ -40,16 +40,14 @@ def _resolve_chat_session_cache_ttl() -> int:
         value = int(raw)
     except ValueError:
         logger.warning(
-            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%r is not an integer; "
-            "falling back to %ds (24h)",
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%r is not an integer; " "falling back to %ds (24h)",
             raw,
             TTL_24_HOURS,
         )
         return TTL_24_HOURS
     if value <= 0:
         logger.warning(
-            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%d must be positive; "
-            "falling back to %ds (24h)",
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%d must be positive; " "falling back to %ds (24h)",
             value,
             TTL_24_HOURS,
         )

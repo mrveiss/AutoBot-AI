@@ -75,9 +75,7 @@ _STUBS: dict = {
     "langgraph": types.ModuleType("langgraph"),
     "langgraph.checkpoint": types.ModuleType("langgraph.checkpoint"),
     "langgraph.checkpoint.redis": types.ModuleType("langgraph.checkpoint.redis"),
-    "langgraph.checkpoint.redis.aio": types.ModuleType(
-        "langgraph.checkpoint.redis.aio"
-    ),
+    "langgraph.checkpoint.redis.aio": types.ModuleType("langgraph.checkpoint.redis.aio"),
     "langgraph.graph": types.ModuleType("langgraph.graph"),
     "langgraph.types": types.ModuleType("langgraph.types"),
     "typing_extensions": types.ModuleType("typing_extensions"),
@@ -125,12 +123,8 @@ class TestInjectMidConversationWarning:
 
     def test_appends_hint_to_prompt(self):
         """Helper appends the hint in a [Guidance: ...] block."""
-        result = _inject_mid_conversation_warning(
-            "Avoid repeating tool calls.", "Answer the question."
-        )
-        assert (
-            result == "Answer the question.\n\n[Guidance: Avoid repeating tool calls.]"
-        )
+        result = _inject_mid_conversation_warning("Avoid repeating tool calls.", "Answer the question.")
+        assert result == "Answer the question.\n\n[Guidance: Avoid repeating tool calls.]"
 
     def test_empty_prompt(self):
         """Helper works when initial_prompt is empty."""
@@ -149,8 +143,7 @@ class TestInjectMidConversationWarning:
         prompt = "Tell me about Python."
         result = _inject_mid_conversation_warning(hint, prompt)
         assert isinstance(result, str), (
-            "_inject_mid_conversation_warning must return a str, not a "
-            "LangChain message object (see Issue #3260)"
+            "_inject_mid_conversation_warning must return a str, not a " "LangChain message object (see Issue #3260)"
         )
         assert "[Guidance:" in result
 
@@ -199,13 +192,9 @@ class TestAnthropicSystemMessageConstraint:
         messages = [
             SystemMessage(content="You are a helpful assistant."),
             HumanMessage(content="Hello"),
-            SystemMessage(
-                content="[Warning: loop detected]"
-            ),  # mid-conversation — WRONG
+            SystemMessage(content="[Warning: loop detected]"),  # mid-conversation — WRONG
         ]
-        with pytest.raises(
-            ValueError, match="Anthropic does not support system messages"
-        ):
+        with pytest.raises(ValueError, match="Anthropic does not support system messages"):
             self._mock_format_messages(messages)
 
     def test_human_message_injection_accepted(self):

@@ -111,9 +111,7 @@ class KnowledgeSyncService:
                 except Exception as e:
                     logger.error("Background sync error: %s", e)
                     # Continue running despite errors
-                    await asyncio.sleep(
-                        TimingConstants.STANDARD_TIMEOUT
-                    )  # Wait 1 minute before retry
+                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait 1 minute before retry
 
         finally:
             self.is_running = False
@@ -225,18 +223,14 @@ class KnowledgeSyncService:
         """Get current sync status and statistics."""
         try:
             # Get basic status from incremental sync
-            basic_status = (
-                self.incremental_sync.get_sync_status() if self.incremental_sync else {}
-            )
+            basic_status = self.incremental_sync.get_sync_status() if self.incremental_sync else {}
 
             # Add service-specific information
             status = {
                 **basic_status,
                 "service_running": self.is_running,
                 "daemon_interval_minutes": self.sync_interval_minutes,
-                "last_sync_time": (
-                    self.last_sync_time.isoformat() if self.last_sync_time else None
-                ),
+                "last_sync_time": (self.last_sync_time.isoformat() if self.last_sync_time else None),
                 "auto_sync_enabled": self.enable_auto_sync,
                 "sync_history_count": len(self.sync_history),
             }
@@ -248,12 +242,9 @@ class KnowledgeSyncService:
             # Add performance summary
             if self.sync_history:
                 recent_syncs = self.sync_history[-10:]  # Last 10 syncs
-                avg_duration = sum(s["duration"] for s in recent_syncs) / len(
-                    recent_syncs
-                )
+                avg_duration = sum(s["duration"] for s in recent_syncs) / len(recent_syncs)
                 total_files_processed = sum(
-                    s["metrics"]["files_changed"] + s["metrics"]["files_added"]
-                    for s in recent_syncs
+                    s["metrics"]["files_changed"] + s["metrics"]["files_added"] for s in recent_syncs
                 )
 
                 status["performance_summary"] = {
@@ -308,19 +299,13 @@ class KnowledgeSyncService:
         recommendations = []
 
         if avg_duration > 5.0:
-            recommendations.append(
-                "Consider increasing sync interval to reduce overhead"
-            )
+            recommendations.append("Consider increasing sync interval to reduce overhead")
 
         if avg_files_per_sync > 20:
-            recommendations.append(
-                "High file change rate detected - consider batch processing optimization"
-            )
+            recommendations.append("High file change rate detected - consider batch processing optimization")
 
         if max_duration > avg_duration * 3:
-            recommendations.append(
-                "Inconsistent sync times - investigate performance bottlenecks"
-            )
+            recommendations.append("Inconsistent sync times - investigate performance bottlenecks")
 
         return recommendations
 
@@ -332,25 +317,18 @@ class KnowledgeSyncService:
         Issue #620.
         """
         durations = [s["duration"] for s in recent_history]
-        file_counts = [
-            s["metrics"]["files_changed"] + s["metrics"]["files_added"]
-            for s in recent_history
-        ]
+        file_counts = [s["metrics"]["files_changed"] + s["metrics"]["files_added"] for s in recent_history]
         total_files = sum(file_counts)
         avg_files_per_sync = total_files / len(file_counts) if file_counts else 0
         return durations, file_counts, total_files, avg_files_per_sync
 
-    def _build_performance_stats(
-        self, durations: list, total_files: int, avg_files_per_sync: float
-    ) -> Dict[str, Any]:
+    def _build_performance_stats(self, durations: list, total_files: int, avg_files_per_sync: float) -> Dict[str, Any]:
         """
         Build performance statistics dictionary from extracted metrics.
 
         Issue #620.
         """
-        avg_duration, min_duration, max_duration = self._calculate_duration_stats(
-            durations
-        )
+        avg_duration, min_duration, max_duration = self._calculate_duration_stats(durations)
         return {
             "avg_sync_duration": avg_duration,
             "min_sync_duration": min_duration,
@@ -360,9 +338,7 @@ class KnowledgeSyncService:
             "total_files_processed": total_files,
         }
 
-    def _calculate_improvement_factor(
-        self, total_files: int, durations: list
-    ) -> Dict[str, Any]:
+    def _calculate_improvement_factor(self, total_files: int, durations: list) -> Dict[str, Any]:
         """
         Calculate performance improvement metrics.
 
@@ -393,12 +369,8 @@ class KnowledgeSyncService:
             _, _, max_duration = self._calculate_duration_stats(durations)
 
             return {
-                "performance_stats": self._build_performance_stats(
-                    durations, total_files, avg_files_per_sync
-                ),
-                "performance_improvement": self._calculate_improvement_factor(
-                    total_files, durations
-                ),
+                "performance_stats": self._build_performance_stats(durations, total_files, avg_files_per_sync),
+                "performance_improvement": self._calculate_improvement_factor(total_files, durations),
                 "recommendations": self._generate_performance_recommendations(
                     sum(durations) / len(durations) if durations else 0,
                     avg_files_per_sync,
@@ -442,9 +414,7 @@ router = APIRouter(prefix="/knowledge/sync", tags=["knowledge-sync"])
 
 
 @router.post("/manual")
-async def trigger_manual_sync(
-    force_full: bool = False, background_tasks: BackgroundTasks = None
-):
+async def trigger_manual_sync(force_full: bool = False, background_tasks: BackgroundTasks = None):
     """Trigger manual knowledge base sync."""
     try:
         service = await get_sync_service()
@@ -512,9 +482,7 @@ async def start_sync_daemon(interval_minutes: int = 15):
             )
 
         # Start daemon in background task
-        service.daemon_task = asyncio.create_task(
-            service.start_daemon(interval_minutes)
-        )
+        service.daemon_task = asyncio.create_task(service.start_daemon(interval_minutes))
 
         return JSONResponse(
             {
@@ -537,9 +505,7 @@ async def stop_sync_daemon():
         service = await get_sync_service()
 
         if not service.is_running:
-            return JSONResponse(
-                {"status": "not_running", "message": "Sync daemon is not running"}
-            )
+            return JSONResponse({"status": "not_running", "message": "Sync daemon is not running"})
 
         await service.stop_daemon()
 

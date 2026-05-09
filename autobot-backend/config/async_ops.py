@@ -81,10 +81,7 @@ class AsyncOperationsMixin:
                         obj[key] = redact_sensitive_fields(value, current_path)
 
             elif isinstance(obj, list):
-                return [
-                    redact_sensitive_fields(item, f"{path}[{i}]")
-                    for i, item in enumerate(obj)
-                ]
+                return [redact_sensitive_fields(item, f"{path}[{i}]") for i, item in enumerate(obj)]
 
             return obj
 
@@ -94,9 +91,7 @@ class AsyncOperationsMixin:
         """Get Redis cache key for config type"""
         return f"{self.settings.redis_key_prefix}{config_type}"
 
-    async def _load_from_redis_cache(
-        self, config_type: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _load_from_redis_cache(self, config_type: str) -> Optional[Dict[str, Any]]:
         """Load config from Redis cache"""
         if not self.settings.use_redis_cache:
             return None
@@ -119,9 +114,7 @@ class AsyncOperationsMixin:
 
         return None
 
-    async def _save_to_redis_cache(
-        self, config_type: str, data: Dict[str, Any]
-    ) -> None:
+    async def _save_to_redis_cache(self, config_type: str, data: Dict[str, Any]) -> None:
         """Save config to Redis cache (with sensitive data filtering)"""
         if not self.settings.use_redis_cache:
             return
@@ -149,8 +142,7 @@ class AsyncOperationsMixin:
         except Exception as e:
             logger.debug("Failed to save %s to Redis cache: %s", config_type, e)
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0,
-                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _read_file_async(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Read config file asynchronously with retry"""
         # Issue #358 - avoid blocking
@@ -163,9 +155,7 @@ class AsyncOperationsMixin:
 
                 if file_path.suffix.lower() == ".json":
                     return json.loads(content)
-                elif (
-                    file_path.suffix.lower() in YAML_FILE_EXTENSIONS
-                ):  # O(1) lookup (Issue #326)
+                elif file_path.suffix.lower() in YAML_FILE_EXTENSIONS:  # O(1) lookup (Issue #326)
                     return yaml.safe_load(content)
                 else:
                     return json.loads(content)
@@ -177,8 +167,7 @@ class AsyncOperationsMixin:
             logger.error("Failed to parse config file %s: %s", file_path, e)
             raise
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0,
-                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _write_file_async(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Write config file asynchronously with retry"""
         try:
@@ -188,9 +177,7 @@ class AsyncOperationsMixin:
             async with aiofiles.open(file_path, "w", encoding="utf-8") as file:
                 if file_path.suffix.lower() == ".json":
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
-                elif (
-                    file_path.suffix.lower() in YAML_FILE_EXTENSIONS
-                ):  # O(1) lookup (Issue #326)
+                elif file_path.suffix.lower() in YAML_FILE_EXTENSIONS:  # O(1) lookup (Issue #326)
                     await file.write(yaml.dump(data, default_flow_style=False))
                 else:
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
@@ -202,9 +189,7 @@ class AsyncOperationsMixin:
             logger.error("Failed to serialize config for %s: %s", file_path, e)
             raise
 
-    async def load_config_async(
-        self, config_type: str = "main", use_cache: bool = True
-    ) -> Dict[str, Any]:
+    async def load_config_async(self, config_type: str = "main", use_cache: bool = True) -> Dict[str, Any]:
         """Load configuration asynchronously with Redis caching"""
         async with await self._get_async_lock():
             # For main config, return current config
@@ -264,9 +249,7 @@ class AsyncOperationsMixin:
 
             logger.info("Saved %s config asynchronously", config_type)
 
-    async def get_config_value_async(
-        self, config_type: str, key: str, default: Any = None
-    ) -> Any:
+    async def get_config_value_async(self, config_type: str, key: str, default: Any = None) -> Any:
         """Get specific config value asynchronously with dot notation support"""
         config = await self.load_config_async(config_type)
 
@@ -281,9 +264,7 @@ class AsyncOperationsMixin:
 
         return value
 
-    async def set_config_value_async(
-        self, config_type: str, key: str, value: Any
-    ) -> None:
+    async def set_config_value_async(self, config_type: str, key: str, value: Any) -> None:
         """Set specific config value asynchronously with dot notation support"""
         config = await self.load_config_async(config_type)
 

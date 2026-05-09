@@ -10,11 +10,11 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import logging
 from typing import Any, List, Optional
 
+from knowledge.backends import get_async_default_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.summary import Summary
 from knowledge.pipeline.registry import TaskRegistry
-from knowledge.backends import get_async_default_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +63,12 @@ class ChromaDBLoader(BaseLoader):
             if summaries:
                 await self._load_summaries(summaries)
 
-        logger.info(
-            f"Loaded {len(chunks)} chunks, "
-            f"{len(context.summaries)} summaries to ChromaDB"
-        )
+        logger.info(f"Loaded {len(chunks)} chunks, " f"{len(context.summaries)} summaries to ChromaDB")
 
     async def _load_chunks(self, chunks: List[ProcessedChunk]) -> None:
         """Load chunks to ChromaDB collection."""
         try:
-            collection = await self.client.get_or_create_collection(
-                name=self.collection_name
-            )
+            collection = await self.client.get_or_create_collection(name=self.collection_name)
 
             for i in range(0, len(chunks), self.batch_size):
                 batch = chunks[i : i + self.batch_size]
@@ -83,9 +78,7 @@ class ChromaDBLoader(BaseLoader):
         except Exception as e:
             logger.error("Failed to load chunks to ChromaDB: %s", e)
 
-    async def _upsert_chunk_batch(
-        self, collection: Any, chunks: List[ProcessedChunk]
-    ) -> None:
+    async def _upsert_chunk_batch(self, collection: Any, chunks: List[ProcessedChunk]) -> None:
         """Upsert a batch of chunks."""
         ids = [str(chunk.id) for chunk in chunks]
         documents = [chunk.content for chunk in chunks]
@@ -104,9 +97,7 @@ class ChromaDBLoader(BaseLoader):
     async def _load_summaries(self, summaries: List[Summary]) -> None:
         """Load summaries to ChromaDB collection."""
         try:
-            collection = await self.client.get_or_create_collection(
-                name=self.summary_collection_name
-            )
+            collection = await self.client.get_or_create_collection(name=self.summary_collection_name)
 
             for i in range(0, len(summaries), self.batch_size):
                 batch = summaries[i : i + self.batch_size]
@@ -116,9 +107,7 @@ class ChromaDBLoader(BaseLoader):
         except Exception as e:
             logger.error("Failed to load summaries to ChromaDB: %s", e)
 
-    async def _upsert_summary_batch(
-        self, collection: Any, summaries: List[Summary]
-    ) -> None:
+    async def _upsert_summary_batch(self, collection: Any, summaries: List[Summary]) -> None:
         """Upsert a batch of summaries."""
         ids = [str(summary.id) for summary in summaries]
         documents = [summary.content for summary in summaries]
@@ -126,11 +115,7 @@ class ChromaDBLoader(BaseLoader):
             {
                 "level": summary.level,
                 "document_id": str(summary.source_document_id),
-                "parent_summary_id": (
-                    str(summary.parent_summary_id)
-                    if summary.parent_summary_id
-                    else None
-                ),
+                "parent_summary_id": (str(summary.parent_summary_id) if summary.parent_summary_id else None),
                 "key_topics": ",".join(summary.key_topics),
                 "word_count": summary.word_count,
             }

@@ -54,6 +54,7 @@ async def _set_key(key: str, value: Any):
 
 async def _fail_then_succeed(call_count: list[int]):
     """Node that raises on first call, succeeds on second."""
+
     async def _fn(state: dict, **kwargs: Any) -> dict:
         call_count.append(1)
         if len(call_count) == 1:
@@ -459,9 +460,7 @@ class TestStepEventEmitter:
         emitter.add_sink(sink_a)
         emitter.add_sink(sink_b)
 
-        event = GraphStepEvent(
-            event_type=StepEventType.NODE_START, node_name="n", graph_id="g"
-        )
+        event = GraphStepEvent(event_type=StepEventType.NODE_START, node_name="n", graph_id="g")
         await emitter.emit(event)
         assert sorted(counter) == [1, 2]
 
@@ -484,9 +483,7 @@ class TestStepEventEmitter:
         builder.add_edge("a", END)
         graph = builder.compile()
 
-        runner = GraphRunner(
-            graph, graph_id="t", emitter=emitter, enable_checkpoints=False
-        )
+        runner = GraphRunner(graph, graph_id="t", emitter=emitter, enable_checkpoints=False)
         await runner.run({})
 
         assert StepEventType.NODE_START in emitted
@@ -506,10 +503,7 @@ class TestDAGGraphExecutor:
         from orchestration.dag_executor import WorkflowDAG
 
         nodes = [{"id": f"s{i}", "type": "step", "data": {}} for i in range(num_steps)]
-        edges = [
-            {"source": f"s{i}", "target": f"s{i + 1}"}
-            for i in range(num_steps - 1)
-        ]
+        edges = [{"source": f"s{i}", "target": f"s{i + 1}"} for i in range(num_steps - 1)]
         return WorkflowDAG(nodes, edges)
 
     def _build_condition_dag(self, condition_value: bool):

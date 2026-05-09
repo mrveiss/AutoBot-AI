@@ -103,15 +103,11 @@ def build_tracking_metrics_section(tracking_metrics: Dict[str, Any]) -> List[str
         lines.extend(_build_api_tracking_lines(tracking_metrics["api_tracking"]))
 
     if "user_interactions" in tracking_metrics:
-        lines.extend(
-            _build_interaction_tracking_lines(tracking_metrics["user_interactions"])
-        )
+        lines.extend(_build_interaction_tracking_lines(tracking_metrics["user_interactions"]))
 
     if "system_health" in tracking_metrics:
         health_data = tracking_metrics["system_health"]
-        redis_status = (
-            "✅ Connected" if health_data.get("redis_connected") else "❌ Disconnected"
-        )
+        redis_status = "✅ Connected" if health_data.get("redis_connected") else "❌ Disconnected"
         lines.append(f"- **Redis Status**: {redis_status}")
 
     lines.append("")
@@ -164,9 +160,7 @@ def build_recent_changes_section(summary: Dict[str, Any]) -> List[str]:
     lines = []
     lines.append("## Recent Changes")
     for change in summary["recent_changes"][-5:]:
-        lines.append(
-            f"- {change['timestamp']}: {change['description']} ({change['type']})"
-        )
+        lines.append(f"- {change['timestamp']}: {change['description']} ({change['type']})")
     lines.append("")
     return lines
 
@@ -183,8 +177,7 @@ def build_phase_status_section(summary: Dict[str, Any]) -> List[str]:
             else "🔄" if phase_data["completion_percentage"] >= 50 else "⏳"
         )
         lines.append(
-            f"- {status_icon} **{phase_name}**: "
-            f"{phase_data['completion_percentage']:.1f}% ({phase_data['status']})"
+            f"- {status_icon} **{phase_name}**: " f"{phase_data['completion_percentage']:.1f}% ({phase_data['status']})"
         )
     return lines
 
@@ -235,18 +228,12 @@ def calculate_trends(
     trends = {}
     for metric in TrackingMetric:
         recent_values = [
-            (s.timestamp, s.system_metrics.get(metric, 0))
-            for s in state_history[-30:]
-            if metric in s.system_metrics
+            (s.timestamp, s.system_metrics.get(metric, 0)) for s in state_history[-30:] if metric in s.system_metrics
         ]
         if len(recent_values) >= 2:
             first_value = recent_values[0][1]
             last_value = recent_values[-1][1]
-            trend = (
-                "increasing"
-                if last_value > first_value
-                else "decreasing" if last_value < first_value else "stable"
-            )
+            trend = "increasing" if last_value > first_value else "decreasing" if last_value < first_value else "stable"
             trends[metric.value] = {
                 "current": last_value,
                 "trend": trend,

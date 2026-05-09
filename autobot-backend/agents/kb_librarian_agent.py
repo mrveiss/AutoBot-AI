@@ -45,19 +45,13 @@ class KBLibrarianAgent(StandardizedAgent):
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.auto_learning_enabled = config.get(
-            "agents.kb_librarian.auto_learning_enabled", True
-        )
+        self.auto_learning_enabled = config.get("agents.kb_librarian.auto_learning_enabled", True)
 
         # Runtime-configurable parameters (used by api/kb_librarian.py overrides)
         self.enabled: bool = True
         self.max_results: int = config.get("agents.kb_librarian.max_results", 5)
-        self.similarity_threshold: float = config.get(
-            "agents.kb_librarian.similarity_threshold", 0.6
-        )
-        self.auto_summarize: bool = config.get(
-            "agents.kb_librarian.auto_summarize", False
-        )
+        self.similarity_threshold: float = config.get("agents.kb_librarian.similarity_threshold", 0.6)
+        self.auto_summarize: bool = config.get("agents.kb_librarian.auto_summarize", False)
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(
@@ -101,10 +95,7 @@ class KBLibrarianAgent(StandardizedAgent):
 
     def _get_system_prompt(self) -> str:
         """Return agent system prompt."""
-        return (
-            "You are a knowledge base librarian. "
-            "Find and retrieve relevant information from the knowledge base."
-        )
+        return "You are a knowledge base librarian. " "Find and retrieve relevant information from the knowledge base."
 
     # Action handler wrappers for StandardizedAgent routing
 
@@ -133,27 +124,21 @@ class KBLibrarianAgent(StandardizedAgent):
         """Handle get_stats action via StandardizedAgent routing."""
         return await self.get_knowledge_stats()
 
-    async def search_knowledge(
-        self, query: str, limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    async def search_knowledge(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search the knowledge base for relevant information."""
         try:
             logger.debug("KB-LIBRARIAN: Searching for '%s'", query)
             results = await self.knowledge_base.search(query, limit=limit)
 
             if results:
-                logger.info(
-                    "KB-LIBRARIAN: Found %s results for '%s'", len(results), query
-                )
+                logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)
                 # Return formatted results with sources
                 formatted_results = []
                 for result in results:
                     formatted_results.append(
                         {
                             "content": result.get("content", ""),
-                            "source": (
-                                result.get("metadata", {}).get("source", "Unknown")
-                            ),
+                            "source": (result.get("metadata", {}).get("source", "Unknown")),
                             "score": result.get("score", 0.0),
                             "metadata": result.get("metadata", {}),
                         }
@@ -176,9 +161,7 @@ class KBLibrarianAgent(StandardizedAgent):
 
         context_parts = []
         for result in results:
-            context_parts.append(
-                f"Source: {result['source']}\n" f"Content: {result['content']}\n"
-            )
+            context_parts.append(f"Source: {result['source']}\n" f"Content: {result['content']}\n")
 
         return "\n---\n".join(context_parts)
 
@@ -189,9 +172,7 @@ class KBLibrarianAgent(StandardizedAgent):
             ("what", "who", "where", "when", "why", "how", "is", "are", "can", "does")
         )
 
-    async def process_query(
-        self, query: str, context: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+    async def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process a KB query and return results compatible with KBQueryResponse.
 
         This is the primary entry-point used by api/kb_librarian.py,
@@ -225,23 +206,15 @@ class KBLibrarianAgent(StandardizedAgent):
             "sources": [doc.get("source", "Unknown") for doc in documents],
         }
 
-    async def answer_question(
-        self, question: str, context_limit: int = 3
-    ) -> Dict[str, Any]:
+    async def answer_question(self, question: str, context_limit: int = 3) -> Dict[str, Any]:
         """Answer a question using knowledge base context."""
         # Search for relevant knowledge
         kb_results = await self.search_knowledge(question, limit=context_limit)
 
         # Build context using list + join (O(n)) instead of += (O(n²))
         if kb_results:
-            result_lines = [
-                f"- {result['content']} (Source: {result['source']})"
-                for result in kb_results
-            ]
-            context = (
-                "Based on the following information from the knowledge base:\n\n"
-                + "\n".join(result_lines)
-            )
+            result_lines = [f"- {result['content']} (Source: {result['source']})" for result in kb_results]
+            context = "Based on the following information from the knowledge base:\n\n" + "\n".join(result_lines)
             prompt = f"{context}\n\nQuestion: {question}\n\nAnswer:"
         else:
             # No knowledge base results - trigger auto-learning if enabled
@@ -264,9 +237,7 @@ class KBLibrarianAgent(StandardizedAgent):
         except Exception as e:
             logger.error("KB-LIBRARIAN: LLM error: %s", e)
             return {
-                "answer": (
-                    "I'm sorry, I encountered an error while generating a response."
-                ),
+                "answer": ("I'm sorry, I encountered an error while generating a response."),
                 "knowledge_base_results": kb_results,
                 "sources": [result["source"] for result in kb_results],
                 "error": "LLM response generation failed",

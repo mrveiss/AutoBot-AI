@@ -32,12 +32,9 @@ if __name__ == "__main__":
 from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
-_SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
-    {"apt", "yum", "dn", "pacman", "zypper"}
-)
+_SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
 from constants.threshold_constants import TimingConstants
-from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import our new intelligent agent components
 from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
@@ -48,6 +45,7 @@ from intelligence.streaming_executor import (
 )
 from intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
+from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 
 # Import existing AutoBot components
 from services.llm_service import get_llm_service  # Phase 2D #3185
@@ -99,9 +97,7 @@ class AgentState:
             "is_wsl": self.os_info.is_wsl,
             "package_manager": self.os_info.package_manager,
             "shell": self.os_info.shell,
-            "capabilities": (
-                list(self.os_info.capabilities) if self.os_info.capabilities else []
-            ),
+            "capabilities": (list(self.os_info.capabilities) if self.os_info.capabilities else []),
         }
 
     def add_to_context(self, entry_type: str, content: Any, **extra) -> None:
@@ -193,9 +189,7 @@ class IntelligentAgent:
             "supported_categories": self.goal_processor.get_supported_categories(),
         }
 
-    def _log_init_success(
-        self, initialization_time: float, capabilities_info: Dict[str, Any]
-    ) -> None:
+    def _log_init_success(self, initialization_time: float, capabilities_info: Dict[str, Any]) -> None:
         """Issue #665: Extracted from initialize to reduce function length.
 
         Log successful initialization details.
@@ -232,9 +226,7 @@ class IntelligentAgent:
             initialization_time = time.time() - start_time
             self.state.initialized = True
 
-            init_result = self._build_init_result(
-                initialization_time, can_install, install_reason, capabilities_info
-            )
+            init_result = self._build_init_result(initialization_time, can_install, install_reason, capabilities_info)
             self._log_init_success(initialization_time, capabilities_info)
             return init_result
 
@@ -281,9 +273,7 @@ class IntelligentAgent:
         # Issue #321: Use helper method to reduce message chains
         self.state.add_to_context("tool_selection", tool_selection)
 
-        async for chunk in self._execute_tool_selection(
-            tool_selection, processed_goal, user_input
-        ):
+        async for chunk in self._execute_tool_selection(tool_selection, processed_goal, user_input):
             yield chunk
             if chunk.chunk_type in (ChunkType.ERROR, ChunkType.COMPLETE):
                 break
@@ -302,9 +292,7 @@ class IntelligentAgent:
             },
         )
 
-        similar_intents = await self.goal_processor.get_similar_intents(
-            user_input, limit=3
-        )
+        similar_intents = await self.goal_processor.get_similar_intents(user_input, limit=3)
         if similar_intents:
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
@@ -323,9 +311,7 @@ class IntelligentAgent:
         async for chunk in self._handle_complex_goal(user_input):
             yield chunk
 
-    async def _handle_low_confidence_goal(
-        self, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_low_confidence_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
         """Handle goals with low confidence (<0.2)."""
         yield StreamChunk(
             timestamp=self._get_timestamp(),
@@ -359,14 +345,10 @@ class IntelligentAgent:
     ) -> AsyncGenerator[StreamChunk, None]:
         """Route goal to handler based on confidence level. Issue #620."""
         if processed_goal.confidence > 0.5:
-            async for chunk in self._handle_high_confidence_goal(
-                processed_goal, user_input
-            ):
+            async for chunk in self._handle_high_confidence_goal(processed_goal, user_input):
                 yield chunk
         elif processed_goal.confidence > 0.2:
-            async for chunk in self._handle_partial_confidence_goal(
-                processed_goal, user_input
-            ):
+            async for chunk in self._handle_partial_confidence_goal(processed_goal, user_input):
                 yield chunk
         else:
             async for chunk in self._handle_low_confidence_goal(user_input):
@@ -393,9 +375,7 @@ class IntelligentAgent:
 
             processed_goal = await self.goal_processor.process_goal(user_input)
             self.state.add_to_context("processed_goal", processed_goal)
-            async for chunk in self._route_goal_by_confidence(
-                processed_goal, user_input
-            ):
+            async for chunk in self._route_goal_by_confidence(processed_goal, user_input):
                 yield chunk
 
         except Exception as e:
@@ -460,9 +440,7 @@ class IntelligentAgent:
             if not tool_selection.install_command:
                 yield self._create_install_failed_chunk()
                 return
-            async for chunk in self._install_tool(
-                tool_selection.install_command, processed_goal
-            ):
+            async for chunk in self._install_tool(tool_selection.install_command, processed_goal):
                 yield chunk
 
         if not tool_selection.primary_command:
@@ -487,9 +465,7 @@ class IntelligentAgent:
                 )
                 return
 
-    async def _handle_complex_goal(
-        self, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_complex_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
         """Issue #665: Refactored to use extracted helper methods."""
         try:
             yield self._create_analysis_status_chunk()
@@ -582,14 +558,10 @@ class IntelligentAgent:
             metadata={"llm_error": True},
         )
 
-    async def _execute_command_with_safety(
-        self, command: str, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_command_with_safety(self, command: str, user_input: str) -> AsyncGenerator[StreamChunk, None]:
         """Execute a command with safety validation (Issue #315)."""
         if self.command_validator.is_command_safe(command):
-            async for chunk in self.streaming_executor.execute_with_streaming(
-                command, user_input, timeout=300
-            ):
+            async for chunk in self.streaming_executor.execute_with_streaming(command, user_input, timeout=300):
                 yield chunk
                 if chunk.chunk_type == ChunkType.COMPLETE:
                     break
@@ -624,9 +596,7 @@ class IntelligentAgent:
             metadata={"installation_failed": True},
         )
 
-    async def _install_tool(
-        self, install_command: str, goal: ProcessedGoal
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _install_tool(self, install_command: str, goal: ProcessedGoal) -> AsyncGenerator[StreamChunk, None]:
         """Install a required tool. Issue #620."""
         yield StreamChunk(
             timestamp=self._get_timestamp(),
@@ -866,14 +836,10 @@ async def get_intelligent_agent(
         async with _agent_lock:
             # Double-check after acquiring lock
             if _agent_instance is None:
-                if not all(
-                    [llm_interface, knowledge_base, worker_node, command_validator]
-                ):
+                if not all([llm_interface, knowledge_base, worker_node, command_validator]):
                     raise ValueError("All components required for first initialization")
 
-                _agent_instance = IntelligentAgent(
-                    llm_interface, knowledge_base, worker_node, command_validator
-                )
+                _agent_instance = IntelligentAgent(llm_interface, knowledge_base, worker_node, command_validator)
                 await _agent_instance.initialize()
 
     return _agent_instance

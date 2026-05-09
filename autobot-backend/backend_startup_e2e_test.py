@@ -3,7 +3,6 @@
 Test backend startup and workflow endpoint registration
 """
 
-
 from tests.test_helpers import get_test_backend_url
 
 
@@ -33,16 +32,10 @@ def test_imports():
         for route in routes[:5]:  # Show first 5
             print(f"   - {route}")  # noqa: print
 
-        print(  # noqa: print
-            "\n🎉 All imports successful! Backend should start properly now."
-        )  # noqa: print
+        print("\n🎉 All imports successful! Backend should start properly now.")  # noqa: print  # noqa: print
         print("\n📋 Next steps:")  # noqa: print
-        print(  # noqa: print
-            "1. Start the backend: source venv/bin/activate && python main.py"
-        )  # noqa: print
-        print(  # noqa: print
-            f"2. Test workflow endpoint: curl {get_test_backend_url()}/api/workflow/workflows"
-        )
+        print("1. Start the backend: source venv/bin/activate && python main.py")  # noqa: print  # noqa: print
+        print(f"2. Test workflow endpoint: curl {get_test_backend_url()}/api/workflow/workflows")  # noqa: print
         print("3. Open frontend and navigate to Workflows tab")  # noqa: print
 
         return True

@@ -215,10 +215,7 @@ class SecureCommandExecutor:
         """
         from autobot_shared.ssot_config import config
 
-        if (
-            not config.permission.enabled
-            or not config.permission.approval_memory_enabled
-        ):
+        if not config.permission.enabled or not config.permission.approval_memory_enabled:
             return None
 
         if self._approval_memory is None:
@@ -282,18 +279,14 @@ class SecureCommandExecutor:
         from services.permission_matcher import MatchResult
 
         if result == MatchResult.DENY:
-            return "deny", self._build_rule_info(
-                "deny", rule, "Denied by permission rule"
-            )
+            return "deny", self._build_rule_info("deny", rule, "Denied by permission rule")
 
         if result == MatchResult.ASK:
             return "ask", self._build_rule_info("ask", rule, "Requires approval")
 
         if result == MatchResult.ALLOW:
             from_memory = await self._check_approval_memory(command, tool)
-            return "allow", self._build_rule_info(
-                "allow", rule, "Allowed by rule", from_memory
-            )
+            return "allow", self._build_rule_info("allow", rule, "Allowed by rule", from_memory)
 
         # DEFAULT - fall through to risk-based assessment
         if await self._check_approval_memory(command, tool):
@@ -427,9 +420,7 @@ class SecureCommandExecutor:
 
         return CommandRisk.SAFE, ["Safe command"]
 
-    def _check_command_category(
-        self, base_command: str, command: str
-    ) -> Optional[tuple[CommandRisk, List[str]]]:
+    def _check_command_category(self, base_command: str, command: str) -> Optional[tuple[CommandRisk, List[str]]]:
         """
         Check command against policy categories and return risk if matched.
 
@@ -489,9 +480,7 @@ class SecureCommandExecutor:
         # Unknown command - treat as moderate risk
         return CommandRisk.MODERATE, [f"Unknown command: {base_command}"]
 
-    async def _request_approval(
-        self, command: str, risk: CommandRisk, reasons: List[str]
-    ) -> bool:
+    async def _request_approval(self, command: str, risk: CommandRisk, reasons: List[str]) -> bool:
         """Request user approval for command execution"""
         if self.require_approval_callback:
             approval_data = {
@@ -594,9 +583,7 @@ class SecureCommandExecutor:
             "security": security_info,
         }
 
-    def _build_permission_deny_result(
-        self, command: str, rule_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _build_permission_deny_result(self, command: str, rule_info: Dict[str, Any]) -> Dict[str, Any]:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
 
@@ -659,9 +646,7 @@ class SecureCommandExecutor:
             "auto_approved_by": auto_approved_by,
         }
 
-    def _build_standard_log_entry(
-        self, command: str, risk: CommandRisk, reasons: List[str]
-    ) -> Dict[str, Any]:
+    def _build_standard_log_entry(self, command: str, risk: CommandRisk, reasons: List[str]) -> Dict[str, Any]:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
 
@@ -708,9 +693,7 @@ class SecureCommandExecutor:
         logger.error("Forbidden command blocked: %s", command)
         log_entry["error"] = "Command forbidden by security policy"
         self.command_history.append(log_entry)
-        return self._build_blocked_result(
-            risk, reasons, f"Command forbidden: {'; '.join(reasons)}"
-        )
+        return self._build_blocked_result(risk, reasons, f"Command forbidden: {'; '.join(reasons)}")
 
     async def _handle_approval_flow(
         self,
@@ -738,9 +721,7 @@ class SecureCommandExecutor:
             Blocked result dict if denied, None if approved
         """
         needs_approval = (
-            force_approval
-            or permission_action == "ask"
-            or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
+            force_approval or permission_action == "ask" or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
         )
 
         if needs_approval:
@@ -751,9 +732,7 @@ class SecureCommandExecutor:
                 logger.warning("Command denied by user: %s", command)
                 log_entry["error"] = "User denied execution"
                 self.command_history.append(log_entry)
-                return self._build_blocked_result(
-                    risk, reasons, "Command execution denied by user"
-                )
+                return self._build_blocked_result(risk, reasons, "Command execution denied by user")
 
         return None
 
@@ -839,16 +818,12 @@ class SecureCommandExecutor:
             logger.error("Command timed out: %s", command)
             log_entry["error"] = "Command timed out"
             self.command_history.append(log_entry)
-            return self._build_error_result(
-                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
-            )
+            return self._build_error_result(risk, reasons, "timeout", "Command execution timed out after 5 minutes")
 
         logger.error("Command execution error: %s", error)
         log_entry["error"] = str(error)
         self.command_history.append(log_entry)
-        return self._build_error_result(
-            risk, reasons, "error", f"Error executing command: {error}"
-        )
+        return self._build_error_result(risk, reasons, "error", f"Error executing command: {error}")
 
     async def _execute_command(
         self,
@@ -887,16 +862,12 @@ class SecureCommandExecutor:
                 exit_code=result["return_code"],
             )
             self.command_history.append(log_entry)
-            result["security"] = self._build_execution_security_info(
-                risk, reasons, log_entry, rule_info
-            )
+            result["security"] = self._build_execution_security_info(risk, reasons, log_entry, rule_info)
             return result
         except Exception as e:
             return self._handle_execution_error(command, risk, reasons, log_entry, e)
 
-    async def run_shell_command(
-        self, command: str, force_approval: bool = False, tool: str = "Bash"
-    ) -> Dict[str, Any]:
+    async def run_shell_command(self, command: str, force_approval: bool = False, tool: str = "Bash") -> Dict[str, Any]:
         """
         Securely execute a shell command with risk assessment and sandboxing.
 
@@ -919,21 +890,15 @@ class SecureCommandExecutor:
         if permission_action == "allow":
             logger.info(f"Command auto-approved by permission rule: {command[:50]}...")
             risk, reasons = self.assess_command_risk(command)
-            log_entry = self._build_auto_approved_log_entry(
-                command, risk, reasons, rule_info
-            )
-            return await self._execute_command(
-                command, risk, reasons, log_entry, rule_info
-            )
+            log_entry = self._build_auto_approved_log_entry(command, risk, reasons, rule_info)
+            return await self._execute_command(command, risk, reasons, log_entry, rule_info)
 
         # Risk-based assessment fallback
         risk, reasons = self.assess_command_risk(command)
         log_entry = self._build_standard_log_entry(command, risk, reasons)
 
         if risk == CommandRisk.FORBIDDEN:
-            return await self._handle_forbidden_command(
-                command, risk, reasons, log_entry
-            )
+            return await self._handle_forbidden_command(command, risk, reasons, log_entry)
 
         denial_result = await self._handle_approval_flow(
             command, risk, reasons, log_entry, force_approval, permission_action

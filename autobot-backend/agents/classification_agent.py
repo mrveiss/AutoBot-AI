@@ -85,9 +85,7 @@ class ClassificationAgent(StandardizedAgent):
             asyncio.create_task(self.initialize_communication(self.capabilities))
         except RuntimeError:
             # Event loop not available yet, will initialize later
-            logger.debug(
-                "Event loop not available, will initialize communication later"
-            )
+            logger.debug("Event loop not available, will initialize communication later")
 
         # Initialize classification prompt
         self._initialize_classification_prompt()
@@ -226,9 +224,7 @@ workflow complexity."""
             llm_result = await self._llm_classify(user_message)
 
             # Combine results with LLM taking precedence but keyword as fallback
-            final_result = self._combine_classifications(
-                llm_result, keyword_result, user_message
-            )
+            final_result = self._combine_classifications(llm_result, keyword_result, user_message)
 
             # Log the classification for learning
             await self._log_classification(user_message, final_result)
@@ -245,9 +241,7 @@ workflow complexity."""
         prompt = self.classification_prompt.format(user_message=user_message)
 
         try:
-            failsafe_response = await self._get_llm_classification_response(
-                prompt, user_message
-            )
+            failsafe_response = await self._get_llm_classification_response(prompt, user_message)
             self._log_llm_response_info(failsafe_response)
             return self._parse_classification_response(failsafe_response.content)
 
@@ -255,13 +249,9 @@ workflow complexity."""
             logger.error("LLM classification failed: %s", e)
             return {}
 
-    async def _get_llm_classification_response(
-        self, prompt: str, user_message: str
-    ) -> Any:
+    async def _get_llm_classification_response(self, prompt: str, user_message: str) -> Any:
         """Get robust LLM response for classification. Issue #620."""
-        system_prompt = (
-            "You are an expert classification agent. Respond only with valid JSON."
-        )
+        system_prompt = "You are an expert classification agent. Respond only with valid JSON."
         full_prompt = f"{system_prompt}\n\n{prompt}"
 
         return await get_robust_llm_response(
@@ -271,9 +261,7 @@ workflow complexity."""
 
     def _log_llm_response_info(self, failsafe_response: Any) -> None:
         """Log LLM response tier and any warnings. Issue #620."""
-        logger.info(
-            f"Classification LLM response using tier: {failsafe_response.tier_used.value}"
-        )
+        logger.info(f"Classification LLM response using tier: {failsafe_response.tier_used.value}")
         if failsafe_response.warnings:
             logger.warning(f"Classification LLM warnings: {failsafe_response.warnings}")
 
@@ -289,14 +277,11 @@ workflow complexity."""
 
     def _parse_string_response(self, response: str) -> Dict[str, Any]:
         """Parse string LLM response using JSON formatter. Issue #620."""
-        parse_result = json_formatter.parse_llm_response(
-            response, CLASSIFICATION_SCHEMA
-        )
+        parse_result = json_formatter.parse_llm_response(response, CLASSIFICATION_SCHEMA)
 
         if parse_result.success:
             logger.info(
-                f"JSON parsed using method: {parse_result.method_used} "
-                f"(confidence: {parse_result.confidence:.2f})"
+                f"JSON parsed using method: {parse_result.method_used} " f"(confidence: {parse_result.confidence:.2f})"
             )
             if parse_result.warnings:
                 logger.warning(f"JSON parsing warnings: {parse_result.warnings}")
@@ -318,12 +303,8 @@ workflow complexity."""
             return self._create_fallback_result(user_message, keyword_result)
 
         try:
-            llm_complexity, confidence = self._resolve_complexity_with_keyword_check(
-                llm_result, keyword_result
-            )
-            return self._build_classification_result(
-                llm_result, llm_complexity, confidence, keyword_result
-            )
+            llm_complexity, confidence = self._resolve_complexity_with_keyword_check(llm_result, keyword_result)
+            return self._build_classification_result(llm_result, llm_complexity, confidence, keyword_result)
         except Exception as e:
             logger.error("Error combining classifications: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
@@ -338,10 +319,7 @@ workflow complexity."""
 
         # If LLM confidence is low and keyword differs significantly, blend results
         if confidence < 0.6:
-            if (
-                keyword_result == TaskComplexity.COMPLEX
-                and llm_complexity == TaskComplexity.SIMPLE
-            ):
+            if keyword_result == TaskComplexity.COMPLEX and llm_complexity == TaskComplexity.SIMPLE:
                 llm_complexity = TaskComplexity.COMPLEX
                 confidence = 0.6
 
@@ -362,9 +340,7 @@ workflow complexity."""
             suggested_agents=self._extract_agents(llm_result),
             estimated_steps=int(llm_result.get("estimated_steps", 1)),
             user_approval_needed=llm_result.get("user_approval_needed", False),
-            context_analysis=self._build_context_analysis(
-                llm_result, keyword_result, confidence
-            ),
+            context_analysis=self._build_context_analysis(llm_result, keyword_result, confidence),
         )
 
     def _build_context_analysis(
@@ -411,9 +387,7 @@ workflow complexity."""
 
         return agents or ["orchestrator"]  # Default to orchestrator
 
-    def _create_fallback_result(
-        self, user_message: str, keyword_result: TaskComplexity
-    ) -> ClassificationResult:
+    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> ClassificationResult:
         """Create a fallback result using keyword classification."""
         return ClassificationResult(
             complexity=keyword_result,
@@ -425,14 +399,8 @@ workflow complexity."""
             context_analysis={
                 "domain": "general",
                 "intent": "unknown",
-                "scope": (
-                    "single"
-                    if keyword_result == TaskComplexity.SIMPLE
-                    else "multi-step"
-                ),
-                "risk_level": (
-                    "high" if keyword_result == TaskComplexity.COMPLEX else "medium"
-                ),
+                "scope": ("single" if keyword_result == TaskComplexity.SIMPLE else "multi-step"),
+                "risk_level": ("high" if keyword_result == TaskComplexity.COMPLEX else "medium"),
                 "classification_method": "keyword_fallback",
                 "original_message": user_message,
             },
@@ -452,9 +420,7 @@ workflow complexity."""
             TaskComplexity.COMPLEX: 5,
         }.get(complexity, 1)
 
-    async def _log_classification(
-        self, user_message: str, result: ClassificationResult
-    ):
+    async def _log_classification(self, user_message: str, result: ClassificationResult):
         """Log classification results for analysis and improvement."""
         try:
             log_data = {
@@ -471,9 +437,7 @@ workflow complexity."""
             # Store in Redis for analysis
             key = f"autobot:classification:log:{hash(user_message)}"
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                self.redis_client.setex, key, 86400, json.dumps(log_data)
-            )  # 24h expiry
+            await asyncio.to_thread(self.redis_client.setex, key, 86400, json.dumps(log_data))  # 24h expiry
 
         except Exception as e:
             logger.error("Failed to log classification: %s", e)
@@ -510,9 +474,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Test the Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")
-    parser.add_argument(
-        "--history", action="store_true", help="Show classification history"
-    )
+    parser.add_argument("--history", action="store_true", help="Show classification history")
     parser.add_argument("--interactive", action="store_true", help="Interactive mode")
 
     args = parser.parse_args()
@@ -525,9 +487,7 @@ if __name__ == "__main__":
             print(f"   Message: {entry['user_message']}")  # noqa: print
             classification = entry["classification"]
             confidence = entry["confidence"]
-            print(  # noqa: print
-                f"   Classification: {classification} (confidence: {confidence})"
-            )  # noqa: print
+            print(f"   Classification: {classification} (confidence: {confidence})")  # noqa: print  # noqa: print
             print(f"   Reasoning: {entry['reasoning']}")  # noqa: print
             print()  # noqa: print
 
@@ -549,9 +509,7 @@ if __name__ == "__main__":
                 print(f"\nClassification: {result.complexity.value}")  # noqa: print
                 print(f"Confidence: {result.confidence:.2f}")  # noqa: print
                 print(f"Reasoning: {result.reasoning}")  # noqa: print
-                print(  # noqa: print
-                    f"Suggested agents: {', '.join(result.suggested_agents)}"
-                )  # noqa: print
+                print(f"Suggested agents: {', '.join(result.suggested_agents)}")  # noqa: print  # noqa: print
                 print(f"Estimated steps: {result.estimated_steps}")  # noqa: print
                 if result.context_analysis.get("domain"):
                     print(f"Domain: {result.context_analysis['domain']}")  # noqa: print
@@ -567,9 +525,7 @@ if __name__ == "__main__":
         print(f"Confidence: {result.confidence:.2f}")  # noqa: print
         print(f"Reasoning: {result.reasoning}")  # noqa: print
         print(f"Suggested agents: {', '.join(result.suggested_agents)}")  # noqa: print
-        print(  # noqa: print
-            f"Context: {json.dumps(result.context_analysis, indent=2)}"
-        )  # noqa: print
+        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")  # noqa: print  # noqa: print
 
     async def main() -> None:
         """Main entry point for CLI classification agent testing."""
@@ -582,8 +538,6 @@ if __name__ == "__main__":
         elif args.message:
             await classify_single(agent, args.message)
         else:
-            print(  # noqa: print
-                "Usage: python3 classification_agent.py 'message' or --interactive"
-            )  # noqa: print
+            print("Usage: python3 classification_agent.py 'message' or --interactive")  # noqa: print  # noqa: print
 
     asyncio.run(main())

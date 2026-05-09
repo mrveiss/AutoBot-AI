@@ -16,8 +16,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.http_client import get_http_client
+from autobot_shared.singleton_factory import lazy_singleton
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
@@ -41,18 +41,10 @@ class LibrarianAssistant:
             "librarian_assistant.playwright_service_url",
             get_service_url("playwright-vnc"),
         )
-        self.max_search_results = self.config.get_nested(
-            "librarian_assistant.max_search_results", 5
-        )
-        self.max_content_length = self.config.get_nested(
-            "librarian_assistant.max_content_length", 2000
-        )
-        self.quality_threshold = self.config.get_nested(
-            "librarian_assistant.quality_threshold", 0.7
-        )
-        self.auto_store_quality = self.config.get_nested(
-            "librarian_assistant.auto_store_quality", True
-        )
+        self.max_search_results = self.config.get_nested("librarian_assistant.max_search_results", 5)
+        self.max_content_length = self.config.get_nested("librarian_assistant.max_content_length", 2000)
+        self.quality_threshold = self.config.get_nested("librarian_assistant.quality_threshold", 0.7)
+        self.auto_store_quality = self.config.get_nested("librarian_assistant.auto_store_quality", True)
 
         # Trusted domains for content assessment
         self.trusted_domains = self.config.get_nested(
@@ -86,16 +78,12 @@ class LibrarianAssistant:
     async def _check_playwright_service(self) -> bool:
         """Check if browser VM Playwright service is available."""
         try:
-            async with await self.http_client.get(
-                f"{self.playwright_service_url}/health"
-            ) as response:
+            async with await self.http_client.get(f"{self.playwright_service_url}/health") as response:
                 if response.status == 200:
                     logger.info("Playwright service is healthy")
                     return True
                 else:
-                    logger.error(
-                        "Playwright service unhealthy: status %s", response.status
-                    )
+                    logger.error("Playwright service unhealthy: status %s", response.status)
                     return False
         except Exception as e:
             logger.error("Cannot reach Playwright service: %s", e)
@@ -112,9 +100,7 @@ class LibrarianAssistant:
         Returns top search results or empty list on failure.
         """
         payload = {"query": query, "search_engine": search_engine}
-        async with await self.http_client.post(
-            f"{self.playwright_service_url}/search", json=payload
-        ) as response:
+        async with await self.http_client.post(f"{self.playwright_service_url}/search", json=payload) as response:
             if response.status != 200:
                 logger.error("Search request failed: status %s", response.status)
                 return []
@@ -163,18 +149,14 @@ class LibrarianAssistant:
             logger.error("Playwright service not available")
             return []
 
-        logger.info(
-            "Searching with %s via Playwright service: %s", search_engine, query
-        )
+        logger.info("Searching with %s via Playwright service: %s", search_engine, query)
         await self._emit(
             progress_callback,
             {"event": "research:searching", "engine": search_engine, "query": query},
         )
 
         try:
-            return await self._execute_search_request(
-                query, search_engine, progress_callback
-            )
+            return await self._execute_search_request(query, search_engine, progress_callback)
         except Exception as e:
             logger.error("Error during web search: %s", e)
             return []
@@ -215,13 +197,9 @@ class LibrarianAssistant:
             payload = {"url": url}
             logger.info("Extracting content via Playwright service: %s", url)
 
-            async with await self.http_client.post(
-                f"{self.playwright_service_url}/extract", json=payload
-            ) as response:
+            async with await self.http_client.post(f"{self.playwright_service_url}/extract", json=payload) as response:
                 if response.status != 200:
-                    logger.error(
-                        "Content extraction failed: status %s", response.status
-                    )
+                    logger.error("Content extraction failed: status %s", response.status)
                     return None
 
                 result = await response.json()
@@ -316,9 +294,7 @@ class LibrarianAssistant:
             "}"
         )
 
-    def _parse_assessment_response(
-        self, response: str, content_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _parse_assessment_response(self, response: str, content_data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse LLM response into assessment dictionary.
 
         Args:
@@ -337,9 +313,7 @@ class LibrarianAssistant:
             logger.warning("Could not parse quality assessment JSON, using fallback")
             return self._build_fallback_assessment(content_data)
 
-    async def assess_content_quality(
-        self, content_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def assess_content_quality(self, content_data: Dict[str, Any]) -> Dict[str, Any]:
         """Assess the quality of extracted content using LLM. Issue #620.
 
         Args:
@@ -354,13 +328,9 @@ class LibrarianAssistant:
             return self._parse_assessment_response(llm_response.content, content_data)
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
-            return self._build_fallback_assessment(
-                content_data, "Content quality assessment failed"
-            )
+            return self._build_fallback_assessment(content_data, "Content quality assessment failed")
 
-    async def store_in_knowledge_base(
-        self, content_data: Dict[str, Any], assessment: Dict[str, Any]
-    ) -> bool:
+    async def store_in_knowledge_base(self, content_data: Dict[str, Any], assessment: Dict[str, Any]) -> bool:
         """Store quality content in the knowledge base.
 
         Args:
@@ -407,9 +377,7 @@ class LibrarianAssistant:
             logger.error("Error storing content in knowledge base: %s", e)
             return False
 
-    def _should_store_content(
-        self, assessment: Dict[str, Any], store_enabled: bool
-    ) -> bool:
+    def _should_store_content(self, assessment: Dict[str, Any], store_enabled: bool) -> bool:
         """Check if content should be stored (Issue #334 - extracted helper)."""
         if not store_enabled:
             return False
@@ -562,9 +530,7 @@ class LibrarianAssistant:
                 return research_results
 
             logger.info("Researching query: %s", query)
-            search_results = await self.search_web(
-                query, progress_callback=progress_callback
-            )
+            search_results = await self.search_web(query, progress_callback=progress_callback)
             research_results["search_results"] = search_results
 
             if not search_results:
@@ -579,9 +545,7 @@ class LibrarianAssistant:
             )
             research_results["content_extracted"] = extracted_content
 
-            await self._finalize_research_results(
-                query, extracted_content, research_results
-            )
+            await self._finalize_research_results(query, extracted_content, research_results)
         except Exception as e:
             logger.error("Error during research: %s", e)
             research_results["error"] = str(e)
@@ -602,12 +566,8 @@ class LibrarianAssistant:
             research_results: Results dict to update in place
         """
         if extracted_content:
-            research_results["summary"] = await self._create_research_summary(
-                query, extracted_content
-            )
-            research_results["sources"] = [
-                self._build_source_entry(c) for c in extracted_content
-            ]
+            research_results["summary"] = await self._create_research_summary(query, extracted_content)
+            research_results["sources"] = [self._build_source_entry(c) for c in extracted_content]
 
         logger.info(
             "Research completed: %d sources analyzed, %d stored in KB",
@@ -615,9 +575,7 @@ class LibrarianAssistant:
             len(research_results["stored_in_kb"]),
         )
 
-    async def _create_research_summary(
-        self, query: str, content_list: List[Dict[str, Any]]
-    ) -> str:
+    async def _create_research_summary(self, query: str, content_list: List[Dict[str, Any]]) -> str:
         """Create a summary of research findings."""
         try:
             source_contents = []

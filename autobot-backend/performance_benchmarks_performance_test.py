@@ -111,9 +111,7 @@ class TestLLMServicePerformance:
                         model="llama3.2:1b",
                     )
 
-                    response = await self.llm.chat(
-                        messages=[{"role": "user", "content": prompt}]
-                    )
+                    response = await self.llm.chat(messages=[{"role": "user", "content": prompt}])
 
                 self.benchmark.end_measurement()
 
@@ -125,17 +123,13 @@ class TestLLMServicePerformance:
             results[f"prompt_length_{len(prompt)}"] = stats
 
             # Performance assertions
-            assert (
-                stats["avg_duration"] < 2.0
-            ), f"LLM response too slow for prompt length {len(prompt)}"
+            assert stats["avg_duration"] < 2.0, f"LLM response too slow for prompt length {len(prompt)}"
             assert stats["max_memory_mb"] < 500, "Memory usage too high"
 
         # Log results for analysis
         print("\nLLM Performance Results:")  # noqa: print
         for prompt_type, stats in results.items():
-            print(  # noqa: print
-                f"{prompt_type}: {stats['avg_duration']:.3f}s avg, {stats['max_duration']:.3f}s max"
-            )
+            print(f"{prompt_type}: {stats['avg_duration']:.3f}s avg, {stats['max_duration']:.3f}s max")  # noqa: print
 
     async def test_concurrent_llm_requests(self):
         """Test LLM performance under concurrent load"""
@@ -154,9 +148,7 @@ class TestLLMServicePerformance:
                         model="llama3.2:1b",
                     )
 
-                    response = await self.llm.chat(
-                        messages=[{"role": "user", "content": "Test concurrent request"}]
-                    )
+                    response = await self.llm.chat(messages=[{"role": "user", "content": "Test concurrent request"}])
 
                 self.benchmark.end_measurement()
                 return response
@@ -174,12 +166,8 @@ class TestLLMServicePerformance:
             stats = self.benchmark.get_statistics()
 
             # Performance assertions
-            assert (
-                total_time < 10.0
-            ), f"Concurrent requests took too long: {total_time}s"
-            assert (
-                stats["avg_duration"] < 5.0
-            ), "Individual request time too high under load"
+            assert total_time < 10.0, f"Concurrent requests took too long: {total_time}s"
+            assert stats["avg_duration"] < 5.0, "Individual request time too high under load"
 
             print(  # noqa: print
                 f"\nConcurrent {num_requests} requests: {total_time:.3f}s total, {stats['avg_duration']:.3f}s avg per request"
@@ -195,9 +183,7 @@ class TestKnowledgeBasePerformance:
 
         # Mock configuration for testing
         with patch("knowledge_base.global_config_manager") as mock_config:
-            mock_config.get_redis_config.return_value = {
-                "enabled": False  # Use in-memory for testing
-            }
+            mock_config.get_redis_config.return_value = {"enabled": False}  # Use in-memory for testing
             mock_config.get_llm_config.return_value = {
                 "unified": {
                     "embedding": {
@@ -244,22 +230,17 @@ class TestKnowledgeBasePerformance:
                 stats = self.benchmark.get_statistics()
 
                 # Performance assertions
-                assert (
-                    stats["avg_duration"] < 1.0
-                ), f"Search too slow for query: {query[:50]}..."
+                assert stats["avg_duration"] < 1.0, f"Search too slow for query: {query[:50]}..."
                 assert stats["max_duration"] < 2.0, "Maximum search time exceeded"
 
-                print(  # noqa: print
-                    f"\nKB Search '{query[:30]}...': {stats['avg_duration']:.3f}s avg"
-                )
+                print(f"\nKB Search '{query[:30]}...': {stats['avg_duration']:.3f}s avg")  # noqa: print
 
     async def test_knowledge_base_indexing_performance(self):
         """Benchmark knowledge base document indexing"""
         documents = [
             {"content": "Short document", "metadata": {"type": "test"}},
             {
-                "content": "Medium length document with more content to index and process"
-                * 5,
+                "content": "Medium length document with more content to index and process" * 5,
                 "metadata": {"type": "test"},
             },
             {
@@ -286,9 +267,7 @@ class TestKnowledgeBasePerformance:
                 stats = self.benchmark.get_statistics()
 
                 # Performance assertions
-                assert (
-                    stats["avg_duration"] < 5.0
-                ), f"Indexing too slow for document {i}"
+                assert stats["avg_duration"] < 5.0, f"Indexing too slow for document {i}"
 
                 print(  # noqa: print
                     f"\nIndexing doc {i} ({len(doc['content'])} chars): {stats['avg_duration']:.3f}s avg"
@@ -303,9 +282,7 @@ class TestOrchestratorPerformance:
         self.benchmark = PerformanceBenchmark()
 
         with patch("orchestrator.config_manager") as mock_config:
-            mock_config.get_llm_config.return_value = {
-                "orchestrator_llm": "llama3.2:1b"
-            }
+            mock_config.get_llm_config.return_value = {"orchestrator_llm": "llama3.2:1b"}
             self.orchestrator = Orchestrator()
 
     async def test_orchestrator_task_planning_performance(self):
@@ -317,9 +294,7 @@ class TestOrchestratorPerformance:
         ]
 
         with patch.object(self.orchestrator, "llm_service") as mock_llm:
-            mock_llm.chat.return_value = MagicMock(
-                content="Mock orchestrator response", error=None
-            )
+            mock_llm.chat.return_value = MagicMock(content="Mock orchestrator response", error=None)
 
             for request in test_requests:
                 self.benchmark.metrics = []
@@ -340,13 +315,9 @@ class TestOrchestratorPerformance:
                 stats = self.benchmark.get_statistics()
 
                 # Performance assertions
-                assert (
-                    stats["avg_duration"] < 3.0
-                ), f"Task planning too slow for: {request[:50]}..."
+                assert stats["avg_duration"] < 3.0, f"Task planning too slow for: {request[:50]}..."
 
-                print(  # noqa: print
-                    f"\nTask planning '{request[:40]}...': {stats['avg_duration']:.3f}s avg"
-                )
+                print(f"\nTask planning '{request[:40]}...': {stats['avg_duration']:.3f}s avg")  # noqa: print
 
     async def test_orchestrator_concurrent_workflows(self):
         """Test orchestrator performance with concurrent workflows"""
@@ -359,13 +330,9 @@ class TestOrchestratorPerformance:
                 self.benchmark.start_measurement()
 
                 with patch.object(self.orchestrator, "llm_service") as mock_llm:
-                    mock_llm.chat.return_value = MagicMock(
-                        content="Mock response", error=None
-                    )
+                    mock_llm.chat.return_value = MagicMock(content="Mock response", error=None)
 
-                    request = (
-                        f"Test concurrent workflow {threading.current_thread().ident}"
-                    )
+                    request = f"Test concurrent workflow {threading.current_thread().ident}"
                     complexity = self.orchestrator.classify_request_complexity(request)
                     steps = self.orchestrator.plan_workflow_steps(request, complexity)
 
@@ -385,13 +352,9 @@ class TestOrchestratorPerformance:
             self.benchmark.get_statistics()
 
             # Performance assertions
-            assert (
-                total_time < 15.0
-            ), f"Concurrent workflows took too long: {total_time}s"
+            assert total_time < 15.0, f"Concurrent workflows took too long: {total_time}s"
 
-            print(  # noqa: print
-                f"\nConcurrent {count} workflows: {total_time:.3f}s total"
-            )  # noqa: print
+            print(f"\nConcurrent {count} workflows: {total_time:.3f}s total")  # noqa: print  # noqa: print
 
 
 class TestMemorySystemPerformance:
@@ -419,8 +382,7 @@ class TestMemorySystemPerformance:
                 "context": "test",
             },
             {
-                "content": "Very long memory entry with extensive context and details"
-                * 10,
+                "content": "Very long memory entry with extensive context and details" * 10,
                 "context": "test",
             },
         ]
@@ -473,9 +435,7 @@ class TestMemorySystemPerformance:
             for _ in range(10):
                 self.benchmark.start_measurement()
 
-                results = await self.memory_manager.retrieve_memories(
-                    query=query, limit=10
-                )
+                results = await self.memory_manager.retrieve_memories(query=query, limit=10)
 
                 self.benchmark.end_measurement()
 
@@ -485,13 +445,9 @@ class TestMemorySystemPerformance:
             stats = self.benchmark.get_statistics()
 
             # Performance assertions
-            assert (
-                stats["avg_duration"] < 1.0
-            ), f"Memory retrieval too slow for: {query}"
+            assert stats["avg_duration"] < 1.0, f"Memory retrieval too slow for: {query}"
 
-            print(  # noqa: print
-                f"\nMemory retrieval '{query}': {stats['avg_duration']:.3f}s avg"
-            )  # noqa: print
+            print(f"\nMemory retrieval '{query}': {stats['avg_duration']:.3f}s avg")  # noqa: print  # noqa: print
 
 
 class TestSystemIntegrationPerformance:
@@ -504,11 +460,11 @@ class TestSystemIntegrationPerformance:
     async def test_end_to_end_workflow_performance(self):
         """Benchmark complete end-to-end workflow performance"""
         # Mock all major components
-        with patch("orchestrator.Orchestrator") as mock_orchestrator_class, patch(
-            "knowledge_base.KnowledgeBase"
-        ) as mock_kb_class, patch(
-            "enhanced_memory_manager.EnhancedMemoryManager"
-        ) as mock_memory_class:
+        with (
+            patch("orchestrator.Orchestrator") as mock_orchestrator_class,
+            patch("knowledge_base.KnowledgeBase") as mock_kb_class,
+            patch("enhanced_memory_manager.EnhancedMemoryManager") as mock_memory_class,
+        ):
             # Set up mocks
             mock_orchestrator = MagicMock()
             mock_kb = MagicMock()
@@ -559,13 +515,9 @@ class TestSystemIntegrationPerformance:
                 stats = self.benchmark.get_statistics()
 
                 # Performance assertions
-                assert (
-                    stats["avg_duration"] < 5.0
-                ), f"Integration workflow too slow: {workflow[:50]}..."
+                assert stats["avg_duration"] < 5.0, f"Integration workflow too slow: {workflow[:50]}..."
 
-                print(  # noqa: print
-                    f"\nIntegration '{workflow[:40]}...': {stats['avg_duration']:.3f}s avg"
-                )
+                print(f"\nIntegration '{workflow[:40]}...': {stats['avg_duration']:.3f}s avg")  # noqa: print
 
     async def test_resource_usage_under_load(self):
         """Test system resource usage under sustained load"""
@@ -591,16 +543,12 @@ class TestSystemIntegrationPerformance:
 
         # Resource usage assertions
         memory_increase = final_memory - initial_memory
-        assert (
-            memory_increase < 100
-        ), f"Memory usage increased too much: {memory_increase}MB"
+        assert memory_increase < 100, f"Memory usage increased too much: {memory_increase}MB"
 
         total_time = end_time - start_time
         assert total_time < 10.0, f"Load test took too long: {total_time}s"
 
-        print(  # noqa: print
-            f"\nLoad test: {total_time:.3f}s, Memory: {initial_memory:.1f}MB -> {final_memory:.1f}MB"
-        )
+        print(f"\nLoad test: {total_time:.3f}s, Memory: {initial_memory:.1f}MB -> {final_memory:.1f}MB")  # noqa: print
 
 
 if __name__ == "__main__":

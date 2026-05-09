@@ -12,7 +12,8 @@ import time
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import config as ssot_config, get_ollama_url
+from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
@@ -46,9 +47,7 @@ class OllamaHealth(BaseProviderHealth):
             tags_url = f"{self.ollama_host}/api/tags"
 
             http_client = get_http_client()
-            async with await http_client.get(
-                tags_url, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
+            async with await http_client.get(tags_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -64,9 +63,7 @@ class OllamaHealth(BaseProviderHealth):
                         details={
                             "endpoint": self.ollama_host,
                             "model_count": model_count,
-                            "models": [
-                                m.get("name") for m in models[:5]
-                            ],  # First 5 models
+                            "models": [m.get("name") for m in models[:5]],  # First 5 models
                         },
                     )
                 else:
@@ -113,9 +110,7 @@ class OpenAIHealth(BaseProviderHealth):
         # Use env var for base URL, fallback to standard OpenAI API
         self.base_url = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
 
-    def _build_response_result(
-        self, response_status: int, data: dict, response_time: float
-    ) -> ProviderHealthResult:
+    def _build_response_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             models = data.get("data", [])
@@ -137,9 +132,7 @@ class OpenAIHealth(BaseProviderHealth):
             429: "OpenAI rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(
-            response_status, f"OpenAI returned status {response_status}"
-        )
+        msg = error_messages.get(response_status, f"OpenAI returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -214,13 +207,9 @@ class AnthropicHealth(BaseProviderHealth):
         super().__init__("anthropic")
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
         # Use env var for base URL, fallback to standard Anthropic API
-        self.base_url = os.getenv(
-            "ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1"
-        )
+        self.base_url = os.getenv("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1")
 
-    def _build_anthropic_result(
-        self, response_status: int, response_time: float
-    ) -> ProviderHealthResult:
+    def _build_anthropic_result(self, response_status: int, response_time: float) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             return self._create_result(
@@ -236,9 +225,7 @@ class AnthropicHealth(BaseProviderHealth):
             429: "Anthropic rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(
-            response_status, f"Anthropic returned status {response_status}"
-        )
+        msg = error_messages.get(response_status, f"Anthropic returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -323,9 +310,7 @@ class GoogleHealth(BaseProviderHealth):
         self.api_key = os.getenv("GOOGLE_API_KEY")
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
-    def _build_google_result(
-        self, response_status: int, data: dict, response_time: float
-    ) -> ProviderHealthResult:
+    def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             models = data.get("models", [])
@@ -348,9 +333,7 @@ class GoogleHealth(BaseProviderHealth):
             429: "Google rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(
-            response_status, f"Google returned status {response_status}"
-        )
+        msg = error_messages.get(response_status, f"Google returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
@@ -436,9 +419,7 @@ class LMStudioHealth(BaseProviderHealth):
             models_url = f"{self.lmstudio_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(
-                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
+            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -510,9 +491,7 @@ class VLLMHealth(BaseProviderHealth):
             models_url = f"{self.vllm_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(
-                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
+            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:

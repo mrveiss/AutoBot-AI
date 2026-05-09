@@ -21,7 +21,6 @@ from knowledge.query_sanitizer import (
     sanitize_query,
 )
 
-
 # ---------------------------------------------------------------------------
 # OWASP LLM01 payloads — must be detected and neutralised
 # ---------------------------------------------------------------------------
@@ -213,9 +212,7 @@ class TestLegitimateQueries:
     def test_legitimate_query_unchanged(self, query):
         result = sanitize_query(query)
         assert not result.rejected, f"False positive: {query!r} rejected ({result.reason})"
-        assert result.sanitized_text == query, (
-            f"Legit query modified: {query!r} -> {result.sanitized_text!r}"
-        )
+        assert result.sanitized_text == query, f"Legit query modified: {query!r} -> {result.sanitized_text!r}"
 
     def test_html_tag_mention_not_treated_as_special_token(self):
         # Must not collide with llm_special_tokens pattern <|...|>
@@ -321,11 +318,7 @@ class TestEntryPoints:
         assert not result.rejected
 
     def test_multiple_rules_aggregate_hits(self):
-        payload = (
-            "<system-reminder>a</system-reminder>"
-            "<|im_start|>"
-            "\u200b"
-        )
+        payload = "<system-reminder>a</system-reminder>" "<|im_start|>" "\u200b"
         result = sanitize_query(payload)
         assert not result.rejected
         # All three distinct rules should register hits

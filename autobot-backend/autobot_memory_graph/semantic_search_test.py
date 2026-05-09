@@ -48,6 +48,7 @@ def _bootstrap_stubs() -> None:
         def vm(self):
             class _VM:
                 redis = "127.0.0.1"
+
             return _VM()
 
     ssot_config_mod.config = _Config()
@@ -200,9 +201,7 @@ class TestExtractIntent:
     def test_time_last_7_days(self) -> None:
         intent = self.proc._extract_intent("issues from last 7 days")
         assert intent.time_range is not None
-        expected_start = datetime.now(tz=timezone.utc).date() - __import__(
-            "datetime"
-        ).timedelta(days=7)
+        expected_start = datetime.now(tz=timezone.utc).date() - __import__("datetime").timedelta(days=7)
         assert intent.time_range["start"] == expected_start
 
     def test_status_completed_extracted(self) -> None:
@@ -274,9 +273,7 @@ class TestProcessQuery:
             "metadata": {"status": "active", "priority": "medium"},
         }
 
-    def _make_processor_with_candidates(
-        self, candidates: List[Dict[str, Any]]
-    ) -> MemoryGraphQueryProcessor:
+    def _make_processor_with_candidates(self, candidates: List[Dict[str, Any]]) -> MemoryGraphQueryProcessor:
         redis_mock = AsyncMock()
         # FT.SEARCH returns empty raw to trigger scan fallback
         redis_mock.execute_command = AsyncMock(side_effect=Exception("no index"))

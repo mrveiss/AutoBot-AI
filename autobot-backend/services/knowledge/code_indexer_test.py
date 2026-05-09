@@ -14,10 +14,7 @@ try:
 except ImportError:
     tree_sitter_available = False
 
-requires_tree_sitter = pytest.mark.skipif(
-    not tree_sitter_available,
-    reason="tree-sitter-python not installed"
-)
+requires_tree_sitter = pytest.mark.skipif(not tree_sitter_available, reason="tree-sitter-python not installed")
 
 from services.knowledge.code_indexer import (
     CodeIndexer,
@@ -146,10 +143,7 @@ async def test_index_directory_skips_hidden_dirs(tmp_path):
     # Only real.py nodes should be indexed; hidden dir is skipped
     assert result.success > 0
     # Verify hidden file was not touched
-    upserted_ids = [
-        call_args[1]["ids"][0]
-        for call_args in indexer._collection.upsert.call_args_list
-    ]
+    upserted_ids = [call_args[1]["ids"][0] for call_args in indexer._collection.upsert.call_args_list]
     assert not any("hook" in nid for nid in upserted_ids)
 
 
@@ -164,10 +158,7 @@ async def test_index_directory_skips_node_modules(tmp_path):
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     assert result.success > 0
-    upserted_ids = [
-        call_args[1]["ids"][0]
-        for call_args in indexer._collection.upsert.call_args_list
-    ]
+    upserted_ids = [call_args[1]["ids"][0] for call_args in indexer._collection.upsert.call_args_list]
     assert not any("index" in nid and "node_modules" in str(nid) for nid in upserted_ids)
 
 
@@ -208,6 +199,7 @@ async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path):
 
     # Clear any stale process-level lock for this cache path before the test.
     import services.knowledge.code_indexer as _ci_mod
+
     _ci_mod._CACHE_FILE_LOCKS.pop(str(cache_file), None)
 
     indexer_a = CodeIndexer(
@@ -295,9 +287,11 @@ async def test_index_code_accepts_project_root_itself(tmp_path):
     mock_doc_svc._collection = MagicMock()
     mock_doc_svc._embed_model = MagicMock()
 
-    with patch("constants.path_constants.PATH") as mock_path, \
-         patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc), \
-         patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer):
+    with (
+        patch("constants.path_constants.PATH") as mock_path,
+        patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc),
+        patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer),
+    ):
         mock_path.PROJECT_ROOT = str(project)
         response = await index_code({"root_dir": str(project)})
 
@@ -322,13 +316,8 @@ class MyClass:
     assert result.success > 0
 
     # Verify method node ID includes class parent prefix
-    upserted_ids = [
-        call_args[1]["ids"][0]
-        for call_args in indexer._collection.upsert.call_args_list
-    ]
-    assert "mymod::myclass__run" in upserted_ids, (
-        f"Expected 'mymod::myclass__run' in upserted IDs, got: {upserted_ids}"
-    )
+    upserted_ids = [call_args[1]["ids"][0] for call_args in indexer._collection.upsert.call_args_list]
+    assert "mymod::myclass__run" in upserted_ids, f"Expected 'mymod::myclass__run' in upserted IDs, got: {upserted_ids}"
 
     # Verify the `calls` metadata on `run` is non-empty
     run_calls = None
@@ -336,9 +325,7 @@ class MyClass:
         if call_args[1]["ids"][0] == "mymod::myclass__run":
             run_calls = call_args[1]["metadatas"][0]["calls"]
             break
-    assert run_calls, (
-        f"Expected non-empty 'calls' metadata for mymod::myclass__run, got: {run_calls!r}"
-    )
+    assert run_calls, f"Expected non-empty 'calls' metadata for mymod::myclass__run, got: {run_calls!r}"
 
 
 @pytest.mark.asyncio
@@ -361,9 +348,11 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path):
     mock_doc_svc._collection = MagicMock()
     mock_doc_svc._embed_model = MagicMock()
 
-    with patch("constants.path_constants.PATH") as mock_path, \
-         patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc), \
-         patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer):
+    with (
+        patch("constants.path_constants.PATH") as mock_path,
+        patch("services.knowledge.doc_indexer.get_doc_indexer_service", return_value=mock_doc_svc),
+        patch("services.knowledge.code_indexer.CodeIndexer", return_value=mock_indexer),
+    ):
         mock_path.PROJECT_ROOT = str(project)
         response = await index_code({"root_dir": str(subdir)})
 

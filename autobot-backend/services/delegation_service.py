@@ -47,17 +47,12 @@ class DelegationService:
 
         defaults = self._org.get_role_defaults(delegator.org_role)
         if not defaults.get("can_delegate"):
-            raise ValueError(
-                f"Agent {delegator_id!r} (role={delegator.org_role}) "
-                "cannot delegate tasks"
-            )
+            raise ValueError(f"Agent {delegator_id!r} (role={delegator.org_role}) " "cannot delegate tasks")
 
         reports = await self._org.get_direct_reports(delegator_id)
         report_ids = {r["agent_id"] for r in reports}
         if assignee_id not in report_ids:
-            raise ValueError(
-                f"Agent {assignee_id!r} is not a direct report " f"of {delegator_id!r}"
-            )
+            raise ValueError(f"Agent {assignee_id!r} is not a direct report " f"of {delegator_id!r}")
 
         delegation = TaskDelegation(
             delegator_id=delegator_id,
@@ -95,9 +90,7 @@ class DelegationService:
                 break
 
         if escalation_target is None:
-            raise ValueError(
-                f"No manager above {delegation.delegator_id!r} to escalate to"
-            )
+            raise ValueError(f"No manager above {delegation.delegator_id!r} to escalate to")
 
         delegation.status = DelegationStatus.ESCALATED.value
         delegation.escalated_to = escalation_target
@@ -126,9 +119,7 @@ class DelegationService:
         """Fetch a single delegation by ID (#1753)."""
         import uuid
 
-        stmt = select(TaskDelegation).where(
-            TaskDelegation.id == uuid.UUID(delegation_id)
-        )
+        stmt = select(TaskDelegation).where(TaskDelegation.id == uuid.UUID(delegation_id))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -164,17 +155,8 @@ class DelegationService:
         limit: int = 50,
     ) -> List[TaskDelegation]:
         """List delegations where agent_id is delegator or assignee (#1753)."""
-        col = (
-            TaskDelegation.delegator_id
-            if role == "delegator"
-            else TaskDelegation.assignee_id
-        )
-        stmt = (
-            select(TaskDelegation)
-            .where(col == agent_id)
-            .order_by(TaskDelegation.created_at.desc())
-            .limit(limit)
-        )
+        col = TaskDelegation.delegator_id if role == "delegator" else TaskDelegation.assignee_id
+        stmt = select(TaskDelegation).where(col == agent_id).order_by(TaskDelegation.created_at.desc()).limit(limit)
         if status_filter:
             stmt = stmt.where(TaskDelegation.status == status_filter)
         result = await self.session.execute(stmt)

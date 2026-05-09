@@ -19,9 +19,7 @@ _REQUIRED_TIMEOUT_CATEGORIES = ("redis", "llamaindex", "documents", "http", "llm
 _NUMERIC_TYPES = (int, float)
 
 
-def _validate_timeout_value(
-    value: Any, path: str, issues: list, warnings: list
-) -> None:
+def _validate_timeout_value(value: Any, path: str, issues: list, warnings: list) -> None:
     """Validate a single timeout value (Issue #315: extracted).
 
     Args:
@@ -39,9 +37,7 @@ def _validate_timeout_value(
         warnings.append(f"Very long timeout '{path}': {value}s (> 10 minutes)")
 
 
-def _check_timeout_values_recursive(
-    config: dict, issues: list, warnings: list, path: str = ""
-) -> None:
+def _check_timeout_values_recursive(config: dict, issues: list, warnings: list, path: str = "") -> None:
     """Recursively check timeout values in config (Issue #315: extracted).
 
     Args:
@@ -121,9 +117,7 @@ class TimeoutConfigMixin:
         base_timeout = self.get_nested(base_path, default)
         return float(base_timeout)
 
-    def get_timeout_group(
-        self, category: str, environment: str = None
-    ) -> Dict[str, float]:
+    def get_timeout_group(self, category: str, environment: str = None) -> Dict[str, float]:
         """
         Get all timeouts for a category as a dictionary.
 

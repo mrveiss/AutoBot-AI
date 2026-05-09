@@ -32,6 +32,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.singleton_factory import lazy_singleton
 from config.async_ops import AsyncOperationsMixin
 from config.file_watcher import FileWatcherMixin
 from config.loader import load_configuration
@@ -42,7 +43,6 @@ from config.sync_ops import SyncOperationsMixin
 from config.timeout_config import TimeoutConfigMixin
 from config.validation import ValidationMixin
 from constants.path_constants import PATH
-from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -103,9 +103,7 @@ class ConfigManager(
 
     def _reload_config(self) -> None:
         """Reload configuration from files."""
-        self._config = load_configuration(
-            self.config_dir, self.base_config_file, self.settings_file
-        )
+        self._config = load_configuration(self.config_dir, self.base_config_file, self.settings_file)
         self._sync_cache_timestamp = time.time()
 
 

@@ -16,9 +16,7 @@ class InstructionParser:
     """Helper class for parsing and extracting instructions from content."""
 
     @classmethod
-    def extract_instructions(
-        cls, results: List[Dict], tool_name: str
-    ) -> Optional[Dict[str, Any]]:
+    def extract_instructions(cls, results: List[Dict], tool_name: str) -> Optional[Dict[str, Any]]:
         """Extract installation and usage instructions from KB results."""
         for result in results:
             content = result.get("content", "")
@@ -48,9 +46,7 @@ class InstructionParser:
         }
 
     @classmethod
-    def parse_content_sections(
-        cls, lines: List[str], instructions: Dict[str, Any]
-    ) -> None:
+    def parse_content_sections(cls, lines: List[str], instructions: Dict[str, Any]) -> None:
         """Parse content lines into instruction sections."""
         current_section = None
 
@@ -80,9 +76,7 @@ class InstructionParser:
         return line.startswith("-") or line.startswith("*")
 
     @classmethod
-    def add_content_to_section(
-        cls, section: str, line: str, instructions: Dict[str, Any]
-    ) -> None:
+    def add_content_to_section(cls, section: str, line: str, instructions: Dict[str, Any]) -> None:
         """Add content line to the appropriate instruction section."""
         # Handle text sections with simple append
         if section in TEXT_SECTIONS:

@@ -9,7 +9,6 @@ Supports TOTP-based 2FA with backup codes.
 
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -17,6 +16,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
 if TYPE_CHECKING:

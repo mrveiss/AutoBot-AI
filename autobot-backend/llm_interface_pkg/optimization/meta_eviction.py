@@ -41,10 +41,7 @@ def _import_torch() -> Any:
 
         return torch
     except (ImportError, RuntimeError) as exc:
-        raise RuntimeError(
-            "PyTorch is required for meta-device eviction. "
-            "Install with: pip install torch"
-        ) from exc
+        raise RuntimeError("PyTorch is required for meta-device eviction. " "Install with: pip install torch") from exc
 
 
 def _import_accelerate() -> Any:
@@ -55,8 +52,7 @@ def _import_accelerate() -> Any:
         return accelerate
     except (ImportError, RuntimeError) as exc:
         raise ImportError(
-            "accelerate is required for per-parameter meta-device eviction. "
-            "Install with: pip install accelerate"
+            "accelerate is required for per-parameter meta-device eviction. " "Install with: pip install accelerate"
         ) from exc
 
 
@@ -220,9 +216,7 @@ def _evict_quantized_layer(layer: Any, layer_repr: str) -> None:
     torch = _import_torch()
     before = _cuda_allocated_safe(torch)
 
-    param_names = [name for name, _ in layer.named_parameters()] + [
-        name for name, _ in layer.named_buffers()
-    ]
+    param_names = [name for name, _ in layer.named_parameters()] + [name for name, _ in layer.named_buffers()]
 
     for name in param_names:
         set_fn(layer, name, device="meta")
@@ -230,8 +224,7 @@ def _evict_quantized_layer(layer: Any, layer_repr: str) -> None:
     after = _cuda_allocated_safe(torch)
     freed = max(0, before - after)
     logger.info(
-        "Evicted quantized layer %s to meta device via per-param path "
-        "(%d tensors, freed ~%d bytes from CUDA)",
+        "Evicted quantized layer %s to meta device via per-param path " "(%d tensors, freed ~%d bytes from CUDA)",
         layer_repr,
         len(param_names),
         freed,
@@ -359,8 +352,7 @@ class MetaDeviceEvictionManager:
         self._stats.total_freed_bytes += freed
 
         logger.info(
-            "MetaDeviceEvictionManager: evicted layer %d (freed ~%d bytes, "
-            "total evicted=%d)",
+            "MetaDeviceEvictionManager: evicted layer %d (freed ~%d bytes, " "total evicted=%d)",
             layer_idx,
             freed,
             self._stats.evicted_count,

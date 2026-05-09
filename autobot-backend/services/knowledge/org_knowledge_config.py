@@ -100,9 +100,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
             return None
         return OrgKnowledgeConfig(**payload)
 
-    async def set(
-        self, org_id: Optional[str], config: OrgKnowledgeConfig
-    ) -> OrgKnowledgeConfig:
+    async def set(self, org_id: Optional[str], config: OrgKnowledgeConfig) -> OrgKnowledgeConfig:
         """Persist ``config`` for ``org_id`` and return what was stored."""
         redis = await self._get_redis()
         if redis is None:
@@ -126,9 +124,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
         deleted = await redis.delete(_key(org_id))
         return bool(deleted)
 
-    async def get_effective(
-        self, org_id: Optional[str] = None
-    ) -> OrgKnowledgeConfig:
+    async def get_effective(self, org_id: Optional[str] = None) -> OrgKnowledgeConfig:
         """Resolve org config, filling missing fields from SSOT defaults.
 
         The returned model always has every field populated (or at least
@@ -144,9 +140,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
         default_provider = getattr(ssot.llm, "llamaindex_embedding_provider", None) or getattr(
             ssot.llm, "provider", "ollama"
         )
-        default_llm_model = getattr(ssot.llm, "default_model", None) or getattr(
-            ssot.llm, "llamaindex_llm_model", ""
-        )
+        default_llm_model = getattr(ssot.llm, "default_model", None) or getattr(ssot.llm, "llamaindex_llm_model", "")
         default_embed_model = getattr(ssot.llm, "embedding_model", "")
 
         if org_cfg is None:

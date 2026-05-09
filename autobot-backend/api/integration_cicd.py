@@ -9,18 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import check_admin_permission
-from integrations.base import IntegrationConfig
-from integrations.cicd_integration import (
-    CircleCIIntegration,
-    GitLabCIIntegration,
-    JenkinsIntegration,
-)
 from api.schemas_code import (
     CICDConnectionTestResponse,
     CICDPipelineLogsResponse,
-    CICDPipelineStatusResponse,
     CICDPipelinesResponse,
+    CICDPipelineStatusResponse,
     CICDPipelineTriggerResponse,
 )
 from api.schemas_workflows import (
@@ -29,7 +22,14 @@ from api.schemas_workflows import (
     CICDProviderInfo,
     PipelineTriggerRequest,
 )
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from integrations.base import IntegrationConfig
+from integrations.cicd_integration import (
+    CircleCIIntegration,
+    GitLabCIIntegration,
+    JenkinsIntegration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,6 @@ router = APIRouter(
     tags=["integrations-cicd"],
     dependencies=[Depends(check_admin_permission)],
 )
-
 
 
 @router.post("/test-connection", response_model=CICDConnectionTestResponse)
@@ -59,9 +58,7 @@ async def test_connection(request: CICDConnectionTestRequest) -> Dict[str, Any]:
         HTTPException: If provider is unknown or test fails
     """
     try:
-        integration = _create_integration(
-            request.provider, request.base_url, request.credentials
-        )
+        integration = _create_integration(request.provider, request.base_url, request.credentials)
         health = await integration.test_connection()
         return {
             "status": health.status.value,
@@ -140,9 +137,7 @@ async def list_pipelines(
         integration = _create_integration(provider, base_url, creds)
         params = {}
         if project_id:
-            params["project_id"] = (
-                int(project_id) if project_id.isdigit() else project_id
-            )
+            params["project_id"] = int(project_id) if project_id.isdigit() else project_id
             params["project_slug"] = project_id
 
         if provider == "jenkins":
@@ -192,9 +187,7 @@ async def get_pipeline_status(
         action = _get_status_action(provider)
         return await integration.execute_action(action, params)
     except Exception:
-        logger.exception(
-            "Failed to get status for %s pipeline %s", provider, pipeline_id
-        )
+        logger.exception("Failed to get status for %s pipeline %s", provider, pipeline_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -229,17 +222,13 @@ async def trigger_pipeline(
         HTTPException: If confirmation missing or operation fails
     """
     if not request.confirm:
-        raise HTTPException(
-            status_code=400, detail="Confirmation required to trigger pipeline"
-        )
+        raise HTTPException(status_code=400, detail="Confirmation required to trigger pipeline")
     try:
         import json
 
         creds = json.loads(credentials)
         integration = _create_integration(provider, base_url, creds)
-        params = _build_trigger_params(
-            provider, pipeline_id, project_id, request.parameters
-        )
+        params = _build_trigger_params(provider, pipeline_id, project_id, request.parameters)
         return await integration.execute_action("trigger_pipeline", params)
     except Exception:
         logger.exception("Failed to trigger %s pipeline %s", provider, pipeline_id)
@@ -295,9 +284,7 @@ async def get_pipeline_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-def _create_integration(
-    provider: CICDProvider, base_url: str, credentials: Dict[str, str]
-):
+def _create_integration(provider: CICDProvider, base_url: str, credentials: Dict[str, str]):
     """Create integration instance.
 
     Helper for _create_integration (Issue #61).
@@ -359,9 +346,7 @@ def _build_status_params(
         return {"job_name": job_name, "build_number": int(pipeline_id)}
     elif provider == "gitlab":
         if not project_id:
-            raise HTTPException(
-                status_code=400, detail="project_id required for GitLab"
-            )
+            raise HTTPException(status_code=400, detail="project_id required for GitLab")
         return {"project_id": int(project_id), "pipeline_id": int(pipeline_id)}
     elif provider == "circleci":
         return {"workflow_id": pipeline_id}
@@ -412,9 +397,7 @@ def _build_trigger_params(
         return {"job_name": pipeline_id, "parameters": parameters}
     elif provider == "gitlab":
         if not project_id:
-            raise HTTPException(
-                status_code=400, detail="project_id required for GitLab"
-            )
+            raise HTTPException(status_code=400, detail="project_id required for GitLab")
         return {"project_id": int(project_id), "ref": pipeline_id}
     elif provider == "circleci":
         return {"project_slug": project_id or pipeline_id, "branch": pipeline_id}

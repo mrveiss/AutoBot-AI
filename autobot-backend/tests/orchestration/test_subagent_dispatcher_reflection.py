@@ -14,8 +14,9 @@ Covers:
 
 import asyncio
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from enhanced_orchestration.subagent_dispatcher import (
     SubagentDispatcher,
@@ -23,10 +24,10 @@ from enhanced_orchestration.subagent_dispatcher import (
     get_subagent_dispatcher,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_llm_response(content: str) -> MagicMock:
     resp = MagicMock()
@@ -41,6 +42,7 @@ def _score_response(score: float, gaps: list) -> MagicMock:
 # ---------------------------------------------------------------------------
 # SubagentTask defaults
 # ---------------------------------------------------------------------------
+
 
 class TestSubagentTaskDefaults:
     def test_reflection_disabled_by_default(self):
@@ -66,6 +68,7 @@ class TestSubagentTaskDefaults:
 # Reflection pass disabled → original result
 # ---------------------------------------------------------------------------
 
+
 class TestReflectionDisabled:
     @pytest.mark.asyncio
     async def test_disabled_skips_reflection(self):
@@ -87,6 +90,7 @@ class TestReflectionDisabled:
 # ---------------------------------------------------------------------------
 # Reflection: high score → original returned
 # ---------------------------------------------------------------------------
+
 
 class TestReflectionHighScore:
     @pytest.mark.asyncio
@@ -119,6 +123,7 @@ class TestReflectionHighScore:
 # ---------------------------------------------------------------------------
 # Reflection: low score → revised result returned
 # ---------------------------------------------------------------------------
+
 
 class TestReflectionLowScore:
     @pytest.mark.asyncio
@@ -184,6 +189,7 @@ class TestReflectionLowScore:
 # Reflection: LLM unavailable → graceful degradation
 # ---------------------------------------------------------------------------
 
+
 class TestReflectionLLMUnavailable:
     @pytest.mark.asyncio
     async def test_llm_import_error_returns_original(self):
@@ -239,6 +245,7 @@ class TestReflectionLLMUnavailable:
 # No regression: existing parallel dispatch flow
 # ---------------------------------------------------------------------------
 
+
 class TestParallelDispatchNoRegression:
     @pytest.mark.asyncio
     async def test_spawn_parallel_tasks_no_reflection(self):
@@ -251,6 +258,7 @@ class TestParallelDispatchNoRegression:
                 await asyncio.sleep(0)
                 call_order.append(val)
                 return val
+
             return func
 
         tasks = [
@@ -316,9 +324,11 @@ class TestParallelDispatchNoRegression:
 # get_subagent_orchestrator singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetSubagentDispatcher:
     def test_returns_singleton(self):
         import enhanced_orchestration.subagent_dispatcher as mod
+
         mod._orchestrator_instance = None  # reset
         a = get_subagent_dispatcher()
         b = get_subagent_dispatcher()
@@ -326,6 +336,7 @@ class TestGetSubagentDispatcher:
 
     def test_custom_max_parallel(self):
         import enhanced_orchestration.subagent_dispatcher as mod
+
         mod._orchestrator_instance = None
         orch = get_subagent_dispatcher(max_parallel=5)
         assert orch.max_parallel == 5

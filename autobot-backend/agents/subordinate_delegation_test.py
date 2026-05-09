@@ -148,9 +148,7 @@ class TestHierarchicalAgent:
         await agent.delegate(task="Record me", reason="History test")
 
         assert len(agent.history) >= 1
-        delegation_entry = next(
-            (h for h in agent.history if h["action"] == "delegate"), None
-        )
+        delegation_entry = next((h for h in agent.history if h["action"] == "delegate"), None)
         assert delegation_entry is not None
         assert delegation_entry["task"] == "Record me"
         assert delegation_entry["reason"] == "History test"
@@ -312,10 +310,7 @@ class TestDelegateTool:
         )
 
         assert response.success is False
-        assert (
-            "Maximum delegation depth" in response.message
-            or "depth" in response.message.lower()
-        )
+        assert "Maximum delegation depth" in response.message or "depth" in response.message.lower()
 
 
 class TestDelegationChain:
@@ -334,9 +329,7 @@ class TestDelegationChain:
             else:
                 return f"Leaf executed: {task}"
 
-        root = HierarchicalAgent(
-            context=root_ctx, task_callback=callback_with_subdelegation
-        )
+        root = HierarchicalAgent(context=root_ctx, task_callback=callback_with_subdelegation)
         result = await root.delegate(task="Top task", reason="Chain test")
 
         assert result.success is True
@@ -352,9 +345,7 @@ class TestDelegationChain:
         async def recursive_delegate(task, agent):
             depth_reached.append(agent.context.level)
             if agent.context.can_delegate():
-                result = await agent.delegate(
-                    task=f"Level {agent.context.level + 1}", reason="Depth test"
-                )
+                result = await agent.delegate(task=f"Level {agent.context.level + 1}", reason="Depth test")
                 return result.result
             else:
                 return f"Max at level {agent.context.level}"

@@ -182,9 +182,7 @@ class CodeChunker:
         if chunk:
             chunks.append(chunk)
 
-    def _collect_definition_block(
-        self, lines: List[str], start_idx: int, base_indent: int
-    ) -> tuple[List[str], int]:
+    def _collect_definition_block(self, lines: List[str], start_idx: int, base_indent: int) -> tuple[List[str], int]:
         """
         Collect all lines belonging to a function/class definition.
 
@@ -202,11 +200,7 @@ class CodeChunker:
         i = start_idx
         while i < len(lines):
             next_line = lines[i]
-            next_indent = (
-                len(next_line) - len(next_line.lstrip())
-                if next_line.strip()
-                else base_indent + 1
-            )
+            next_indent = len(next_line) - len(next_line.lstrip()) if next_line.strip() else base_indent + 1
             # Continue if still inside the block or blank line
             if not next_line.strip() or next_indent > base_indent:
                 collected.append(next_line)
@@ -232,22 +226,16 @@ class CodeChunker:
         """
         # Save previous chunk if it exists
         if current_chunk:
-            self._append_chunk_if_valid(
-                chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
-            )
+            self._append_chunk_if_valid(chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i)
 
         # Determine chunk type and collect definition block
         chunk_type = "function" if "def " in stripped_line else "class"
         current_indent = len(line) - len(line.lstrip())
-        block_lines, new_i = self._collect_definition_block(
-            lines, i + 1, current_indent
-        )
+        block_lines, new_i = self._collect_definition_block(lines, i + 1, current_indent)
         full_block = [line] + block_lines
 
         # Save the function/class chunk
-        self._append_chunk_if_valid(
-            chunks, full_block, chunk_type, new_i - len(full_block), new_i - 1
-        )
+        self._append_chunk_if_valid(chunks, full_block, chunk_type, new_i - len(full_block), new_i - 1)
         return new_i, [], "general"
 
     def chunk_python_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
@@ -302,9 +290,7 @@ class CodeChunker:
 
         return chunks
 
-    def _add_vue_script_chunks(
-        self, chunks: List[Dict[str, Any]], script_content: str
-    ) -> None:
+    def _add_vue_script_chunks(self, chunks: List[Dict[str, Any]], script_content: str) -> None:
         """
         Add script section chunks to the Vue file chunks list.
 
@@ -364,11 +350,7 @@ class CodeChunker:
                     }
                 )
 
-        return (
-            chunks
-            if chunks
-            else [{"content": content, "type": "vue_file", "section": "complete"}]
-        )
+        return chunks if chunks else [{"content": content, "type": "vue_file", "section": "complete"}]
 
     def chunk_javascript_content(self, content: str) -> List[Dict[str, Any]]:
         """Chunk JavaScript content by functions and logical blocks"""
@@ -449,24 +431,18 @@ class CodeChunker:
 
             if heading_match:
                 if current_chunk:
-                    self._append_md_section_chunk(
-                        chunks, current_chunk, current_heading, current_level
-                    )
+                    self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
                 current_level = len(heading_match.group(1))
                 current_heading = heading_match.group(2)
                 current_chunk = [line]
             else:
                 current_chunk.append(line)
                 if len("\n".join(current_chunk)) > self.max_chunk_size:
-                    self._append_md_section_chunk(
-                        chunks, current_chunk, current_heading, current_level
-                    )
+                    self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
                     current_chunk = []
 
         if current_chunk:
-            self._append_md_section_chunk(
-                chunks, current_chunk, current_heading, current_level
-            )
+            self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
 
         return chunks if chunks else [{"content": content, "type": "document"}]
 
@@ -709,9 +685,7 @@ class CodebaseIndexingService:
             logger.warning("Error reading file %s: %s", file_path, e)
             return None
 
-    def _chunk_file_content(
-        self, content: str, file_info: FileInfo
-    ) -> List[Dict[str, Any]]:
+    def _chunk_file_content(self, content: str, file_info: FileInfo) -> List[Dict[str, Any]]:
         """Chunk file content based on file type"""
         if file_info.language == "python":
             return self.chunker.chunk_python_file(content, str(file_info.path))
@@ -773,14 +747,10 @@ class CodebaseIndexingService:
         if result and result.get("status") == "success":
             logger.debug("Stored chunk %s/%s for %s", index + 1, total, relative_path)
             return True
-        logger.warning(
-            "Failed to store chunk %s for %s: %s", index + 1, relative_path, result
-        )
+        logger.warning("Failed to store chunk %s for %s: %s", index + 1, relative_path, result)
         return False
 
-    async def _store_chunks(
-        self, chunks: List[Dict[str, Any]], file_info: FileInfo, knowledge_base
-    ) -> int:
+    async def _store_chunks(self, chunks: List[Dict[str, Any]], file_info: FileInfo, knowledge_base) -> int:
         """Store file chunks in the knowledge base."""
         stored_count = 0
         total = len(chunks)
@@ -788,9 +758,7 @@ class CodebaseIndexingService:
         for i, chunk in enumerate(chunks):
             try:
                 metadata = self._build_chunk_metadata(file_info, chunk, i, total)
-                if await self._store_single_chunk(
-                    chunk, metadata, knowledge_base, i, total, file_info.relative_path
-                ):
+                if await self._store_single_chunk(chunk, metadata, knowledge_base, i, total, file_info.relative_path):
                     stored_count += 1
             except Exception as e:
                 logger.error(
@@ -799,9 +767,7 @@ class CodebaseIndexingService:
                     file_info.relative_path,
                     e,
                 )
-                self.progress.errors.append(
-                    f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}"
-                )
+                self.progress.errors.append(f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}")
 
         return stored_count
 
@@ -817,9 +783,7 @@ class CodebaseIndexingService:
             logger.info("Indexed %s: %s chunks", file_info.relative_path, stored_count)
         else:
             self.progress.failed_files += 1
-            self.progress.errors.append(
-                f"No chunks stored for: {file_info.relative_path}"
-            )
+            self.progress.errors.append(f"No chunks stored for: {file_info.relative_path}")
         self.progress.processed_files += 1
         return stored_count > 0
 
@@ -832,9 +796,7 @@ class CodebaseIndexingService:
             content = await self._read_file_content(file_info.path)
             if content is None:
                 self.progress.failed_files += 1
-                self.progress.errors.append(
-                    f"Could not read file: {file_info.relative_path}"
-                )
+                self.progress.errors.append(f"Could not read file: {file_info.relative_path}")
                 return False
 
             if not content.strip():
@@ -855,9 +817,7 @@ class CodebaseIndexingService:
             logger.error("Error indexing file %s: %s", file_info.relative_path, e)
             self.progress.failed_files += 1
             self.progress.processed_files += 1
-            self.progress.errors.append(
-                f"Indexing error in {file_info.relative_path}: {str(e)}"
-            )
+            self.progress.errors.append(f"Indexing error in {file_info.relative_path}: {str(e)}")
             return False
 
     def _group_files_by_category(self, files: List) -> Dict[str, List]:
@@ -870,16 +830,12 @@ class CodebaseIndexingService:
             files_by_category[category].append(file_info)
         return files_by_category
 
-    async def _process_category_batches(
-        self, category_files: List, batch_size: int, knowledge_base
-    ) -> None:
+    async def _process_category_batches(self, category_files: List, batch_size: int, knowledge_base) -> None:
         """Process a category's files in batches (Issue #665: extracted helper)."""
         for i in range(0, len(category_files), batch_size):
             batch = category_files[i : i + batch_size]
 
-            tasks = [
-                self.index_single_file(file_info, knowledge_base) for file_info in batch
-            ]
+            tasks = [self.index_single_file(file_info, knowledge_base) for file_info in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             successful_in_batch = sum(1 for r in results if r is True)
@@ -907,9 +863,7 @@ class CodebaseIndexingService:
             for error in self.progress.errors[:10]:
                 logger.warning("  - %s", error)
 
-    async def index_codebase(
-        self, batch_size: int = 10, max_files: Optional[int] = None
-    ) -> IndexingProgress:
+    async def index_codebase(self, batch_size: int = 10, max_files: Optional[int] = None) -> IndexingProgress:
         """Index the entire codebase with progress tracking"""
         logger.info("Starting codebase indexing for: %s", self.root_path)
 
@@ -933,12 +887,8 @@ class CodebaseIndexingService:
             files_by_category = self._group_files_by_category(files)
 
             for category, category_files in files_by_category.items():
-                logger.info(
-                    "Processing %s files in category: %s", len(category_files), category
-                )
-                await self._process_category_batches(
-                    category_files, batch_size, knowledge_base
-                )
+                logger.info("Processing %s files in category: %s", len(category_files), category)
+                await self._process_category_batches(category_files, batch_size, knowledge_base)
 
             self.progress.end_time = datetime.now(tz=timezone.utc)
             self._log_indexing_completion()
@@ -965,9 +915,7 @@ class CodebaseIndexingService:
         """
         for i in range(0, len(category_files), batch_size):
             batch = category_files[i : i + batch_size]
-            tasks = [
-                self.index_single_file(file_info, knowledge_base) for file_info in batch
-            ]
+            tasks = [self.index_single_file(file_info, knowledge_base) for file_info in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             successful_in_batch = sum(1 for r in results if r is True)
             logger.info(
@@ -979,9 +927,7 @@ class CodebaseIndexingService:
             )
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-    def _handle_reindex_error(
-        self, category: str, error: Exception
-    ) -> IndexingProgress:
+    def _handle_reindex_error(self, category: str, error: Exception) -> IndexingProgress:
         """
         Handle error during category reindexing.
 
@@ -992,9 +938,7 @@ class CodebaseIndexingService:
         self.progress.errors.append(f"Category reindexing failed: {str(error)}")
         return self.progress
 
-    async def reindex_category(
-        self, category: str, batch_size: int = 10
-    ) -> IndexingProgress:
+    async def reindex_category(self, category: str, batch_size: int = 10) -> IndexingProgress:
         """Reindex files in a specific category."""
         logger.info("Starting category reindexing for: %s", category)
         self.progress = IndexingProgress()
@@ -1014,9 +958,7 @@ class CodebaseIndexingService:
                 logger.warning("No files found for category: %s", category)
                 return self.progress
 
-            await self._process_category_reindex_batches(
-                category, category_files, batch_size, knowledge_base
-            )
+            await self._process_category_reindex_batches(category, category_files, batch_size, knowledge_base)
 
             self.progress.end_time = datetime.now(tz=timezone.utc)
             logger.info(
@@ -1049,9 +991,7 @@ def get_indexing_service() -> CodebaseIndexingService:
 
 
 # Convenience functions
-async def index_autobot_codebase(
-    max_files: Optional[int] = None, batch_size: int = 10
-) -> IndexingProgress:
+async def index_autobot_codebase(max_files: Optional[int] = None, batch_size: int = 10) -> IndexingProgress:
     """Index the AutoBot codebase"""
     service = get_indexing_service()
     return await service.index_codebase(batch_size=batch_size, max_files=max_files)

@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from constants.ttl_constants import TTL_30_DAYS
 from autobot_shared.singleton_factory import lazy_singleton
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,7 @@ class RetrievalLearner:
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis = await get_redis_client(
-                async_client=True, database="analytics"
-            )
+            self._redis = await get_redis_client(async_client=True, database="analytics")
         return self._redis
 
     # ------------------------------------------------------------------
@@ -160,9 +158,7 @@ class RetrievalLearner:
             if stored:
                 self._cursors.update(
                     {
-                        (k.decode() if isinstance(k, bytes) else k): (
-                            v.decode() if isinstance(v, bytes) else v
-                        )
+                        (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
                         for k, v in stored.items()
                     }
                 )
@@ -180,9 +176,7 @@ class RetrievalLearner:
             redis = await self._get_redis()
             await redis.hset(_CURSOR_HASH_KEY, stream_key, cursor)
         except Exception as exc:
-            logger.warning(
-                "RetrievalLearner: could not save cursor for %s: %s", stream_key, exc
-            )
+            logger.warning("RetrievalLearner: could not save cursor for %s: %s", stream_key, exc)
 
     # ------------------------------------------------------------------
     # Stream consumption
@@ -227,13 +221,9 @@ class RetrievalLearner:
 
         while True:
             try:
-                entries = await redis.xrange(
-                    stream_key, min=resume_id, count=_XRANGE_BATCH
-                )
+                entries = await redis.xrange(stream_key, min=resume_id, count=_XRANGE_BATCH)
             except Exception as exc:
-                logger.warning(
-                    "RetrievalLearner: xrange failed for %s: %s", stream_key, exc
-                )
+                logger.warning("RetrievalLearner: xrange failed for %s: %s", stream_key, exc)
                 break
 
             if not entries:
@@ -241,9 +231,7 @@ class RetrievalLearner:
 
             for entry_id, fields in entries:
                 await self._process_feedback_event(fields, user_id=uid)
-                ts, seq = (
-                    entry_id.decode() if isinstance(entry_id, bytes) else entry_id
-                ).split("-")
+                ts, seq = (entry_id.decode() if isinstance(entry_id, bytes) else entry_id).split("-")
                 resume_id = f"{ts}-{int(seq) + 1}"
                 processed += 1
 
@@ -267,9 +255,7 @@ class RetrievalLearner:
     # Event processing & pattern distillation
     # ------------------------------------------------------------------
 
-    async def _process_feedback_event(
-        self, fields: Dict, user_id: str = GLOBAL_USER
-    ) -> None:
+    async def _process_feedback_event(self, fields: Dict, user_id: str = GLOBAL_USER) -> None:
         """Score a single feedback event and distil a pattern if successful.
 
         Issue #3240: user_id scopes the distilled pattern to the originating user.
@@ -364,9 +350,7 @@ class RetrievalLearner:
 
             await redis.hset(redis_key, mapping=pattern.to_redis_mapping())
             await redis.expire(redis_key, _PATTERN_TTL_SECONDS)
-            logger.debug(
-                "RetrievalLearner: upserted pattern %s (%s)", pattern_hash, query_type
-            )
+            logger.debug("RetrievalLearner: upserted pattern %s (%s)", pattern_hash, query_type)
 
         except Exception as exc:
             logger.warning("RetrievalLearner: failed to distil pattern: %s", exc)
@@ -569,19 +553,13 @@ class RetrievalLearner:
                     continue
                 if pat_a.query_type != pat_b.query_type:
                     continue
-                sim = _jaccard_similarity(
-                    pat_a.chunk_categories, pat_b.chunk_categories
-                )
+                sim = _jaccard_similarity(pat_a.chunk_categories, pat_b.chunk_categories)
                 if sim >= _DEDUP_SIMILARITY_THRESHOLD:
                     # Keep the one with more usage evidence.
-                    to_delete = (
-                        pat_b if pat_a.usage_count >= pat_b.usage_count else pat_a
-                    )
+                    to_delete = pat_b if pat_a.usage_count >= pat_b.usage_count else pat_a
                     deleted_hashes.add(to_delete.pattern_hash)
                     try:
-                        await redis.delete(
-                            f"{_PATTERN_KEY_PREFIX}{to_delete.pattern_hash}"
-                        )
+                        await redis.delete(f"{_PATTERN_KEY_PREFIX}{to_delete.pattern_hash}")
                         removed += 1
                         logger.debug(
                             "RetrievalLearner: dedup removed pattern %s",
@@ -652,9 +630,7 @@ def _ucb1_score(
         return float("inf")
     if total_queries <= 0:
         return success_rate
-    return success_rate + exploration_constant * math.sqrt(
-        math.log(total_queries) / usage_count
-    )
+    return success_rate + exploration_constant * math.sqrt(math.log(total_queries) / usage_count)
 
 
 def _compute_pattern_hash(query_type: str, categories: List[str]) -> str:

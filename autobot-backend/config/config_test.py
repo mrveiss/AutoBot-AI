@@ -97,9 +97,7 @@ def run_with_timeout(func, timeout=30, *args, **kwargs):
     thread.join(timeout)
 
     if thread.is_alive():
-        raise TimeoutError(
-            f"Function {func.__name__} timed out after {timeout} seconds"
-        )
+        raise TimeoutError(f"Function {func.__name__} timed out after {timeout} seconds")
 
     if exception[0]:
         raise exception[0]

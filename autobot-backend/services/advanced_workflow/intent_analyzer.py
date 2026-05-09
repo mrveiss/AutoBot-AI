@@ -56,9 +56,7 @@ complexity, and requirements:
             7. Success criteria
             """
 
-            response = await self.llm_interface.chat(
-                messages=[{"role": "user", "content": analysis_prompt}]
-            )
+            response = await self.llm_interface.chat(messages=[{"role": "user", "content": analysis_prompt}])
 
             if response and response.content:
                 try:

@@ -175,9 +175,7 @@ class DocGenerator:
             self._analyzed_files.add(file_path)
         return result
 
-    def analyze_package(
-        self, package_path: str, depth: int = 0
-    ) -> Optional[PackageDoc]:
+    def analyze_package(self, package_path: str, depth: int = 0) -> Optional[PackageDoc]:
         """
         Analyze a Python package and all its modules.
 
@@ -219,9 +217,7 @@ class DocGenerator:
         Returns:
             GeneratedDoc with the generated content
         """
-        return self._markdown_generator.generate_api_docs(
-            modules, title, format, include_toc, include_diagrams
-        )
+        return self._markdown_generator.generate_api_docs(modules, title, format, include_toc, include_diagrams)
 
     def generate_module_overview(
         self,

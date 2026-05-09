@@ -19,21 +19,15 @@ from .base import ThreatAnalyzer
 class BruteForceAnalyzer(ThreatAnalyzer):
     """Analyzes events for brute force attacks"""
 
-    async def analyze(
-        self, event: SecurityEvent, context: AnalysisContext
-    ) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
         """Detect brute force attacks"""
         if not event.is_authentication_failure():
             return None
 
-        window_minutes = context.config.get("thresholds", {}).get(
-            "brute_force_window_minutes", 15
-        )
+        window_minutes = context.config.get("thresholds", {}).get("brute_force_window_minutes", 15)
         threshold = context.config.get("thresholds", {}).get("brute_force_attempts", 5)
 
-        recent_failures = context.count_recent_failures(
-            event.user_id, event.source_ip, window_minutes
-        )
+        recent_failures = context.count_recent_failures(event.user_id, event.source_ip, window_minutes)
 
         if recent_failures >= threshold:
             confidence = min(1.0, recent_failures / threshold)
@@ -52,11 +46,7 @@ class BruteForceAnalyzer(ThreatAnalyzer):
                 details={
                     "failed_attempts": recent_failures,
                     "time_window_minutes": window_minutes,
-                    "attack_pattern": (
-                        "credential_stuffing"
-                        if event.user_id != "unknown"
-                        else "dictionary_attack"
-                    ),
+                    "attack_pattern": ("credential_stuffing" if event.user_id != "unknown" else "dictionary_attack"),
                 },
                 mitigation_actions=["block_ip", "lock_account", "alert_security_team"],
             )

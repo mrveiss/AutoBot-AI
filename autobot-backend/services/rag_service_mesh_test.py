@@ -4,9 +4,9 @@
 # Author: mrveiss
 """Unit tests for Neural Mesh RAG feature flags and RAGService mesh path (#2059, #4724)."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # =============================================================================
 # Helpers
@@ -64,6 +64,7 @@ def _make_mesh_result(chunk_ids):
 class TestMeshFeatureFlagsDefaultValues:
     def test_defaults(self):
         from services.rag_config import RAGConfig
+
         cfg = RAGConfig()
         assert cfg.mesh_retriever_enabled is False
         assert cfg.mesh_seed_edges is True
@@ -71,12 +72,14 @@ class TestMeshFeatureFlagsDefaultValues:
 
     def test_to_dict_includes_mesh_retriever_enabled(self):
         from services.rag_config import RAGConfig
+
         d = RAGConfig().to_dict()
         assert "mesh_retriever_enabled" in d
         assert d["mesh_retriever_enabled"] is False
 
     def test_from_dict_round_trip(self):
         from services.rag_config import RAGConfig
+
         original = RAGConfig()
         original.mesh_edge_learner = True
         restored = RAGConfig.from_dict(original.to_dict())
@@ -96,14 +99,12 @@ class TestMeshFlagDisabled:
 
         svc = _make_service(mesh_retriever_enabled=False)
 
-        with patch("services.rag_service.RAGService._check_cache_tiers",
-                   new_callable=AsyncMock, return_value=None), \
-             patch("services.rag_service.RAGService.initialize",
-                   new_callable=AsyncMock, return_value=True), \
-             patch("services.rag_service.RAGService._emit_ranked_feedback",
-                   new_callable=AsyncMock), \
-             patch("services.rag_service.RAGService._run_mesh_retriever",
-                   new_callable=AsyncMock) as mock_mesh:
+        with (
+            patch("services.rag_service.RAGService._check_cache_tiers", new_callable=AsyncMock, return_value=None),
+            patch("services.rag_service.RAGService.initialize", new_callable=AsyncMock, return_value=True),
+            patch("services.rag_service.RAGService._emit_ranked_feedback", new_callable=AsyncMock),
+            patch("services.rag_service.RAGService._run_mesh_retriever", new_callable=AsyncMock) as mock_mesh,
+        ):
             await svc.advanced_search("test query")
             mock_mesh.assert_not_called()
             svc.optimizer.advanced_search.assert_called_once()
@@ -117,8 +118,9 @@ class TestMeshFlagDisabled:
 class TestMeshFlagEnabled:
     @pytest.mark.asyncio
     async def test_mesh_path_when_flag_on_and_retriever_injected(self):
-        from advanced_rag_optimizer import RAGMetrics
         from unittest.mock import patch
+
+        from advanced_rag_optimizer import RAGMetrics
 
         svc = _make_service(mesh_retriever_enabled=True)
         svc._mesh_retriever = MagicMock()  # non-None
@@ -126,12 +128,15 @@ class TestMeshFlagEnabled:
         expected = _make_mesh_result(["c1", "c2"]).chunks
         metrics = RAGMetrics()
 
-        with patch("services.rag_service.RAGService._check_cache_tiers",
-                   new_callable=AsyncMock, return_value=None), \
-             patch("services.rag_service.RAGService._emit_ranked_feedback",
-                   new_callable=AsyncMock), \
-             patch("services.rag_service.RAGService._run_mesh_retriever",
-                   new_callable=AsyncMock, return_value=(expected, metrics)) as mock_mesh:
+        with (
+            patch("services.rag_service.RAGService._check_cache_tiers", new_callable=AsyncMock, return_value=None),
+            patch("services.rag_service.RAGService._emit_ranked_feedback", new_callable=AsyncMock),
+            patch(
+                "services.rag_service.RAGService._run_mesh_retriever",
+                new_callable=AsyncMock,
+                return_value=(expected, metrics),
+            ) as mock_mesh,
+        ):
             results, _ = await svc.advanced_search("test query")
             mock_mesh.assert_called_once_with("test query", 5)
             assert results is expected
@@ -150,14 +155,12 @@ class TestMeshFlagEnabledRetrieverNone:
         svc = _make_service(mesh_retriever_enabled=True)
         svc._mesh_retriever = None  # not injected yet
 
-        with patch("services.rag_service.RAGService._check_cache_tiers",
-                   new_callable=AsyncMock, return_value=None), \
-             patch("services.rag_service.RAGService.initialize",
-                   new_callable=AsyncMock, return_value=True), \
-             patch("services.rag_service.RAGService._emit_ranked_feedback",
-                   new_callable=AsyncMock), \
-             patch("services.rag_service.RAGService._run_mesh_retriever",
-                   new_callable=AsyncMock) as mock_mesh:
+        with (
+            patch("services.rag_service.RAGService._check_cache_tiers", new_callable=AsyncMock, return_value=None),
+            patch("services.rag_service.RAGService.initialize", new_callable=AsyncMock, return_value=True),
+            patch("services.rag_service.RAGService._emit_ranked_feedback", new_callable=AsyncMock),
+            patch("services.rag_service.RAGService._run_mesh_retriever", new_callable=AsyncMock) as mock_mesh,
+        ):
             await svc.advanced_search("test query")
             mock_mesh.assert_not_called()
             svc.optimizer.advanced_search.assert_called_once()
@@ -173,11 +176,13 @@ class TestSharedMeshComponentsPerInstanceBuild:
 
     def setup_method(self):
         import services.rag_service as _mod
+
         self._orig = _mod._shared_mesh_components
         _mod._shared_mesh_components = None
 
     def teardown_method(self):
         import services.rag_service as _mod
+
         _mod._shared_mesh_components = self._orig
 
     def _make_components(self):
@@ -193,9 +198,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_builds_per_instance_retriever_on_initialize(self):
         """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -209,8 +215,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
         svc.kb_adapter.kb = MagicMock()
 
         built_retriever = MagicMock(name="built_NeuralMeshRetriever")
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
-             patch("services.rag_service.NeuralMeshRetriever", return_value=built_retriever) as MockNMR:
+        with (
+            patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt,
+            patch("services.rag_service.NeuralMeshRetriever", return_value=built_retriever) as MockNMR,
+        ):
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt
@@ -229,9 +237,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_two_instances_get_independent_retrievers(self):
         """Two RAGService instances each get their own NeuralMeshRetriever."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -257,8 +266,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
             retrievers.append(r)
             return r
 
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
-             patch("services.rag_service.NeuralMeshRetriever", side_effect=_fake_nmr):
+        with (
+            patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt,
+            patch("services.rag_service.NeuralMeshRetriever", side_effect=_fake_nmr),
+        ):
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt
@@ -273,9 +284,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_already_set_retriever_not_overwritten(self):
         """An existing _mesh_retriever is NOT replaced even when components are registered."""
-        from services.rag_service import RAGService, register_shared_mesh_components
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService, register_shared_mesh_components
 
         register_shared_mesh_components(self._make_components())
 
@@ -291,8 +303,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
         svc.kb_adapter = MagicMock()
         svc.kb_adapter.kb = MagicMock()
 
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
-             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
+        with (
+            patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt,
+            patch("services.rag_service.NeuralMeshRetriever") as MockNMR,
+        ):
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt
@@ -305,9 +319,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
     @pytest.mark.asyncio
     async def test_no_components_no_retriever_built(self):
         """If components are not registered, no retriever is built."""
-        from services.rag_service import RAGService
+        from unittest.mock import AsyncMock, patch
+
         from services.rag_config import RAGConfig
-        from unittest.mock import patch, AsyncMock
+        from services.rag_service import RAGService
 
         # _shared_mesh_components is None (cleared in setup_method)
 
@@ -320,8 +335,10 @@ class TestSharedMeshComponentsPerInstanceBuild:
         svc.kb_adapter = MagicMock()
         svc.kb_adapter.kb = MagicMock()
 
-        with patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt, \
-             patch("services.rag_service.NeuralMeshRetriever") as MockNMR:
+        with (
+            patch("services.rag_service.AdvancedRAGOptimizer") as MockOpt,
+            patch("services.rag_service.NeuralMeshRetriever") as MockNMR,
+        ):
             mock_opt = MagicMock()
             mock_opt.initialize = AsyncMock(return_value=True)
             MockOpt.return_value = mock_opt

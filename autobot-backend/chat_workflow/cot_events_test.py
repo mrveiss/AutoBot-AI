@@ -345,9 +345,7 @@ class TestCausalChainInPayloads:
             emit_step_start(step_name="test", causal_chain=chain)
             emit_step_complete(step_name="test", start_time=1000.0, causal_chain=chain)
             emit_tool_call(tool_name="test", arguments={}, causal_chain=chain)
-            emit_tool_result(
-                tool_name="test", result="ok", start_time=1000.0, causal_chain=chain
-            )
+            emit_tool_result(tool_name="test", result="ok", start_time=1000.0, causal_chain=chain)
             emit_llm_chunk(chunk="text", causal_chain=chain)
             emit_plan(steps=["step"], causal_chain=chain)
 

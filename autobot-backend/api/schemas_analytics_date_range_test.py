@@ -20,7 +20,6 @@ if str(_BACKEND_ROOT) not in sys.path:
 
 from api.schemas_analytics import DateRangeParams  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Direct-instantiation contract — needed for unit tests / non-HTTP callers
 # ---------------------------------------------------------------------------

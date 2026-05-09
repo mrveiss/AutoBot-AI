@@ -53,9 +53,7 @@ _chromadb_stub = _make_stub("utils.chromadb_client")
 # ---------------------------------------------------------------------------
 
 _ANALYZER_PATH = Path(__file__).parent / "analyzer_service.py"
-_spec = importlib.util.spec_from_file_location(
-    "services.knowledge.analyzer_service", str(_ANALYZER_PATH)
-)
+_spec = importlib.util.spec_from_file_location("services.knowledge.analyzer_service", str(_ANALYZER_PATH))
 assert _spec and _spec.loader, "Could not load analyzer_service spec"
 _analyzer_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.analyzer_service"] = _analyzer_mod
@@ -66,7 +64,6 @@ from services.knowledge.analyzer_service import (  # noqa: E402
     Lesson,
     get_analyzer_service,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,9 +216,7 @@ async def test_analyze_rag_session_higher_score_with_feedback():
     svc = AnalyzerService(llm)
     result = MagicMock()
     result.content = "some content"
-    lessons = await svc.analyze_rag_session(
-        query="q", results=[result], user_feedback="Very helpful!"
-    )
+    lessons = await svc.analyze_rag_session(query="q", results=[result], user_feedback="Very helpful!")
     assert len(lessons) == 1
     # score_delta should be 0.5 when user_feedback is provided
     assert lessons[0].score_delta == pytest.approx(0.5)
@@ -311,9 +306,7 @@ async def test_get_lessons_context_chromadb_error_returns_empty():
     llm = _make_llm()
     svc = AnalyzerService(llm)
     # Make chromadb client raise
-    _chromadb_stub.get_async_chromadb_client = AsyncMock(
-        side_effect=RuntimeError("ChromaDB unavailable")
-    )
+    _chromadb_stub.get_async_chromadb_client = AsyncMock(side_effect=RuntimeError("ChromaDB unavailable"))
     ctx = await svc.get_lessons_context("test query")
     assert ctx == ""
 

@@ -53,7 +53,8 @@ class AgentRouter:
             return agent
         logger.warning(
             "Agent '%s' not found. Available: %s",
-            agent_type, self._agent_client_registry.list_agents(),
+            agent_type,
+            self._agent_client_registry.list_agents(),
         )
         return None
 
@@ -61,8 +62,6 @@ class AgentRouter:
         coverage: Dict[str, float] = {}
         n_agents = max(len(self.agent_capabilities), 1)
         for capability in AgentCapability:
-            agents_with_cap = sum(
-                1 for caps in self.agent_capabilities.values() if capability in caps
-            )
+            agents_with_cap = sum(1 for caps in self.agent_capabilities.values() if capability in caps)
             coverage[capability.value] = agents_with_cap / n_agents
         return coverage

@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.session_adaptive_reranker import SessionAdaptiveReranker, get_session_adaptive_reranker
 
-
 _DEFAULT_SEM = 0.75
 _DEFAULT_KW = 0.25
 
@@ -119,9 +118,7 @@ class TestSessionAdaptiveRerankerBasics(unittest.TestCase):
 class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
     """RAGService session adaptive reranking integration."""
 
-    def _make_search_result(
-        self, hybrid_score: float = 0.8, semantic_score: float = 0.8, keyword_score: float = 0.2
-    ):
+    def _make_search_result(self, hybrid_score: float = 0.8, semantic_score: float = 0.8, keyword_score: float = 0.2):
         from advanced_rag_optimizer import SearchResult
 
         return SearchResult(
@@ -220,9 +217,7 @@ class TestRAGServiceSessionAdaptation(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(applied_sem_values[0], config.hybrid_weight_semantic - 0.01)
 
         # After call, optimizer weights should be restored to defaults.
-        self.assertAlmostEqual(
-            mock_optimizer.hybrid_weight_semantic, config.hybrid_weight_semantic
-        )
+        self.assertAlmostEqual(mock_optimizer.hybrid_weight_semantic, config.hybrid_weight_semantic)
 
 
 if __name__ == "__main__":

@@ -185,11 +185,7 @@ class NamingDetector:
         for child in ast.walk(node):
             if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
                 name = child.id
-                if (
-                    len(name) == 1
-                    and name not in ACCEPTABLE_SINGLE_LETTER_VARS
-                    and name not in problematic_vars
-                ):
+                if len(name) == 1 and name not in ACCEPTABLE_SINGLE_LETTER_VARS and name not in problematic_vars:
                     problematic_vars.append(name)
 
         if problematic_vars:
@@ -201,8 +197,7 @@ class NamingDetector:
                     line_number=node.lineno,
                     entity_name=node.name,
                     description=(
-                        f"Function uses non-descriptive single-letter variables: "
-                        f"{', '.join(problematic_vars)}"
+                        f"Function uses non-descriptive single-letter variables: " f"{', '.join(problematic_vars)}"
                     ),
                     suggestion="Use descriptive variable names for better readability",
                     metrics={"variables": problematic_vars},
@@ -234,9 +229,7 @@ class NamingDetector:
         number_occurrences: Dict[float, List[int]] = {}
 
         for child in ast.walk(node):
-            if isinstance(child, ast.Constant) and isinstance(
-                child.value, (int, float)
-            ):
+            if isinstance(child, ast.Constant) and isinstance(child.value, (int, float)):
                 value = child.value
                 if value not in ALLOWED_MAGIC_NUMBERS:
                     if value not in number_occurrences:
@@ -301,10 +294,7 @@ class NamingDetector:
                                 f"Complex conditional with {condition_count} "
                                 f"conditions (threshold: {self.complex_conditional_threshold})"
                             ),
-                            suggestion=(
-                                "Extract conditions to well-named boolean variables "
-                                "or use early returns"
-                            ),
+                            suggestion=("Extract conditions to well-named boolean variables " "or use early returns"),
                             metrics={
                                 "condition_count": condition_count,
                                 "threshold": self.complex_conditional_threshold,

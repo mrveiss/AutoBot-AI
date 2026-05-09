@@ -238,25 +238,19 @@ class OSAwareToolSelector:
                 unavailable_tools.append((tool_cmd, tool_name))
         return available_tools, unavailable_tools
 
-    def _build_available_tool_selection(
-        self, available_tools: List[str], goal: ProcessedGoal
-    ) -> ToolSelection:
+    def _build_available_tool_selection(self, available_tools: List[str], goal: ProcessedGoal) -> ToolSelection:
         """Build ToolSelection for available tools. Issue #620."""
         primary = available_tools[0]
         fallbacks = available_tools[1:]
         return ToolSelection(
             primary_command=self._format_command(primary, goal.parameters),
-            fallback_commands=[
-                self._format_command(cmd, goal.parameters) for cmd in fallbacks
-            ],
+            fallback_commands=[self._format_command(cmd, goal.parameters) for cmd in fallbacks],
             install_command=None,
             requires_install=False,
             explanation=f"Using available tool: {primary.split()[0]}",
         )
 
-    async def _build_install_tool_selection(
-        self, unavailable_tools: List[tuple], goal: ProcessedGoal
-    ) -> ToolSelection:
+    async def _build_install_tool_selection(self, unavailable_tools: List[tuple], goal: ProcessedGoal) -> ToolSelection:
         """Build ToolSelection for unavailable tools needing install. Issue #620."""
         tool_cmd, tool_name = unavailable_tools[0]
         install_cmd = await self.os_detector.get_install_command(tool_name)
@@ -268,9 +262,7 @@ class OSAwareToolSelector:
             explanation=f"Tool '{tool_name}' needs to be installed",
         )
 
-    async def _select_best_available_tool(
-        self, tools: List[str], goal: ProcessedGoal
-    ) -> ToolSelection:
+    async def _select_best_available_tool(self, tools: List[str], goal: ProcessedGoal) -> ToolSelection:
         """Select the best available tool from a list. Issue #620."""
         available_tools, unavailable_tools = self._categorize_tools(tools)
 
@@ -294,9 +286,7 @@ class OSAwareToolSelector:
         # Get default network from environment; DEFAULT_SCAN_NETWORK="" until configured
         import os
 
-        default_network = os.getenv(
-            "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
-        )
+        default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
         resolved_network = parameters.get("network", default_network)
         if "{network}" in command and not resolved_network:
             logger.warning(

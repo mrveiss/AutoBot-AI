@@ -457,9 +457,7 @@ class TestExtensionManager:
         ctx = HookContext()
         ctx.set("prompt", "base")
 
-        result = await manager.invoke_with_transform(
-            HookPoint.AFTER_PROMPT_BUILD, ctx, "prompt"
-        )
+        result = await manager.invoke_with_transform(HookPoint.AFTER_PROMPT_BUILD, ctx, "prompt")
 
         assert result == "base-A-B"
 

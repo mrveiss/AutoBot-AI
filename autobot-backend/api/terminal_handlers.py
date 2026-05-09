@@ -35,12 +35,12 @@ from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
 from constants.terminal_constants import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
 )
-from chat_history import ChatHistoryManager
-from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from services.simple_pty import simple_pty_manager
 from services.terminal_completion_service import TerminalCompletionService
@@ -186,9 +186,7 @@ class ConsolidatedTerminalWebSocket:
         if conversation_id:
             from autobot_logging.terminal_logger import TerminalLogger
 
-            self.terminal_logger = TerminalLogger(
-                redis_client=redis_client, data_dir="data/chats"
-            )
+            self.terminal_logger = TerminalLogger(redis_client=redis_client, data_dir="data/chats")
             # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
             self.chat_history_manager = ChatHistoryManager()
         else:
@@ -208,14 +206,10 @@ class ConsolidatedTerminalWebSocket:
             from services.simple_pty import simple_pty_manager
 
             # Create PTY session with SimplePTY manager
-            self.pty_process = simple_pty_manager.create_session(
-                self.session_id, initial_cwd=str(PATH.PROJECT_ROOT)
-            )
+            self.pty_process = simple_pty_manager.create_session(self.session_id, initial_cwd=str(PATH.PROJECT_ROOT))
 
             if self.pty_process:
-                logger.info(
-                    f"PTY initialized successfully for session {self.session_id}"
-                )
+                logger.info(f"PTY initialized successfully for session {self.session_id}")
                 # Output reader will be started when WebSocket is ready
                 self.pty_output_task = None
             else:
@@ -300,18 +294,14 @@ class ConsolidatedTerminalWebSocket:
             try:
                 success = self.pty_process.write_input(text)
                 if not success:
-                    await self.send_message(
-                        {"type": "error", "content": "Failed to write to terminal"}
-                    )
+                    await self.send_message({"type": "error", "content": "Failed to write to terminal"})
                 return
             except Exception as e:
                 logger.error("Error writing to PTY: %s", e)
                 await self.send_message({"type": "error", "content": "Terminal error"})
         else:
             # PTY not available
-            await self.send_message(
-                {"type": "error", "content": "Terminal not available"}
-            )
+            await self.send_message({"type": "error", "content": "Terminal not available"})
 
     async def start(self):
         """Start the terminal session"""
@@ -329,9 +319,7 @@ class ConsolidatedTerminalWebSocket:
             # NOTE: Keep PTY echo ON by default for automated/agent mode visibility
             # Frontend handles local echo for manual mode to reduce lag
             # This ensures agent commands are visible to user in automated mode
-            logger.info(
-                f"PTY echo enabled for session {self.session_id} (agent commands visible)"
-            )
+            logger.info(f"PTY echo enabled for session {self.session_id} (agent commands visible)")
 
             # Send initial shell prompt/output with newline for proper formatting
             await self.send_message(
@@ -342,9 +330,7 @@ class ConsolidatedTerminalWebSocket:
             )
         else:
             logger.warning("PTY not available for session %s", self.session_id)
-            await self.send_message(
-                {"type": "error", "content": "Terminal initialization failed"}
-            )
+            await self.send_message({"type": "error", "content": "Terminal initialization failed"})
 
     async def _cleanup_flush_buffer(self) -> None:
         """Flush remaining output buffer to chat on cleanup. Issue #620."""
@@ -372,9 +358,7 @@ class ConsolidatedTerminalWebSocket:
 
             self.output_queue.put_nowait({"type": "stop"})
         except queue.Full:
-            logger.debug(
-                "Output queue full during shutdown, sender will stop via active flag"
-            )
+            logger.debug("Output queue full during shutdown, sender will stop via active flag")
         except Exception as e:
             logger.error("Error signaling output sender to stop: %s", e)
 
@@ -466,9 +450,7 @@ class ConsolidatedTerminalWebSocket:
             cursor_pos = message.get("cursor", len(text))
             cwd = message.get("cwd") or self._get_session_cwd()
 
-            result = await self._completion_service.get_completions(
-                text, cursor_pos, cwd
-            )
+            result = await self._completion_service.get_completions(text, cursor_pos, cwd)
 
             await self.send_message(
                 {
@@ -551,9 +533,7 @@ class ConsolidatedTerminalWebSocket:
 
         return directory, partial, True
 
-    def _filter_entries_for_completion(
-        self, entries: list, directory: str, partial: str, max_results: int
-    ) -> list:
+    def _filter_entries_for_completion(self, entries: list, directory: str, partial: str, max_results: int) -> list:
         """Filter directory entries by partial match. Issue #620.
 
         Args:
@@ -596,9 +576,7 @@ class ConsolidatedTerminalWebSocket:
             except PermissionError:
                 return []
 
-            return self._filter_entries_for_completion(
-                entries, directory, partial, max_results
-            )
+            return self._filter_entries_for_completion(entries, directory, partial, max_results)
 
         except Exception as e:
             logger.debug("Path completion error for '%s': %s", prefix, e)
@@ -608,9 +586,7 @@ class ConsolidatedTerminalWebSocket:
         """Enhanced message handling with security and workflow features"""
         try:
             message_type = message.get("type", "unknown")
-            logger.info(
-                f"[HANDLE MSG] Session {self.session_id}, Type: {message_type}, Message: {str(message)[:100]}"
-            )
+            logger.info(f"[HANDLE MSG] Session {self.session_id}, Type: {message_type}, Message: {str(message)[:100]}")
 
             # Log all messages for security tracking
             if self.enable_logging:
@@ -686,9 +662,7 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            logger.info(
-                f"[MANUAL CMD] Logging to {self.conversation_id}: {command[:50]}"
-            )
+            logger.info(f"[MANUAL CMD] Logging to {self.conversation_id}: {command[:50]}")
             await self.terminal_logger.log_command(
                 session_id=self.conversation_id,
                 command=command,
@@ -761,10 +735,7 @@ class ConsolidatedTerminalWebSocket:
             await self.send_message(
                 {
                     "type": "security_warning",
-                    "content": (
-                        f"Command blocked due to {risk_level.value} "
-                        f"risk level: {command}"
-                    ),
+                    "content": (f"Command blocked due to {risk_level.value} " f"risk level: {command}"),
                     "risk_level": risk_level.value,
                     "timestamp": time.time(),
                 }
@@ -782,9 +753,7 @@ class ConsolidatedTerminalWebSocket:
     def _extract_input_text(self, message: dict) -> str:
         """Extract input text from message with logging. Issue #620."""
         text = message.get("text") or message.get("content", "")
-        logger.info(
-            f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}"
-        )
+        logger.info(f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}")
         return text
 
     def _extract_command_from_buffer(self, text: str) -> str:
@@ -795,10 +764,7 @@ class ConsolidatedTerminalWebSocket:
 
     async def _handle_input_message(self, message: dict):
         """Handle terminal input with security assessment. Issue #281."""
-        logger.info(
-            f"[_handle_input_message] CALLED for session {self.session_id}, "
-            f"message: {str(message)[:100]}"
-        )
+        logger.info(f"[_handle_input_message] CALLED for session {self.session_id}, " f"message: {str(message)[:100]}")
 
         text = self._extract_input_text(message)
         if not text:
@@ -818,9 +784,7 @@ class ConsolidatedTerminalWebSocket:
                 await self.send_to_terminal(text)
                 return
 
-            logger.info(
-                f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}"
-            )
+            logger.info(f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}")
             await self._handle_complete_command(command, text)
         else:
             self._command_buffer += text
@@ -838,9 +802,7 @@ class ConsolidatedTerminalWebSocket:
         """
         MAX_STDIN_SIZE = 4096  # 4KB max per stdin message
         if len(content) > MAX_STDIN_SIZE:
-            logger.warning(
-                f"[STDIN] Rejected oversized input: {len(content)} bytes (max: {MAX_STDIN_SIZE})"
-            )
+            logger.warning(f"[STDIN] Rejected oversized input: {len(content)} bytes (max: {MAX_STDIN_SIZE})")
             await self.send_message(
                 {
                     "type": "error",
@@ -870,9 +832,7 @@ class ConsolidatedTerminalWebSocket:
             return False
         return True
 
-    async def _write_stdin_to_pty(
-        self, content: str, is_password: bool, command_id: Optional[str]
-    ) -> bool:
+    async def _write_stdin_to_pty(self, content: str, is_password: bool, command_id: Optional[str]) -> bool:
         """
         Write stdin to PTY with password echo handling (Issue #315 - extracted helper).
 
@@ -887,9 +847,7 @@ class ConsolidatedTerminalWebSocket:
         success = self.pty_process.write_input(content)
 
         if not success:
-            logger.error(
-                f"[STDIN] Failed to write to PTY for session {self.session_id}"
-            )
+            logger.error(f"[STDIN] Failed to write to PTY for session {self.session_id}")
             await self.send_message(
                 {
                     "type": "error",
@@ -899,9 +857,7 @@ class ConsolidatedTerminalWebSocket:
             )
             return False
 
-        logger.info(
-            f"[STDIN] Sent {len(content)} bytes to PTY (command_id: {command_id})"
-        )
+        logger.info(f"[STDIN] Sent {len(content)} bytes to PTY (command_id: {command_id})")
 
         # Re-enable echo after password (if it was disabled)
         if is_password:
@@ -960,9 +916,7 @@ class ConsolidatedTerminalWebSocket:
 
         (Issue #315 - refactored to reduce nesting depth)
         """
-        logger.info(
-            f"[STDIN] Session {self.session_id}, receiving stdin for interactive command"
-        )
+        logger.info(f"[STDIN] Session {self.session_id}, receiving stdin for interactive command")
 
         # Extract stdin content
         content = message.get("content", "")
@@ -979,9 +933,7 @@ class ConsolidatedTerminalWebSocket:
 
         # Disable echo for password input (Issue #33 Phase 4)
         if is_password:
-            logger.info(
-                f"[STDIN] Disabling echo for password input (command_id: {command_id})"
-            )
+            logger.info(f"[STDIN] Disabling echo for password input (command_id: {command_id})")
             self.pty_process.set_echo(False)
 
         try:
@@ -1131,9 +1083,7 @@ class ConsolidatedTerminalWebSocket:
 
         return CommandRiskLevel.SAFE
 
-    async def _should_block_command(
-        self, command: str, risk_level: CommandRiskLevel
-    ) -> bool:
+    async def _should_block_command(self, command: str, risk_level: CommandRiskLevel) -> bool:
         """Determine if command should be blocked based on security level"""
         if self.security_level == SecurityLevel.RESTRICTED:
             return risk_level in HIGH_RISK_COMMAND_LEVELS
@@ -1180,9 +1130,7 @@ class ConsolidatedTerminalWebSocket:
             try:
                 self.output_queue.get_nowait()
                 self.output_queue.put_nowait(message)
-                logger.warning(
-                    "Output queue full for session %s, dropped oldest", self.session_id
-                )
+                logger.warning("Output queue full for session %s, dropped oldest", self.session_id)
                 return True
             except (queue.Empty, queue.Full):
                 logger.error("Failed to queue output for session %s", self.session_id)
@@ -1233,9 +1181,7 @@ class ConsolidatedTerminalWebSocket:
             current_time = time.time()
 
             should_save = (
-                len(self._output_buffer) > 500
-                or (current_time - self._last_output_save_time) > 2.0
-                or "\n" in content
+                len(self._output_buffer) > 500 or (current_time - self._last_output_save_time) > 2.0 or "\n" in content
             )
 
             if should_save and self._output_buffer.strip():
@@ -1327,9 +1273,7 @@ class ConsolidatedTerminalWebSocket:
 
                     # Check for stop signal (early return)
                     if message.get("type") == "stop":
-                        logger.info(
-                            f"Stop signal received in output sender for session {self.session_id}"
-                        )
+                        logger.info(f"Stop signal received in output sender for session {self.session_id}")
                         break
 
                     # Send message using extracted helper
@@ -1407,9 +1351,7 @@ class ConsolidatedTerminalManager:
             try:
                 success = terminal.pty_process.send_signal(sig)
                 if success:
-                    logger.info(
-                        "Sent signal %s to terminal session %s", sig, session_id
-                    )
+                    logger.info("Sent signal %s to terminal session %s", sig, session_id)
                 return success
             except Exception as e:
                 logger.error("Failed to send signal to session %s: %s", session_id, e)
@@ -1455,9 +1397,7 @@ class ConsolidatedTerminalManager:
             ]
         return []
 
-    async def send_output_to_conversation(
-        self, conversation_id: str, content: str
-    ) -> int:
+    async def send_output_to_conversation(self, conversation_id: str, content: str) -> int:
         """
         Send output to all terminal WebSockets linked to a conversation.
 
@@ -1477,9 +1417,7 @@ class ConsolidatedTerminalManager:
             for session_id, config in list(self.session_configs.items()):
                 if config.get("conversation_id") == conversation_id:
                     if session_id in self.active_connections:
-                        terminals_to_send.append(
-                            (session_id, self.active_connections[session_id])
-                        )
+                        terminals_to_send.append((session_id, self.active_connections[session_id]))
 
         # Send outside lock to avoid blocking
         count = 0
@@ -1525,9 +1463,7 @@ class ConsolidatedTerminalManager:
         with simple_pty_manager._lock:
             pty_sessions = dict(simple_pty_manager.sessions)
 
-        total_commands = sum(
-            stats.get("commands_executed", 0) for stats in self.session_stats.values()
-        )
+        total_commands = sum(stats.get("commands_executed", 0) for stats in self.session_stats.values())
 
         return {
             "total_sessions": len(pty_sessions),
@@ -1536,9 +1472,7 @@ class ConsolidatedTerminalManager:
             "sessions": {
                 sid: {
                     "is_connected": sid in self.active_connections,
-                    "commands_executed": self.session_stats.get(sid, {}).get(
-                        "commands_executed", 0
-                    ),
+                    "commands_executed": self.session_stats.get(sid, {}).get("commands_executed", 0),
                 }
                 for sid in pty_sessions.keys()
             },

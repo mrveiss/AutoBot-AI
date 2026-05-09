@@ -343,9 +343,7 @@ class PropertyGraph:
         logger.debug("delete_edge: %s", edge_id)
         return True
 
-    async def _delete_edge_by_id(
-        self, edge_id: str, from_id: str, relation: str
-    ) -> None:
+    async def _delete_edge_by_id(self, edge_id: str, from_id: str, relation: str) -> None:
         """Remove edge hash + outgoing adjacency entries (internal helper)."""
         await self._redis.delete(_edge_key(edge_id))
         if from_id and relation:
@@ -392,11 +390,7 @@ class PropertyGraph:
             relations_to_query = [relation]
         else:
             # Discover relation types from all-relations index
-            all_key = (
-                _adj_out_all_key(node_id)
-                if direction == "outgoing"
-                else _adj_in_all_key(node_id)
-            )
+            all_key = _adj_out_all_key(node_id) if direction == "outgoing" else _adj_in_all_key(node_id)
             members = await self._redis.smembers(all_key)
             seen_rels: Set[str] = set()
             for m in members:
@@ -405,11 +399,7 @@ class PropertyGraph:
             relations_to_query = list(seen_rels)
 
         for rel in relations_to_query:
-            adj_key = (
-                _adj_out_key(node_id, rel)
-                if direction == "outgoing"
-                else _adj_in_key(node_id, rel)
-            )
+            adj_key = _adj_out_key(node_id, rel) if direction == "outgoing" else _adj_in_key(node_id, rel)
             edge_ids = await self._redis.zrange(adj_key, 0, -1)
             for eid_bytes in edge_ids:
                 eid = eid_bytes.decode("utf-8") if isinstance(eid_bytes, bytes) else eid_bytes
@@ -448,9 +438,7 @@ class PropertyGraph:
         for k, v in property_filter.items():
             idx_key = _prop_index_key(k, str(v))
             raw_members = await self._redis.smembers(idx_key)
-            candidate_sets.append(
-                {m.decode("utf-8") if isinstance(m, bytes) else m for m in raw_members}
-            )
+            candidate_sets.append({m.decode("utf-8") if isinstance(m, bytes) else m for m in raw_members})
 
         if not candidate_sets:
             return []
@@ -552,9 +540,7 @@ class PropertyGraph:
             if depth >= max_depth:
                 continue
 
-            neighbours = await self.get_neighbors(
-                current_id, relation=relation, direction="both"
-            )
+            neighbours = await self.get_neighbors(current_id, relation=relation, direction="both")
             for entry in neighbours:
                 neighbour_id = entry["node"].get("id")
                 edge_id = entry["edge"].get("id")
@@ -603,9 +589,7 @@ class PropertyGraph:
             if len(path) >= max_depth:
                 continue
 
-            neighbours = await self.get_neighbors(
-                current_id, relation=relation, direction="outgoing"
-            )
+            neighbours = await self.get_neighbors(current_id, relation=relation, direction="outgoing")
             for entry in neighbours:
                 neighbour_id = entry["node"].get("id")
                 if not neighbour_id:

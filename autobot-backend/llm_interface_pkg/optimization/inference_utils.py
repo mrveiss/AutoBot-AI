@@ -152,17 +152,10 @@ class LastLogitOptimizer:
             raise RuntimeError("PyTorch is required for LastLogitOptimizer")
 
         if hidden_states.ndim != 3:
-            raise ValueError(
-                f"Expected 3D tensor [batch, seq_len, hidden_dim], "
-                f"got {hidden_states.ndim}D"
-            )
+            raise ValueError(f"Expected 3D tensor [batch, seq_len, hidden_dim], " f"got {hidden_states.ndim}D")
 
         batch_size, seq_len, hidden_dim = hidden_states.shape
-        should_slice = (
-            only_last_logit
-            if only_last_logit is not None
-            else self._config.should_slice
-        )
+        should_slice = only_last_logit if only_last_logit is not None else self._config.should_slice
 
         self._stats.forward_pass_count += 1
 
@@ -194,9 +187,7 @@ class LastLogitOptimizer:
             memory_saved_bytes=0,
         )
 
-    def _estimate_memory_saved(
-        self, batch_size: int, seq_len: int, hidden_dim: int
-    ) -> int:
+    def _estimate_memory_saved(self, batch_size: int, seq_len: int, hidden_dim: int) -> int:
         """Estimate bytes saved by slicing hidden states before lm_head.
 
         The lm_head output is [batch, seq_len, vocab_size]. Slicing reduces
@@ -210,12 +201,8 @@ class LastLogitOptimizer:
         Returns:
             Estimated bytes saved.
         """
-        full_output_bytes = (
-            batch_size * seq_len * self._config.vocab_size * self._config.dtype_bytes
-        )
-        sliced_output_bytes = (
-            batch_size * 1 * self._config.vocab_size * self._config.dtype_bytes
-        )
+        full_output_bytes = batch_size * seq_len * self._config.vocab_size * self._config.dtype_bytes
+        sliced_output_bytes = batch_size * 1 * self._config.vocab_size * self._config.dtype_bytes
         return full_output_bytes - sliced_output_bytes
 
     def reset_stats(self) -> MemoryStats:

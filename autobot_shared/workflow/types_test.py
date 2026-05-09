@@ -170,11 +170,13 @@ def test_prompt_spec_round_trip():
 def test_prompt_spec_from_dict_drops_unknown_keys():
     """Forward-compat: unknown keys (added by future server versions) don't
     break older clients deserializing the payload."""
-    spec = PromptSpec.from_dict({
-        "user_prompt": "hi",
-        "version": "1",
-        "future_field_we_dont_know_yet": "ignore me",
-    })
+    spec = PromptSpec.from_dict(
+        {
+            "user_prompt": "hi",
+            "version": "1",
+            "future_field_we_dont_know_yet": "ignore me",
+        }
+    )
     assert spec.user_prompt == "hi"
     assert spec.version == "1"
 
@@ -210,6 +212,7 @@ def test_workflow_task_round_trip_with_prompt():
 def test_workflow_task_from_dict_requires_task_id():
     """Missing task_id (the only required field) raises KeyError."""
     import pytest
+
     with pytest.raises(KeyError, match="task_id"):
         WorkflowTask.from_dict({"description": "no task_id"})
 
@@ -266,6 +269,7 @@ def test_workflow_plan_from_dict_accepts_enum_or_string():
 def test_workflow_plan_from_dict_requires_plan_id_goal_tasks():
     """All three required fields validated."""
     import pytest
+
     for missing in ("plan_id", "goal", "tasks"):
         data = {"plan_id": "p1", "goal": "g", "tasks": []}
         del data[missing]
@@ -313,6 +317,7 @@ def test_workflow_task_get_execution_time_zero_until_complete():
     t.start_execution()
     assert t.get_execution_time() == 0.0  # no end yet
     import time as _time
+
     _time.sleep(0.001)
     t.complete_execution({})
     assert t.get_execution_time() > 0.0
@@ -321,13 +326,13 @@ def test_workflow_task_get_execution_time_zero_until_complete():
 def test_workflow_task_retry_methods():
     """can_retry() respects max_retries; increment_retry() advances the counter."""
     t = WorkflowTask(task_id="t1", max_retries=2)
-    assert t.can_retry()                # 0 < 2
+    assert t.can_retry()  # 0 < 2
     t.increment_retry()
     assert t.retry_count == 1
-    assert t.can_retry()                # 1 < 2
+    assert t.can_retry()  # 1 < 2
     t.increment_retry()
     assert t.retry_count == 2
-    assert not t.can_retry()            # 2 == 2
+    assert not t.can_retry()  # 2 == 2
 
 
 def test_workflow_task_get_enhanced_inputs_merges_context():
@@ -349,6 +354,7 @@ def test_workflow_task_to_completed_result_shape():
     t = WorkflowTask(task_id="t1", agent_type="researcher")
     t.start_execution()
     import time as _time
+
     _time.sleep(0.001)
     t.complete_execution({"answer": "yes"})
     res = t.to_completed_result({"answer": "yes"})

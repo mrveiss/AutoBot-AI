@@ -103,11 +103,7 @@ class TestRouting:
 
         retriever.ppr.rank.assert_called_once()
         call_args = retriever.ppr.rank.call_args
-        seed_ids_arg = (
-            call_args.args[0]
-            if call_args.args
-            else call_args.kwargs.get("seed_node_ids", [])
-        )
+        seed_ids_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("seed_node_ids", [])
         assert len(seed_ids_arg) > 0
         assert result.expanded is True
         assert result.complexity == "moderate"
@@ -126,9 +122,7 @@ class TestRouting:
         """MULTI_HOP complexity routes through _full_retrieve (same as complex)."""
         retriever = _make_retriever(complexity_value="multi_hop")
 
-        result = await retriever.retrieve(
-            "trace the chain of events that led to failure", top_k=3
-        )
+        result = await retriever.retrieve("trace the chain of events that led to failure", top_k=3)
 
         retriever.mesh_db.get_anchor_neighbors.assert_called_once()
         assert result.expanded is True
@@ -243,9 +237,7 @@ class TestMergeWithExpansion:
 
         merged = retriever._merge_with_expansion(seeds, expanded_scores)
 
-        chunk_ids = {
-            r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged
-        }
+        chunk_ids = {r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged}
         assert "s1" in chunk_ids
         assert "s2" in chunk_ids
 
@@ -257,9 +249,7 @@ class TestMergeWithExpansion:
 
         merged = retriever._merge_with_expansion(seeds, expanded_scores)
 
-        merged_ids = {
-            r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged
-        }
+        merged_ids = {r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged}
         assert "new_node" in merged_ids
 
     def test_merge_boosts_seed_score_with_ppr(self):
@@ -270,9 +260,7 @@ class TestMergeWithExpansion:
 
         merged = retriever._merge_with_expansion(seeds, expanded_scores)
 
-        s1_result = next(
-            r for r in merged if r.get("metadata", {}).get("chunk_id") == "s1"
-        )
+        s1_result = next(r for r in merged if r.get("metadata", {}).get("chunk_id") == "s1")
         assert abs(s1_result["score"] - 0.8) < 1e-9
 
     def test_merge_with_empty_expansion(self):
@@ -292,9 +280,7 @@ class TestMergeWithExpansion:
 
         merged = retriever._merge_with_expansion(seeds, expanded_scores)
 
-        chunk_ids = [
-            r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged
-        ]
+        chunk_ids = [r.get("metadata", {}).get("chunk_id") or r.get("chunk_id") for r in merged]
         assert chunk_ids.count("shared") == 1
 
 
@@ -334,9 +320,7 @@ class TestAnchorInjection:
     async def test_anchor_failure_is_gracefully_handled(self):
         """If mesh_db.get_anchor_neighbors raises, retrieval still completes."""
         retriever = _make_retriever(complexity_value="complex")
-        retriever.mesh_db.get_anchor_neighbors = AsyncMock(
-            side_effect=RuntimeError("db error")
-        )
+        retriever.mesh_db.get_anchor_neighbors = AsyncMock(side_effect=RuntimeError("db error"))
 
         result = await retriever.retrieve("compare A vs B", top_k=3)
 

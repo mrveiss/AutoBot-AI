@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
 from api.schemas_agent import LogFileMetadata
-from api.schemas_common import AgentMessageResponse
 from api.schemas_code import (
     LogContainerResponse,
     LogReadResponse,
@@ -31,6 +30,7 @@ from api.schemas_code import (
     LogSourcesResponse,
     LogUnifiedResponse,
 )
+from api.schemas_common import AgentMessageResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
@@ -112,9 +112,7 @@ def _parse_docker_log_line_for_unified(line: str, service: str) -> Metadata:
     pass  # Replaced at module load
 
 
-def _parse_file_content_lines(
-    content: str, file_name: str, level: Optional[str]
-) -> List[Metadata]:
+def _parse_file_content_lines(content: str, file_name: str, level: Optional[str]) -> List[Metadata]:
     """Parse file log content lines with optional level filter (Issue #315: extracted).
 
     Args:
@@ -160,9 +158,7 @@ async def _tail_file_to_websocket(file_path: Path, websocket: WebSocket) -> None
                 await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
 
-async def _read_log_lines_from_file(
-    file_path: Path, lines: int, offset: int, tail: bool
-) -> tuple:
+async def _read_log_lines_from_file(file_path: Path, lines: int, offset: int, tail: bool) -> tuple:
     """Read lines from log file with offset/tail support (Issue #315: extracted).
 
     Args:
@@ -190,9 +186,7 @@ async def _read_log_lines_from_file(
             return all_lines[start_idx:end_idx], len(all_lines)
 
 
-async def _collect_file_logs(
-    source_filter: Set[str], level: Optional[str]
-) -> List[Metadata]:
+async def _collect_file_logs(source_filter: Set[str], level: Optional[str]) -> List[Metadata]:
     """Collect logs from file sources (Issue #336 - extracted helper).
 
     Issue #370: Optimized to read files in parallel using asyncio.gather().
@@ -212,11 +206,7 @@ async def _collect_file_logs(
     log_files = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
 
     # Filter files first
-    filtered_files = [
-        (fp, fp.stem)
-        for fp in log_files
-        if not source_filter or fp.stem in source_filter
-    ]
+    filtered_files = [(fp, fp.stem) for fp in log_files if not source_filter or fp.stem in source_filter]
 
     if not filtered_files:
         return []
@@ -232,9 +222,7 @@ async def _collect_file_logs(
             logger.debug("Error reading file log %s: %s", file_path, e)
             return []
 
-    results = await asyncio.gather(
-        *[read_file_logs(fp, fn) for fp, fn in filtered_files], return_exceptions=True
-    )
+    results = await asyncio.gather(*[read_file_logs(fp, fn) for fp, fn in filtered_files], return_exceptions=True)
 
     # Flatten results
     logs = []
@@ -266,9 +254,7 @@ async def _get_container_output(container_name: str, service: str) -> Optional[b
         return None
 
 
-def _parse_container_log_lines(
-    stdout: bytes, service: str, level: Optional[str]
-) -> List[Metadata]:
+def _parse_container_log_lines(stdout: bytes, service: str, level: Optional[str]) -> List[Metadata]:
     """Parse Docker container log lines (Issue #315 - extracted helper)."""
     logs = []
     for line in stdout.decode().split("\n"):
@@ -282,9 +268,7 @@ def _parse_container_log_lines(
     return logs
 
 
-async def _collect_container_logs(
-    source_filter: Set[str], level: Optional[str]
-) -> List[Metadata]:
+async def _collect_container_logs(source_filter: Set[str], level: Optional[str]) -> List[Metadata]:
     """Collect logs from Docker containers (Issue #315 - refactored).
 
     Issue #370: Optimized to fetch container logs in parallel using asyncio.gather().
@@ -353,16 +337,12 @@ async def _get_file_log_sources() -> List[Metadata]:
             "size_mb": round(stat.st_size / 1024 / 1024, 2),
         }
 
-    results = await asyncio.gather(
-        *[get_file_info(fp) for fp in log_files], return_exceptions=True
-    )
+    results = await asyncio.gather(*[get_file_info(fp) for fp in log_files], return_exceptions=True)
 
     return [r for r in results if isinstance(r, dict)]
 
 
-async def _check_container_status(
-    service: str, container_name: str
-) -> Optional[Metadata]:
+async def _check_container_status(service: str, container_name: str) -> Optional[Metadata]:
     """Check status of a single Docker container (Issue #315 - extracted helper)."""
     try:
         process = await asyncio.create_subprocess_exec(
@@ -557,9 +537,7 @@ async def read_log(
 
         try:
             # Use extracted helper (Issue #315)
-            selected_lines, total_lines = await _read_log_lines_from_file(
-                file_path, lines, offset, tail
-            )
+            selected_lines, total_lines = await _read_log_lines_from_file(file_path, lines, offset, tail)
         except OSError as e:
             logger.error("Failed to read log file %s: %s", file_path, e)
             raise HTTPException(status_code=500, detail="Failed to read log file")
@@ -579,9 +557,7 @@ async def read_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _execute_docker_logs_command(
-    container_name: str, lines: int, tail: bool, since: Optional[str]
-) -> bytes:
+async def _execute_docker_logs_command(container_name: str, lines: int, tail: bool, since: Optional[str]) -> bytes:
     """Helper for read_container_logs. Ref: #1088.
 
     Builds and runs the docker logs command, returning raw stdout bytes.
@@ -626,9 +602,7 @@ async def _execute_docker_logs_command(
     return stdout
 
 
-def _parse_and_limit_container_output(
-    stdout: bytes, service: str, lines: int, tail: bool
-) -> List[Metadata]:
+def _parse_and_limit_container_output(stdout: bytes, service: str, lines: int, tail: bool) -> List[Metadata]:
     """Helper for read_container_logs. Ref: #1088.
 
     Parses raw docker log bytes into structured entries and applies line limit.
@@ -642,11 +616,7 @@ def _parse_and_limit_container_output(
     Returns:
         List of parsed log entry dicts
     """
-    log_lines = [
-        parse_docker_log_line(line, service)
-        for line in stdout.decode().split("\n")
-        if line.strip()
-    ]
+    log_lines = [parse_docker_log_line(line, service) for line in stdout.decode().split("\n") if line.strip()]
     if not tail and len(log_lines) > lines:
         log_lines = log_lines[-lines:]
     return log_lines
@@ -673,9 +643,7 @@ async def read_container_logs(
     """
     try:
         if service not in CONTAINER_LOGS:
-            raise HTTPException(
-                status_code=404, detail=f"Service '{service}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Service '{service}' not found")
 
         container_name = CONTAINER_LOGS[service]
         stdout = await _execute_docker_logs_command(container_name, lines, tail, since)
@@ -765,9 +733,7 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
 )
 async def get_unified_logs(
     admin_check: bool = Depends(check_admin_permission),
-    lines: int = Query(
-        100, ge=1, le=1000, description="Total number of lines to return"
-    ),
+    lines: int = Query(100, ge=1, le=1000, description="Total number of lines to return"),
     level: Optional[str] = Query(None, description="Filter by log level"),
     sources: Optional[str] = Query(None, description="Comma-separated list of sources"),
 ):
@@ -956,9 +922,7 @@ async def _search_single_log_file(
             if not _line_matches_query(line_content, query, case_sensitive):
                 continue
 
-            results.append(
-                _create_search_result(file_path.name, line_num, line_content)
-            )
+            results.append(_create_search_result(file_path.name, line_num, line_content))
 
             if current_count + len(results) >= max_results:
                 break
@@ -994,9 +958,7 @@ async def search_logs(
                 files_to_search.append(file_path)
         else:
             # Issue #358 - use lambda for proper glob() execution in thread
-            files_to_search = await run_in_log_executor(
-                lambda: list(LOG_DIR.glob("*.log"))
-            )
+            files_to_search = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
 
         for file_path in files_to_search:
             if len(results) >= max_results:

@@ -151,8 +151,7 @@ class SessionAdaptiveReranker:
             self._recompute_weights(state)
 
         logger.debug(
-            "SessionAdaptiveReranker[%s]: sem_hits=%d sem_misses=%d "
-            "kw_hits=%d kw_misses=%d → sem=%.3f kw=%.3f",
+            "SessionAdaptiveReranker[%s]: sem_hits=%d sem_misses=%d " "kw_hits=%d kw_misses=%d → sem=%.3f kw=%.3f",
             session_id,
             state.semantic_hits,
             state.semantic_misses,
@@ -225,9 +224,7 @@ class SessionAdaptiveReranker:
         target_sem = sem_rate / total_rate  # in [0, 1]
 
         # Blend towards target at learning rate.
-        new_sem = state.hybrid_weight_semantic + _LEARNING_RATE * (
-            target_sem - state.hybrid_weight_semantic
-        )
+        new_sem = state.hybrid_weight_semantic + _LEARNING_RATE * (target_sem - state.hybrid_weight_semantic)
 
         # Clamp and normalise.
         new_sem = max(_MIN_WEIGHT, min(_MAX_WEIGHT, new_sem))

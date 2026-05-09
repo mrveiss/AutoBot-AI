@@ -101,9 +101,7 @@ class WorkflowRunner:
 
     # ------------------------------------------------------ execution internals
 
-    async def _evaluate_workflow_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _evaluate_workflow_criteria(self, plan: WorkflowPlan, results: Dict[str, Any]) -> Dict[str, Any]:
         if plan.structured_criteria:
             eval_result = await self._criteria_evaluator.evaluate(plan.structured_criteria, results)
             return eval_result.to_dict()
@@ -150,22 +148,22 @@ class WorkflowRunner:
         if _depth >= 5:
             logger.error("Max fallback depth (5) reached, aborting fallback chain")
             return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
-        for fallback in (plan.fallback_plans or []):
+        for fallback in plan.fallback_plans or []:
             try:
                 return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
 
-    async def _handle_task_timeout(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _handle_task_timeout(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.fail_execution("Timeout")
         if task.can_retry():
             task.increment_retry()
             logger.warning(
                 "Task %s timed out, retrying (%d/%d)",
-                task.task_id, task.retry_count, task.max_retries,
+                task.task_id,
+                task.retry_count,
+                task.max_retries,
             )
             return await self._execute_single_agent_task(task, context)
         self._perf.update(task.agent_type, False, time.time() - (task.start_time or time.time()))
@@ -177,9 +175,7 @@ class WorkflowRunner:
         self._perf.update(task.agent_type, False, execution_time)
         return task.to_failed_result(str(error))
 
-    async def _execute_single_agent_task(
-        self, task: AgentTask, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _execute_single_agent_task(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.start_execution()
         try:
             async with self.resource_semaphore:
@@ -199,9 +195,7 @@ class WorkflowRunner:
         except Exception as e:
             return self._handle_task_exception(task, e)
 
-    async def _publish_workflow_event(
-        self, workflow_id: str, event_type: str, data: Dict[str, Any]
-    ) -> None:
+    async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
         await _get_event_manager().publish(
             "workflow_event",
             {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data},

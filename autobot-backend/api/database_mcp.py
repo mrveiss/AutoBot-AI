@@ -47,9 +47,9 @@ from .schemas_code import (
     DatabaseMCPTool,
     DatabaseQueryResponse,
     DatabaseStatisticsResponse,
+    SchemaRequest,
     SQLExecuteRequest,
     SQLQueryRequest,
-    SchemaRequest,
     TableListRequest,
 )
 
@@ -84,9 +84,7 @@ def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
         ValueError: If the name contains characters outside the allowed set.
     """
     if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(
-            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
-        )
+        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
     return name
 
 
@@ -216,18 +214,14 @@ async def check_rate_limit() -> bool:
             query_counter["reset_time"] = now
 
         if query_counter["count"] >= MAX_QUERIES_PER_MINUTE:
-            logger.warning(
-                "Rate limit exceeded: %s queries/min", query_counter["count"]
-            )
+            logger.warning("Rate limit exceeded: %s queries/min", query_counter["count"])
             return False
 
         query_counter["count"] += 1
         return True
 
 
-def _execute_sqlite_query_sync(
-    db_path: Path, query: str, params: list | None, limit: int
-) -> tuple[list, list]:
+def _execute_sqlite_query_sync(db_path: Path, query: str, params: list | None, limit: int) -> tuple[list, list]:
     """Execute SQLite SELECT query synchronously (Issue #357: for use with asyncio.to_thread)."""
     conn = None
     try:
@@ -259,9 +253,7 @@ def _execute_sqlite_query_sync(
             conn.close()
 
 
-def _execute_sqlite_statement_sync(
-    db_path: Path, statement: str, params: list | None
-) -> int:
+def _execute_sqlite_statement_sync(db_path: Path, statement: str, params: list | None) -> int:
     """Execute SQLite DML statement synchronously (Issue #357: for use with asyncio.to_thread)."""
     conn = None
     try:
@@ -297,9 +289,7 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = cursor.fetchall()
 
         # Issue #480: Each table requires a separate COUNT query in SQLite.
@@ -342,9 +332,7 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
                 for col in columns
             ]
         else:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
@@ -432,16 +420,13 @@ def _create_database_query_tool() -> DatabaseMCPTool:
                 "database": {
                     "type": "string",
                     "description": (
-                        "Database name (conversation_files, agent_memory, "
-                        "knowledge_base, project_state, autobot)"
+                        "Database name (conversation_files, agent_memory, " "knowledge_base, project_state, autobot)"
                     ),
                     "enum": list(DATABASE_WHITELIST.keys()),
                 },
                 "query": {
                     "type": "string",
-                    "description": (
-                        "SQL SELECT query. Use ? for parameters to prevent injection."
-                    ),
+                    "description": ("SQL SELECT query. Use ? for parameters to prevent injection."),
                 },
                 "params": {
                     "type": "array",
@@ -450,9 +435,7 @@ def _create_database_query_tool() -> DatabaseMCPTool:
                 },
                 "limit": {
                     "type": "integer",
-                    "description": (
-                        f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})"
-                    ),
+                    "description": (f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})"),
                     "minimum": 1,
                     "maximum": MAX_RESULT_ROWS,
                 },
@@ -484,9 +467,7 @@ def _create_database_execute_tool() -> DatabaseMCPTool:
                 },
                 "statement": {
                     "type": "string",
-                    "description": (
-                        "SQL INSERT/UPDATE/DELETE statement. Use ? for parameters."
-                    ),
+                    "description": ("SQL INSERT/UPDATE/DELETE statement. Use ? for parameters."),
                 },
                 "params": {
                     "type": "array",
@@ -546,10 +527,7 @@ def _create_describe_schema_tool() -> DatabaseMCPTool:
     """
     return DatabaseMCPTool(
         name="database_describe_schema",
-        description=(
-            "Get schema information for database tables including columns, types,"
-            "and constraints."
-        ),
+        description=("Get schema information for database tables including columns, types," "and constraints."),
         input_schema={
             "type": "object",
             "properties": {
@@ -560,9 +538,7 @@ def _create_describe_schema_tool() -> DatabaseMCPTool:
                 },
                 "table": {
                     "type": "string",
-                    "description": (
-                        "Specific table to describe (optional, omit for all tables)"
-                    ),
+                    "description": ("Specific table to describe (optional, omit for all tables)"),
                 },
             },
             "required": ["database"],
@@ -578,10 +554,7 @@ def _create_list_databases_tool() -> DatabaseMCPTool:
     """
     return DatabaseMCPTool(
         name="database_list_databases",
-        description=(
-            "List all available whitelisted databases with their access permissions and"
-            "descriptions."
-        ),
+        description=("List all available whitelisted databases with their access permissions and" "descriptions."),
         input_schema={
             "type": "object",
             "properties": {},
@@ -598,10 +571,7 @@ def _create_statistics_tool() -> DatabaseMCPTool:
     """
     return DatabaseMCPTool(
         name="database_statistics",
-        description=(
-            "Get statistics for a database including size, table count,"
-            "and last modified time."
-        ),
+        description=("Get statistics for a database including size, table count," "and last modified time."),
         input_schema={
             "type": "object",
             "properties": {
@@ -677,27 +647,19 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
-        raise HTTPException(
-            status_code=403, detail=f"Database not in whitelist: {request.database}"
-        )
+        raise HTTPException(status_code=403, detail=f"Database not in whitelist: {request.database}")
 
     if not validate_sql_query(request.query):
-        raise HTTPException(
-            status_code=400, detail="Query contains blocked patterns or is too long"
-        )
+        raise HTTPException(status_code=400, detail="Query contains blocked patterns or is too long")
 
     # Get database path
     db_path = get_database_path(request.database)
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(db_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"Database file not found: {request.database}"
-        )
+        raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     # Log the operation
     logger.info("Database query on %s: %s...", request.database, request.query[:100])
@@ -737,14 +699,10 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
-        raise HTTPException(
-            status_code=403, detail=f"Database not in whitelist: {request.database}"
-        )
+        raise HTTPException(status_code=403, detail=f"Database not in whitelist: {request.database}")
 
     # Check if database is read-only
     if is_database_read_only(request.database):
@@ -754,22 +712,16 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
         )
 
     if not validate_sql_query(request.statement):
-        raise HTTPException(
-            status_code=400, detail="Statement contains blocked patterns"
-        )
+        raise HTTPException(status_code=400, detail="Statement contains blocked patterns")
 
     # Get database path
     db_path = get_database_path(request.database)
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(db_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"Database file not found: {request.database}"
-        )
+        raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     # Log the operation with warning (data modification)
-    logger.warning(
-        f"Database EXECUTE on {request.database}: {request.statement[:100]}..."
-    )
+    logger.warning(f"Database EXECUTE on {request.database}: {request.statement[:100]}...")
 
     try:
         # Execute statement in thread pool (Issue #357: non-blocking)
@@ -807,22 +759,16 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
-        raise HTTPException(
-            status_code=403, detail=f"Database not in whitelist: {request.database}"
-        )
+        raise HTTPException(status_code=403, detail=f"Database not in whitelist: {request.database}")
 
     # Get database path
     db_path = get_database_path(request.database)
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(db_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"Database file not found: {request.database}"
-        )
+        raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     logger.info("Listing tables in %s", request.database)
 
@@ -860,22 +806,16 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
-        raise HTTPException(
-            status_code=403, detail=f"Database not in whitelist: {request.database}"
-        )
+        raise HTTPException(status_code=403, detail=f"Database not in whitelist: {request.database}")
 
     # Get database path
     db_path = get_database_path(request.database)
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(db_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"Database file not found: {request.database}"
-        )
+        raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     logger.info("Describing schema for %s", request.database)
 
@@ -917,9 +857,7 @@ async def database_list_databases_mcp() -> Metadata:
     """
     # Security check
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     logger.info("Listing available databases")
 
@@ -963,22 +901,16 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     """
     # Security checks
     if not await check_rate_limit():
-        raise HTTPException(
-            status_code=429, detail="Rate limit exceeded. Try again later."
-        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_database_allowed(request.database):
-        raise HTTPException(
-            status_code=403, detail=f"Database not in whitelist: {request.database}"
-        )
+        raise HTTPException(status_code=403, detail=f"Database not in whitelist: {request.database}")
 
     # Get database path
     db_path = get_database_path(request.database)
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(db_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"Database file not found: {request.database}"
-        )
+        raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     logger.info("Getting statistics for %s", request.database)
 
@@ -1025,10 +957,7 @@ async def get_database_mcp_status() -> Metadata:
         current_rate = query_counter["count"]
         time_until_reset = max(
             0,
-            60
-            - (
-                now_utc() - query_counter["reset_time"]
-            ).total_seconds(),
+            60 - (now_utc() - query_counter["reset_time"]).total_seconds(),
         )
 
     # Check database availability

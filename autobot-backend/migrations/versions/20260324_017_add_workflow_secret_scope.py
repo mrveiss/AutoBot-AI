@@ -32,10 +32,7 @@ def upgrade() -> None:
             "workflow_id",
             sa.String(128),
             nullable=True,
-            comment=(
-                "Workflow ID for workflow-scoped secrets (Issue #2153). "
-                "Set when scope='workflow'."
-            ),
+            comment=("Workflow ID for workflow-scoped secrets (Issue #2153). " "Set when scope='workflow'."),
         ),
     )
 
@@ -48,9 +45,7 @@ def upgrade() -> None:
     op.alter_column(
         "secrets",
         "scope",
-        comment=(
-            "Visibility scope: user, session, shared, group, organization, or workflow"
-        ),
+        comment=("Visibility scope: user, session, shared, group, organization, or workflow"),
     )
 
 

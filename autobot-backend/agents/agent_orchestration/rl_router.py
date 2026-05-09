@@ -127,14 +127,10 @@ class RLRouter(AsyncRedisClientMixin):
 
         if random.random() < epsilon:
             agent_id = random.choice(available_agents)
-            logger.debug(
-                "RL explore: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon
-            )
+            logger.debug("RL explore: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon)
         else:
             agent_id = await self._greedy_select(state_key, available_agents)
-            logger.debug(
-                "RL exploit: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon
-            )
+            logger.debug("RL exploit: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon)
 
         confidence = await self._agent_confidence(state_key, agent_id)
         await self._decay_epsilon()
@@ -170,13 +166,7 @@ class RLRouter(AsyncRedisClientMixin):
         - 3-gram character hash of the first 80 chars (4 hex chars)
         """
         query_lower = query.lower()
-        domains = sorted(
-            {
-                domain
-                for domain, kws in _DOMAIN_KEYWORDS.items()
-                if any(kw in query_lower for kw in kws)
-            }
-        )
+        domains = sorted({domain for domain, kws in _DOMAIN_KEYWORDS.items() if any(kw in query_lower for kw in kws)})
         length_label = "xlong"
         word_count = len(query.split())
         for threshold, label in _LENGTH_BUCKETS:
@@ -242,10 +232,7 @@ class RLRouter(AsyncRedisClientMixin):
             redis = await self._get_redis()
             key = _KEY_QTABLE.format(state=state_key)
             raw_all = await redis.hgetall(key)
-            q_map = {
-                k.decode() if isinstance(k, bytes) else k: float(v)
-                for k, v in raw_all.items()
-            }
+            q_map = {k.decode() if isinstance(k, bytes) else k: float(v) for k, v in raw_all.items()}
         except Exception as exc:
             logger.debug("RL greedy-select Redis error: %s", exc)
             q_map = {}
@@ -345,10 +332,7 @@ class RLRouter(AsyncRedisClientMixin):
             redis = await self._get_redis()
             key = _KEY_QTABLE.format(state=state_key)
             raw = await redis.hgetall(key)
-            return {
-                k.decode() if isinstance(k, bytes) else k: float(v)
-                for k, v in raw.items()
-            }
+            return {k.decode() if isinstance(k, bytes) else k: float(v) for k, v in raw.items()}
         except Exception as exc:
             logger.warning("RL q-table-snapshot failed: %s", exc)
             return {}

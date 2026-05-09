@@ -154,7 +154,7 @@ async def _fetch_from_providers() -> Dict[str, Any]:
     for name, entries in zip(provider_names, results):
         if entries is not None:
             providers_queried.append(name)
-        for entry in (entries or []):
+        for entry in entries or []:
             dedup_key = f"{entry['provider']}:{entry['name']}"
             if dedup_key not in seen:
                 seen.add(dedup_key)

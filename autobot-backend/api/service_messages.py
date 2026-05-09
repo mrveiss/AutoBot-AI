@@ -17,16 +17,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from auth_middleware import get_auth_middleware
-from autobot_shared.message_bus import get_message_bus
 from api.schemas_system import (
     CorrelationChainResponse,
     LatestMessagesResponse,
     ServiceMessageResponse,
     SingleMessageResponse,
 )
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.message_bus import get_message_bus
+from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = logging.getLogger(__name__)
 

@@ -202,18 +202,14 @@ class TaskComplexityScorer:
             config: Tier configuration with threshold settings
         """
         self.config = config
-        self._compiled_code_patterns = [
-            re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.CODE_PATTERNS
-        ]
+        self._compiled_code_patterns = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.CODE_PATTERNS]
         self._compiled_multistep_patterns = [
             re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.MULTISTEP_PATTERNS
         ]
         self._compiled_complex_question_patterns = [
             re.compile(p, re.IGNORECASE) for p in self.COMPLEX_QUESTION_PATTERNS
         ]
-        self._compiled_simple_question_patterns = [
-            re.compile(p, re.IGNORECASE) for p in self.SIMPLE_QUESTION_PATTERNS
-        ]
+        self._compiled_simple_question_patterns = [re.compile(p, re.IGNORECASE) for p in self.SIMPLE_QUESTION_PATTERNS]
 
     def score(self, messages: List[Dict]) -> ComplexityResult:
         """
@@ -251,11 +247,7 @@ class TaskComplexityScorer:
 
     def _extract_user_content(self, messages: List[Dict]) -> str:
         """Extract and combine user message content."""
-        user_messages = [
-            msg.get("content", "")
-            for msg in messages
-            if msg.get("role") == "user" and msg.get("content")
-        ]
+        user_messages = [msg.get("content", "") for msg in messages if msg.get("role") == "user" and msg.get("content")]
         return " ".join(user_messages)
 
     def _score_length(self, content: str) -> float:
@@ -319,14 +311,10 @@ class TaskComplexityScorer:
     def _score_question(self, content: str) -> float:
         """Score based on question complexity (0-3)."""
         # Check for simple patterns (reduces score)
-        simple_matches = sum(
-            1 for p in self._compiled_simple_question_patterns if p.search(content)
-        )
+        simple_matches = sum(1 for p in self._compiled_simple_question_patterns if p.search(content))
 
         # Check for complex patterns (increases score)
-        complex_matches = sum(
-            1 for p in self._compiled_complex_question_patterns if p.search(content)
-        )
+        complex_matches = sum(1 for p in self._compiled_complex_question_patterns if p.search(content))
 
         # Net score: complex matches - (simple matches * 0.5)
         net_score = complex_matches - (simple_matches * 0.5)
@@ -374,11 +362,7 @@ class TaskComplexityScorer:
         Returns:
             ComplexityResult with all fields populated
         """
-        tier = (
-            "simple"
-            if normalized_score < self.config.complexity_threshold
-            else "complex"
-        )
+        tier = "simple" if normalized_score < self.config.complexity_threshold else "complex"
         reasoning = self._generate_reasoning(factors, normalized_score, tier)
 
         if self.config.logging.log_scores:
@@ -396,9 +380,7 @@ class TaskComplexityScorer:
             reasoning=reasoning,
         )
 
-    def _generate_reasoning(
-        self, factors: Dict[str, float], score: float, tier: str
-    ) -> str:
+    def _generate_reasoning(self, factors: Dict[str, float], score: float, tier: str) -> str:
         """Generate human-readable reasoning for the score."""
         # Find dominant factors (score > 1.5)
         dominant = [k for k, v in factors.items() if v > 1.5]

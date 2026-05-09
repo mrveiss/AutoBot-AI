@@ -66,8 +66,7 @@ def test_constructor_accepts_llm_service_keyword() -> None:
     params = list(sig.parameters.keys())
     assert "llm_service" in params
     assert "llm_interface" not in params, (
-        "param must be renamed to 'llm_service' — orchestrator.py and any "
-        "future caller depend on the new name"
+        "param must be renamed to 'llm_service' — orchestrator.py and any " "future caller depend on the new name"
     )
 
 
@@ -161,7 +160,6 @@ def test_source_does_not_call_chat_completion() -> None:
     """
     src = inspect.getsource(WorkflowDocumenter._generate_llm_summary)
     assert ".chat_completion(" not in src, (
-        "_generate_llm_summary must call llm_service.chat(...), "
-        "not the deleted-from-LLMService chat_completion(...)"
+        "_generate_llm_summary must call llm_service.chat(...), " "not the deleted-from-LLMService chat_completion(...)"
     )
     assert ".chat(" in src, "expected a llm_service.chat(...) call"

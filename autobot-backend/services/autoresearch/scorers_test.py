@@ -217,9 +217,7 @@ class TestHumanReviewScorer:
     @pytest.mark.asyncio
     async def test_score_result_already_present_skips_blpop(self, scorer, mock_redis):
         # Result was written before score() was called — BLPOP must be skipped.
-        mock_redis.get.return_value = json.dumps(
-            {"score": 7, "comment": "good"}
-        ).encode()
+        mock_redis.get.return_value = json.dumps({"score": 7, "comment": "good"}).encode()
         result = await scorer.score(
             "test output",
             {"session_id": "s1", "variant_id": "v1"},

@@ -11,9 +11,9 @@ Manages session isolation, context persistence, and lifecycle.
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from autobot_shared.time_utils import now_utc
 from typing import Dict, List, Optional
 
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 
 from .config import GatewayConfig
@@ -89,8 +89,7 @@ class SessionManager:
             active_sessions = [
                 sid
                 for sid in user_sessions
-                if sid in self._sessions
-                and self._sessions[sid].status == SessionStatus.ACTIVE
+                if sid in self._sessions and self._sessions[sid].status == SessionStatus.ACTIVE
             ]
 
             if len(active_sessions) >= self.config.max_sessions_per_user:
@@ -241,12 +240,8 @@ class SessionManager:
     async def get_stats(self) -> Dict:
         """Get session manager statistics."""
         total_sessions = len(self._sessions)
-        active_sessions = sum(
-            1 for s in self._sessions.values() if s.status == SessionStatus.ACTIVE
-        )
-        idle_sessions = sum(
-            1 for s in self._sessions.values() if s.status == SessionStatus.IDLE
-        )
+        active_sessions = sum(1 for s in self._sessions.values() if s.status == SessionStatus.ACTIVE)
+        idle_sessions = sum(1 for s in self._sessions.values() if s.status == SessionStatus.IDLE)
 
         return {
             "total_sessions": total_sessions,

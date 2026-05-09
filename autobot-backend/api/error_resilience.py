@@ -13,12 +13,6 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.system_health import ComponentHealth, register_health_probe
-from services.resilience.circuit_breaker_manager import (
-    get_circuit_breaker_manager,
-)
-from services.resilience.error_budget import get_error_budget_tracker
-from services.resilience.fallback_manager import get_fallback_manager
 from api.schemas_workflows import (
     CircuitBreakerResetResponse,
     CircuitBreakerStatusResponse,
@@ -26,7 +20,13 @@ from api.schemas_workflows import (
     ErrorBudgetStatusResponse,
     ResilienceHealthResponse,
 )
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.resilience.circuit_breaker_manager import (
+    get_circuit_breaker_manager,
+)
+from services.resilience.error_budget import get_error_budget_tracker
+from services.resilience.fallback_manager import get_fallback_manager
 
 logger = logging.getLogger(__name__)
 
@@ -48,22 +48,13 @@ async def probe_error_resilience(
         cb_status = get_circuit_breaker_manager().get_status()
         budget_status = get_error_budget_tracker().get_status()
         get_fallback_manager()  # liveness only — no rich state to inspect
-        open_breakers = [
-            name for name, cb in cb_status.items() if cb.get("state") == "open"
-        ]
-        exhausted_budgets = [
-            name
-            for name, budget in budget_status.items()
-            if budget.get("has_budget") is False
-        ]
+        open_breakers = [name for name, cb in cb_status.items() if cb.get("state") == "open"]
+        exhausted_budgets = [name for name, budget in budget_status.items() if budget.get("has_budget") is False]
         if open_breakers or exhausted_budgets:
             return ComponentHealth(
                 name="error_resilience",
                 status="degraded",
-                detail=(
-                    f"{len(open_breakers)} breaker(s) open, "
-                    f"{len(exhausted_budgets)} budget(s) exhausted"
-                ),
+                detail=(f"{len(open_breakers)} breaker(s) open, " f"{len(exhausted_budgets)} budget(s) exhausted"),
                 data={
                     "open_breakers": open_breakers,
                     "exhausted_budgets": exhausted_budgets,
@@ -134,9 +125,7 @@ async def get_circuit_breaker_status() -> Dict[str, Any]:
         return manager.get_status()
     except Exception as e:
         logger.error("Error fetching circuit breaker status: %s", type(e).__name__)
-        raise HTTPException(
-            status_code=500, detail="Failed to get circuit breaker status"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get circuit breaker status")
 
 
 @router.get("/error-budgets", response_model=ErrorBudgetStatusResponse)
@@ -157,9 +146,7 @@ async def get_error_budget_status() -> Dict[str, Any]:
         return tracker.get_status()
     except Exception as e:
         logger.error("Error fetching error budget status: %s", type(e).__name__)
-        raise HTTPException(
-            status_code=500, detail="Failed to get error budget status"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get error budget status")
 
 
 @router.post("/circuit-breakers/{service_name}/reset", response_model=CircuitBreakerResetResponse)
@@ -184,9 +171,7 @@ async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
         return {"message": f"Circuit breaker for {service_name} reset"}
     except Exception as e:
         logger.error("Error resetting circuit breaker: %s", type(e).__name__)
-        raise HTTPException(
-            status_code=500, detail="Failed to reset circuit breaker"
-        )
+        raise HTTPException(status_code=500, detail="Failed to reset circuit breaker")
 
 
 @router.post("/error-budgets/{component}/reset", response_model=ErrorBudgetResetResponse)
@@ -211,6 +196,4 @@ async def reset_error_budget(component: str) -> Dict[str, str]:
         return {"message": f"Error budget for {component} reset"}
     except Exception as e:
         logger.error("Error resetting error budget: %s", type(e).__name__)
-        raise HTTPException(
-            status_code=500, detail="Failed to reset error budget"
-        )
+        raise HTTPException(status_code=500, detail="Failed to reset error budget")

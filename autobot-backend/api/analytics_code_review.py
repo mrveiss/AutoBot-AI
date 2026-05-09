@@ -14,7 +14,6 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -25,6 +24,8 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
 )
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
+    CodeReviewCategoryItem,
+    CodeReviewPatternItem,
     PatternToggleRequest,
     ReviewCategory,
     ReviewComment,
@@ -42,18 +43,16 @@ from api.schemas_code import (
     CodeReviewSummaryResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
-from api.schemas_analytics import CodeReviewPatternItem, CodeReviewCategoryItem
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 # Allowlist pattern for git commit range arguments (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.
-_VALID_GIT_REF_RE = re.compile(
-    r"^[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?$"
-)
+_VALID_GIT_REF_RE = re.compile(r"^[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?$")
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
@@ -291,9 +290,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     for pattern_id, pattern_def in REVIEW_PATTERNS.items():
         if pattern_def.get("pattern"):
             try:
-                for match in re.finditer(
-                    pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE
-                ):
+                for match in re.finditer(pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE):
                     # Calculate line number
                     line_num = content[: match.start()].count("\n") + 1
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
@@ -382,9 +379,7 @@ def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
         "info_count": by_severity.get("info", 0) + by_severity.get("suggestion", 0),
         "top_issues": [
             {"category": cat, "count": count}
-            for cat, count in sorted(
-                by_category.items(), key=lambda x: x[1], reverse=True
-            )[:5]
+            for cat, count in sorted(by_category.items(), key=lambda x: x[1], reverse=True)[:5]
         ],
     }
 
@@ -405,16 +400,12 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
             return stdout.decode("utf-8") if process.returncode == 0 else ""
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
-            logger.warning(
-                "Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT
-            )
+            logger.warning("Git diff timed out after %s seconds", TimingConstants.SHORT_TIMEOUT)
             return ""
     except Exception as e:
         logger.warning("Failed to get git diff: %s", e)
@@ -434,9 +425,7 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 )
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
-    commit_range: Optional[str] = Query(
-        None, description="Git commit range (e.g., HEAD~1..HEAD)"
-    ),
+    commit_range: Optional[str] = Query(None, description="Git commit range (e.g., HEAD~1..HEAD)"),
     source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
@@ -454,9 +443,7 @@ async def analyze_diff(
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
-        return _no_data_response(
-            "No git diff available. Make changes or specify a commit range."
-        )
+        return _no_data_response("No git diff available. Make changes or specify a commit range.")
 
     # Parse diff
     files = parse_diff(diff_content)
@@ -473,18 +460,11 @@ async def analyze_diff(
                 try:
                     resolved.relative_to(source_root.resolve())
                 except ValueError:
-                    logger.debug(
-                        "Skipping file outside source_root: %s", file_info["path"]
-                    )
+                    logger.debug("Skipping file outside source_root: %s", file_info["path"])
                     continue
             # Issue #358 - avoid blocking
-            if (
-                await asyncio.to_thread(file_path.exists)
-                and file_path.suffix in REVIEWABLE_EXTENSIONS
-            ):
-                content = await asyncio.to_thread(
-                    file_path.read_text, encoding="utf-8", errors="ignore"
-                )
+            if await asyncio.to_thread(file_path.exists) and file_path.suffix in REVIEWABLE_EXTENSIONS:
+                content = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="ignore")
                 comments = analyze_code(content, str(file_path))
                 all_comments.extend(comments)
         except Exception as e:
@@ -512,9 +492,7 @@ async def analyze_diff(
         if redis:
             effective_source = source_id or "default"
             redis_key = f"code_review:result:{effective_source}:{review_id}"
-            await asyncio.to_thread(
-                redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS
-            )
+            await asyncio.to_thread(redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS)
             history_entry = {
                 "id": review_id,
                 "path": result_payload["path"],
@@ -528,12 +506,8 @@ async def analyze_diff(
                 f"code_review:history:{effective_source}",
                 json.dumps(history_entry),
             )
-            await asyncio.to_thread(
-                redis.ltrim, f"code_review:history:{effective_source}", 0, 99
-            )
-            await asyncio.to_thread(
-                redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS
-            )
+            await asyncio.to_thread(redis.ltrim, f"code_review:history:{effective_source}", 0, 99)
+            await asyncio.to_thread(redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS)
             logger.info("Stored code review result %s for source %s", review_id, effective_source)
     except Exception as exc:
         logger.warning("Failed to persist code review result: %s", exc)
@@ -576,9 +550,7 @@ async def get_review_by_id(
             raise HTTPException(status_code=503, detail="Analytics database unavailable")
 
         if source_id:
-            raw = await asyncio.to_thread(
-                redis.get, f"code_review:result:{source_id}:{review_id}"
-            )
+            raw = await asyncio.to_thread(redis.get, f"code_review:result:{source_id}:{review_id}")
         else:
             # Scan across all sources for this review_id
             pattern = f"code_review:result:*:{review_id}"
@@ -619,13 +591,9 @@ async def review_file(
             path = Path(file_path)
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(path.exists):
-                content = await asyncio.to_thread(
-                    path.read_text, encoding="utf-8", errors="ignore"
-                )
+                content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
             else:
-                raise HTTPException(
-                    status_code=404, detail=f"File not found: {file_path}"
-                )
+                raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
         except Exception:
             raise HTTPException(status_code=400, detail="Internal server error")
 
@@ -703,9 +671,7 @@ async def get_review_history(
             return _no_data_response("Analytics database unavailable.")
 
         effective_source = source_id or "default"
-        raw_entries = await asyncio.to_thread(
-            redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1
-        )
+        raw_entries = await asyncio.to_thread(redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1)
 
         reviews = []
         for raw in raw_entries:
@@ -733,9 +699,7 @@ async def get_review_history(
         return {"status": "success", "reviews": reviews, "total": len(reviews)}
     except Exception as exc:
         logger.warning("Failed to load review history: %s", exc)
-        return _no_data_response(
-            "No review history available. Reviews will be stored here once you run code reviews."
-        )
+        return _no_data_response("No review history available. Reviews will be stored here once you run code reviews.")
 
 
 @router.get("/metrics", response_model=CodeReviewMetricsResponse)
@@ -759,9 +723,7 @@ async def get_review_metrics(
     """
     await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response(
-        "No review metrics available. Metrics will accumulate as you run code reviews."
-    )
+    return _no_data_response("No review metrics available. Metrics will accumulate as you run code reviews.")
 
 
 @router.post("/feedback", response_model=CodeReviewFeedbackResponse)
@@ -795,12 +757,8 @@ async def submit_feedback(
                 "submitted_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                redis.lpush, "code_review:feedback", json.dumps(feedback)
-            )
-            await asyncio.to_thread(
-                redis.ltrim, "code_review:feedback", 0, 999
-            )  # Keep last 1000
+            await asyncio.to_thread(redis.lpush, "code_review:feedback", json.dumps(feedback))
+            await asyncio.to_thread(redis.ltrim, "code_review:feedback", 0, 999)  # Keep last 1000
 
             return {"status": "success", "feedback": feedback}
     except Exception as e:
@@ -887,25 +845,17 @@ async def toggle_pattern_preference(
 
         redis = get_redis_client(async_client=False, database="analytics")
         if not redis:
-            raise HTTPException(
-                status_code=503, detail="Analytics database unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Analytics database unavailable")
 
         # Validate pattern exists
         if request.pattern_id not in REVIEW_PATTERNS:
-            raise HTTPException(
-                status_code=404, detail=f"Pattern {request.pattern_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Pattern {request.pattern_id} not found")
 
         # Store preference in Redis hash
         key = "code_review:pattern_prefs"
-        await asyncio.to_thread(
-            redis.hset, key, request.pattern_id, str(request.enabled).lower()
-        )
+        await asyncio.to_thread(redis.hset, key, request.pattern_id, str(request.enabled).lower())
 
-        logger.info(
-            "Pattern preference updated: %s = %s", request.pattern_id, request.enabled
-        )
+        logger.info("Pattern preference updated: %s = %s", request.pattern_id, request.enabled)
 
         return {
             "status": "success",
@@ -941,12 +891,7 @@ async def get_pattern_preferences(
         redis = get_redis_client(async_client=False, database="analytics")
         if not redis:
             # Return default (all enabled) if Redis unavailable
-            return {
-                "patterns": {
-                    pattern_id: {"enabled": True}
-                    for pattern_id in REVIEW_PATTERNS.keys()
-                }
-            }
+            return {"patterns": {pattern_id: {"enabled": True} for pattern_id in REVIEW_PATTERNS.keys()}}
 
         # Get all preferences from Redis hash
         key = "code_review:pattern_prefs"
@@ -969,11 +914,7 @@ async def get_pattern_preferences(
     except Exception as e:
         logger.warning("Failed to load pattern preferences: %s", e)
         # Return default (all enabled) on error
-        return {
-            "patterns": {
-                pattern_id: {"enabled": True} for pattern_id in REVIEW_PATTERNS.keys()
-            }
-        }
+        return {"patterns": {pattern_id: {"enabled": True} for pattern_id in REVIEW_PATTERNS.keys()}}
 
 
 def _get_category_description(category: ReviewCategory) -> str:

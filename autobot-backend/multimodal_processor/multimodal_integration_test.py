@@ -39,9 +39,7 @@ class TestMultiModalWorkflowIntegration:
     def teardown_method(self):
         """Clean up after tests"""
 
-    def create_test_image(
-        self, width: int = 400, height: int = 300, color: str = "lightblue"
-    ) -> bytes:
+    def create_test_image(self, width: int = 400, height: int = 300, color: str = "lightblue") -> bytes:
         """Create a test image for multi-modal testing"""
         image = Image.new("RGB", (width, height), color=color)
 
@@ -69,9 +67,7 @@ class TestMultiModalWorkflowIntegration:
         image.save(buffer, format="PNG")
         return buffer.getvalue()
 
-    def create_test_audio(
-        self, duration: float = 2.0, sample_rate: int = 16000
-    ) -> bytes:
+    def create_test_audio(self, duration: float = 2.0, sample_rate: int = 16000) -> bytes:
         """Create test audio data for multi-modal testing"""
         # Generate a simple sine wave
         t = np.linspace(0, duration, int(sample_rate * duration))
@@ -145,9 +141,7 @@ class TestMultiModalWorkflowIntegration:
                 "confidence_score": 0.88,
             }
 
-            screenshot_result = await multimodal_processor.process_input(
-                screenshot_input
-            )
+            screenshot_result = await multimodal_processor.process_input(screenshot_input)
 
             # Verify screenshot analysis
             assert screenshot_result.success
@@ -186,9 +180,7 @@ class TestMultiModalWorkflowIntegration:
             timestamp=time.time(),
         )
 
-        with patch.object(
-            multimodal_processor, "_process_combined_input"
-        ) as mock_combined:
+        with patch.object(multimodal_processor, "_process_combined_input") as mock_combined:
             mock_combined.return_value = {
                 "image_analysis": {
                     "ui_elements": [{"type": "menu", "confidence": 0.9}],
@@ -200,9 +192,7 @@ class TestMultiModalWorkflowIntegration:
                     "confidence": 0.85,
                 },
                 "correlation_score": 0.92,
-                "recommended_actions": [
-                    {"action": "click_menu", "target": "settings", "confidence": 0.88}
-                ],
+                "recommended_actions": [{"action": "click_menu", "target": "settings", "confidence": 0.88}],
             }
 
             combined_result = await multimodal_processor.process_input(combined_input)
@@ -270,9 +260,7 @@ class TestMultiModalWorkflowIntegration:
 
             if isinstance(input_data, AudioInput):
                 # Process audio input
-                with patch.object(
-                    voice_processing_system, "process_voice_command"
-                ) as mock_voice:
+                with patch.object(voice_processing_system, "process_voice_command") as mock_voice:
                     mock_voice.return_value = {
                         "success": True,
                         "transcription": f'Stream command {input_data.metadata["stream_index"]}',
@@ -280,9 +268,7 @@ class TestMultiModalWorkflowIntegration:
                         "confidence": 0.8,
                     }
 
-                    result = await voice_processing_system.process_voice_command(
-                        input_data
-                    )
+                    result = await voice_processing_system.process_voice_command(input_data)
             else:
                 # Process other modalities
                 with patch.object(multimodal_processor, "process_input") as mock_modal:
@@ -313,16 +299,10 @@ class TestMultiModalWorkflowIntegration:
         avg_processing_time = sum(processing_times) / len(processing_times)
         max_processing_time = max(processing_times)
 
-        assert (
-            avg_processing_time < 1.0
-        ), "Average processing time too high for real-time"
-        assert (
-            max_processing_time < 2.0
-        ), "Maximum processing time too high for real-time"
+        assert avg_processing_time < 1.0, "Average processing time too high for real-time"
+        assert max_processing_time < 2.0, "Maximum processing time too high for real-time"
 
-        print(  # noqa: print
-            f"✅ Real-time stream: {len(results)} inputs, avg {avg_processing_time:.3f}s"
-        )
+        print(f"✅ Real-time stream: {len(results)} inputs, avg {avg_processing_time:.3f}s")  # noqa: print
 
     async def test_cross_modal_context_preservation(self):
         """Test that context is preserved across different modalities"""
@@ -360,9 +340,7 @@ class TestMultiModalWorkflowIntegration:
             timestamp=time.time(),
         )
 
-        with patch.object(
-            multimodal_processor, "_enhance_visual_context"
-        ) as mock_visual:
+        with patch.object(multimodal_processor, "_enhance_visual_context") as mock_visual:
             mock_visual.return_value = {
                 "form_elements": [
                     {"type": "input", "label": "username"},
@@ -391,9 +369,7 @@ class TestMultiModalWorkflowIntegration:
             metadata={"session_id": session_id, "step": 3},
         )
 
-        with patch.object(
-            voice_processing_system, "process_voice_command"
-        ) as mock_audio:
+        with patch.object(voice_processing_system, "process_voice_command") as mock_audio:
             mock_audio.return_value = {
                 "success": True,
                 "transcription": "fill username with john_doe and click submit",
@@ -405,9 +381,7 @@ class TestMultiModalWorkflowIntegration:
                 },
             }
 
-            audio_result = await voice_processing_system.process_voice_command(
-                audio_context
-            )
+            audio_result = await voice_processing_system.process_voice_command(audio_context)
             assert audio_result["success"]
             assert "context_awareness" in audio_result
 
@@ -502,9 +476,7 @@ class TestMultiModalWorkflowIntegration:
             metadata={"test_scenario": "audio_error"},
         )
 
-        with patch.object(
-            voice_processing_system, "process_voice_command"
-        ) as mock_audio:
+        with patch.object(voice_processing_system, "process_voice_command") as mock_audio:
             mock_audio.return_value = {
                 "success": False,
                 "error": "Invalid audio format",
@@ -512,17 +484,13 @@ class TestMultiModalWorkflowIntegration:
                 "confidence": 0.0,
             }
 
-            audio_result = await voice_processing_system.process_voice_command(
-                audio_input
-            )
+            audio_result = await voice_processing_system.process_voice_command(audio_input)
 
             # Should handle error gracefully
             assert isinstance(audio_result, dict)
             assert "error" in audio_result or not audio_result.get("success", True)
 
-        print(  # noqa: print
-            "✅ Error recovery workflow completed - system remained stable"
-        )  # noqa: print
+        print("✅ Error recovery workflow completed - system remained stable")  # noqa: print  # noqa: print
 
     async def test_performance_under_multimodal_load(self):
         """Test system performance under concurrent multi-modal load"""
@@ -543,9 +511,7 @@ class TestMultiModalWorkflowIntegration:
                     timestamp=time.time(),
                 )
 
-                with patch.object(
-                    multimodal_processor, "process_input"
-                ) as mock_process:
+                with patch.object(multimodal_processor, "process_input") as mock_process:
                     mock_result = MagicMock()
                     mock_result.success = True
                     mock_result.confidence = 0.8
@@ -565,9 +531,7 @@ class TestMultiModalWorkflowIntegration:
                     timestamp=time.time(),
                 )
 
-                with patch.object(
-                    multimodal_processor, "process_input"
-                ) as mock_process:
+                with patch.object(multimodal_processor, "process_input") as mock_process:
                     mock_result = MagicMock()
                     mock_result.success = True
                     mock_result.confidence = 0.8
@@ -589,9 +553,7 @@ class TestMultiModalWorkflowIntegration:
                     metadata={"load_test": True, "request_id": request_id},
                 )
 
-                with patch.object(
-                    voice_processing_system, "process_voice_command"
-                ) as mock_voice:
+                with patch.object(voice_processing_system, "process_voice_command") as mock_voice:
                     mock_voice.return_value = {
                         "success": True,
                         "transcription": f"Load test {request_id}",
@@ -599,9 +561,7 @@ class TestMultiModalWorkflowIntegration:
                         "request_id": request_id,
                     }
 
-                    return await voice_processing_system.process_voice_command(
-                        audio_input
-                    )
+                    return await voice_processing_system.process_voice_command(audio_input)
 
         # Execute concurrent load test
         start_time = time.perf_counter()
@@ -614,16 +574,12 @@ class TestMultiModalWorkflowIntegration:
 
         # Verify all requests completed
         successful_results = [r for r in results if not isinstance(r, Exception)]
-        assert (
-            len(successful_results) >= concurrent_requests * 0.8
-        )  # At least 80% success
+        assert len(successful_results) >= concurrent_requests * 0.8  # At least 80% success
 
         # Performance assertions
         avg_time_per_request = total_time / concurrent_requests
         assert total_time < 30.0, f"Load test took too long: {total_time:.2f}s"
-        assert (
-            avg_time_per_request < 3.0
-        ), f"Average per request too high: {avg_time_per_request:.2f}s"
+        assert avg_time_per_request < 3.0, f"Average per request too high: {avg_time_per_request:.2f}s"
 
         print(  # noqa: print
             f"✅ Load test: {len(successful_results)}/{concurrent_requests} succeeded in {total_time:.2f}s"

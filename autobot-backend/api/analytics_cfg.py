@@ -24,9 +24,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from auth_middleware import check_admin_permission
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.security.path_validator import validate_path
 from api.schemas_analytics import (
     CFGAnalyzeFileRequest,
     CFGAnalyzeRequest,
@@ -36,6 +33,9 @@ from api.schemas_analytics import (
     NodeType,
 )
 from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 
@@ -187,9 +187,7 @@ class CFGBuilder(ast.NodeVisitor):
         try:
             start_line = node.lineno - 1
             end_line = getattr(node, "end_lineno", node.lineno)
-            if start_line < len(self.source_lines) and end_line <= len(
-                self.source_lines
-            ):
+            if start_line < len(self.source_lines) and end_line <= len(self.source_lines):
                 return "\n".join(self.source_lines[start_line:end_line])
         except Exception as e:
             logger.debug("Failed to extract code snippet from AST node: %s", e)
@@ -265,9 +263,7 @@ class CFGBuilder(ast.NodeVisitor):
         """Build CFG for an async function definition."""
         self._build_function_cfg(node, is_async=True)
 
-    def _build_function_cfg(
-        self, node: ast.FunctionDef, is_async: bool = False
-    ) -> None:
+    def _build_function_cfg(self, node: ast.FunctionDef, is_async: bool = False) -> None:
         """Build CFG for a function."""
         # Create new graph
         self._current_graph = ControlFlowGraph(
@@ -485,9 +481,7 @@ class CFGBuilder(ast.NodeVisitor):
 
         return [exit_id]
 
-    def _create_loop_exit_node(
-        self, stmt: ast.stmt, exit_id: str, ast_type: str
-    ) -> CFGNode:
+    def _create_loop_exit_node(self, stmt: ast.stmt, exit_id: str, ast_type: str) -> CFGNode:
         """
         Create an exit node for a loop construct.
 
@@ -584,10 +578,7 @@ class CFGBuilder(ast.NodeVisitor):
 
         Issue #620.
         """
-        has_break = any(
-            isinstance(node, ast.Break)
-            for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[]))
-        )
+        has_break = any(isinstance(node, ast.Break) for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[])))
         if not has_break:
             issue = self._create_loop_issue(
                 stmt,
@@ -769,8 +760,7 @@ class CFGBuilder(ast.NodeVisitor):
     def _process_with(self, stmt: ast.With) -> List[str]:
         """Process a with statement."""
         items_str = ", ".join(
-            ast.unparse(item.context_expr) if hasattr(ast, "unparse") else "..."
-            for item in stmt.items
+            ast.unparse(item.context_expr) if hasattr(ast, "unparse") else "..." for item in stmt.items
         )
         with_node = self._add_node(NodeType.STATEMENT, stmt, f"with {items_str}:")
 
@@ -838,9 +828,7 @@ class CFGBuilder(ast.NodeVisitor):
 
         return []  # Continue terminates normal flow
 
-    def _check_high_complexity(
-        self, graph: "ControlFlowGraph", complexity: int
-    ) -> None:
+    def _check_high_complexity(self, graph: "ControlFlowGraph", complexity: int) -> None:
         """
         Check and add issue for high cyclomatic complexity.
 
@@ -895,12 +883,8 @@ class CFGBuilder(ast.NodeVisitor):
         cyclomatic_complexity = num_edges - num_nodes + 2
 
         # Count decision and loop nodes
-        decision_points = sum(
-            1 for node in graph.nodes if node.node_type == NodeType.CONDITION
-        )
-        loop_count = sum(
-            1 for node in graph.nodes if node.node_type == NodeType.LOOP_HEADER
-        )
+        decision_points = sum(1 for node in graph.nodes if node.node_type == NodeType.CONDITION)
+        loop_count = sum(1 for node in graph.nodes if node.node_type == NodeType.LOOP_HEADER)
         max_depth = self._calculate_nesting_depth()
 
         graph.metrics = {
@@ -979,9 +963,7 @@ class CFGBuilder(ast.NodeVisitor):
             return
 
         # Count return nodes
-        return_nodes = [
-            n for n in self._current_graph.nodes if n.node_type == NodeType.RETURN
-        ]
+        return_nodes = [n for n in self._current_graph.nodes if n.node_type == NodeType.RETURN]
 
         if not return_nodes:
             # No explicit returns - might be intentional for void functions
@@ -993,9 +975,7 @@ class CFGBuilder(ast.NodeVisitor):
 
         # Check edges to exit
         edges_to_exit = [
-            e
-            for e in self._current_graph.edges
-            if e.target_id in exit_nodes and e.edge_type != EdgeType.RETURN_EDGE
+            e for e in self._current_graph.edges if e.target_id in exit_nodes and e.edge_type != EdgeType.RETURN_EDGE
         ]
 
         if edges_to_exit:
@@ -1036,9 +1016,7 @@ def _aggregate_cfg_issues(graphs: List[ControlFlowGraph]) -> List[Dict[str, Any]
     return all_issues
 
 
-def _calculate_cfg_summary(
-    graphs: List[ControlFlowGraph], all_issues: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+def _calculate_cfg_summary(graphs: List[ControlFlowGraph], all_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Calculate summary statistics for CFG analysis.
 
@@ -1056,9 +1034,7 @@ def _calculate_cfg_summary(
             "low": sum(1 for i in all_issues if i["severity"] == "low"),
         },
         "avg_cyclomatic_complexity": (
-            sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs) / len(graphs)
-            if graphs
-            else 0
+            sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs) / len(graphs) if graphs else 0
         ),
     }
 
@@ -1192,9 +1168,7 @@ def _convert_cfg_to_dot(graph: ControlFlowGraph) -> Dict[str, str]:
     for edge in graph.edges:
         style = _DOT_EDGE_STYLES.get(edge.edge_type, "")
         label = edge.condition if edge.condition else ""
-        dot_lines.append(
-            f'  "{edge.source_id}" -> "{edge.target_id}" [{style}, label="{label}"];'
-        )
+        dot_lines.append(f'  "{edge.source_id}" -> "{edge.target_id}" [{style}, label="{label}"];')
 
     dot_lines.append("}")
     return {"function_name": graph.function_name, "dot": "\n".join(dot_lines)}
@@ -1268,17 +1242,9 @@ async def get_complexity_metrics(
             "metrics": metrics,
             "summary": {
                 "total_functions": len(metrics),
-                "avg_complexity": (
-                    sum(m["cyclomatic_complexity"] for m in metrics) / len(metrics)
-                    if metrics
-                    else 0
-                ),
-                "max_complexity": max(
-                    (m["cyclomatic_complexity"] for m in metrics), default=0
-                ),
-                "high_complexity_count": sum(
-                    1 for m in metrics if m["cyclomatic_complexity"] > 10
-                ),
+                "avg_complexity": (sum(m["cyclomatic_complexity"] for m in metrics) / len(metrics) if metrics else 0),
+                "max_complexity": max((m["cyclomatic_complexity"] for m in metrics), default=0),
+                "high_complexity_count": sum(1 for m in metrics if m["cyclomatic_complexity"] > 10),
             },
         },
     )
@@ -1354,16 +1320,10 @@ async def detect_infinite_loops(
         content={
             "success": True,
             "loop_issues": loop_issues,
-            "definite_infinite": sum(
-                1 for i in loop_issues if i["issue_type"] == "infinite_loop"
-            ),
-            "potential_infinite": sum(
-                1 for i in loop_issues if i["issue_type"] == "potential_infinite_loop"
-            ),
+            "definite_infinite": sum(1 for i in loop_issues if i["issue_type"] == "infinite_loop"),
+            "potential_infinite": sum(1 for i in loop_issues if i["issue_type"] == "potential_infinite_loop"),
         },
     )
-
-
 
 
 @router.get("/health", response_model=DataResponse)
@@ -1384,8 +1344,7 @@ async def cfg_health(
     Issue #744: Requires admin authentication.
     """
     logger.warning(
-        "Deprecated health endpoint called: /api/cfg-analytics/health — "
-        "use /api/system/health instead (#3333)"
+        "Deprecated health endpoint called: /api/cfg-analytics/health — " "use /api/system/health instead (#3333)"
     )
     return JSONResponse(
         status_code=200,

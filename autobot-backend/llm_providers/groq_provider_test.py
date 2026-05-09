@@ -69,9 +69,7 @@ class TestGroqProviderChatCompletion:
     async def test_successful_completion(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_sdk_response("Hello from Groq!")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_sdk_response("Hello from Groq!"))
         provider._client = mock_client
 
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
@@ -85,9 +83,7 @@ class TestGroqProviderChatCompletion:
     async def test_error_returned_in_response(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("rate limit exceeded")
-        )
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("rate limit exceeded"))
         provider._client = mock_client
 
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
@@ -101,9 +97,7 @@ class TestGroqProviderChatCompletion:
     async def test_usage_populated(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_sdk_response("ok")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_sdk_response("ok"))
         provider._client = mock_client
 
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
@@ -117,9 +111,7 @@ class TestGroqProviderChatCompletion:
     async def test_custom_model_used(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=_make_sdk_response("ok", model="llama3-70b-8192")
-        )
+        mock_client.chat.completions.create = AsyncMock(return_value=_make_sdk_response("ok", model="llama3-70b-8192"))
         provider._client = mock_client
 
         request = LLMRequest(
@@ -147,9 +139,7 @@ class TestGroqProviderListModels:
         model_b = MagicMock()
         model_b.id = "mixtral-8x7b-32768"
         mock_client = AsyncMock()
-        mock_client.models.list = AsyncMock(
-            return_value=MagicMock(data=[model_a, model_b])
-        )
+        mock_client.models.list = AsyncMock(return_value=MagicMock(data=[model_a, model_b]))
         provider._client = mock_client
 
         models = await provider.list_models()

@@ -165,9 +165,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
         """Record an embedding usage event"""
         try:
             redis = await self._get_redis()
-            operation_id = (
-                f"emb_{int(time.time() * 1000)}_{hash(request.model) % 10000}"
-            )
+            operation_id = f"emb_{int(time.time() * 1000)}_{hash(request.model) % 10000}"
 
             # Calculate cost
             cost = self._calculate_cost(request.model, request.token_count)
@@ -218,9 +216,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
                 await pipe.hincrby(daily_key, "total_tokens", request.token_count)
                 await pipe.hincrby(daily_key, "total_documents", request.document_count)
                 await pipe.hincrbyfloat(daily_key, "total_cost", cost)
-                await pipe.hincrbyfloat(
-                    daily_key, "total_processing_time", request.processing_time
-                )
+                await pipe.hincrbyfloat(daily_key, "total_processing_time", request.processing_time)
                 await pipe.hincrby(daily_key, "total_batch_size", request.batch_size)
 
                 if request.success:
@@ -266,10 +262,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             redis = await self._get_redis()
 
             # Aggregate daily stats - batch fetch using pipeline to eliminate N+1
-            dates = [
-                (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
-                for i in range(days)
-            ]
+            dates = [(datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
             daily_keys = [f"{self._stats_key}:daily:{date}" for date in dates]
 
             async with redis.pipeline() as pipe:
@@ -288,14 +281,10 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             ) = self._sum_daily_stats(all_stats)
 
             # Calculate derived metrics
-            avg_processing_time = (
-                total_processing_time / total_ops if total_ops > 0 else 0
-            )
+            avg_processing_time = total_processing_time / total_ops if total_ops > 0 else 0
             success_rate = successful_ops / total_ops if total_ops > 0 else 1.0
             avg_batch_size = total_batch_size / total_ops if total_ops > 0 else 0
-            tokens_per_second = (
-                total_tokens / total_processing_time if total_processing_time > 0 else 0
-            )
+            tokens_per_second = total_tokens / total_processing_time if total_processing_time > 0 else 0
 
             return {
                 "status": "success",
@@ -349,16 +338,12 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             models = []
 
             while True:
-                cursor, keys = await redis.scan(
-                    cursor, match=f"{self._model_stats_key}:*", count=100
-                )
+                cursor, keys = await redis.scan(cursor, match=f"{self._model_stats_key}:*", count=100)
 
                 # Batch fetch and parse using helper (Issue #315 - reduced depth)
                 if keys:
                     all_stats = await self._fetch_model_stats_batch(redis, keys)
-                    parsed = [
-                        self._parse_model_stats(k, s) for k, s in zip(keys, all_stats)
-                    ]
+                    parsed = [self._parse_model_stats(k, s) for k, s in zip(keys, all_stats)]
                     models.extend(m for m in parsed if m)
 
                 if cursor == 0:
@@ -375,9 +360,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             logger.error("Failed to get model comparison: %s", e)
             return {"status": "error", "error": "Internal server error"}
 
-    def _build_batch_recommendations(
-        self, avg_batch_size: float, tokens_per_second: float
-    ) -> list:
+    def _build_batch_recommendations(self, avg_batch_size: float, tokens_per_second: float) -> list:
         """Helper for get_batch_optimization_recommendations. Ref: #1088."""
         recommendations = []
         if avg_batch_size < 10:
@@ -401,8 +384,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
                     "recommended_value": 50,
                     "potential_improvement": "Better memory efficiency",
                     "reasoning": (
-                        "Large batch sizes may cause memory issues. "
-                        "Consider reducing to 50 for stability."
+                        "Large batch sizes may cause memory issues. " "Consider reducing to 50 for stability."
                     ),
                 }
             )
@@ -432,9 +414,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             current_stats = stats.get("stats", {})
             avg_batch_size = current_stats.get("avg_batch_size", 1)
             tokens_per_second = current_stats.get("tokens_per_second", 0)
-            recommendations = self._build_batch_recommendations(
-                avg_batch_size, tokens_per_second
-            )
+            recommendations = self._build_batch_recommendations(avg_batch_size, tokens_per_second)
             return {
                 "status": "success",
                 "recommendations": recommendations,
@@ -452,6 +432,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
 # =============================================================================
 
 import threading
+
 from api.schemas_common import DataResponse, SuccessResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

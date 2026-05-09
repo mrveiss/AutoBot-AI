@@ -2,7 +2,6 @@
 
 import unittest
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import now_utc
 
 from notification_suppression import (
     NotificationFilter,
@@ -10,6 +9,8 @@ from notification_suppression import (
     NotificationSuppressionConfig,
     NotificationSuppressionManager,
 )
+
+from autobot_shared.time_utils import now_utc
 
 
 class TestNotificationFilter(unittest.TestCase):
@@ -43,31 +44,23 @@ class TestNotificationSuppressionConfig(unittest.TestCase):
     def test_should_suppress_ci_activity(self):
         """Test that old CI activity is suppressed."""
         # 10 days old, max is 7
-        should_suppress = self.config.should_suppress(
-            NotificationReason.CI_ACTIVITY, age_days=10
-        )
+        should_suppress = self.config.should_suppress(NotificationReason.CI_ACTIVITY, age_days=10)
         self.assertTrue(should_suppress)
 
     def test_should_not_suppress_recent_ci_activity(self):
         """Test that recent CI activity is not suppressed."""
         # 3 days old, max is 7
-        should_suppress = self.config.should_suppress(
-            NotificationReason.CI_ACTIVITY, age_days=3
-        )
+        should_suppress = self.config.should_suppress(NotificationReason.CI_ACTIVITY, age_days=3)
         self.assertFalse(should_suppress)
 
     def test_keep_author_notifications(self):
         """Test that author notifications are always kept."""
-        should_suppress = self.config.should_suppress(
-            NotificationReason.AUTHOR, age_days=100
-        )
+        should_suppress = self.config.should_suppress(NotificationReason.AUTHOR, age_days=100)
         self.assertFalse(should_suppress)
 
     def test_keep_review_requested(self):
         """Test that review requests are always kept."""
-        should_suppress = self.config.should_suppress(
-            NotificationReason.REVIEW_REQUESTED, age_days=100
-        )
+        should_suppress = self.config.should_suppress(NotificationReason.REVIEW_REQUESTED, age_days=100)
         self.assertFalse(should_suppress)
 
     def test_get_filter(self):
@@ -90,9 +83,7 @@ class TestNotificationSuppressionManager(unittest.TestCase):
         old_time = now_utc() - timedelta(days=10)
         updated_at = old_time.isoformat().replace("+00:00", "Z")
 
-        should_suppress, reason = self.manager.classify_notification(
-            "ci_activity", updated_at
-        )
+        should_suppress, reason = self.manager.classify_notification("ci_activity", updated_at)
         self.assertTrue(should_suppress)
         self.assertIn("archive", reason)
 
@@ -101,18 +92,14 @@ class TestNotificationSuppressionManager(unittest.TestCase):
         old_time = now_utc() - timedelta(days=100)
         updated_at = old_time.isoformat().replace("+00:00", "Z")
 
-        should_suppress, reason = self.manager.classify_notification(
-            "author", updated_at
-        )
+        should_suppress, reason = self.manager.classify_notification("author", updated_at)
         self.assertFalse(should_suppress)
         self.assertIn("keep", reason)
 
     def test_classify_unknown_reason(self):
         """Test classifying unknown reason."""
         now = now_utc().isoformat().replace("+00:00", "Z")
-        should_suppress, reason = self.manager.classify_notification(
-            "unknown_reason", now
-        )
+        should_suppress, reason = self.manager.classify_notification("unknown_reason", now)
         self.assertFalse(should_suppress)
         self.assertIn("unknown", reason)
 

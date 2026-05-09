@@ -98,9 +98,7 @@ async def test_track_task_complete_updates_and_cleans():
         "started_at": datetime.now(tz=timezone.utc).isoformat(),
         "metadata": {},
     }
-    redis_stub.get = AsyncMock(
-        return_value=json.dumps(start_record).encode("utf-8")
-    )
+    redis_stub.get = AsyncMock(return_value=json.dumps(start_record).encode("utf-8"))
 
     result = await analytics.track_task_complete(
         task_id=task_id,
@@ -196,9 +194,7 @@ async def test_track_agent_usage_success():
 
     redis_stub.get.side_effect = fake_get
 
-    with patch(
-        "services.agent_analytics.get_agent_analytics", return_value=analytics
-    ):
+    with patch("services.agent_analytics.get_agent_analytics", return_value=analytics):
         async with track_agent_usage("chat", "conversation"):
             pass  # no exception → COMPLETED
 
@@ -235,9 +231,7 @@ async def test_track_agent_usage_failure_records_failed():
 
     analytics.track_task_complete = capture_complete
 
-    with patch(
-        "services.agent_analytics.get_agent_analytics", return_value=analytics
-    ):
+    with patch("services.agent_analytics.get_agent_analytics", return_value=analytics):
         with pytest.raises(ValueError):
             async with track_agent_usage("chat", "conversation"):
                 raise ValueError("boom")
@@ -282,9 +276,10 @@ async def test_execute_with_tracking_calls_analytics():
         payload={},
     )
 
-    with patch(
-        "agents.base_agent.get_agent_analytics", return_value=mock_analytics, create=True
-    ), patch("agents.base_agent.TaskStatus", TaskStatus, create=True):
+    with (
+        patch("agents.base_agent.get_agent_analytics", return_value=mock_analytics, create=True),
+        patch("agents.base_agent.TaskStatus", TaskStatus, create=True),
+    ):
         response = await dummy.execute_with_tracking(request)
 
     assert response.status == "success"
@@ -317,9 +312,10 @@ async def test_execute_with_tracking_records_failure():
     mock_analytics.track_task_start = AsyncMock(return_value=MagicMock())
     mock_analytics.track_task_complete = AsyncMock(return_value=MagicMock())
 
-    with patch(
-        "agents.base_agent.get_agent_analytics", return_value=mock_analytics, create=True
-    ), patch("agents.base_agent.TaskStatus", TaskStatus, create=True):
+    with (
+        patch("agents.base_agent.get_agent_analytics", return_value=mock_analytics, create=True),
+        patch("agents.base_agent.TaskStatus", TaskStatus, create=True),
+    ):
         response = await broken.execute_with_tracking(request)
 
     assert response.status == "error"
@@ -383,17 +379,18 @@ async def test_usage_endpoint_returns_structure():
     }
 
     mock_analytics_instance = AsyncMock()
-    mock_analytics_instance.get_all_agents_metrics = AsyncMock(
-        return_value=[mock_metrics]
-    )
+    mock_analytics_instance.get_all_agents_metrics = AsyncMock(return_value=[mock_metrics])
     mock_analytics_instance.get_recent_tasks = AsyncMock(return_value=[mock_task])
 
-    with patch(
-        "api.agent_config.check_admin_permission",
-        return_value=True,
-    ), patch(
-        "services.agent_analytics.get_agent_analytics",
-        return_value=mock_analytics_instance,
+    with (
+        patch(
+            "api.agent_config.check_admin_permission",
+            return_value=True,
+        ),
+        patch(
+            "services.agent_analytics.get_agent_analytics",
+            return_value=mock_analytics_instance,
+        ),
     ):
         from fastapi import FastAPI
 
@@ -436,12 +433,15 @@ async def test_usage_endpoint_outcome_filter():
     mock_analytics_instance.get_all_agents_metrics = AsyncMock(return_value=[])
     mock_analytics_instance.get_recent_tasks = AsyncMock(return_value=mock_tasks)
 
-    with patch(
-        "api.agent_config.check_admin_permission",
-        return_value=True,
-    ), patch(
-        "services.agent_analytics.get_agent_analytics",
-        return_value=mock_analytics_instance,
+    with (
+        patch(
+            "api.agent_config.check_admin_permission",
+            return_value=True,
+        ),
+        patch(
+            "services.agent_analytics.get_agent_analytics",
+            return_value=mock_analytics_instance,
+        ),
     ):
         from fastapi import FastAPI
 

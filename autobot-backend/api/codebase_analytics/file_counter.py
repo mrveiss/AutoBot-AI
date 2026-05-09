@@ -37,9 +37,7 @@ def _count_scannable_files_sync(root_path_obj: Path) -> Tuple[int, list]:
     return len(scannable_files), scannable_files
 
 
-async def _count_scannable_files(
-    root_path_obj: Path, run_in_indexing_thread
-) -> Tuple[int, list]:
+async def _count_scannable_files(root_path_obj: Path, run_in_indexing_thread) -> Tuple[int, list]:
     """
     Count files to be scanned and return the file list for reuse.
 
@@ -55,9 +53,7 @@ async def _count_scannable_files(
         Tuple of (scannable_file_count, all_files_list) to avoid duplicate rglob.
     """
     # Run entire counting operation in thread pool (rglob + is_file checks)
-    total_files, all_files = await run_in_indexing_thread(
-        _count_scannable_files_sync, root_path_obj
-    )
+    total_files, all_files = await run_in_indexing_thread(_count_scannable_files_sync, root_path_obj)
     logger.debug(
         "Counted %d scannable files from %d total in %s",
         total_files,
@@ -89,9 +85,7 @@ async def _gather_scannable_files(
     all_files = []
 
     if progress_callback:
-        total_files, all_files = await _count_scannable_files(
-            root_path_obj, run_in_indexing_thread
-        )
+        total_files, all_files = await _count_scannable_files(root_path_obj, run_in_indexing_thread)
         await progress_callback(
             operation="Scanning files",
             current=0,
@@ -105,9 +99,7 @@ async def _gather_scannable_files(
     return total_files, all_files
 
 
-def _log_incremental_stats(
-    files_processed: int, files_skipped: int, incremental_enabled: bool
-) -> None:
+def _log_incremental_stats(files_processed: int, files_skipped: int, incremental_enabled: bool) -> None:
     """
     Log incremental indexing statistics.
 

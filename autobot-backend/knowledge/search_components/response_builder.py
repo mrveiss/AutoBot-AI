@@ -11,8 +11,8 @@ Contains response building and clustering functionality.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from models.task_context import SearchResponseContext
 from autobot_shared.singleton_factory import lazy_singleton
+from models.task_context import SearchResponseContext
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +150,7 @@ class ResponseBuilder:
         """
         total_count = len(ctx.results)
         paginated_results = (
-            ctx.unclustered[ctx.offset : ctx.offset + ctx.limit]
-            if not ctx.enable_clustering
-            else ctx.unclustered
+            ctx.unclustered[ctx.offset : ctx.offset + ctx.limit] if not ctx.enable_clustering else ctx.unclustered
         )
 
         response = {

@@ -127,25 +127,15 @@ class ExperimentStore(AsyncRedisClientMixin):
         ]
         # Include hyperparams for richer search
         hp_dict = experiment.hyperparams.to_dict()
-        parts.append(
-            f"Hyperparams: {', '.join(f'{k}={v}' for k, v in hp_dict.items())}"
-        )
+        parts.append(f"Hyperparams: {', '.join(f'{k}={v}' for k, v in hp_dict.items())}")
 
         if experiment.result:
             parts.append(f"val_bpb: {experiment.result.val_bpb}")
-            if (
-                experiment.baseline_val_bpb is not None
-                and experiment.result.val_bpb is not None
-            ):
+            if experiment.baseline_val_bpb is not None and experiment.result.val_bpb is not None:
                 improvement = experiment.baseline_val_bpb - experiment.result.val_bpb
-                pct = (
-                    (improvement / experiment.baseline_val_bpb * 100)
-                    if experiment.baseline_val_bpb != 0
-                    else 0
-                )
+                pct = (improvement / experiment.baseline_val_bpb * 100) if experiment.baseline_val_bpb != 0 else 0
                 parts.append(
-                    f"Baseline: {experiment.baseline_val_bpb}, "
-                    f"Improvement: {improvement:.4f} ({pct:.2f}%)"
+                    f"Baseline: {experiment.baseline_val_bpb}, " f"Improvement: {improvement:.4f} ({pct:.2f}%)"
                 )
         if experiment.code_diff:
             parts.append(f"Code change:\n{experiment.code_diff[:500]}")
@@ -221,9 +211,7 @@ class ExperimentStore(AsyncRedisClientMixin):
             return None
         return Experiment.from_dict(json.loads(data))
 
-    async def _fetch_experiments_by_ids(
-        self, experiment_ids: List[str]
-    ) -> List[Experiment]:
+    async def _fetch_experiments_by_ids(self, experiment_ids: List[str]) -> List[Experiment]:
         """Batch-fetch experiments from Redis using a single HMGET call.
 
         Replaces N individual HGET calls with one pipeline command — see #2684.
@@ -238,9 +226,7 @@ class ExperimentStore(AsyncRedisClientMixin):
                 experiments.append(Experiment.from_dict(json.loads(raw)))
         return experiments
 
-    async def _sorted_ids_for_state(
-        self, redis, state: ExperimentState, limit: int, offset: int
-    ) -> List[str]:
+    async def _sorted_ids_for_state(self, redis, state: ExperimentState, limit: int, offset: int) -> List[str]:
         """Return experiment IDs for *state*, ordered newest-first, with paging.
 
         Uses a single pipeline to batch all ZSCORE calls — see #2684.
@@ -251,9 +237,7 @@ class ExperimentStore(AsyncRedisClientMixin):
 
         timeline_key = self._redis_key("timeline")
         pipe = redis.pipeline()
-        id_list = [
-            eid if isinstance(eid, str) else eid.decode("utf-8") for eid in state_ids
-        ]
+        id_list = [eid if isinstance(eid, str) else eid.decode("utf-8") for eid in state_ids]
         for eid in id_list:
             pipe.zscore(timeline_key, eid)
         scores = await pipe.execute()
@@ -272,19 +256,14 @@ class ExperimentStore(AsyncRedisClientMixin):
         redis = await self._get_redis()
 
         if state is not None:
-            experiment_ids = await self._sorted_ids_for_state(
-                redis, state, limit, offset
-            )
+            experiment_ids = await self._sorted_ids_for_state(redis, state, limit, offset)
         else:
             experiment_ids = await redis.zrevrange(
                 self._redis_key("timeline"),
                 offset,
                 offset + limit - 1,
             )
-            experiment_ids = [
-                eid if isinstance(eid, str) else eid.decode("utf-8")
-                for eid in experiment_ids
-            ]
+            experiment_ids = [eid if isinstance(eid, str) else eid.decode("utf-8") for eid in experiment_ids]
 
         return await self._fetch_experiments_by_ids(experiment_ids)
 
@@ -315,11 +294,7 @@ class ExperimentStore(AsyncRedisClientMixin):
         all_done = completed + kept
 
         if all_done:
-            wall_times = [
-                e.result.wall_time_seconds
-                for e in all_done
-                if e.result and e.result.wall_time_seconds > 0
-            ]
+            wall_times = [e.result.wall_time_seconds for e in all_done if e.result and e.result.wall_time_seconds > 0]
             if wall_times:
                 stats.avg_wall_time = sum(wall_times) / len(wall_times)
                 stats.total_wall_time = sum(wall_times)

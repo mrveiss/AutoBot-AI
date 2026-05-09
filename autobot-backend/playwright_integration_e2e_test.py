@@ -30,13 +30,9 @@ async def test_playwright_service():
                     health_data = await response.json()
                     print("✅ Playwright service is healthy")  # noqa: print
                     print(f"   Status: {health_data.get('status')}")  # noqa: print
-                    print(  # noqa: print
-                        f"   Browser connected: {health_data.get('browser_connected')}"
-                    )
+                    print(f"   Browser connected: {health_data.get('browser_connected')}")  # noqa: print
                 else:
-                    print(  # noqa: print
-                        f"❌ Playwright service unhealthy: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Playwright service unhealthy: {response.status}")  # noqa: print  # noqa: print
                     return False
         except Exception as e:
             print(f"❌ Cannot reach Playwright service: {e}")  # noqa: print
@@ -53,9 +49,7 @@ async def test_playwright_service():
         }
 
         try:
-            async with session.post(
-                "http://localhost:3000/scrape", json=scrape_request
-            ) as response:
+            async with session.post("http://localhost:3000/scrape", json=scrape_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Web scraping successful")  # noqa: print
@@ -89,9 +83,7 @@ async def test_workflow_with_research():
         workflow_id = None
 
         try:
-            async with session.post(
-                f"{base_url}/execute", json=workflow_request
-            ) as response:
+            async with session.post(f"{base_url}/execute", json=workflow_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Research workflow initiated")  # noqa: print
@@ -99,15 +91,9 @@ async def test_workflow_with_research():
                     workflow_response = result.get("workflow_response", {})
                     workflow_id = result.get("workflow_id")
 
-                    print(  # noqa: print
-                        f"   🎯 Classification: {workflow_response.get('message_classification')}"
-                    )
-                    print(  # noqa: print
-                        f"   🤖 Agents: {', '.join(workflow_response.get('agents_involved', []))}"
-                    )
-                    print(  # noqa: print
-                        f"   📋 Steps: {workflow_response.get('planned_steps')}"
-                    )  # noqa: print
+                    print(f"   🎯 Classification: {workflow_response.get('message_classification')}")  # noqa: print
+                    print(f"   🤖 Agents: {', '.join(workflow_response.get('agents_involved', []))}")  # noqa: print
+                    print(f"   📋 Steps: {workflow_response.get('planned_steps')}")  # noqa: print  # noqa: print
 
                     # Show workflow preview
                     preview = workflow_response.get("workflow_preview", [])
@@ -116,9 +102,7 @@ async def test_workflow_with_research():
                         for step in preview:
                             print(f"      {step}")  # noqa: print
                 else:
-                    print(  # noqa: print
-                        f"❌ Workflow execution failed: {response.status}"
-                    )  # noqa: print
+                    print(f"❌ Workflow execution failed: {response.status}")  # noqa: print  # noqa: print
                     error = await response.text()
                     print(f"   Error: {error}")  # noqa: print
                     return
@@ -135,9 +119,7 @@ async def test_workflow_with_research():
                 await asyncio.sleep(2)
 
                 try:
-                    async with session.get(
-                        f"{base_url}/workflow/{workflow_id}/status"
-                    ) as response:
+                    async with session.get(f"{base_url}/workflow/{workflow_id}/status") as response:
                         if response.status == 200:
                             status = await response.json()
                             progress = status.get("progress_percentage", 0)
@@ -154,9 +136,7 @@ async def test_workflow_with_research():
                             )
 
                             if status.get("status") == "completed":
-                                print(  # noqa: print
-                                    "\n   ✅ Workflow completed successfully!"
-                                )  # noqa: print
+                                print("\n   ✅ Workflow completed successfully!")  # noqa: print  # noqa: print
 
                                 # Show completed steps
                                 steps_completed = status.get("steps_completed", [])
@@ -209,9 +189,7 @@ async def test_chat_with_workflow():
         }
 
         try:
-            async with session.post(
-                get_test_backend_url() + "/api/chat", json=chat_request
-            ) as response:
+            async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Message sent successfully")  # noqa: print

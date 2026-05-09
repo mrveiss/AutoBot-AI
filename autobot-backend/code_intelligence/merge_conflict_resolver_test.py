@@ -313,9 +313,7 @@ class TestMergeConflictResolver:
             f.flush()
 
             resolver = MergeConflictResolver()
-            results = resolver.resolve_file(
-                f.name, strategy=ResolutionStrategy.ACCEPT_OURS
-            )
+            results = resolver.resolve_file(f.name, strategy=ResolutionStrategy.ACCEPT_OURS)
 
             assert len(results) == 1
             result = results[0]
@@ -337,9 +335,7 @@ class TestMergeConflictResolver:
             f.flush()
 
             resolver = MergeConflictResolver()
-            results = resolver.resolve_file(
-                f.name, strategy=ResolutionStrategy.ACCEPT_THEIRS
-            )
+            results = resolver.resolve_file(f.name, strategy=ResolutionStrategy.ACCEPT_THEIRS)
 
             assert len(results) == 1
             result = results[0]
@@ -363,9 +359,7 @@ class TestMergeConflictResolver:
             f.flush()
 
             resolver = MergeConflictResolver()
-            results = resolver.resolve_file(
-                f.name, strategy=ResolutionStrategy.ACCEPT_BOTH
-            )
+            results = resolver.resolve_file(f.name, strategy=ResolutionStrategy.ACCEPT_BOTH)
 
             assert len(results) == 1
             result = results[0]

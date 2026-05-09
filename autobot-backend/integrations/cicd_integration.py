@@ -71,9 +71,7 @@ class JenkinsIntegration(BaseIntegration):
             List of available integration actions
         """
         return [
-            IntegrationAction(
-                name="list_jobs", description="List all Jenkins jobs", parameters={}
-            ),
+            IntegrationAction(name="list_jobs", description="List all Jenkins jobs", parameters={}),
             IntegrationAction(
                 name="get_build_status",
                 description="Get status of a specific build",
@@ -92,9 +90,7 @@ class JenkinsIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute Jenkins action.
 
         Args:
@@ -118,9 +114,7 @@ class JenkinsIntegration(BaseIntegration):
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all Jenkins jobs."""
         async with aiohttp.ClientSession(auth=self.auth) as session:
-            async with session.get(
-                f"{self.base_url}/api/json?tree=jobs[name,url,color]"
-            ) as response:
+            async with session.get(f"{self.base_url}/api/json?tree=jobs[name,url,color]") as response:
                 response.raise_for_status()
                 data = await response.json()
                 return {"jobs": data.get("jobs", [])}
@@ -233,9 +227,7 @@ class GitLabCIIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute GitLab CI action.
 
         Args:
@@ -290,9 +282,7 @@ class GitLabCIIntegration(BaseIntegration):
         """List GitLab pipeline jobs."""
         project_id = params["project_id"]
         pipeline_id = params["pipeline_id"]
-        url = (
-            f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}/jobs"
-        )
+        url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}/jobs"
         async with aiohttp.ClientSession(headers=self.headers) as session:
             async with session.get(url) as response:
                 response.raise_for_status()
@@ -322,9 +312,7 @@ class CircleCIIntegration(BaseIntegration):
         """
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(
-                    f"{self.base_url}/me", timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
+                async with session.get(f"{self.base_url}/me", timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status == 200:
                         data = await response.json()
                         return IntegrationHealth(
@@ -370,9 +358,7 @@ class CircleCIIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute CircleCI action.
 
         Args:

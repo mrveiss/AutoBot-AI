@@ -53,12 +53,8 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         response_time = time.time() - start_time
 
         # Track analytics asynchronously (don't block response)
-        if self.analytics_controller and hasattr(
-            self.analytics_controller, "track_api_call"
-        ):
-            task = asyncio.create_task(
-                self._track_call_async(endpoint, response_time, status_code, method)
-            )
+        if self.analytics_controller and hasattr(self.analytics_controller, "track_api_call"):
+            task = asyncio.create_task(self._track_call_async(endpoint, response_time, status_code, method))
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
@@ -68,15 +64,11 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    async def _track_call_async(
-        self, endpoint: str, response_time: float, status_code: int, method: str
-    ):
+    async def _track_call_async(self, endpoint: str, response_time: float, status_code: int, method: str):
         """Track API call asynchronously"""
         try:
             full_endpoint = f"{method} {endpoint}"
-            await self.analytics_controller.track_api_call(
-                full_endpoint, response_time, status_code
-            )
+            await self.analytics_controller.track_api_call(full_endpoint, response_time, status_code)
         except Exception as e:
             # Don't let analytics tracking errors affect the main request
             logger.debug("Analytics tracking failed for %s: %s", endpoint, e)

@@ -42,12 +42,8 @@ class FailurePattern:
     successful_resolutions: List[str] = field(default_factory=list)  # Action names
     resolution_success_rate: float = 0.0  # 0.0-1.0
     confidence: float = 0.8  # How confident in this pattern's recovery strategy
-    first_seen: str = field(
-        default_factory=lambda: now_utc().isoformat()
-    )
-    last_seen: str = field(
-        default_factory=lambda: now_utc().isoformat()
-    )
+    first_seen: str = field(default_factory=lambda: now_utc().isoformat())
+    last_seen: str = field(default_factory=lambda: now_utc().isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict."""
@@ -102,9 +98,7 @@ class FailurePatternDetector:
         """Hash a causal chain for pattern matching."""
         return hashlib.md5(causal_chain.encode()).hexdigest()[:16]
 
-    async def detect_pattern(
-        self, causal_chain: str, error_type: str
-    ) -> Optional[FailurePattern]:
+    async def detect_pattern(self, causal_chain: str, error_type: str) -> Optional[FailurePattern]:
         """
         Check if a causal chain matches a known failure pattern.
 
@@ -143,9 +137,7 @@ class FailurePatternDetector:
                 )
                 return pattern
             except (json.JSONDecodeError, KeyError) as exc:
-                logger.warning(
-                    "Corrupt pattern data for hash=%s: %s", pattern_hash, exc
-                )
+                logger.warning("Corrupt pattern data for hash=%s: %s", pattern_hash, exc)
                 return None
 
         except Exception as exc:
@@ -200,13 +192,9 @@ class FailurePatternDetector:
                 # Recompute success rate
                 if pattern.occurrence_count > 0:
                     success_count = len(pattern.successful_resolutions)
-                    pattern.resolution_success_rate = (
-                        success_count / pattern.occurrence_count
-                    )
+                    pattern.resolution_success_rate = success_count / pattern.occurrence_count
                     # Boost confidence if we have good resolution history
-                    pattern.confidence = min(
-                        1.0, 0.7 + (pattern.resolution_success_rate * 0.3)
-                    )
+                    pattern.confidence = min(1.0, 0.7 + (pattern.resolution_success_rate * 0.3))
 
             # Store pattern back to Redis
             self._store_pattern(pattern_hash, pattern)
@@ -232,9 +220,7 @@ class FailurePatternDetector:
                 confidence=0.5,
             )
 
-    def _create_new_pattern(
-        self, pattern_hash: str, causal_chain: str
-    ) -> FailurePattern:
+    def _create_new_pattern(self, pattern_hash: str, causal_chain: str) -> FailurePattern:
         """Create a new failure pattern."""
         return FailurePattern(
             pattern_id=pattern_hash,
@@ -300,9 +286,7 @@ class FailurePatternDetector:
                         continue
 
             pattern_count = len(pattern_hashes)
-            avg_success_rate = (
-                total_success_rate / pattern_count if pattern_count > 0 else 0.0
-            )
+            avg_success_rate = total_success_rate / pattern_count if pattern_count > 0 else 0.0
 
             return {
                 "total_patterns": pattern_count,

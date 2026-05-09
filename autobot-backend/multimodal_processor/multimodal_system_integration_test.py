@@ -58,9 +58,7 @@ class TestUnifiedMultiModalSystem:
         )
 
         # Mock vision processor to return test results
-        with patch.object(
-            unified_processor.vision_processor, "process", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(unified_processor.vision_processor, "process", new_callable=AsyncMock) as mock_process:
             mock_result = Mock()
             mock_result.result_id = "vision_test_image_001"
             mock_result.input_id = "test_image_001"
@@ -103,9 +101,7 @@ class TestUnifiedMultiModalSystem:
         )
 
         # Mock voice processor
-        with patch.object(
-            unified_processor.voice_processor, "process", new_callable=AsyncMock
-        ) as mock_process:
+        with patch.object(unified_processor.voice_processor, "process", new_callable=AsyncMock) as mock_process:
             mock_result = Mock()
             mock_result.result_id = "voice_test_audio_001"
             mock_result.input_id = "test_audio_001"
@@ -159,16 +155,19 @@ class TestUnifiedMultiModalSystem:
             modality_type=ModalityType.AUDIO,
         )
 
-        with patch.object(
-            unified_processor.vision_processor,
-            "process",
-            new_callable=AsyncMock,
-            return_value=vision_result,
-        ), patch.object(
-            unified_processor.voice_processor,
-            "process",
-            new_callable=AsyncMock,
-            return_value=voice_result,
+        with (
+            patch.object(
+                unified_processor.vision_processor,
+                "process",
+                new_callable=AsyncMock,
+                return_value=vision_result,
+            ),
+            patch.object(
+                unified_processor.voice_processor,
+                "process",
+                new_callable=AsyncMock,
+                return_value=voice_result,
+            ),
         ):
             # Process combined input
             result = await unified_processor.process(combined_input)
@@ -203,10 +202,7 @@ class TestUnifiedMultiModalSystem:
 
             # Verify error handling
             assert result.success is False
-            assert (
-                result.error_message
-                == "Multi-modal processing failed: Processing failed"
-            )
+            assert result.error_message == "Multi-modal processing failed: Processing failed"
             assert result.confidence == 0.0
 
     def test_statistics_tracking(self, unified_processor):
@@ -218,12 +214,8 @@ class TestUnifiedMultiModalSystem:
         assert initial_stats["failed_processed"] == 0
 
         # Simulate processing results
-        success_result = Mock(
-            success=True, modality_type=ModalityType.IMAGE, processing_time=1.5
-        )
-        error_result = Mock(
-            success=False, modality_type=ModalityType.AUDIO, processing_time=0.5
-        )
+        success_result = Mock(success=True, modality_type=ModalityType.IMAGE, processing_time=1.5)
+        error_result = Mock(success=False, modality_type=ModalityType.AUDIO, processing_time=0.5)
 
         # Update stats
         unified_processor._update_stats(success_result)
@@ -241,9 +233,7 @@ class TestUnifiedMultiModalSystem:
     def test_stats_reset(self, unified_processor):
         """Test statistics reset functionality"""
         # Add some stats
-        mock_result = Mock(
-            success=True, modality_type=ModalityType.TEXT, processing_time=2.0
-        )
+        mock_result = Mock(success=True, modality_type=ModalityType.TEXT, processing_time=2.0)
         unified_processor._update_stats(mock_result)
 
         # Verify stats exist
@@ -271,11 +261,10 @@ class TestUnifiedMultiModalSystem:
         )
 
         # Mock context processor and memory manager
-        with patch.object(
-            unified_processor.context_processor, "process", new_callable=AsyncMock
-        ) as mock_process, patch.object(
-            unified_processor.memory_manager, "store_task", new_callable=AsyncMock
-        ) as mock_store:
+        with (
+            patch.object(unified_processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
+            patch.object(unified_processor.memory_manager, "store_task", new_callable=AsyncMock) as mock_store,
+        ):
             mock_result = Mock(
                 result_id="context_test_memory_001",
                 success=True,
@@ -400,9 +389,7 @@ class TestUnifiedMultiModalSystem:
         cv_system = ComputerVisionSystem()
 
         # Mock the screen analyzer and its dependencies
-        with patch.object(
-            cv_system.screen_analyzer, "analyze_current_screen", new_callable=AsyncMock
-        ) as mock_analyze:
+        with patch.object(cv_system.screen_analyzer, "analyze_current_screen", new_callable=AsyncMock) as mock_analyze:
             mock_screen_state = Mock(
                 timestamp=time.time(),
                 ui_elements=[],

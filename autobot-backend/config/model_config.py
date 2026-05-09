@@ -25,31 +25,23 @@ class ModelConfigMixin:
         # This is the key method that was broken in the original global_config_manager
         # It must read from config.yaml, NOT return hardcoded values
 
-        selected_model = self.get_nested(
-            "backend.llm.local.providers.ollama.selected_model"
-        )
+        selected_model = self.get_nested("backend.llm.local.providers.ollama.selected_model")
 
         if selected_model:
-            logger.info(
-                "UNIFIED CONFIG: Selected model from config.yaml: %s", selected_model
-            )
+            logger.info("UNIFIED CONFIG: Selected model from config.yaml: %s", selected_model)
             return selected_model
 
         # Only fall back to environment if config.yaml doesn't have the value
         env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
         if env_model:
-            logger.info(
-                "UNIFIED CONFIG: Selected model from environment: %s", env_model
-            )
+            logger.info("UNIFIED CONFIG: Selected model from environment: %s", env_model)
             return env_model
 
         # Final fallback - use centralized constant (lazy import to avoid circular dep)
         from constants.model_constants import ModelConstants
 
         fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        logger.warning(
-            "UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model
-        )
+        logger.warning("UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model)
         return fallback_model
 
     def update_llm_model(self, model_name: str) -> None:
@@ -84,13 +76,9 @@ class ModelConfigMixin:
                         "selected_model": self.get_selected_model(),
                         "models": [],
                         "endpoint": (
-                            f"http://{NetworkConstants.LOCALHOST_NAME}"
-                            f":{NetworkConstants.OLLAMA_PORT}/api/generate"
+                            f"http://{NetworkConstants.LOCALHOST_NAME}" f":{NetworkConstants.OLLAMA_PORT}/api/generate"
                         ),
-                        "host": (
-                            f"http://{NetworkConstants.LOCALHOST_NAME}"
-                            f":{NetworkConstants.OLLAMA_PORT}"
-                        ),
+                        "host": (f"http://{NetworkConstants.LOCALHOST_NAME}" f":{NetworkConstants.OLLAMA_PORT}"),
                     }
                 },
             },
@@ -140,12 +128,7 @@ class ModelConfigMixin:
         Issue #620.
         """
         # Check old nested format (legacy: backend.llm.local.providers.ollama.endpoint)
-        ollama_endpoint = (
-            backend_llm.get("local", {})
-            .get("providers", {})
-            .get("ollama", {})
-            .get("endpoint")
-        )
+        ollama_endpoint = backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint")
 
         # Check new flat format (current: backend.llm.ollama.endpoint in config.yaml) (#1193)
         if not ollama_endpoint:
@@ -172,9 +155,7 @@ class ModelConfigMixin:
         # CRITICAL: Always use the selected model from config, not hardcoded values
         selected_model = self.get_selected_model()
         if backend_llm.get("local", {}).get("providers", {}).get("ollama"):
-            backend_llm["local"]["providers"]["ollama"][
-                "selected_model"
-            ] = selected_model
+            backend_llm["local"]["providers"]["ollama"]["selected_model"] = selected_model
 
         # Build Ollama endpoint from config instead of hardcoded IP
         ollama_endpoint = self._resolve_ollama_endpoint(backend_llm)
@@ -183,12 +164,7 @@ class ModelConfigMixin:
         return {
             "ollama": {
                 "selected_model": selected_model,
-                "models": (
-                    backend_llm.get("local", {})
-                    .get("providers", {})
-                    .get("ollama", {})
-                    .get("models", [])
-                ),
+                "models": (backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("models", [])),
                 "endpoint": ollama_endpoint,
             },
             "unified": backend_llm,  # New unified format

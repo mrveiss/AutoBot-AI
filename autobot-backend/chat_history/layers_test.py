@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -259,10 +258,9 @@ class TestTieredContextBuilderFeatureFlag:
     @pytest.mark.asyncio
     async def test_returns_empty_when_flag_off(self):
         """When TIERED_CONTEXT_ENABLED=false, builder returns empty string."""
-        from chat_history.layers import TieredContextBuilder
-
         # Temporarily override the module-level flag
         import chat_history.layers as layers_mod
+        from chat_history.layers import TieredContextBuilder
 
         original = layers_mod.TIERED_CONTEXT_ENABLED
         try:
@@ -369,9 +367,7 @@ class TestTieredContextBuilderFeatureFlag:
             mock_gen = MagicMock()
             mock_gen.generate = AsyncMock(return_value="")
             fake_ks = MagicMock()
-            fake_ks.conversation_aware_retrieve = AsyncMock(
-                return_value=("SHOULD NOT APPEAR", [], None, None)
-            )
+            fake_ks.conversation_aware_retrieve = AsyncMock(return_value=("SHOULD NOT APPEAR", [], None, None))
 
             with patch("memory.essential_story.EssentialStoryGenerator", return_value=mock_gen):
                 builder = layers_mod.TieredContextBuilder()

@@ -14,12 +14,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from prompt_manager import PromptManager, _YAML_SECTION_ORDER
-
+from prompt_manager import _YAML_SECTION_ORDER, PromptManager
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pm(tmp_path: Path) -> PromptManager:
     """Return a PromptManager pointed at a temp prompts directory."""
@@ -36,6 +36,7 @@ def _write_yaml(tmp_path: Path, name: str, content: dict) -> Path:
 # ---------------------------------------------------------------------------
 # TestAssembleYamlSections — unit tests for the assembly helper
 # ---------------------------------------------------------------------------
+
 
 class TestAssembleYamlSections:
     """Tests for PromptManager._assemble_yaml_sections."""
@@ -72,7 +73,7 @@ class TestAssembleYamlSections:
         result = pm._assemble_yaml_sections(sections)
         parts = result.split("\n\n")
         assert parts[0] == "agent role"
-        assert parts[1] == "first extra"   # alpha before zeta
+        assert parts[1] == "first extra"  # alpha before zeta
         assert parts[2] == "last"
 
     def test_empty_sections_dict(self, tmp_path):
@@ -110,15 +111,20 @@ class TestAssembleYamlSections:
 # TestLoadYamlPromptFile — unit tests for file loading
 # ---------------------------------------------------------------------------
 
+
 class TestLoadYamlPromptFile:
     """Tests for PromptManager._load_yaml_prompt_file."""
 
     def test_valid_yaml_loads_sections(self, tmp_path):
         """A valid YAML file populates yaml_sections and prompts."""
-        _write_yaml(tmp_path, "agent.yml", {
-            "role": "you are a helpful assistant",
-            "objective": "answer questions",
-        })
+        _write_yaml(
+            tmp_path,
+            "agent.yml",
+            {
+                "role": "you are a helpful assistant",
+                "objective": "answer questions",
+            },
+        )
         pm = _make_pm(tmp_path)
 
         assert "agent" in pm.yaml_sections
@@ -127,10 +133,14 @@ class TestLoadYamlPromptFile:
 
     def test_valid_yaml_assembles_prompt(self, tmp_path):
         """A valid YAML file produces assembled prompt stored in pm.prompts."""
-        _write_yaml(tmp_path, "agent.yml", {
-            "role": "you are",
-            "instructions": "be concise",
-        })
+        _write_yaml(
+            tmp_path,
+            "agent.yml",
+            {
+                "role": "you are",
+                "instructions": "be concise",
+            },
+        )
         pm = _make_pm(tmp_path)
 
         assert "agent" in pm.prompts
@@ -147,13 +157,17 @@ class TestLoadYamlPromptFile:
 
     def test_all_standard_sections(self, tmp_path):
         """All five standard sections are loaded and assembled in order."""
-        _write_yaml(tmp_path, "full.yaml", {
-            "role": "R",
-            "objective": "O",
-            "tools": "T",
-            "examples": "E",
-            "instructions": "I",
-        })
+        _write_yaml(
+            tmp_path,
+            "full.yaml",
+            {
+                "role": "R",
+                "objective": "O",
+                "tools": "T",
+                "examples": "E",
+                "instructions": "I",
+            },
+        )
         pm = _make_pm(tmp_path)
 
         assert "full" in pm.yaml_sections
@@ -181,11 +195,15 @@ class TestLoadYamlPromptFile:
 
     def test_non_string_values_excluded(self, tmp_path):
         """Non-string YAML values (lists, dicts) are excluded from sections."""
-        _write_yaml(tmp_path, "mixed.yml", {
-            "role": "text role",
-            "tools": ["tool1", "tool2"],   # list — not a str
-            "meta": {"version": 1},        # dict — not a str
-        })
+        _write_yaml(
+            tmp_path,
+            "mixed.yml",
+            {
+                "role": "text role",
+                "tools": ["tool1", "tool2"],  # list — not a str
+                "meta": {"version": 1},  # dict — not a str
+            },
+        )
         pm = _make_pm(tmp_path)
 
         assert "mixed" in pm.yaml_sections
@@ -227,15 +245,20 @@ class TestLoadYamlPromptFile:
 # TestGetWithYamlOverrides — section override via pm.get()
 # ---------------------------------------------------------------------------
 
+
 class TestGetWithYamlOverrides:
     """Tests for per-section overrides through PromptManager.get()."""
 
     def _pm_with_agent(self, tmp_path) -> PromptManager:
-        _write_yaml(tmp_path, "agent.yml", {
-            "role": "default role",
-            "objective": "default objective",
-            "instructions": "default instructions",
-        })
+        _write_yaml(
+            tmp_path,
+            "agent.yml",
+            {
+                "role": "default role",
+                "objective": "default objective",
+                "instructions": "default instructions",
+            },
+        )
         return _make_pm(tmp_path)
 
     def test_override_single_section(self, tmp_path):
@@ -303,6 +326,7 @@ class TestGetWithYamlOverrides:
 # TestYamlSectionConstants — module-level constants
 # ---------------------------------------------------------------------------
 
+
 class TestYamlSectionConstants:
     """Tests for _YAML_SECTION_ORDER constant."""
 
@@ -324,24 +348,33 @@ class TestYamlSectionConstants:
 # TestYamlJinja2Integration — Jinja2 template rendering inside YAML prompts
 # ---------------------------------------------------------------------------
 
+
 class TestYamlJinja2Integration:
     """Tests that Jinja2 templates work inside YAML-sectioned prompts."""
 
     def test_jinja2_variable_renders(self, tmp_path):
         """Template variables in section text are rendered by get()."""
-        _write_yaml(tmp_path, "greeting.yml", {
-            "role": "you are {{ name }}",
-        })
+        _write_yaml(
+            tmp_path,
+            "greeting.yml",
+            {
+                "role": "you are {{ name }}",
+            },
+        )
         pm = _make_pm(tmp_path)
         result = pm.get("greeting", name="Alice")
         assert "Alice" in result
 
     def test_jinja2_variable_in_overridden_section(self, tmp_path):
         """Template variables also work inside overridden sections."""
-        _write_yaml(tmp_path, "greeting.yml", {
-            "role": "default role",
-            "objective": "help {{ user }}",
-        })
+        _write_yaml(
+            tmp_path,
+            "greeting.yml",
+            {
+                "role": "default role",
+                "objective": "help {{ user }}",
+            },
+        )
         pm = _make_pm(tmp_path)
         result = pm.get(
             "greeting",

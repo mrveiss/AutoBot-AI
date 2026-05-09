@@ -12,12 +12,12 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from autobot_shared.time_utils import now_utc
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base, TenantMixin
 
 if TYPE_CHECKING:

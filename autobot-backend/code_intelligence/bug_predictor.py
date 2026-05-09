@@ -32,11 +32,11 @@ import subprocess  # nosec B404 - required for git operations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
@@ -65,9 +65,7 @@ _IMPORT_PATTERN_RE = re.compile(r"^(?:from\s+\S+\s+)?import\s+", re.MULTILINE)
 
 
 # Issue #315 - Threshold-based score calculation to reduce nesting
-def _calculate_threshold_score(
-    value: int, thresholds: list[tuple[int, int]], default: int = 10
-) -> int:
+def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], default: int = 10) -> int:
     """Calculate score based on value thresholds (Issue #315 - extracted helper).
 
     Args:
@@ -155,9 +153,7 @@ class FileRiskAssessment:
             "factors": {fs.factor.value: fs.score for fs in self.factor_scores},
             "factor_details": [fs.to_dict() for fs in self.factor_scores],
             "bug_count_history": self.bug_count_history,
-            "last_bug_date": (
-                self.last_bug_date.isoformat() if self.last_bug_date else None
-            ),
+            "last_bug_date": (self.last_bug_date.isoformat() if self.last_bug_date else None),
             "prevention_tips": self.prevention_tips,
             "suggested_tests": self.suggested_tests,
             "recommendation": self.recommendation,
@@ -188,18 +184,11 @@ class PredictionResult:
             "high_risk_count": self.high_risk_count,
             "predicted_bugs": self.predicted_bugs,
             # Issue #468: Return None if no historical accuracy data, otherwise round
-            "accuracy_score": (
-                round(self.accuracy_score, 1)
-                if self.accuracy_score is not None
-                else None
-            ),
+            "accuracy_score": (round(self.accuracy_score, 1) if self.accuracy_score is not None else None),
             "accuracy_available": self.accuracy_score is not None,
             "risk_distribution": self.risk_distribution,
             "files": [fa.to_dict() for fa in self.file_assessments],
-            "top_risk_factors": [
-                {"factor": f, "total_score": round(s, 1)}
-                for f, s in self.top_risk_factors
-            ],
+            "top_risk_factors": [{"factor": f, "total_score": round(s, 1)} for f, s in self.top_risk_factors],
         }
 
 
@@ -318,9 +307,7 @@ class BugPredictor(_BaseClass):
             use_semantic_analysis: Enable LLM-based pattern analysis (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = (
-            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -352,9 +339,7 @@ class BugPredictor(_BaseClass):
         # Issue #554: Cache for semantic bug pattern embeddings
         self._bug_pattern_embeddings: Optional[Dict[str, List[float]]] = None
 
-    def _collect_complexity_factors(
-        self, path: Path, complexity: dict[str, Any]
-    ) -> list[RiskFactorScore]:
+    def _collect_complexity_factors(self, path: Path, complexity: dict[str, Any]) -> list[RiskFactorScore]:
         """Collect complexity-related risk factor scores (Issue #281 - extracted helper)."""
         return [
             RiskFactorScore(
@@ -377,9 +362,7 @@ class BugPredictor(_BaseClass):
             ),
         ]
 
-    def _collect_history_factors(
-        self, rel_path: str
-    ) -> tuple[list[RiskFactorScore], dict[str, Any]]:
+    def _collect_history_factors(self, rel_path: str) -> tuple[list[RiskFactorScore], dict[str, Any]]:
         """Collect history-related risk factors (Issue #281 - extracted helper).
 
         Returns tuple of (factor_scores, bug_data) for use in assessment.
@@ -403,9 +386,7 @@ class BugPredictor(_BaseClass):
         ]
         return scores, bug_data
 
-    def _compute_prediction_stats(
-        self, assessments: list[FileRiskAssessment]
-    ) -> dict[str, Any]:
+    def _compute_prediction_stats(self, assessments: list[FileRiskAssessment]) -> dict[str, Any]:
         """
         Compute prediction statistics from assessments (Issue #665: extracted).
 
@@ -416,11 +397,7 @@ class BugPredictor(_BaseClass):
             Dict with high_risk_count, risk_distribution, top_factors, predicted_bugs
         """
         # High risk count
-        high_risk_count = sum(
-            1
-            for a in assessments
-            if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH)
-        )
+        high_risk_count = sum(1 for a in assessments if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH))
 
         # Risk distribution
         risk_dist = {level.value: 0 for level in RiskLevel}
@@ -431,12 +408,8 @@ class BugPredictor(_BaseClass):
         factor_totals: dict[str, float] = {}
         for a in assessments:
             for fs in a.factor_scores:
-                factor_totals[fs.factor.value] = (
-                    factor_totals.get(fs.factor.value, 0) + fs.score
-                )
-        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[
-            :5
-        ]
+                factor_totals[fs.factor.value] = factor_totals.get(fs.factor.value, 0) + fs.score
+        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)[:5]
 
         # Estimate predicted bugs (based on high risk file count)
         predicted_bugs = int(high_risk_count * 0.7)  # 70% of high risk files
@@ -588,9 +561,7 @@ class BugPredictor(_BaseClass):
         high_risk = [a for a in result.file_assessments if a.risk_score >= threshold]
         return high_risk[:limit]
 
-    def _generate_flat_heatmap(
-        self, assessments: list[FileRiskAssessment]
-    ) -> list[dict[str, Any]]:
+    def _generate_flat_heatmap(self, assessments: list[FileRiskAssessment]) -> list[dict[str, Any]]:
         """
         Generate flat heatmap data without grouping.
 
@@ -609,9 +580,7 @@ class BugPredictor(_BaseClass):
             for a in assessments
         ]
 
-    def _generate_grouped_heatmap(
-        self, assessments: list[FileRiskAssessment]
-    ) -> list[dict[str, Any]]:
+    def _generate_grouped_heatmap(self, assessments: list[FileRiskAssessment]) -> list[dict[str, Any]]:
         """
         Generate directory-grouped heatmap data.
 
@@ -631,19 +600,14 @@ class BugPredictor(_BaseClass):
 
         heatmap_data = []
         for group_name, group_assessments in groups.items():
-            avg_risk = sum(a.risk_score for a in group_assessments) / len(
-                group_assessments
-            )
+            avg_risk = sum(a.risk_score for a in group_assessments) / len(group_assessments)
             heatmap_data.append(
                 {
                     "name": group_name,
                     "value": round(avg_risk, 1),
                     "file_count": len(group_assessments),
                     "risk_level": self._get_risk_level(avg_risk).value,
-                    "files": [
-                        {"path": a.file_path, "risk": a.risk_score}
-                        for a in group_assessments
-                    ],
+                    "files": [{"path": a.file_path, "risk": a.risk_score} for a in group_assessments],
                 }
             )
 
@@ -720,9 +684,7 @@ class BugPredictor(_BaseClass):
 
     def _count_code_metrics(self, lines: list[str]) -> dict[str, int]:
         """Count basic code metrics (Issue #281 - extracted helper)."""
-        func_count = sum(
-            1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
-        )
+        func_count = sum(1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES))
 
         max_depth = 0
         for line in lines:
@@ -730,9 +692,7 @@ class BugPredictor(_BaseClass):
                 indent = len(line) - len(line.lstrip())
                 max_depth = max(max_depth, indent // 4)
 
-        conditionals = sum(
-            1 for line in lines if any(kw in line for kw in self._CONTROL_FLOW_KEYWORDS)
-        )
+        conditionals = sum(1 for line in lines if any(kw in line for kw in self._CONTROL_FLOW_KEYWORDS))
 
         return {
             "func_count": func_count,
@@ -740,15 +700,11 @@ class BugPredictor(_BaseClass):
             "conditionals": conditionals,
         }
 
-    def _calculate_complexity_scores(
-        self, line_count: int, metrics: dict[str, int]
-    ) -> dict[str, float]:
+    def _calculate_complexity_scores(self, line_count: int, metrics: dict[str, int]) -> dict[str, float]:
         """Calculate complexity scores from metrics (Issue #281 - extracted helper)."""
         complexity_score = _calculate_threshold_score(
             line_count, self._LINE_COUNT_THRESHOLDS, 0
-        ) + _calculate_threshold_score(
-            metrics["func_count"], self._FUNC_COUNT_THRESHOLDS, 0
-        )
+        ) + _calculate_threshold_score(metrics["func_count"], self._FUNC_COUNT_THRESHOLDS, 0)
 
         nesting_score = min(100, metrics["max_depth"] * 15)
         cyclomatic_score = min(100, metrics["conditionals"] * 2)
@@ -821,9 +777,7 @@ class BugPredictor(_BaseClass):
             if result.returncode == 0:
                 for line in result.stdout.strip().split("\n"):
                     if line:
-                        self._change_freq_cache[line] = (
-                            self._change_freq_cache.get(line, 0) + 1
-                        )
+                        self._change_freq_cache[line] = self._change_freq_cache.get(line, 0) + 1
         except Exception as e:
             logger.warning("Failed to get change frequency: %s", e)
 
@@ -969,9 +923,7 @@ class BugPredictor(_BaseClass):
             return RiskLevel.LOW
         return RiskLevel.MINIMAL
 
-    def _generate_prevention_tips(
-        self, factor_scores: list[RiskFactorScore]
-    ) -> list[str]:
+    def _generate_prevention_tips(self, factor_scores: list[RiskFactorScore]) -> list[str]:
         """Generate prevention tips based on highest risk factors."""
         tips = []
         sorted_factors = sorted(factor_scores, key=lambda x: x.score, reverse=True)
@@ -983,9 +935,7 @@ class BugPredictor(_BaseClass):
 
         return tips[:5]
 
-    def _generate_test_suggestions(
-        self, file_path: str, factor_scores: list[RiskFactorScore]
-    ) -> list[str]:
+    def _generate_test_suggestions(self, file_path: str, factor_scores: list[RiskFactorScore]) -> list[str]:
         """Generate test suggestions based on risk factors."""
         suggestions = []
         basename = Path(file_path).stem
@@ -1001,9 +951,7 @@ class BugPredictor(_BaseClass):
             suggestions.append(f"Add regression tests for recent changes in {basename}")
 
         if factors.get(RiskFactor.BUG_HISTORY, 0) > 50:
-            suggestions.append(
-                f"Create tests covering previous bug scenarios in {basename}"
-            )
+            suggestions.append(f"Create tests covering previous bug scenarios in {basename}")
 
         if factors.get(RiskFactor.TEST_COVERAGE, 0) > 50:
             suggestions.append(f"Increase unit test coverage for {basename}")
@@ -1014,25 +962,14 @@ class BugPredictor(_BaseClass):
 
         return suggestions[:4]
 
-    def _generate_recommendation(
-        self, risk_score: float, factor_scores: list[RiskFactorScore]
-    ) -> str:
+    def _generate_recommendation(self, risk_score: float, factor_scores: list[RiskFactorScore]) -> str:
         """Generate a recommendation based on risk analysis."""
         if risk_score >= 80:
-            return (
-                "CRITICAL: Immediate attention required. "
-                "Consider comprehensive code review and refactoring."
-            )
+            return "CRITICAL: Immediate attention required. " "Consider comprehensive code review and refactoring."
         if risk_score >= 60:
-            return (
-                "HIGH RISK: Prioritize testing and code review. "
-                "Add monitoring for this file."
-            )
+            return "HIGH RISK: Prioritize testing and code review. " "Add monitoring for this file."
         if risk_score >= 40:
-            return (
-                "MODERATE: Regular monitoring recommended. "
-                "Consider improving test coverage."
-            )
+            return "MODERATE: Regular monitoring recommended. " "Consider improving test coverage."
         if risk_score >= 20:
             return "LOW RISK: Standard maintenance practices sufficient."
         return "MINIMAL RISK: File is well-maintained with low bug probability."
@@ -1081,9 +1018,7 @@ class BugPredictor(_BaseClass):
                 )
         return bug_patterns
 
-    def _filter_valid_embeddings(
-        self, bug_patterns: list, texts: list, embeddings: list
-    ) -> tuple:
+    def _filter_valid_embeddings(self, bug_patterns: list, texts: list, embeddings: list) -> tuple:
         """
         Filter valid embeddings from batch results.
 
@@ -1141,9 +1076,7 @@ class BugPredictor(_BaseClass):
                 documents=valid_texts,
                 metadatas=valid_metadata,
             )
-        logger.info(
-            "Learned %d bug patterns for semantic analysis", len(valid_embeddings)
-        )
+        logger.info("Learned %d bug patterns for semantic analysis", len(valid_embeddings))
 
     def _create_semantic_disabled_score(self) -> RiskFactorScore:
         """
@@ -1159,9 +1092,7 @@ class BugPredictor(_BaseClass):
             details="Semantic analysis not enabled",
         )
 
-    def _create_semantic_error_score(
-        self, details: str, score: float = 30.0
-    ) -> RiskFactorScore:
+    def _create_semantic_error_score(self, details: str, score: float = 30.0) -> RiskFactorScore:
         """
         Create a RiskFactorScore for semantic analysis errors or fallback cases.
 
@@ -1178,9 +1109,7 @@ class BugPredictor(_BaseClass):
             details=details,
         )
 
-    def _create_semantic_success_score(
-        self, similar_count: int, avg_similarity: float
-    ) -> RiskFactorScore:
+    def _create_semantic_success_score(self, similar_count: int, avg_similarity: float) -> RiskFactorScore:
         """
         Create a RiskFactorScore from successful semantic similarity analysis.
 
@@ -1195,10 +1124,7 @@ class BugPredictor(_BaseClass):
             factor=RiskFactor.BUG_HISTORY,
             score=score,
             weight=0.10,
-            details=(
-                f"Similar to {similar_count} historical bug patterns "
-                f"({avg_similarity:.1%} avg)"
-            ),
+            details=(f"Similar to {similar_count} historical bug patterns " f"({avg_similarity:.1%} avg)"),
         )
 
     async def _analyze_file_semantic_async(
@@ -1227,13 +1153,9 @@ class BugPredictor(_BaseClass):
 
             embedding = await self._get_embedding(content_sample)
             if not embedding:
-                return self._create_semantic_error_score(
-                    "Could not generate embedding for file", score=10.0
-                )
+                return self._create_semantic_error_score("Could not generate embedding for file", score=10.0)
 
-            similar = await self._query_similar(
-                embedding, n_results=5, min_similarity=0.6
-            )
+            similar = await self._query_similar(embedding, n_results=5, min_similarity=0.6)
 
             if not similar:
                 return RiskFactorScore(
@@ -1271,16 +1193,12 @@ class BugPredictor(_BaseClass):
             if semantic_factor.score > 0:
                 assessment.factor_scores.append(semantic_factor)
                 # Recalculate total risk score
-                assessment.risk_score = sum(
-                    fs.weighted_score for fs in assessment.factor_scores
-                )
+                assessment.risk_score = sum(fs.weighted_score for fs in assessment.factor_scores)
                 assessment.risk_level = self._get_risk_level(assessment.risk_score)
 
         return assessment
 
-    async def _check_cached_prediction(
-        self, cache_key: str
-    ) -> Optional[PredictionResult]:
+    async def _check_cached_prediction(self, cache_key: str) -> Optional[PredictionResult]:
         """
         Check for cached prediction result if semantic analysis is enabled.
 
@@ -1317,9 +1235,7 @@ class BugPredictor(_BaseClass):
                 logger.warning("Failed to analyze %s: %s", file_path, e)
         return assessments
 
-    async def _cache_prediction_result(
-        self, cache_key: str, result: PredictionResult
-    ) -> None:
+    async def _cache_prediction_result(self, cache_key: str, result: PredictionResult) -> None:
         """
         Cache prediction result in Redis if semantic analysis is enabled.
 
@@ -1492,25 +1408,15 @@ def get_risk_factors() -> list[dict[str, Any]]:
         List of risk factor definitions
     """
     descriptions = {
-        RiskFactor.COMPLEXITY: (
-            "Code complexity measured by nesting depth, conditionals, and function count"
-        ),
-        RiskFactor.CHANGE_FREQUENCY: (
-            "How often the file has been modified in the last 90 days"
-        ),
-        RiskFactor.BUG_HISTORY: (
-            "Number of bug fixes historically associated with this file"
-        ),
-        RiskFactor.TEST_COVERAGE: (
-            "Inverse of test coverage - higher score means less coverage"
-        ),
+        RiskFactor.COMPLEXITY: ("Code complexity measured by nesting depth, conditionals, and function count"),
+        RiskFactor.CHANGE_FREQUENCY: ("How often the file has been modified in the last 90 days"),
+        RiskFactor.BUG_HISTORY: ("Number of bug fixes historically associated with this file"),
+        RiskFactor.TEST_COVERAGE: ("Inverse of test coverage - higher score means less coverage"),
         RiskFactor.CODE_AGE: "Age of the code since last major refactor",
         RiskFactor.AUTHOR_EXPERIENCE: "Experience level of recent contributors",
         RiskFactor.FILE_SIZE: "File size in lines of code",
         RiskFactor.DEPENDENCY_COUNT: "Number of imports and dependencies",
-        RiskFactor.CYCLOMATIC_COMPLEXITY: (
-            "Number of independent paths through the code"
-        ),
+        RiskFactor.CYCLOMATIC_COMPLEXITY: ("Number of independent paths through the code"),
         RiskFactor.NESTING_DEPTH: "Maximum depth of nested blocks",
     }
 

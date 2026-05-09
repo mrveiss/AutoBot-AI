@@ -46,10 +46,7 @@ class ModalBackend(ExecutionBackend):
         super().__init__(BackendType.MODAL)
 
         if modal is None:
-            raise RuntimeError(
-                "modal package not installed. "
-                "Install with: pip install modal"
-            )
+            raise RuntimeError("modal package not installed. " "Install with: pip install modal")
 
         self.api_token = api_token
         self._function_cache: Dict[str, Any] = {}
@@ -100,11 +97,7 @@ class ModalBackend(ExecutionBackend):
                 result.metadata["modal_run_id"] = output.get("run_id", "")
                 result.metadata["cost_estimate"] = output.get("cost", 0.0)
 
-                result.status = (
-                    ExecutionStatus.SUCCESS
-                    if result.return_code == 0
-                    else ExecutionStatus.FAILED
-                )
+                result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
             except Exception as e:
                 result.status = ExecutionStatus.FAILED
@@ -115,9 +108,7 @@ class ModalBackend(ExecutionBackend):
         finally:
             result.completed_at = now_utc()
             if result.started_at:
-                result.execution_time_ms = (
-                    result.completed_at - result.started_at
-                ).total_seconds() * 1000
+                result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
 
         return result
 
@@ -180,9 +171,7 @@ class ModalBackend(ExecutionBackend):
 
         return self._function_cache[language]
 
-    async def _call_modal_function(
-        self, func: Any, task: ExecutionTask
-    ) -> Dict[str, Any]:
+    async def _call_modal_function(self, func: Any, task: ExecutionTask) -> Dict[str, Any]:
         """Call Modal function with task code (simulated).
 
         Args:
@@ -198,7 +187,7 @@ class ModalBackend(ExecutionBackend):
         # Simulate Modal execution
         try:
             import io
-            from contextlib import redirect_stdout, redirect_stderr
+            from contextlib import redirect_stderr, redirect_stdout
 
             # Capture stdout/stderr
             stdout_capture = io.StringIO()
@@ -209,9 +198,7 @@ class ModalBackend(ExecutionBackend):
             stderr_output = ""
 
             try:
-                with redirect_stdout(stdout_capture), redirect_stderr(
-                    stderr_capture
-                ):
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                     # Execute code in isolated namespace
                     namespace = {"__name__": "__modal__"}
                     namespace.update(task.env_vars)

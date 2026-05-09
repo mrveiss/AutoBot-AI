@@ -18,26 +18,26 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from auth_middleware import get_auth_middleware
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.models.pagination import PaginationParams
-from services.audit_logger import AuditResult, get_audit_logger
-from utils.catalog_http_exceptions import (
-    raise_auth_error,
-    raise_server_error,
-    raise_validation_error,
-)
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     AuditCleanupRequest,
     AuditQueryRequest,
     AuditQueryResponse,
     AuditStatisticsResponse,
+)
+from auth_middleware import get_auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.time_utils import parse_utc_iso
+from services.audit_logger import AuditResult, get_audit_logger
+from utils.catalog_http_exceptions import (
+    raise_auth_error,
+    raise_server_error,
+    raise_validation_error,
 )
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -51,9 +51,7 @@ def check_admin_permission(request: Request) -> bool:
         user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
-            raise_auth_error(
-                "AUTH_0002", "Authentication required for audit log access"
-            )
+            raise_auth_error("AUTH_0002", "Authentication required for audit log access")
 
         # Check for admin role
         # Issue #744: Require explicit role - no guest fallback for security
@@ -61,9 +59,7 @@ def check_admin_permission(request: Request) -> bool:
         if not user_role:
             raise_auth_error("AUTH_0002", "User role not assigned - access denied")
         if user_role != "admin":
-            raise_auth_error(
-                "AUTH_0003", "Admin permission required for audit log access"
-            )
+            raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
 
         return True
 
@@ -176,9 +172,7 @@ async def query_audit_logs(
     operation="get_audit_statistics",
     error_code_prefix="AUDIT",
 )
-async def get_audit_statistics(
-    request: Request, admin_check: bool = Depends(check_admin_permission)
-):
+async def get_audit_statistics(request: Request, admin_check: bool = Depends(check_admin_permission)):
     """
     Get audit logging statistics
 
@@ -226,9 +220,7 @@ async def get_session_audit_trail(
         end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=30)
 
-        entries = await audit_logger.query(
-            start_time=start_time, end_time=end_time, session_id=session_id, limit=1000
-        )
+        entries = await audit_logger.query(start_time=start_time, end_time=end_time, session_id=session_id, limit=1000)
 
         # Issue #372: Use model method to reduce feature envy
         entry_dicts = [e.to_response_dict() for e in entries]
@@ -270,9 +262,7 @@ async def get_user_audit_trail(
         end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=days)
 
-        entries = await audit_logger.query(
-            start_time=start_time, end_time=end_time, user_id=user_id, limit=1000
-        )
+        entries = await audit_logger.query(start_time=start_time, end_time=end_time, user_id=user_id, limit=1000)
 
         # Issue #372: Use model method to reduce feature envy
         entry_dicts = [e.to_response_dict() for e in entries]
@@ -319,9 +309,7 @@ async def get_failed_operations(
         end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(hours=hours)
 
-        entries = await audit_logger.query(
-            start_time=start_time, end_time=end_time, result=result_filter, limit=500
-        )
+        entries = await audit_logger.query(start_time=start_time, end_time=end_time, result=result_filter, limit=500)
 
         # Issue #372: Use model method to reduce feature envy
         entry_dicts = [e.to_response_dict() for e in entries]
@@ -360,9 +348,7 @@ async def cleanup_old_logs(
     """
     try:
         if not cleanup_request.confirm:
-            raise_validation_error(
-                "API_0001", "Cleanup requires confirmation (set 'confirm' to true)"
-            )
+            raise_validation_error("API_0001", "Cleanup requires confirmation (set 'confirm' to true)")
 
         audit_logger = await get_audit_logger()
 
@@ -371,9 +357,7 @@ async def cleanup_old_logs(
 
         return {
             "success": True,
-            "message": (
-                f"Audit logs older than {cleanup_request.days_to_keep} days have been deleted"
-            ),
+            "message": (f"Audit logs older than {cleanup_request.days_to_keep} days have been deleted"),
             "days_retained": cleanup_request.days_to_keep,
         }
 
@@ -390,9 +374,7 @@ async def cleanup_old_logs(
     operation="list_operation_types",
     error_code_prefix="AUDIT",
 )
-async def list_operation_types(
-    request: Request, admin_check: bool = Depends(check_admin_permission)
-):
+async def list_operation_types(request: Request, admin_check: bool = Depends(check_admin_permission)):
     """
     List all available operation types for filtering
 

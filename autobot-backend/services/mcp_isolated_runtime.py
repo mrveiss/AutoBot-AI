@@ -20,9 +20,7 @@ from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_fo
 logger = logging.getLogger(__name__)
 
 _JSONRPC = "2.0"
-_WORKER_SCRIPT = str(
-    Path(__file__).parent / "mcp_bridge_workers" / "worker_entrypoint.py"
-)
+_WORKER_SCRIPT = str(Path(__file__).parent / "mcp_bridge_workers" / "worker_entrypoint.py")
 
 _WORKER_ENV_ALLOW = frozenset(
     {
@@ -57,9 +55,7 @@ class IsolatedBridgeClient:
         if self._proc is not None and self._proc.returncode is None:
             return
         if self._permanently_failed:
-            raise RuntimeError(
-                "bridge " + self._bridge + " exceeded restart_max"
-            )
+            raise RuntimeError("bridge " + self._bridge + " exceeded restart_max")
 
         env = {k: v for k, v in os.environ.items() if k in _WORKER_ENV_ALLOW}
         env["MCP_WORKER_CPU_SECONDS"] = str(self._policy.cpu_seconds)
@@ -132,9 +128,7 @@ class IsolatedBridgeClient:
                         self._bridge,
                         self._policy.restart_max,
                     )
-                    raise RuntimeError(
-                        "bridge " + self._bridge + " crash loop"
-                    )
+                    raise RuntimeError("bridge " + self._bridge + " crash loop")
             await self.start()
 
     async def _next_id(self):
@@ -151,13 +145,9 @@ class IsolatedBridgeClient:
         self._proc.stdin.write(line)
         await self._proc.stdin.drain()
         try:
-            raw = await asyncio.wait_for(
-                self._proc.stdout.readline(), timeout=timeout
-            )
+            raw = await asyncio.wait_for(self._proc.stdout.readline(), timeout=timeout)
         except asyncio.TimeoutError:
-            raise TimeoutError(
-                "bridge " + self._bridge + " did not respond within " + str(timeout) + "s"
-            )
+            raise TimeoutError("bridge " + self._bridge + " did not respond within " + str(timeout) + "s")
         if not raw:
             raise EOFError("bridge " + self._bridge + " closed stdout")
         return json.loads(raw.decode("utf-8"))

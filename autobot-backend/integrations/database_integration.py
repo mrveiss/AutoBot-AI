@@ -136,9 +136,7 @@ class PostgreSQLIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a PostgreSQL action."""
         if action == "list_databases":
             return await self._list_databases()
@@ -151,6 +149,7 @@ class PostgreSQLIntegration(BaseIntegration):
             return await self._execute_query(query, database)
         else:
             return {"error": f"Unknown action: {action}"}
+
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in PostgreSQL."""
         import asyncpg
@@ -167,9 +166,7 @@ class PostgreSQLIntegration(BaseIntegration):
             timeout=10.0,
         )
 
-        rows = await conn.fetch(
-            "SELECT datname FROM pg_database WHERE datistemplate = false"
-        )
+        rows = await conn.fetch("SELECT datname FROM pg_database WHERE datistemplate = false")
         await conn.close()
 
         databases = [row["datname"] for row in rows]
@@ -191,9 +188,7 @@ class PostgreSQLIntegration(BaseIntegration):
             timeout=10.0,
         )
 
-        rows = await conn.fetch(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-        )
+        rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         await conn.close()
 
         tables = [row["tablename"] for row in rows]
@@ -300,9 +295,7 @@ class MySQLIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a MySQL action."""
         if action == "list_databases":
             return await self._list_databases()
@@ -315,6 +308,7 @@ class MySQLIntegration(BaseIntegration):
             return await self._execute_query(query, database)
         else:
             return {"error": f"Unknown action: {action}"}
+
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in MySQL."""
         import aiomysql
@@ -407,10 +401,7 @@ class MongoDBIntegration(BaseIntegration):
 
             # Build connection string
             if self.config.username and self.config.password:
-                conn_str = (
-                    f"mongodb://{self.config.username}:"
-                    f"{self.config.password}@{host}:{port}/{database}"
-                )
+                conn_str = f"mongodb://{self.config.username}:" f"{self.config.password}@{host}:{port}/{database}"
             else:
                 conn_str = f"mongodb://{host}:{port}/{database}"
 
@@ -473,9 +464,7 @@ class MongoDBIntegration(BaseIntegration):
             ),
         ]
 
-    async def execute_action(
-        self, action: str, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a MongoDB action."""
         if action == "list_databases":
             return await self._list_databases()
@@ -487,11 +476,10 @@ class MongoDBIntegration(BaseIntegration):
             collection = params.get("collection", "")
             filter_dict = params.get("filter", {})
             limit = params.get("limit", 100)
-            return await self._query_collection(
-                database, collection, filter_dict, limit
-            )
+            return await self._query_collection(database, collection, filter_dict, limit)
         else:
             return {"error": f"Unknown action: {action}"}
+
     async def _list_databases(self) -> Dict[str, Any]:
         """List all databases in MongoDB."""
         from motor.motor_asyncio import AsyncIOMotorClient
@@ -500,10 +488,7 @@ class MongoDBIntegration(BaseIntegration):
         port = self.config.extra.get("port", 27017)
 
         if self.config.username and self.config.password:
-            conn_str = (
-                f"mongodb://{self.config.username}:"
-                f"{self.config.password}@{host}:{port}/admin"
-            )
+            conn_str = f"mongodb://{self.config.username}:" f"{self.config.password}@{host}:{port}/admin"
         else:
             conn_str = f"mongodb://{host}:{port}/admin"
 
@@ -522,10 +507,7 @@ class MongoDBIntegration(BaseIntegration):
         port = self.config.extra.get("port", 27017)
 
         if self.config.username and self.config.password:
-            conn_str = (
-                f"mongodb://{self.config.username}:"
-                f"{self.config.password}@{host}:{port}/{database}"
-            )
+            conn_str = f"mongodb://{self.config.username}:" f"{self.config.password}@{host}:{port}/{database}"
         else:
             conn_str = f"mongodb://{host}:{port}/{database}"
 
@@ -541,9 +523,7 @@ class MongoDBIntegration(BaseIntegration):
             "database": database,
         }
 
-    async def _query_collection(
-        self, database: str, collection: str, filter_dict: Dict, limit: int
-    ) -> Dict[str, Any]:
+    async def _query_collection(self, database: str, collection: str, filter_dict: Dict, limit: int) -> Dict[str, Any]:
         """Query a MongoDB collection."""
         from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -551,10 +531,7 @@ class MongoDBIntegration(BaseIntegration):
         port = self.config.extra.get("port", 27017)
 
         if self.config.username and self.config.password:
-            conn_str = (
-                f"mongodb://{self.config.username}:"
-                f"{self.config.password}@{host}:{port}/{database}"
-            )
+            conn_str = f"mongodb://{self.config.username}:" f"{self.config.password}@{host}:{port}/{database}"
         else:
             conn_str = f"mongodb://{host}:{port}/{database}"
 

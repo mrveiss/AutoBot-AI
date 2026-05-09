@@ -19,9 +19,8 @@ helper, so the tests are now at the helper-level and the integration
 tests below pin the per-endpoint configuration.
 """
 
-from autobot_shared.rate_limit import IPRateLimiter
-
 from api import openai_compat
+from autobot_shared.rate_limit import IPRateLimiter
 
 
 class TestOAIRateLimitWiring:

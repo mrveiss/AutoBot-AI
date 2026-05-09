@@ -55,9 +55,7 @@ class TopologyAwareRouter:
         task_type = context.get("task_type")
         complexity = context.get("complexity", "simple")
 
-        collaborators = await self._resolve_collaborators(
-            primary_agent_id, task_type, complexity
-        )
+        collaborators = await self._resolve_collaborators(primary_agent_id, task_type, complexity)
 
         return _build_routing_result(primary_agent_id, collaborators)
 
@@ -71,9 +69,7 @@ class TopologyAwareRouter:
         if complexity not in _COMPLEX_PATTERNS:
             return []
 
-        connections = await self.topology.get_collaborators(
-            primary_agent_id, task_type=task_type, limit=2
-        )
+        connections = await self.topology.get_collaborators(primary_agent_id, task_type=task_type, limit=2)
         collaborators = [c.to_agent for c in connections]
         logger.debug(
             "Topology collaborators for %s (%s): %s",

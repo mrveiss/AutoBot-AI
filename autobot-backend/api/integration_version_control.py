@@ -17,12 +17,12 @@ from api.schemas_code import (
 )
 from api.schemas_workflows import VCSConnectionTestRequest, VCSProviderInfo
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -114,11 +114,7 @@ async def test_connection(request: VCSConnectionTestRequest) -> IntegrationHealt
             api_key=request.api_key,
             base_url=request.settings.get("base_url"),
             username=request.settings.get("username"),
-            extra={
-                k: v
-                for k, v in request.settings.items()
-                if k not in ("base_url", "username")
-            },
+            extra={k: v for k, v in request.settings.items() if k not in ("base_url", "username")},
         )
 
         integration = _create_integration(request.provider, config)

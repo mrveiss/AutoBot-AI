@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
+
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc
 
@@ -296,9 +297,7 @@ class NmapParser(BaseToolParser):
             return None
 
         state_elem = port_elem.find("state")
-        state = (
-            state_elem.get("state", "unknown") if state_elem is not None else "unknown"
-        )
+        state = state_elem.get("state", "unknown") if state_elem is not None else "unknown"
 
         service_elem = port_elem.find("service")
         service = None
@@ -449,9 +448,7 @@ class MasscanParser(BaseToolParser):
     TOOL_NAME = "masscan"
 
     # Pattern for masscan output lines
-    LINE_PATTERN = re.compile(
-        r"Discovered open port (\d+)/(tcp|udp) on (\d+\.\d+\.\d+\.\d+)"
-    )
+    LINE_PATTERN = re.compile(r"Discovered open port (\d+)/(tcp|udp) on (\d+\.\d+\.\d+\.\d+)")
     JSON_PORT_PATTERN = re.compile(r'"port":\s*(\d+)')
 
     def can_parse(self, output: str) -> bool:
@@ -505,9 +502,7 @@ class NucleiParser(BaseToolParser):
     def can_parse(self, output: str) -> bool:
         """Check if output is from nuclei."""
         # Issue #380: use pre-compiled pattern
-        return (
-            "nuclei" in output.lower() or _NUCLEI_FORMAT_RE.search(output) is not None
-        )
+        return "nuclei" in output.lower() or _NUCLEI_FORMAT_RE.search(output) is not None
 
     def parse(self, output: str) -> ParsedToolOutput:
         """Parse nuclei output."""
@@ -585,9 +580,7 @@ class NiktoParser(BaseToolParser):
 
             hostname_match = self.TARGET_HOSTNAME_PATTERN.search(line)
             if hostname_match and host:
-                result.hosts.append(
-                    ParsedHost(ip=host, hostname=hostname_match.group(1), status="up")
-                )
+                result.hosts.append(ParsedHost(ip=host, hostname=hostname_match.group(1), status="up"))
                 continue
 
             port_match = self.TARGET_PORT_PATTERN.search(line)
@@ -704,10 +697,7 @@ class GobusterParser(BaseToolParser):
         path_lower = path.lower()
 
         # Sensitive paths
-        if any(
-            sensitive in path_lower
-            for sensitive in [".git", "backup", "admin", ".env", "config"]
-        ):
+        if any(sensitive in path_lower for sensitive in [".git", "backup", "admin", ".env", "config"]):
             if status == 200:
                 return "high"
             elif status == 403:
@@ -734,11 +724,7 @@ class SearchsploitParser(BaseToolParser):
 
     def can_parse(self, output: str) -> bool:
         """Check if output is from searchsploit."""
-        return (
-            "searchsploit" in output.lower()
-            or "Exploit Title" in output
-            and "Path" in output
-        )
+        return "searchsploit" in output.lower() or "Exploit Title" in output and "Path" in output
 
     def parse(self, output: str) -> ParsedToolOutput:
         """Parse searchsploit output."""
@@ -783,21 +769,13 @@ class SearchsploitParser(BaseToolParser):
         """Determine severity based on exploit type (Issue #260)."""
         title_lower = title.lower()
 
-        if any(
-            keyword in title_lower
-            for keyword in ["remote code execution", "rce", "arbitrary code"]
-        ):
+        if any(keyword in title_lower for keyword in ["remote code execution", "rce", "arbitrary code"]):
             return "critical"
-        elif any(
-            keyword in title_lower
-            for keyword in ["buffer overflow", "overflow", "privilege escalation"]
-        ):
+        elif any(keyword in title_lower for keyword in ["buffer overflow", "overflow", "privilege escalation"]):
             return "high"
         elif any(keyword in title_lower for keyword in ["dos", "denial of service"]):
             return "medium"
-        elif any(
-            keyword in title_lower for keyword in ["information disclosure", "info"]
-        ):
+        elif any(keyword in title_lower for keyword in ["information disclosure", "info"]):
             return "low"
         else:
             return "medium"

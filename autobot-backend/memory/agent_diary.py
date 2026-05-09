@@ -85,9 +85,7 @@ class AgentDiaryService:
             )
             return fact_id
         except Exception as exc:
-            logger.warning(
-                "AgentDiary write failed for agent=%s: %s", agent_name, exc
-            )
+            logger.warning("AgentDiary write failed for agent=%s: %s", agent_name, exc)
             return ""
 
     # ------------------------------------------------------------------
@@ -116,7 +114,8 @@ class AgentDiaryService:
             # sorted and capped to last_n.
             all_facts = await kb.get_all_facts(limit=self._DIARY_FETCH_LIMIT)
             entries = [
-                f for f in all_facts
+                f
+                for f in all_facts
                 if (f.get("metadata") or {}).get("category") == self.CATEGORY
                 and (f.get("metadata") or {}).get("source") == agent_name
             ]
@@ -126,18 +125,14 @@ class AgentDiaryService:
             )
             return entries[:last_n]
         except Exception as exc:
-            logger.warning(
-                "AgentDiary read failed for agent=%s: %s", agent_name, exc
-            )
+            logger.warning("AgentDiary read failed for agent=%s: %s", agent_name, exc)
             return []
 
     # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------
 
-    async def search(
-        self, agent_name: str, query: str, n: int = 5
-    ) -> List[Dict[str, Any]]:
+    async def search(self, agent_name: str, query: str, n: int = 5) -> List[Dict[str, Any]]:
         """Semantic search within one agent's diary.
 
         Args:
@@ -163,9 +158,7 @@ class AgentDiaryService:
             return []
 
 
-async def list_with_diaries(
-    agent_names: List[str], last_n: int = 3
-) -> List[Dict[str, Any]]:
+async def list_with_diaries(agent_names: List[str], last_n: int = 3) -> List[Dict[str, Any]]:
     """Return recent diary entries for multiple agents in parallel.
 
     Args:

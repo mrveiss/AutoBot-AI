@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # /health — structure known from AIStackClient.health_check()
 # ---------------------------------------------------------------------------

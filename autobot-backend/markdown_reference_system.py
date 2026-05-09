@@ -106,18 +106,10 @@ class MarkdownReferenceSystem:
 
     def _create_markdown_indexes(self, conn: sqlite3.Connection) -> None:
         """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_markdown_hash ON markdown_documents(content_hash)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_markdown_type ON markdown_documents(document_type)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cross_ref_source ON markdown_cross_references(source_file)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_sections_file ON markdown_sections(file_path)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_markdown_hash ON markdown_documents(content_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_markdown_type ON markdown_documents(document_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cross_ref_source ON markdown_cross_references(source_file)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sections_file ON markdown_sections(file_path)")
 
     def _init_markdown_tables(self) -> None:
         """Initialize additional SQLite tables for markdown management"""
@@ -128,9 +120,7 @@ class MarkdownReferenceSystem:
             self._create_markdown_indexes(conn)
             conn.commit()
 
-    def scan_markdown_directory(
-        self, directory: Path, document_type: str = "documentation"
-    ) -> Dict[str, Any]:
+    def scan_markdown_directory(self, directory: Path, document_type: str = "documentation") -> Dict[str, Any]:
         """Scan directory for markdown files and update database"""
         if not directory.exists():
             logger.warning("Directory does not exist: %s", directory)
@@ -180,9 +170,7 @@ class MarkdownReferenceSystem:
             "tags": self._extract_tags(content),
         }
 
-    def _check_document_status(
-        self, conn: sqlite3.Connection, file_path: Path, content_hash: str
-    ) -> tuple[bool, bool]:
+    def _check_document_status(self, conn: sqlite3.Connection, file_path: Path, content_hash: str) -> tuple[bool, bool]:
         """Issue #665: Extracted from _process_markdown_file to reduce function length.
 
         Check if document exists and whether it has been updated.
@@ -230,9 +218,7 @@ class MarkdownReferenceSystem:
             ),
         )
 
-    def _process_markdown_file(
-        self, file_path: Path, document_type: str
-    ) -> Dict[str, Any]:
+    def _process_markdown_file(self, file_path: Path, document_type: str) -> Dict[str, Any]:
         """Process individual markdown file and update database"""
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -240,9 +226,7 @@ class MarkdownReferenceSystem:
         metadata = self._get_file_metadata(file_path, content)
 
         with sqlite3.connect(self.memory_manager.db_path) as conn:
-            is_new, is_updated = self._check_document_status(
-                conn, file_path, metadata["content_hash"]
-            )
+            is_new, is_updated = self._check_document_status(conn, file_path, metadata["content_hash"])
             self._upsert_document_record(conn, file_path, document_type, metadata)
 
             if is_new or is_updated:
@@ -280,25 +264,17 @@ class MarkdownReferenceSystem:
 
         return sorted(list(tags))
 
-    def _finalize_section(
-        self, section: Dict[str, Any], lines: List[str], end_line: int
-    ) -> Dict[str, Any]:
+    def _finalize_section(self, section: Dict[str, Any], lines: List[str], end_line: int) -> Dict[str, Any]:
         """Issue #665: Extracted from _process_markdown_sections to reduce function length.
 
         Finalize a section by setting end_line, content_text, and content_hash.
         """
         section["end_line"] = end_line
-        section["content_text"] = "\n".join(
-            lines[section["start_line"] - 1 : section["end_line"]]
-        )
-        section["content_hash"] = hashlib.sha256(
-            section["content_text"].encode()
-        ).hexdigest()
+        section["content_text"] = "\n".join(lines[section["start_line"] - 1 : section["end_line"]])
+        section["content_hash"] = hashlib.sha256(section["content_text"].encode()).hexdigest()
         return section
 
-    def _insert_sections_to_db(
-        self, conn: sqlite3.Connection, sections: List[Dict[str, Any]]
-    ) -> None:
+    def _insert_sections_to_db(self, conn: sqlite3.Connection, sections: List[Dict[str, Any]]) -> None:
         """Issue #665: Extracted from _process_markdown_sections to reduce function length.
 
         Insert all parsed sections into the database.
@@ -323,9 +299,7 @@ class MarkdownReferenceSystem:
                 ),
             )
 
-    def _process_markdown_sections(
-        self, conn: sqlite3.Connection, file_path: Path, content: str
-    ) -> None:
+    def _process_markdown_sections(self, conn: sqlite3.Connection, file_path: Path, content: str) -> None:
         """Extract and store markdown sections"""
         conn.execute(
             "DELETE FROM markdown_sections WHERE file_path = ?",
@@ -340,9 +314,7 @@ class MarkdownReferenceSystem:
             header_match = _HEADER_RE.match(line.strip())
             if header_match:
                 if current_section:
-                    sections.append(
-                        self._finalize_section(current_section, lines, line_num - 1)
-                    )
+                    sections.append(self._finalize_section(current_section, lines, line_num - 1))
                 current_section = {
                     "file_path": str(file_path),
                     "section_title": header_match.group(2),
@@ -373,15 +345,11 @@ class MarkdownReferenceSystem:
                     self._extract_references(conn, file_path, content, files)
 
                 except Exception as e:
-                    logger.warning(
-                        "Error processing references in %s: %s", file_path, e
-                    )
+                    logger.warning("Error processing references in %s: %s", file_path, e)
 
             conn.commit()
 
-    def _extract_references(
-        self, conn, source_file: str, content: str, all_files: List[str]
-    ):
+    def _extract_references(self, conn, source_file: str, content: str, all_files: List[str]):
         """Extract references from markdown content"""
         lines = content.split("\n")
 
@@ -389,16 +357,12 @@ class MarkdownReferenceSystem:
             # Find markdown links [text](url) using pre-compiled pattern (Issue #380)
             link_matches = _MARKDOWN_LINK_RE.findall(line)
             for link_text, link_url in link_matches:
-                self._insert_link_reference(
-                    conn, source_file, link_url, line, line_num, all_files
-                )
+                self._insert_link_reference(conn, source_file, link_url, line, line_num, all_files)
 
             # Find file mentions using pre-compiled pattern (Issue #380)
             file_mentions = _MD_FILE_MENTION_RE.findall(line)
             for mentioned_file in file_mentions:
-                self._insert_mention_reference(
-                    conn, source_file, mentioned_file, line, line_num, all_files
-                )
+                self._insert_mention_reference(conn, source_file, mentioned_file, line, line_num, all_files)
 
     def _insert_link_reference(
         self,
@@ -444,9 +408,7 @@ class MarkdownReferenceSystem:
         all_files: List[str],
     ) -> None:
         """Insert a file mention reference into the database. Issue #620."""
-        target_file = self._resolve_markdown_reference(
-            mentioned_file, source_file, all_files
-        )
+        target_file = self._resolve_markdown_reference(mentioned_file, source_file, all_files)
         if target_file and target_file != source_file:
             conn.execute(
                 """
@@ -465,9 +427,7 @@ class MarkdownReferenceSystem:
                 ),
             )
 
-    def _resolve_markdown_reference(
-        self, reference: str, source_file: str, all_files: List[str]
-    ) -> Optional[str]:
+    def _resolve_markdown_reference(self, reference: str, source_file: str, all_files: List[str]) -> Optional[str]:
         """Resolve a markdown reference to an actual file path"""
         # Try exact match first
         if reference in all_files:
@@ -487,9 +447,7 @@ class MarkdownReferenceSystem:
 
         return None
 
-    def get_document_references(
-        self, file_path: str
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    def get_document_references(self, file_path: str) -> Dict[str, List[Dict[str, Any]]]:
         """Get all references for a specific document"""
         with sqlite3.connect(self.memory_manager.db_path) as conn:
             # Outgoing references
@@ -569,9 +527,7 @@ class MarkdownReferenceSystem:
         params.append(limit)
         return sql, params
 
-    def _search_documents(
-        self, conn: sqlite3.Connection, sql: str, params: List[Any]
-    ) -> List[Dict[str, Any]]:
+    def _search_documents(self, conn: sqlite3.Connection, sql: str, params: List[Any]) -> List[Dict[str, Any]]:
         """Issue #665: Extracted from search_markdown_content to reduce function length.
 
         Execute document search and format results.
@@ -591,9 +547,7 @@ class MarkdownReferenceSystem:
             for row in cursor.fetchall()
         ]
 
-    def _search_sections(
-        self, conn: sqlite3.Connection, query: str, limit: int
-    ) -> List[Dict[str, Any]]:
+    def _search_sections(self, conn: sqlite3.Connection, query: str, limit: int) -> List[Dict[str, Any]]:
         """Issue #665: Extracted from search_markdown_content to reduce function length.
 
         Search markdown sections and format results.
@@ -630,9 +584,7 @@ class MarkdownReferenceSystem:
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """Search markdown content and sections"""
-        sql, params = self._build_document_search_query(
-            query, document_type, tags, limit
-        )
+        sql, params = self._build_document_search_query(query, document_type, tags, limit)
 
         with sqlite3.connect(self.memory_manager.db_path) as conn:
             doc_results = self._search_documents(conn, sql, params)
@@ -640,9 +592,7 @@ class MarkdownReferenceSystem:
 
         return doc_results + section_results
 
-    def _get_document_stats_by_type(
-        self, conn: sqlite3.Connection
-    ) -> Dict[str, Dict[str, Any]]:
+    def _get_document_stats_by_type(self, conn: sqlite3.Connection) -> Dict[str, Dict[str, Any]]:
         """
         Query document statistics grouped by document type.
 
@@ -736,9 +686,7 @@ class MarkdownReferenceSystem:
 
         # Scan system knowledge directory
         if self.knowledge_root.exists():
-            knowledge_result = self.scan_markdown_directory(
-                self.knowledge_root, "system_knowledge"
-            )
+            knowledge_result = self.scan_markdown_directory(self.knowledge_root, "system_knowledge")
             results["scanned_directories"].append(knowledge_result)
             results["total_files"] += knowledge_result["scanned_files"]
             results["total_errors"] += len(knowledge_result["errors"])
@@ -754,8 +702,6 @@ class MarkdownReferenceSystem:
                     results["total_errors"] += 1
                     logger.error("Error processing %s: %s", location, e)
 
-        logger.info(
-            f"Markdown system initialization completed: {results['total_files']} files processed"
-        )
+        logger.info(f"Markdown system initialization completed: {results['total_files']} files processed")
 
         return results

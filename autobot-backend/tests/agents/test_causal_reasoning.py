@@ -279,15 +279,17 @@ class TestCausalReasoningIntegration:
         """
         # Stub only the modules that are not importable in the test environment.
         # setdefault preserves any real module already registered by conftest.
-        _make_module_stub("intelligence.streaming_executor",
-                          ChunkType=MagicMock(), StreamChunk=MagicMock,
-                          StreamingCommandExecutor=MagicMock)
-        _make_module_stub("intelligence.goal_processor",
-                          GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
-        _make_module_stub("intelligence.os_detector",
-                          OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock())
-        _make_module_stub("intelligence.tool_selector",
-                          OSAwareToolSelector=MagicMock)
+        _make_module_stub(
+            "intelligence.streaming_executor",
+            ChunkType=MagicMock(),
+            StreamChunk=MagicMock,
+            StreamingCommandExecutor=MagicMock,
+        )
+        _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
+        _make_module_stub(
+            "intelligence.os_detector", OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock()
+        )
+        _make_module_stub("intelligence.tool_selector", OSAwareToolSelector=MagicMock)
         _make_module_stub("knowledge_base", KnowledgeBase=MagicMock)
         _make_module_stub("llm_interface", LLMInterface=MagicMock)
         _make_module_stub("worker_node", WorkerNode=MagicMock)

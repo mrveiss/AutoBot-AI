@@ -44,9 +44,7 @@ class TestSecurityChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "config.py")
 
-        password_results = [
-            r for r in results if r.check_id == "SEC001" and not r.passed
-        ]
+        password_results = [r for r in results if r.check_id == "SEC001" and not r.passed]
 
         assert len(password_results) >= 1
         assert password_results[0].severity == CheckSeverity.BLOCK
@@ -146,9 +144,7 @@ class TestDebugChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "app.js")
 
-        console_results = [
-            r for r in results if r.check_id == "DBG001" and not r.passed
-        ]
+        console_results = [r for r in results if r.check_id == "DBG001" and not r.passed]
 
         assert len(console_results) >= 2
 
@@ -182,9 +178,7 @@ class TestDebugChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "debug.py")
 
-        debugger_results = [
-            r for r in results if r.check_id == "DBG003" and not r.passed
-        ]
+        debugger_results = [r for r in results if r.check_id == "DBG003" and not r.passed]
 
         assert len(debugger_results) >= 1
         assert debugger_results[0].severity == CheckSeverity.BLOCK
@@ -200,9 +194,7 @@ class TestDebugChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "test.py")
 
-        debugger_results = [
-            r for r in results if r.check_id == "DBG003" and not r.passed
-        ]
+        debugger_results = [r for r in results if r.check_id == "DBG003" and not r.passed]
 
         assert len(debugger_results) >= 1
 
@@ -240,9 +232,7 @@ class TestQualityChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "handler.py")
 
-        except_results = [
-            r for r in results if r.check_id in ("QUA001", "QUA002") and not r.passed
-        ]
+        except_results = [r for r in results if r.check_id in ("QUA001", "QUA002") and not r.passed]
 
         assert len(except_results) >= 1
 
@@ -258,9 +248,7 @@ class TestQualityChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "handler.py")
 
-        bare_except_results = [
-            r for r in results if r.check_id == "QUA002" and not r.passed
-        ]
+        bare_except_results = [r for r in results if r.check_id == "QUA002" and not r.passed]
 
         assert len(bare_except_results) >= 1
 
@@ -290,9 +278,7 @@ class TestStyleChecks:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "style.py")
 
-        whitespace_results = [
-            r for r in results if r.check_id == "STY001" and not r.passed
-        ]
+        whitespace_results = [r for r in results if r.check_id == "STY001" and not r.passed]
 
         assert len(whitespace_results) >= 1
         assert whitespace_results[0].severity == CheckSeverity.INFO
@@ -445,9 +431,7 @@ class TestAnalyzeFiles:
         (tmp_path / "file2.js").write_text("console.log('test');\n")
 
         analyzer = PrecommitAnalyzer(project_root=str(tmp_path))
-        result = analyzer.analyze_files(
-            [str(tmp_path / "file1.py"), str(tmp_path / "file2.js")]
-        )
+        result = analyzer.analyze_files([str(tmp_path / "file1.py"), str(tmp_path / "file2.js")])
 
         assert result.files_checked == [
             str(tmp_path / "file1.py"),
@@ -475,9 +459,7 @@ class TestCommitCheckResult:
     def test_blocking_result(self):
         """Test that BLOCK severity issues block commit."""
         # Use a private key which is definitely BLOCK severity
-        code = (
-            "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBg...\n-----END PRIVATE KEY-----"
-        )
+        code = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBg...\n-----END PRIVATE KEY-----"
 
         analyzer = PrecommitAnalyzer()
 
@@ -486,9 +468,7 @@ class TestCommitCheckResult:
         analyzer.results = results
 
         # Check blocking
-        has_block = any(
-            r.severity == CheckSeverity.BLOCK and not r.passed for r in results
-        )
+        has_block = any(r.severity == CheckSeverity.BLOCK and not r.passed for r in results)
         assert has_block
 
     def test_warning_result(self):
@@ -498,9 +478,7 @@ class TestCommitCheckResult:
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "test.py")
 
-        warnings = [
-            r for r in results if r.severity == CheckSeverity.WARN and not r.passed
-        ]
+        warnings = [r for r in results if r.severity == CheckSeverity.WARN and not r.passed]
         assert len(warnings) >= 1
 
     def test_to_dict_serialization(self):
@@ -615,9 +593,7 @@ class TestEdgeCases:
 
         # Filter out INFO level issues
         blocking_or_warning = [
-            r
-            for r in results
-            if r.severity in (CheckSeverity.BLOCK, CheckSeverity.WARN) and not r.passed
+            r for r in results if r.severity in (CheckSeverity.BLOCK, CheckSeverity.WARN) and not r.passed
         ]
 
         assert len(blocking_or_warning) == 0

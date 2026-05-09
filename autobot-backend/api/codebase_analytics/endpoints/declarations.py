@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _query_chromadb_declarations(
-    code_collection, source_id: Optional[str] = None
-) -> tuple:
+def _query_chromadb_declarations(code_collection, source_id: Optional[str] = None) -> tuple:
     """Helper for get_code_declarations (#1088, #1710: per-source filter).
 
     Returns:
@@ -52,25 +50,15 @@ def _query_chromadb_declarations(
                 "name": metadata.get("name", ""),
                 "type": metadata.get("type", ""),
                 "file_path": metadata.get("file_path", ""),
-                "line_number": (
-                    int(metadata.get("start_line", 0))
-                    if metadata.get("start_line")
-                    else 0
-                ),
+                "line_number": (int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0),
                 "usage_count": 1,
                 "is_exported": True,
-                "parameters": (
-                    metadata.get("parameters", "").split(",")
-                    if metadata.get("parameters")
-                    else []
-                ),
+                "parameters": (metadata.get("parameters", "").split(",") if metadata.get("parameters") else []),
             }
             all_declarations.append(decl)
         logger.info("Retrieved %s declarations from ChromaDB", len(all_declarations))
     except Exception as chroma_error:
-        logger.warning(
-            f"ChromaDB query failed: {chroma_error}, returning empty declarations"
-        )
+        logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
     return all_declarations, storage_type
 
 
@@ -111,7 +99,5 @@ async def get_code_declarations(
                 "declarations": [],
             }
         )
-    all_declarations, storage_type = await asyncio.to_thread(
-        _query_chromadb_declarations, code_collection, source_id
-    )
+    all_declarations, storage_type = await asyncio.to_thread(_query_chromadb_declarations, code_collection, source_id)
     return JSONResponse(_build_declarations_response(all_declarations, storage_type))

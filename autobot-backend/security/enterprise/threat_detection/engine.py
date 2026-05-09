@@ -57,9 +57,7 @@ class ThreatDetectionEngine:
 
     def __init__(
         self,
-        config_path: str = str(
-            PATH.get_config_path("security", "threat_detection.yaml")
-        ),
+        config_path: str = str(PATH.get_config_path("security", "threat_detection.yaml")),
     ):
         """Initialize threat detection engine with ML models and configuration."""
         # Thread-safe file operations - must be initialized first (Issue #378)
@@ -335,15 +333,11 @@ class ThreatDetectionEngine:
             asyncio.create_task(self._periodic_cleanup())
         except RuntimeError:
             # No event loop running - tasks will be started when loop becomes available
-            logger.debug(
-                "No event loop running, background tasks will be started later"
-            )
+            logger.debug("No event loop running, background tasks will be started later")
 
     async def _periodic_model_training(self):
         """Periodically retrain ML models with new data"""
-        retrain_interval = (
-            self.config.get("ml_models", {}).get("model_retrain_hours", 24) * 3600
-        )
+        retrain_interval = self.config.get("ml_models", {}).get("model_retrain_hours", 24) * 3600
 
         while True:
             try:
@@ -354,10 +348,7 @@ class ThreatDetectionEngine:
 
     async def _periodic_profile_updates(self):
         """Periodically update user behavioral profiles"""
-        update_interval = (
-            self.config.get("behavioral_analysis", {}).get("profile_update_hours", 6)
-            * 3600
-        )
+        update_interval = self.config.get("behavioral_analysis", {}).get("profile_update_hours", 6) * 3600
 
         while True:
             try:
@@ -370,13 +361,9 @@ class ThreatDetectionEngine:
         """Periodic cleanup of old data and statistics"""
         while True:
             try:
-                await asyncio.sleep(
-                    TimingConstants.HOURLY_INTERVAL
-                )  # Cleanup every hour
+                await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)  # Cleanup every hour
                 await self._cleanup_old_data()
-                await asyncio.get_running_loop().run_in_executor(
-                    None, self._run_learner_consolidation
-                )
+                await asyncio.get_running_loop().run_in_executor(None, self._run_learner_consolidation)
             except Exception as e:
                 logger.error("Error in periodic cleanup: %s", e)
 
@@ -401,9 +388,7 @@ class ThreatDetectionEngine:
             InsiderThreatAnalyzer: "insider_threat_detection",
         }
 
-    async def _run_analyzers(
-        self, security_event: SecurityEvent, context: AnalysisContext
-    ) -> List[ThreatEvent]:
+    async def _run_analyzers(self, security_event: SecurityEvent, context: AnalysisContext) -> List[ThreatEvent]:
         """Run all enabled analyzers on the security event. Issue #620."""
         detected_threats = []
         detection_modes = self.config.get("detection_modes", {})
@@ -421,9 +406,7 @@ class ThreatDetectionEngine:
 
         return detected_threats
 
-    def _apply_learner_confidence(
-        self, threat: ThreatEvent, pattern_id: str
-    ) -> ThreatEvent:
+    def _apply_learner_confidence(self, threat: ThreatEvent, pattern_id: str) -> ThreatEvent:
         """Adjust threat confidence using learner's historical precision. Issue #2110."""
         if self.learner is None:
             return threat
@@ -431,9 +414,7 @@ class ThreatDetectionEngine:
         threat.confidence_score = adjusted
         return threat
 
-    async def _process_detected_threat(
-        self, detected_threats: List[ThreatEvent]
-    ) -> ThreatEvent:
+    async def _process_detected_threat(self, detected_threats: List[ThreatEvent]) -> ThreatEvent:
         """Process detected threats and update statistics. Issue #620."""
         primary_threat = max(
             detected_threats,
@@ -545,9 +526,7 @@ class ThreatDetectionEngine:
 
             self._record_mitigation(threat, action, success)
 
-    def _record_mitigation(
-        self, threat: ThreatEvent, action: str, success: bool
-    ) -> None:
+    def _record_mitigation(self, threat: ThreatEvent, action: str, success: bool) -> None:
         """Record mitigation outcome to the learner. Issue #2110."""
         if self.learner is None:
             return
@@ -569,9 +548,7 @@ class ThreatDetectionEngine:
 
     async def _apply_rate_limiting(self, user_id: str, ip_address: str):
         """Apply rate limiting to user/IP"""
-        logger.warning(
-            "SECURITY ACTION: Rate limiting user %s from IP %s", user_id, ip_address
-        )
+        logger.warning("SECURITY ACTION: Rate limiting user %s from IP %s", user_id, ip_address)
         # Implementation would update rate limiting rules
 
     async def _send_security_alert(self, threat: ThreatEvent):
@@ -618,9 +595,7 @@ class ThreatDetectionEngine:
             feature_vector = [
                 len(event.get("action", "")),
                 len(event.get("resource", "")),
-                parse_utc_iso(
-                    event.get("timestamp", utc_timestamp())
-                ).hour,
+                parse_utc_iso(event.get("timestamp", utc_timestamp())).hour,
                 1 if event.get("outcome") == "success" else 0,
                 len(event.get("details", {})),
                 hash(event.get("user_id", "")) % 1000,  # User hash for anonymity
@@ -661,9 +636,7 @@ class ThreatDetectionEngine:
                 self.stats["threats_by_category"] = defaultdict(int)
                 self.stats["threats_by_level"] = defaultdict(int)
 
-            logger.debug(
-                "Cleanup completed: removed %s expired sessions", len(expired_sessions)
-            )
+            logger.debug("Cleanup completed: removed %s expired sessions", len(expired_sessions))
 
         except Exception as e:
             logger.error("Error during cleanup: %s", e)
@@ -675,13 +648,8 @@ class ThreatDetectionEngine:
             "recent_events_count": len(self.recent_events),
             "active_user_profiles": len(self.user_profiles),
             "active_sessions": len(self.user_sessions),
-            "detection_rate": (
-                self.stats["threats_detected"]
-                / max(1, self.stats["total_events_processed"])
-            ),
-            "false_positive_rate": (
-                self.stats["false_positives"] / max(1, self.stats["threats_detected"])
-            ),
+            "detection_rate": (self.stats["threats_detected"] / max(1, self.stats["total_events_processed"])),
+            "false_positive_rate": (self.stats["false_positives"] / max(1, self.stats["threats_detected"])),
         }
 
     async def get_user_risk_assessment(self, user_id: str) -> Dict:

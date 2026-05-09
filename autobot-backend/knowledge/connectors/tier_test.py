@@ -20,9 +20,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Ensure the autobot-backend package root is on sys.path
 # ---------------------------------------------------------------------------
-_BACKEND_DIR = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
@@ -62,25 +60,15 @@ class TestConnectorTierAttribute:
         connectors = dict(ConnectorRegistry._connectors)
         assert connectors, "No connectors registered — imports failed"
         for type_name, klass in connectors.items():
-            assert hasattr(klass, "tier"), (
-                "Connector %s (%s) missing tier" % (type_name, klass)
-            )
-            assert isinstance(klass.tier, int), (
-                "Connector %s tier must be int, got %r"
-                % (type_name, type(klass.tier))
-            )
-            assert 0 <= klass.tier <= 2, (
-                "Connector %s tier out of range: %d" % (type_name, klass.tier)
-            )
+            assert hasattr(klass, "tier"), "Connector %s (%s) missing tier" % (type_name, klass)
+            assert isinstance(klass.tier, int), "Connector %s tier must be int, got %r" % (type_name, type(klass.tier))
+            assert 0 <= klass.tier <= 2, "Connector %s tier out of range: %d" % (type_name, klass.tier)
 
     @pytest.mark.parametrize("connector_type,expected", _EXPECTED_TIERS.items())
     def test_expected_tier_per_builtin(self, connector_type, expected):
         klass = ConnectorRegistry._connectors.get(connector_type)
         assert klass is not None, "Connector %s not registered" % connector_type
-        assert klass.tier == expected, (
-            "Expected %s tier=%d, got %d"
-            % (connector_type, expected, klass.tier)
-        )
+        assert klass.tier == expected, "Expected %s tier=%d, got %d" % (connector_type, expected, klass.tier)
 
 
 class TestConnectorConfigTier:
@@ -120,9 +108,7 @@ class TestApiSerialization:
             created_at=datetime(2026, 1, 1),
         )
         payload = _cfg_to_dict(cfg)
-        assert payload["tier"] == 1, (
-            "notion connector should surface tier=1 in API payload"
-        )
+        assert payload["tier"] == 1, "notion connector should surface tier=1 in API payload"
 
     def test_cfg_to_dict_falls_back_to_cfg_tier_when_type_unknown(self):
         from api.knowledge_connectors import _cfg_to_dict
@@ -150,14 +136,12 @@ class TestConnectorTypesEndpoint:
         assert "connector_types" in response
         assert response["total"] == len(response["connector_types"])
 
-        by_type = {
-            entry["connector_type"]: entry["tier"]
-            for entry in response["connector_types"]
-        }
+        by_type = {entry["connector_type"]: entry["tier"] for entry in response["connector_types"]}
         for connector_type, expected in _EXPECTED_TIERS.items():
-            assert by_type.get(connector_type) == expected, (
-                "endpoint tier mismatch for %s: expected %d, got %r"
-                % (connector_type, expected, by_type.get(connector_type))
+            assert by_type.get(connector_type) == expected, "endpoint tier mismatch for %s: expected %d, got %r" % (
+                connector_type,
+                expected,
+                by_type.get(connector_type),
             )
 
     @pytest.mark.asyncio

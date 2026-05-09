@@ -25,14 +25,16 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc, parse_utc_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
+from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
@@ -50,8 +52,6 @@ from knowledge.schemas.connectors import (
     CreateConnectorRequest,
     UpdateConnectorRequest,
 )
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +149,7 @@ async def _list_connector_ids() -> List[str]:
     redis = get_redis_client(database="knowledge")
     pattern = "%s*" % _REDIS_KEY_PREFIX
     ids: List[str] = []
-    async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(
-        getattr(redis, "scan_iter", None)
-    )
+    async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
 
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
@@ -224,11 +222,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         history_entry = {
             "connector_id": connector_id,
             "started_at": sync_result.started_at.isoformat(),
-            "completed_at": (
-                sync_result.completed_at.isoformat()
-                if sync_result.completed_at
-                else None
-            ),
+            "completed_at": (sync_result.completed_at.isoformat() if sync_result.completed_at else None),
             "status": sync_result.status,
             "added": sync_result.added,
             "updated": sync_result.updated,
@@ -484,9 +478,7 @@ async def trigger_sync(
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     background_tasks.add_task(_run_sync_background, connector_id, incremental)
-    logger.info(
-        "Triggered sync for connector %s (incremental=%s)", connector_id, incremental
-    )
+    logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
         "connector_id": connector_id,
         "status": "sync_started",
@@ -547,9 +539,7 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
         return {
             "connector_id": status.connector_id,
             "is_healthy": status.is_healthy,
-            "last_sync_at": (
-                status.last_sync_at.isoformat() if status.last_sync_at else None
-            ),
+            "last_sync_at": (status.last_sync_at.isoformat() if status.last_sync_at else None),
             "last_sync_status": status.last_sync_status,
             "documents_indexed": status.documents_indexed,
             "last_error": status.last_error,

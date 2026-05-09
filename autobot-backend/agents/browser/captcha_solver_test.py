@@ -266,9 +266,7 @@ class TestLocalCaptchaSolverSolveTextImage:
         solver._provider_used = "NPUExecutionProvider"
 
         # Provide minimal valid PNG-like bytes; preprocessing is mocked via PIL stub
-        with patch(
-            "agents.browser.captcha_solver.LocalCaptchaSolver._preprocess_image"
-        ) as pp:
+        with patch("agents.browser.captcha_solver.LocalCaptchaSolver._preprocess_image") as pp:
             pp.return_value = np.zeros((1, 1, 64, 200), dtype=np.float32)
             result = await solver.solve_text_image(b"fake_image_bytes")
 
@@ -362,13 +360,9 @@ class TestCaptchaSolverPipeline:
         human_result.success = True
         human_result.error_message = None
 
-        with patch(
-            "agents.browser.captcha_solver.get_captcha_human_loop"
-        ) as mock_get_loop:
+        with patch("agents.browser.captcha_solver.get_captcha_human_loop") as mock_get_loop:
             loop_instance = AsyncMock()
-            loop_instance.request_human_intervention = AsyncMock(
-                return_value=human_result
-            )
+            loop_instance.request_human_intervention = AsyncMock(return_value=human_result)
             mock_get_loop.return_value = loop_instance
 
             pipeline = self._make_pipeline(solver=solver, detector=detector)
@@ -381,9 +375,7 @@ class TestCaptchaSolverPipeline:
     async def test_human_fallback_for_recaptcha(self):
         """reCAPTCHA is not solvable locally — pipeline skips to human fallback."""
         solver = MagicMock(spec=LocalCaptchaSolver)
-        solver.can_solve.return_value = (
-            False  # LocalCaptchaSolver can't handle reCAPTCHA
-        )
+        solver.can_solve.return_value = False  # LocalCaptchaSolver can't handle reCAPTCHA
 
         detector = MagicMock(spec=CaptchaDetector)
 
@@ -394,13 +386,9 @@ class TestCaptchaSolverPipeline:
         human_result.success = False
         human_result.error_message = "timeout"
 
-        with patch(
-            "agents.browser.captcha_solver.get_captcha_human_loop"
-        ) as mock_get_loop:
+        with patch("agents.browser.captcha_solver.get_captcha_human_loop") as mock_get_loop:
             loop_instance = AsyncMock()
-            loop_instance.request_human_intervention = AsyncMock(
-                return_value=human_result
-            )
+            loop_instance.request_human_intervention = AsyncMock(return_value=human_result)
             mock_get_loop.return_value = loop_instance
 
             pipeline = self._make_pipeline(solver=solver, detector=detector)
@@ -436,9 +424,7 @@ class TestCaptchaSolverPipeline:
         solver.can_solve.return_value = True
 
         detector = MagicMock(spec=CaptchaDetector)
-        detector.extract_captcha_image = AsyncMock(
-            return_value=None
-        )  # extraction fails
+        detector.extract_captcha_image = AsyncMock(return_value=None)  # extraction fails
 
         page = MagicMock()
         page.url = "https://example.com"
@@ -448,13 +434,9 @@ class TestCaptchaSolverPipeline:
         human_result.success = True
         human_result.error_message = None
 
-        with patch(
-            "agents.browser.captcha_solver.get_captcha_human_loop"
-        ) as mock_get_loop:
+        with patch("agents.browser.captcha_solver.get_captcha_human_loop") as mock_get_loop:
             loop_instance = AsyncMock()
-            loop_instance.request_human_intervention = AsyncMock(
-                return_value=human_result
-            )
+            loop_instance.request_human_intervention = AsyncMock(return_value=human_result)
             mock_get_loop.return_value = loop_instance
 
             pipeline = self._make_pipeline(solver=solver, detector=detector)

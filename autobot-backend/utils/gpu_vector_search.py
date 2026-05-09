@@ -891,14 +891,10 @@ class HybridVectorSearch(AsyncInitializable):
     ) -> List[SearchResult]:
         """Fetch document content and metadata from ChromaDB."""
         try:
-            collection: BaseCollection = await asyncio.to_thread(
-                self.chromadb.get_collection, collection_name
-            )
+            collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
             doc_ids = [r.doc_id for r in results]
 
-            chromadb_results = await asyncio.to_thread(
-                collection.get, ids=doc_ids, include=["documents", "metadatas"]
-            )
+            chromadb_results = await asyncio.to_thread(collection.get, ids=doc_ids, include=["documents", "metadatas"])
             doc_lookup = self._build_doc_lookup(chromadb_results)
 
             enriched = []
@@ -978,9 +974,7 @@ class HybridVectorSearch(AsyncInitializable):
         start_time = time.perf_counter()
 
         try:
-            collection: BaseCollection = await asyncio.to_thread(
-                self.chromadb.get_collection, collection_name
-            )
+            collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
             where = metadata_filter if metadata_filter else None
 
             chromadb_results = await asyncio.to_thread(
@@ -1031,9 +1025,7 @@ class HybridVectorSearch(AsyncInitializable):
             return 0
 
         try:
-            collection: BaseCollection = await asyncio.to_thread(
-                self.chromadb.get_collection, collection_name
-            )
+            collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
 
             # Get all embeddings from ChromaDB
             all_data = await asyncio.to_thread(collection.get, include=["embeddings"])

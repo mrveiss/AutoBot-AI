@@ -99,7 +99,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 
-
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
@@ -167,10 +166,7 @@ def _create_read_text_file_tool() -> MCPTool:
     """
     return MCPTool(
         name="read_text_file",
-        description=(
-            "Read complete text file contents with optional head/tail parameters for"
-            "large files"
-        ),
+        description=("Read complete text file contents with optional head/tail parameters for" "large files"),
         input_schema={
             "type": "object",
             "properties": {
@@ -191,15 +187,10 @@ def _create_read_media_file_tool() -> MCPTool:
     """
     return MCPTool(
         name="read_media_file",
-        description=(
-            "Read media files (images, audio) as base64-encoded data with"
-            "MIME type detection"
-        ),
+        description=("Read media files (images, audio) as base64-encoded data with" "MIME type detection"),
         input_schema={
             "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Absolute path to media file"}
-            },
+            "properties": {"path": {"type": "string", "description": "Absolute path to media file"}},
             "required": ["path"],
         },
     )
@@ -213,10 +204,7 @@ def _create_read_multiple_files_tool() -> MCPTool:
     """
     return MCPTool(
         name="read_multiple_files",
-        description=(
-            "Batch read multiple text files efficiently with graceful error handling per"
-            "file"
-        ),
+        description=("Batch read multiple text files efficiently with graceful error handling per" "file"),
         input_schema={
             "type": "object",
             "properties": {
@@ -257,10 +245,7 @@ def _create_write_file_tool() -> MCPTool:
     """
     return MCPTool(
         name="write_file",
-        description=(
-            "Create new file or completely overwrite existing file with"
-            "provided content"
-        ),
+        description=("Create new file or completely overwrite existing file with" "provided content"),
         input_schema={
             "type": "object",
             "properties": {
@@ -280,10 +265,7 @@ def _create_edit_file_tool() -> MCPTool:
     """
     return MCPTool(
         name="edit_file",
-        description=(
-            "Selectively modify file contents using pattern-based find-and-replace"
-            "edits"
-        ),
+        description=("Selectively modify file contents using pattern-based find-and-replace" "edits"),
         input_schema={
             "type": "object",
             "properties": {
@@ -345,10 +327,7 @@ def _create_directory_tool() -> MCPTool:
     """
     return MCPTool(
         name="create_directory",
-        description=(
-            "Create directory with automatic parent directory creation (recursive"
-            "mkdir)"
-        ),
+        description=("Create directory with automatic parent directory creation (recursive" "mkdir)"),
         input_schema={
             "type": "object",
             "properties": {
@@ -373,10 +352,7 @@ def _list_directory_tool() -> MCPTool:
     """
     return MCPTool(
         name="list_directory",
-        description=(
-            "List directory contents with [FILE] and [DIR] prefixes for"
-            "easy identification"
-        ),
+        description=("List directory contents with [FILE] and [DIR] prefixes for" "easy identification"),
         input_schema={
             "type": "object",
             "properties": {
@@ -401,10 +377,7 @@ def _list_directory_with_sizes_tool() -> MCPTool:
     """
     return MCPTool(
         name="list_directory_with_sizes",
-        description=(
-            "List directory contents with detailed size information and"
-            "sortable metrics"
-        ),
+        description=("List directory contents with detailed size information and" "sortable metrics"),
         input_schema={
             "type": "object",
             "properties": {
@@ -468,10 +441,7 @@ def _create_search_files_tool() -> MCPTool:
     """
     return MCPTool(
         name="search_files",
-        description=(
-            "Recursively search for files matching glob pattern with"
-            "optional exclusion patterns"
-        ),
+        description=("Recursively search for files matching glob pattern with" "optional exclusion patterns"),
         input_schema={
             "type": "object",
             "properties": {
@@ -499,15 +469,10 @@ def _create_directory_tree_tool() -> MCPTool:
     """
     return MCPTool(
         name="directory_tree",
-        description=(
-            "Get recursive directory structure as JSON tree with files and"
-            "subdirectories"
-        ),
+        description=("Get recursive directory structure as JSON tree with files and" "subdirectories"),
         input_schema={
             "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Root directory path"}
-            },
+            "properties": {"path": {"type": "string", "description": "Root directory path"}},
             "required": ["path"],
         },
     )
@@ -521,15 +486,10 @@ def _create_get_file_info_tool() -> MCPTool:
     """
     return MCPTool(
         name="get_file_info",
-        description=(
-            "Get comprehensive file/directory metadata (size, timestamps, permissions,"
-            "type)"
-        ),
+        description=("Get comprehensive file/directory metadata (size, timestamps, permissions," "type)"),
         input_schema={
             "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "File or directory path"}
-            },
+            "properties": {"path": {"type": "string", "description": "File or directory path"}},
             "required": ["path"],
         },
     )
@@ -679,9 +639,7 @@ async def read_media_file_mcp(
     # Check file size
     file_size = await run_in_file_executor(os.path.getsize, safe_path)
     if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413, detail=f"File too large: {file_size} bytes"
-        )
+        raise HTTPException(status_code=413, detail=f"File too large: {file_size} bytes")
 
     # Detect MIME type
     mime_type, _ = mimetypes.guess_type(safe_path)
@@ -829,9 +787,7 @@ async def write_file_mcp(
 
     # Create parent directories if needed
     parent_dir = os.path.dirname(safe_path)
-    parent_exists = (
-        await run_in_file_executor(os.path.exists, parent_dir) if parent_dir else True
-    )
+    parent_exists = await run_in_file_executor(os.path.exists, parent_dir) if parent_dir else True
     if parent_dir and not parent_exists:
         _validated_path(parent_dir)  # validate parent too
         await run_in_file_executor(os.makedirs, parent_dir, exist_ok=True)
@@ -935,9 +891,7 @@ async def edit_file_mcp(
             async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
                 original_content = await f.read()
 
-            content, edits_applied = _apply_edits_to_content(
-                original_content, request.edits
-            )
+            content, edits_applied = _apply_edits_to_content(original_content, request.edits)
 
             if not request.dry_run:
                 async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:  # codeql[py/path-injection]
@@ -1020,9 +974,7 @@ async def list_directory_mcp(
         # Check all entries in parallel - eliminates N+1 sequential I/O
         # Issue #718: Use dedicated file I/O executor
         full_paths = [os.path.join(safe_path, name) for name in dir_contents]
-        is_dir_checks = await asyncio.gather(
-            *[run_in_file_executor(os.path.isdir, fp) for fp in full_paths]
-        )
+        is_dir_checks = await asyncio.gather(*[run_in_file_executor(os.path.isdir, fp) for fp in full_paths])
 
         entries = []
         for name, entry_is_dir in zip(dir_contents, is_dir_checks):
@@ -1086,9 +1038,7 @@ async def _build_directory_entries_with_sizes(path: str) -> list:
     full_paths = [os.path.join(path, name) for name in dir_contents]
 
     # Batch check all entries in parallel - eliminates N+1 sequential I/O
-    is_dir_checks = await asyncio.gather(
-        *[run_in_file_executor(os.path.isdir, fp) for fp in full_paths]
-    )
+    is_dir_checks = await asyncio.gather(*[run_in_file_executor(os.path.isdir, fp) for fp in full_paths])
 
     # Get sizes for files only (directories are 0)
     async def get_size_if_file(file_path: str, is_directory: bool) -> int:
@@ -1096,14 +1046,10 @@ async def _build_directory_entries_with_sizes(path: str) -> list:
             return 0
         return await run_in_file_executor(os.path.getsize, file_path)
 
-    sizes = await asyncio.gather(
-        *[get_size_if_file(fp, is_d) for fp, is_d in zip(full_paths, is_dir_checks)]
-    )
+    sizes = await asyncio.gather(*[get_size_if_file(fp, is_d) for fp, is_d in zip(full_paths, is_dir_checks)])
 
     entries = []
-    for name, full_path, entry_is_dir, size in zip(
-        dir_contents, full_paths, is_dir_checks, sizes
-    ):
+    for name, full_path, entry_is_dir, size in zip(dir_contents, full_paths, is_dir_checks, sizes):
         entries.append(
             {
                 "name": name,
@@ -1181,9 +1127,7 @@ async def move_file_mcp(
 
     dest_exists = await run_in_file_executor(os.path.exists, safe_dest)
     if dest_exists:
-        raise HTTPException(
-            status_code=409, detail=f"Destination already exists: {request.destination}"
-        )
+        raise HTTPException(status_code=409, detail=f"Destination already exists: {request.destination}")
 
     try:
         await run_in_file_executor(shutil.move, safe_source, safe_dest)
@@ -1290,9 +1234,7 @@ async def directory_tree_mcp(
                 if os.path.isdir(full_path):
                     tree["children"].append(build_tree(full_path))
                 else:
-                    tree["children"].append(
-                        {"name": name, "type": "file", "path": full_path}
-                    )
+                    tree["children"].append({"name": name, "type": "file", "path": full_path})
         except PermissionError:
             tree["error"] = "Permission denied"
 

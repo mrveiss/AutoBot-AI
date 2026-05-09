@@ -92,9 +92,7 @@ def load_worker_config(config_path: str = "config/npu_workers.yaml") -> List[Dic
         # Validate required fields
         missing = required_fields - set(worker.keys())
         if missing:
-            logger.warning(
-                "Skipping worker with missing fields %s: %s", missing, worker
-            )
+            logger.warning("Skipping worker with missing fields %s: %s", missing, worker)
             continue
 
         # Construct URL from host and port
@@ -151,9 +149,7 @@ class NPUWorkerClient:
         """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
-        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = (
-            None
-        )
+        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = None
         self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None
@@ -174,13 +170,10 @@ class NPUWorkerClient:
 
                 self._http_client = await create_service_client("main-backend")
                 self._auth_client_initialized = True
-                logger.info(
-                    "NPU client using authenticated ServiceHTTPClient (Issue #255)"
-                )
+                logger.info("NPU client using authenticated ServiceHTTPClient (Issue #255)")
             except Exception as e:
                 logger.warning(
-                    "Failed to create authenticated client, falling back to "
-                    "unauthenticated mode: %s",
+                    "Failed to create authenticated client, falling back to " "unauthenticated mode: %s",
                     e,
                 )
                 self._http_client = get_http_client()
@@ -228,9 +221,7 @@ class NPUWorkerClient:
         try:
             http_client = await self._get_http_client()
             payload = {"model_id": model_id, "device": device}
-            async with await http_client.post(
-                f"{self.npu_endpoint}/models/load", json=payload
-            ) as response:
+            async with await http_client.post(f"{self.npu_endpoint}/models/load", json=payload) as response:
                 return await response.json()
         except Exception as e:
             logger.error("Failed to load model %s: %s", model_id, e)
@@ -255,9 +246,7 @@ class NPUWorkerClient:
                 "top_p": top_p,
             }
 
-            async with await http_client.post(
-                f"{self.npu_endpoint}/inference", json=payload
-            ) as response:
+            async with await http_client.post(f"{self.npu_endpoint}/inference", json=payload) as response:
                 result = await response.json()
                 if response.status == 200:
                     return result
@@ -270,9 +259,7 @@ class NPUWorkerClient:
             logger.error("NPU inference failed: %s", e)
             return {"error": "NPU inference failed", "success": False}
 
-    async def offload_heavy_processing(
-        self, task_type: str, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def offload_heavy_processing(self, task_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Offload heavy processing tasks to NPU worker
 
@@ -293,10 +280,7 @@ class NPUWorkerClient:
 
             # For now, use standard inference endpoint with task-specific prompts
             if task_type == "text_analysis":
-                prompt = (
-                    "Analyze the following text and extract key insights:\n\n"
-                    f"{data.get('text', '')}"
-                )
+                prompt = "Analyze the following text and extract key insights:\n\n" f"{data.get('text', '')}"
                 return await self.run_inference(
                     model_id=data.get("model_id", "default"),
                     input_text=prompt,
@@ -305,8 +289,7 @@ class NPUWorkerClient:
 
             elif task_type == "knowledge_processing":
                 prompt = (
-                    "Process and summarize this knowledge data:\n\n"
-                    f"{json.dumps(data.get('knowledge_data', {}))}"
+                    "Process and summarize this knowledge data:\n\n" f"{json.dumps(data.get('knowledge_data', {}))}"
                 )
                 return await self.run_inference(
                     model_id=data.get("model_id", "default"),
@@ -646,9 +629,7 @@ class NPUWorkerPool:
             logger.info("Task exception on worker %s: %s", worker.worker_id, e)
             return None
 
-    async def execute_task(
-        self, task_type: str, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_task(self, task_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a task on the pool with automatic retry and failover.
 
@@ -673,9 +654,7 @@ class NPUWorkerPool:
                 )
                 break
 
-            result = await self._execute_on_worker(
-                worker, task_type, data, attempt, excluded_workers
-            )
+            result = await self._execute_on_worker(worker, task_type, data, attempt, excluded_workers)
             if result is not None:
                 return result
 
@@ -706,11 +685,7 @@ class NPUWorkerPool:
             - success_rate: Task success rate (0.0-1.0)
         """
         total_workers = len(self.workers)
-        healthy_workers = sum(
-            1
-            for w in self.workers.values()
-            if w.healthy and self._is_circuit_available(w)
-        )
+        healthy_workers = sum(1 for w in self.workers.values() if w.healthy and self._is_circuit_available(w))
         total_tasks = sum(w.total_requests for w in self.workers.values())
         active_tasks = sum(w.active_tasks for w in self.workers.values())
         total_failures = sum(w.failures for w in self.workers.values())
@@ -825,18 +800,12 @@ class NPUTaskQueue:
         while self.running:
             try:
                 # Wait for task with timeout to allow graceful shutdown
-                task_data = await asyncio.wait_for(
-                    self.queue.get(), timeout=TimingConstants.STANDARD_DELAY
-                )
+                task_data = await asyncio.wait_for(self.queue.get(), timeout=TimingConstants.STANDARD_DELAY)
 
-                logger.debug(
-                    f"Worker {worker_id} processing task: {task_data['task_type']}"
-                )
+                logger.debug(f"Worker {worker_id} processing task: {task_data['task_type']}")
 
                 # Process the task
-                result = await self.npu_client.offload_heavy_processing(
-                    task_data["task_type"], task_data["data"]
-                )
+                result = await self.npu_client.offload_heavy_processing(task_data["task_type"], task_data["data"])
 
                 # Set result in the future
                 if not task_data["future"].done():
@@ -864,9 +833,7 @@ class NPUTaskQueue:
 
         try:
             # Wait for result with timeout (Issue #376 - use named constants)
-            result = await asyncio.wait_for(
-                future, timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            result = await asyncio.wait_for(future, timeout=TimingConstants.SHORT_TIMEOUT)
             return result
         except asyncio.TimeoutError:
             return {"success": False, "error": "NPU task timeout", "fallback": True}
@@ -897,9 +864,7 @@ get_npu_pool = async_lazy_singleton(_init_npu_pool)
 get_npu_queue = async_lazy_singleton(_init_npu_queue)
 
 
-async def process_with_npu_fallback(
-    task_type: str, data: Dict[str, Any], fallback_func: callable
-) -> Dict[str, Any]:
+async def process_with_npu_fallback(task_type: str, data: Dict[str, Any], fallback_func: callable) -> Dict[str, Any]:
     """
     Try to process with NPU worker, fall back to local processing if unavailable
     """
@@ -914,7 +879,5 @@ async def process_with_npu_fallback(
         return result
     except Exception as e:
         # Issue #699: NPU is optional, fallback is expected - log at DEBUG
-        logger.debug(
-            "NPU processing unavailable for %s, using fallback: %s", task_type, e
-        )
+        logger.debug("NPU processing unavailable for %s, using fallback: %s", task_type, e)
         return await fallback_func()

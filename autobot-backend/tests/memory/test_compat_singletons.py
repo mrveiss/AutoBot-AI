@@ -26,8 +26,7 @@ def test_get_enhanced_memory_manager_returns_instance_not_callable():
     with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
         result = get_enhanced_memory_manager()
     assert not inspect.isfunction(result), (
-        f"get_enhanced_memory_manager() returned {type(result).__name__!r}; "
-        "expected EnhancedMemoryManager instance"
+        f"get_enhanced_memory_manager() returned {type(result).__name__!r}; " "expected EnhancedMemoryManager instance"
     )
     assert isinstance(result, EnhancedMemoryManager)
 
@@ -37,8 +36,7 @@ def test_get_long_term_memory_manager_returns_instance_not_callable():
     with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
         result = get_long_term_memory_manager()
     assert not inspect.isfunction(result), (
-        f"get_long_term_memory_manager() returned {type(result).__name__!r}; "
-        "expected LongTermMemoryManager instance"
+        f"get_long_term_memory_manager() returned {type(result).__name__!r}; " "expected LongTermMemoryManager instance"
     )
     assert isinstance(result, LongTermMemoryManager)
 

@@ -12,6 +12,7 @@ from typing import Any, Dict
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from autobot_shared.time_utils import now_utc
 
 
@@ -44,12 +45,6 @@ class ProcessedChunk(BaseModel):
         default="unknown",
         description="Document classification (technical, narrative, etc.)",
     )
-    start_offset: int = Field(
-        default=0, description="Character offset where chunk starts in document"
-    )
-    end_offset: int = Field(
-        default=0, description="Character offset where chunk ends in document"
-    )
-    created_at: datetime = Field(
-        default_factory=_utcnow, description="Chunk creation timestamp"
-    )
+    start_offset: int = Field(default=0, description="Character offset where chunk starts in document")
+    end_offset: int = Field(default=0, description="Character offset where chunk ends in document")
+    created_at: datetime = Field(default_factory=_utcnow, description="Chunk creation timestamp")

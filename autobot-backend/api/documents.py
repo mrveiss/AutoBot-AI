@@ -29,11 +29,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import get_async_redis_client
-from constants.ttl_constants import TTL_365_DAYS
-from models.document import AIDocument
 from api.schemas_knowledge import (
     AIDocumentListResponse,
     AIDocumentResponse,
@@ -41,6 +36,11 @@ from api.schemas_knowledge import (
     RefineDocumentRequest,
     UpdateDocumentRequest,
 )
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_async_redis_client
+from constants.ttl_constants import TTL_365_DAYS
+from models.document import AIDocument
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +66,7 @@ def _user_index_key(user_id: str) -> str:
 
 def _owner_id(current_user: dict) -> str:
     """Extract a stable user ID string from the JWT payload dict."""
-    return (
-        current_user.get("user_id")
-        or current_user.get("id")
-        or current_user.get("sub")
-        or "anonymous"
-    )
+    return current_user.get("user_id") or current_user.get("id") or current_user.get("sub") or "anonymous"
 
 
 async def _load_document(redis, doc_id: str) -> Optional[AIDocument]:
@@ -170,7 +165,7 @@ async def list_documents(
 
     documents.sort(key=lambda d: d.updated_at, reverse=True)
     total = len(documents)
-    page = documents[offset: offset + limit]
+    page = documents[offset : offset + limit]
     return {"documents": [d.model_dump() for d in page], "total": total}
 
 

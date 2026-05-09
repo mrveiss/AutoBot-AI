@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
-from services.secrets_service import SecretsService, get_secrets_service
 from autobot_shared.singleton_factory import lazy_singleton
+from services.secrets_service import SecretsService, get_secrets_service
 
 logger = logging.getLogger(__name__)
 

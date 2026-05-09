@@ -99,14 +99,10 @@ class ProviderRegistry:
     # Per-conversation overrides
     # ------------------------------------------------------------------
 
-    def set_conversation_provider(
-        self, conversation_id: str, provider_name: str
-    ) -> None:
+    def set_conversation_provider(self, conversation_id: str, provider_name: str) -> None:
         """Pin a specific provider for a given conversation."""
         self._conversation_overrides[conversation_id] = provider_name
-        logger.debug(
-            "Conversation %s pinned to provider %s", conversation_id, provider_name
-        )
+        logger.debug("Conversation %s pinned to provider %s", conversation_id, provider_name)
 
     def clear_conversation_provider(self, conversation_id: str) -> None:
         """Remove the per-conversation provider override."""
@@ -341,9 +337,9 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from .custom_openai_provider import CustomOpenAIProvider
     from .groq_provider import GroqProvider
     from .huggingface_provider import HuggingFaceProvider
+    from .nous_portal_provider import NousPortalProvider
     from .openai_provider import OpenAIProvider
     from .openrouter_provider import OpenRouterProvider
-    from .nous_portal_provider import NousPortalProvider
     from .vllm_base_provider import VLLMBaseProvider
 
     fallback: List[str] = []
@@ -351,11 +347,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     # Ollama (local) — always registered, highest priority
     try:
         ssot = get_ssot_config()
-        ollama_url = (
-            ssot.ollama_url
-            if ssot
-            else os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
-        )
+        ollama_url = ssot.ollama_url if ssot else os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
         from llm_providers.ollama_provider import OllamaProvider
 
         ollama_provider = OllamaProvider(settings={"base_url": ollama_url})
@@ -413,9 +405,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         registry.register(custom_provider)
         fallback.append(custom_provider.provider_name)
     else:
-        logger.debug(
-            "CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered"
-        )
+        logger.debug("CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered")
 
     # OpenRouter — registered when API key is present (Issue #4341)
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
@@ -424,9 +414,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
             openrouter_provider = OpenRouterProvider(
                 settings={
                     "api_key": openrouter_key,
-                    "default_model": os.getenv(
-                        "OPENROUTER_DEFAULT_MODEL", "gpt-3.5-turbo"
-                    ),
+                    "default_model": os.getenv("OPENROUTER_DEFAULT_MODEL", "gpt-3.5-turbo"),
                 }
             )
             registry.register(openrouter_provider)
@@ -437,11 +425,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
 
     # Nous Portal — registered when API key is present (Issue #4341)
-    nous_key = (
-        os.getenv("NOUS_API_KEY")
-        or os.getenv("HF_TOKEN")
-        or os.getenv("HUGGINGFACE_API_TOKEN")
-    )
+    nous_key = os.getenv("NOUS_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_TOKEN")
     if nous_key:
         try:
             nous_provider = NousPortalProvider(
@@ -467,12 +451,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
             vllm_provider = VLLMBaseProvider(
                 settings={
                     "model": vllm_model,
-                    "tensor_parallel_size": int(
-                        os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1")
-                    ),
-                    "gpu_memory_utilization": float(
-                        os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.9")
-                    ),
+                    "tensor_parallel_size": int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1")),
+                    "gpu_memory_utilization": float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.9")),
                     "dtype": os.getenv("VLLM_DTYPE", "auto"),
                 }
             )

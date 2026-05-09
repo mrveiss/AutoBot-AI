@@ -221,11 +221,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         event_type = event_type_map.get(message.message_type, "message")
 
         # Format content based on type
-        data = (
-            message.content
-            if isinstance(message.content, dict)
-            else {"content": message.content}
-        )
+        data = message.content if isinstance(message.content, dict) else {"content": message.content}
 
         return {
             "type": event_type,

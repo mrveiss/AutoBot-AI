@@ -2,6 +2,7 @@
 # Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """Response schemas for knowledge population endpoints (Issue #5317 batch 3b)."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional

@@ -98,12 +98,8 @@ def _make_dag_node_fn(
                 condition_result,
             )
             # Mark pruned branch descendants as skipped.
-            true_targets = [
-                e.target for e in dag.successors(dag_node.node_id) if e.label is True
-            ]
-            false_targets = [
-                e.target for e in dag.successors(dag_node.node_id) if e.label is False
-            ]
+            true_targets = [e.target for e in dag.successors(dag_node.node_id) if e.label is True]
+            false_targets = [e.target for e in dag.successors(dag_node.node_id) if e.label is False]
             pruned = false_targets if condition_result else true_targets
             _mark_descendants_skipped(pruned, dag, ctx)
             return {}  # dag_ctx mutated in-place
@@ -129,9 +125,7 @@ def _make_dag_node_fn(
         try:
             result = await step_executor(dag_node, ctx)
         except Exception as exc:
-            logger.error(
-                "DAGGraph step node %s raised: %s", dag_node.node_id, exc
-            )
+            logger.error("DAGGraph step node %s raised: %s", dag_node.node_id, exc)
             result = {
                 "success": False,
                 "error": str(exc),
@@ -257,9 +251,7 @@ def build_dag_graph(
 
             builder.add_conditional_edges(
                 nid,
-                _make_condition_router(
-                    true_targets, false_targets, unconditional, condition_node_id
-                ),
+                _make_condition_router(true_targets, false_targets, unconditional, condition_node_id),
             )
         else:
             # Non-condition node: unconditional edges to all successors.
@@ -354,9 +346,7 @@ class DAGGraphExecutor:
 
         roots = dag.root_nodes()
         if not roots:
-            logger.error(
-                "DAGGraphExecutor %s: DAG has no root nodes", workflow_id
-            )
+            logger.error("DAGGraphExecutor %s: DAG has no root nodes", workflow_id)
             ctx = DAGExecutionContext(workflow_id=workflow_id)
             ctx.status = TaskStatus.FAILED.value
             ctx.error = "DAG has no root nodes"
@@ -365,13 +355,9 @@ class DAGGraphExecutor:
         ctx = DAGExecutionContext(workflow_id=workflow_id)
 
         try:
-            compiled = build_dag_graph(
-                dag, self._step_executor, self._retry_config
-            )
+            compiled = build_dag_graph(dag, self._step_executor, self._retry_config)
         except ValueError as exc:
-            logger.error(
-                "DAGGraphExecutor %s: graph build failed: %s", workflow_id, exc
-            )
+            logger.error("DAGGraphExecutor %s: graph build failed: %s", workflow_id, exc)
             ctx.status = TaskStatus.FAILED.value
             ctx.error = str(exc)
             return ctx
@@ -401,18 +387,12 @@ class DAGGraphExecutor:
         try:
             await runner.run(initial_state)
         except Exception as exc:
-            logger.error(
-                "DAGGraphExecutor %s: execution raised: %s", workflow_id, exc
-            )
+            logger.error("DAGGraphExecutor %s: execution raised: %s", workflow_id, exc)
             ctx.status = TaskStatus.FAILED.value
             ctx.error = str(exc)
             return ctx
 
-        ctx.status = (
-            TaskStatus.COMPLETED.value
-            if ctx.error is None
-            else TaskStatus.PARTIALLY_COMPLETED.value
-        )
+        ctx.status = TaskStatus.COMPLETED.value if ctx.error is None else TaskStatus.PARTIALLY_COMPLETED.value
         logger.info(
             "DAGGraphExecutor %s: finished: status=%s",
             workflow_id,

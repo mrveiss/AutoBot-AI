@@ -93,9 +93,7 @@ class TestFalsePositivePrevention:
         line = "    # Bug risk patterns"
         debt_items, problem_items = _detect_technical_debt_in_line(156, line, "test.py")
 
-        assert (
-            len(debt_items) == 0
-        ), "Section header should not be detected as tech debt"
+        assert len(debt_items) == 0, "Section header should not be detected as tech debt"
         assert len(problem_items) == 0
 
     def test_bug_prediction_comment_not_detected(self):
@@ -103,9 +101,7 @@ class TestFalsePositivePrevention:
         line = "    # Bug prediction (Issue #224)"
         debt_items, problem_items = _detect_technical_debt_in_line(340, line, "test.py")
 
-        assert (
-            len(debt_items) == 0
-        ), "Issue reference should not be detected as tech debt"
+        assert len(debt_items) == 0, "Issue reference should not be detected as tech debt"
 
     def test_bug_predictor_class_not_detected(self):
         """Test that '# Bug Predictor Class' is NOT detected."""
@@ -119,9 +115,7 @@ class TestFalsePositivePrevention:
         line = "        # Bug mention patterns"
         debt_items, problem_items = _detect_technical_debt_in_line(148, line, "test.py")
 
-        assert (
-            len(debt_items) == 0
-        ), "Section header should not be detected as tech debt"
+        assert len(debt_items) == 0, "Section header should not be detected as tech debt"
 
     def test_todo_list_section_not_detected(self):
         """Test that '# Todo list items' section header is NOT detected."""

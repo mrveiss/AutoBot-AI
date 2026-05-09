@@ -11,6 +11,16 @@ on provider type.
 Issue #717: Efficient Inference Design implementation.
 """
 
+# Expose submodules as package attributes so @patch("...optimization.<submodule>.X")
+# resolves correctly under pytest --import-mode=importlib (#5728)
+from . import (  # noqa: E402
+    attention_backend,
+    flash_attention,
+    hf_quantizer,
+    meta_eviction,
+    model_inspector,
+    token_optimizer,
+)
 from .attention_backend import AttentionBackend as ModelAttentionBackend
 from .attention_backend import (
     AttentionBackendSelector,
@@ -86,17 +96,6 @@ from .token_optimizer import (
     TokenOptimizerConfig,
     TokenSavingsRecord,
     get_token_optimizer,
-)
-
-# Expose submodules as package attributes so @patch("...optimization.<submodule>.X")
-# resolves correctly under pytest --import-mode=importlib (#5728)
-from . import (  # noqa: E402
-    attention_backend,
-    flash_attention,
-    hf_quantizer,
-    meta_eviction,
-    model_inspector,
-    token_optimizer,
 )
 
 __all__ = [

@@ -44,9 +44,7 @@ class SecurityMixin:
             return encrypt_data(data)
         except Exception as e:
             logger.error("Failed to encrypt chat data: %s", e)
-            logger.warning(
-                "Falling back to unencrypted storage due to encryption failure"
-            )
+            logger.warning("Falling back to unencrypted storage due to encryption failure")
             return json.dumps(data, indent=2, ensure_ascii=False)
 
     def _decrypt_data(self, data_str: str) -> Dict[str, Any]:
@@ -81,6 +79,4 @@ class SecurityMixin:
                 return json.loads(data_str)
             except json.JSONDecodeError:
                 logger.error("Data is neither valid encrypted nor JSON format")
-                raise ValueError(
-                    "Cannot decode chat data - corrupted or invalid format"
-                )
+                raise ValueError("Cannot decode chat data - corrupted or invalid format")

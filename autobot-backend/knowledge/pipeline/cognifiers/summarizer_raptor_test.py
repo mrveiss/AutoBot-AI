@@ -107,12 +107,8 @@ class TestProcessPopulatesRaptorTree:
 
         fake_tree = {"L0": [chunk]}
 
-        with patch.object(
-            s, "_summarize_text", new=AsyncMock(return_value=stub_summary)
-        ):
-            with patch.object(
-                s, "build_raptor_tree", new=AsyncMock(return_value=fake_tree)
-            ):
+        with patch.object(s, "_summarize_text", new=AsyncMock(return_value=stub_summary)):
+            with patch.object(s, "build_raptor_tree", new=AsyncMock(return_value=fake_tree)):
                 result = await s.process(context)
 
         assert result.raptor_tree is not None
@@ -137,9 +133,7 @@ class TestProcessPopulatesRaptorTree:
         context.chunks = [chunk]
         # embeddings intentionally left as None
 
-        with patch.object(
-            s, "_summarize_text", new=AsyncMock(return_value=stub_summary)
-        ):
+        with patch.object(s, "_summarize_text", new=AsyncMock(return_value=stub_summary)):
             with patch.object(s, "build_raptor_tree", new=AsyncMock()) as mock_brt:
                 result = await s.process(context)
 

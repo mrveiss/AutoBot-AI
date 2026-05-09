@@ -167,16 +167,11 @@ class CircuitBreaker:
         with self._lock:
             # Check if we should try recovery
             if self.state == CircuitBreakerState.OPEN:
-                if (
-                    time.time() - self.stats.last_state_change
-                    >= self.config.recovery_timeout
-                ):
+                if time.time() - self.stats.last_state_change >= self.config.recovery_timeout:
                     self._transition_to_half_open()
                 else:
                     self._record_blocked()
-                    raise CircuitBreakerOpenError(
-                        f"Circuit breaker {self.name} is open"
-                    )
+                    raise CircuitBreakerOpenError(f"Circuit breaker {self.name} is open")
 
         try:
             result = func(*args, **kwargs)
@@ -204,16 +199,11 @@ class CircuitBreaker:
         with self._lock:
             # Check if we should try recovery
             if self.state == CircuitBreakerState.OPEN:
-                if (
-                    time.time() - self.stats.last_state_change
-                    >= self.config.recovery_timeout
-                ):
+                if time.time() - self.stats.last_state_change >= self.config.recovery_timeout:
                     self._transition_to_half_open()
                 else:
                     self._record_blocked()
-                    raise CircuitBreakerOpenError(
-                        f"Circuit breaker {self.name} is open"
-                    )
+                    raise CircuitBreakerOpenError(f"Circuit breaker {self.name} is open")
 
         try:
             result = await asyncio.wait_for(
@@ -224,9 +214,7 @@ class CircuitBreaker:
             return result
         except asyncio.TimeoutError as e:
             self._record_failure(e)
-            raise CircuitBreakerTimeout(
-                f"Call to {self.name} exceeded {self.config.timeout}s"
-            )
+            raise CircuitBreakerTimeout(f"Call to {self.name} exceeded {self.config.timeout}s")
         except Exception as e:
             self._record_failure(e)
             raise

@@ -23,10 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Regex patterns for autoresearch output
 _STEP_PATTERN = re.compile(
-    r"step\s+(\d+)\s*\|\s*"
-    r"train loss\s+([\d.]+)\s*\|\s*"
-    r"val loss\s+([\d.]+)\s*\|\s*"
-    r"val_bpb\s+([\d.]+)"
+    r"step\s+(\d+)\s*\|\s*" r"train loss\s+([\d.]+)\s*\|\s*" r"val loss\s+([\d.]+)\s*\|\s*" r"val_bpb\s+([\d.]+)"
 )
 _TOKENS_PATTERN = re.compile(r"tokens/sec:\s*([\d.]+)")
 _ERROR_PATTERN = re.compile(r"(?:Error|Exception|Traceback|CUDA out of memory)", re.I)

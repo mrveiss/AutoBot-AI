@@ -14,9 +14,17 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-from api.system_health import ComponentHealth, register_health_probe
-
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
+from api.schemas_common import DataResponse
+from api.schemas_knowledge import (
+    CrossModalSearchRequest,
+    CrossModalSearchResponse,
+    EmbeddingRequest,
+    MultiModalResponse,
+    TextProcessingRequest,
+)
+from api.schemas_system import MultimodalHealthResponse
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from multimodal_processor import (
@@ -28,15 +36,6 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from api.schemas_common import DataResponse
-from api.schemas_knowledge import (
-    CrossModalSearchRequest,
-    CrossModalSearchResponse,
-    EmbeddingRequest,
-    MultiModalResponse,
-    TextProcessingRequest,
-)
-from api.schemas_system import MultimodalHealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +69,7 @@ def _get_modality_type(modality_str: str) -> ModalityType:
     return modality_mapping.get(modality_str.lower(), ModalityType.TEXT)
 
 
-def _build_image_modal_input(
-    image_data, file, intent: str, question
-) -> MultiModalInput:
+def _build_image_modal_input(image_data, file, intent: str, question) -> MultiModalInput:
     """Helper for process_image. Ref: #1088."""
     input_id = f"image_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
     metadata = {"filename": file.filename, "content_type": file.content_type}
@@ -447,9 +444,7 @@ async def get_multimodal_stats(
 
         # Issue #675: Extract model availability for top-level access
         model_availability = processor_stats.get("model_availability", {})
-        vision_available, voice_available = _extract_model_availability_flags(
-            model_availability
-        )
+        vision_available, voice_available = _extract_model_availability_flags(model_availability)
 
         return {
             "success": True,
@@ -489,21 +484,17 @@ def _get_gpu_stats() -> tuple:
             "gpu_memory_allocated_mb": torch.cuda.memory_allocated() / 1024 / 1024,
             "gpu_memory_reserved_mb": torch.cuda.memory_reserved() / 1024 / 1024,
             "gpu_device_count": torch.cuda.device_count(),
-            "gpu_device_name": (
-                torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else None
-            ),
+            "gpu_device_name": (torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else None),
         }
     return gpu_available, gpu_stats
 
 
 def _extract_model_availability_flags(model_availability: dict) -> tuple:
     """Helper for get_multimodal_stats. Ref: #1088."""
-    vision_available = model_availability.get("vision", {}).get(
-        "clip_available", False
-    ) or model_availability.get("vision", {}).get("blip_available", False)
-    voice_available = model_availability.get("voice", {}).get(
-        "whisper_available", False
-    )
+    vision_available = model_availability.get("vision", {}).get("clip_available", False) or model_availability.get(
+        "vision", {}
+    ).get("blip_available", False)
+    voice_available = model_availability.get("voice", {}).get("whisper_available", False)
     return vision_available, voice_available
 
 
@@ -607,14 +598,10 @@ async def combine_multimodal_inputs(
         inputs = await _collect_modal_inputs(text, image_file, audio_file, intent)
 
         if not inputs:
-            raise HTTPException(
-                status_code=400, detail="At least one input modality required"
-            )
+            raise HTTPException(status_code=400, detail="At least one input modality required")
 
         # Process all inputs
-        results = [
-            await unified_processor.process(modal_input) for modal_input in inputs
-        ]
+        results = [await unified_processor.process(modal_input) for modal_input in inputs]
 
         # Create combined input and process fusion
         combined_input = _create_combined_input(text, image_file, audio_file, intent)
@@ -667,9 +654,7 @@ async def get_performance_stats(
     """
     try:
         # Get performance metrics from monitor
-        performance_metrics = (
-            await unified_processor.performance_monitor.monitor_processing_performance()
-        )
+        performance_metrics = await unified_processor.performance_monitor.monitor_processing_performance()
 
         # Get processor-specific stats
         processor_stats = unified_processor.get_stats()
@@ -712,9 +697,7 @@ async def optimize_performance(
     Issue #744: Requires authenticated user.
     """
     try:
-        optimization_result = (
-            await unified_processor.performance_monitor.optimize_gpu_memory()
-        )
+        optimization_result = await unified_processor.performance_monitor.optimize_gpu_memory()
 
         return {
             "success": True,
@@ -781,9 +764,7 @@ async def update_batch_size(
             return {
                 "success": False,
                 "error": f"Unknown modality: {modality}",
-                "available_modalities": list(
-                    unified_processor.performance_monitor.batch_sizes.keys()
-                ),
+                "available_modalities": list(unified_processor.performance_monitor.batch_sizes.keys()),
             }
 
         if batch_size < 1 or batch_size > 128:
@@ -821,9 +802,7 @@ async def probe_multimodal(
     """
     try:
         if unified_processor is None:
-            return ComponentHealth(
-                name="multimodal", status="down", detail="processor unavailable"
-            )
+            return ComponentHealth(name="multimodal", status="down", detail="processor unavailable")
         return ComponentHealth(name="multimodal", status="ok")
     except Exception as exc:
         return ComponentHealth(

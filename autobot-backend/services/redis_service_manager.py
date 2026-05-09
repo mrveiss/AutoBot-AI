@@ -161,9 +161,7 @@ class RedisServiceManager:
         """Stop Redis Service Manager (no-op — SLM API is stateless)."""
         logger.info("Redis Service Manager stopped")
 
-    def _audit_log(
-        self, event_type: str, data: Metadata, user_id: Optional[str] = None
-    ):
+    def _audit_log(self, event_type: str, data: Metadata, user_id: Optional[str] = None):
         """Log audit event"""
         if not self.enable_audit_logging:
             return
@@ -196,10 +194,7 @@ class RedisServiceManager:
         """
         if not self.slm_url:
             raise RedisConnectionError("SLM_URL not configured")
-        url = (
-            f"{self.slm_url}/api/nodes/{self.slm_node_id}"
-            f"/services/{self.service_name}/{action}"
-        )
+        url = f"{self.slm_url}/api/nodes/{self.slm_node_id}" f"/services/{self.service_name}/{action}"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, ssl=False) as resp:
@@ -210,9 +205,7 @@ class RedisServiceManager:
         except Exception as exc:
             logger.error("SLM service action '%s' failed: %s", action, exc)
             await self._record_error()
-            raise RedisConnectionError(
-                f"Cannot reach SLM API for service action '{action}': {exc}"
-            ) from exc
+            raise RedisConnectionError(f"Cannot reach SLM API for service action '{action}': {exc}") from exc
 
     async def _slm_get_service_status(self) -> str:
         """
@@ -241,9 +234,7 @@ class RedisServiceManager:
             logger.warning("SLM service status query failed: %s", exc)
             return "unknown"
 
-    def _already_in_state_result(
-        self, operation: str, target_status: str, duration: float
-    ) -> ServiceOperationResult:
+    def _already_in_state_result(self, operation: str, target_status: str, duration: float) -> ServiceOperationResult:
         """
         Create result for service already in target state.
 
@@ -286,9 +277,7 @@ class RedisServiceManager:
             error=None if success else stderr,
         )
 
-    def _operation_failure_result(
-        self, operation: str, error: str, duration: float
-    ) -> ServiceOperationResult:
+    def _operation_failure_result(self, operation: str, error: str, duration: float) -> ServiceOperationResult:
         """
         Create result for operation failure.
 
@@ -320,9 +309,7 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now(tz=timezone.utc)
-        self._audit_log(
-            "redis_service_start_attempt", {"user_id": user_id}, user_id=user_id
-        )
+        self._audit_log("redis_service_start_attempt", {"user_id": user_id}, user_id=user_id)
 
         try:
             # Check if already running (Issue #665: uses helper)
@@ -368,9 +355,7 @@ class RedisServiceManager:
                 {"error": type(e).__name__},
                 user_id=user_id,
             )
-            return self._operation_failure_result(
-                "start", "Service start failed", duration
-            )
+            return self._operation_failure_result("start", "Service start failed", duration)
 
     async def stop_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
@@ -388,9 +373,7 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now(tz=timezone.utc)
-        self._audit_log(
-            "redis_service_stop_attempt", {"user_id": user_id}, user_id=user_id
-        )
+        self._audit_log("redis_service_stop_attempt", {"user_id": user_id}, user_id=user_id)
 
         try:
             # Check if already stopped (Issue #665: uses helper)
@@ -436,9 +419,7 @@ class RedisServiceManager:
                 {"error": type(e).__name__},
                 user_id=user_id,
             )
-            return self._operation_failure_result(
-                "stop", "Service stop failed", duration
-            )
+            return self._operation_failure_result("stop", "Service stop failed", duration)
 
     async def restart_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
@@ -456,9 +437,7 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now(tz=timezone.utc)
-        self._audit_log(
-            "redis_service_restart_attempt", {"user_id": user_id}, user_id=user_id
-        )
+        self._audit_log("redis_service_restart_attempt", {"user_id": user_id}, user_id=user_id)
 
         try:
             # Call SLM API to restart service and verify
@@ -495,9 +474,7 @@ class RedisServiceManager:
                 {"error": type(e).__name__},
                 user_id=user_id,
             )
-            return self._operation_failure_result(
-                "restart", "Service restart failed", duration
-            )
+            return self._operation_failure_result("restart", "Service restart failed", duration)
 
     async def get_service_status(self, use_cache: bool = True) -> ServiceStatus:
         """
@@ -514,8 +491,7 @@ class RedisServiceManager:
             use_cache
             and self._status_cache
             and self._status_cache_time
-            and (datetime.now(tz=timezone.utc) - self._status_cache_time).total_seconds()
-            < self._cache_ttl_seconds
+            and (datetime.now(tz=timezone.utc) - self._status_cache_time).total_seconds() < self._cache_ttl_seconds
         ):
             return self._status_cache
 
@@ -555,9 +531,7 @@ class RedisServiceManager:
             logger.warning("Redis connectivity check failed: %s", e)
             return False, 0.0
 
-    def _determine_health_status(
-        self, service_running: bool, connectivity: bool
-    ) -> str:
+    def _determine_health_status(self, service_running: bool, connectivity: bool) -> str:
         """
         Determine overall health status based on service and connectivity.
 
@@ -579,17 +553,11 @@ class RedisServiceManager:
         """
         recommendations = []
         if not service_running:
-            recommendations.append(
-                "Redis Stack service is not running - consider starting it"
-            )
+            recommendations.append("Redis Stack service is not running - consider starting it")
         if not connectivity and service_running:
-            recommendations.append(
-                "Redis Stack service running but not responding - check logs"
-            )
+            recommendations.append("Redis Stack service running but not responding - check logs")
         if response_time_ms > 1000:
-            recommendations.append(
-                f"High response time ({response_time_ms:.1f}ms) - check system load"
-            )
+            recommendations.append(f"High response time ({response_time_ms:.1f}ms) - check system load")
         return recommendations
 
     async def get_health(self) -> HealthStatus:
@@ -606,12 +574,8 @@ class RedisServiceManager:
             service_running = status.status == "running"
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
-            overall_status = self._determine_health_status(
-                service_running, connectivity
-            )
-            recommendations = self._generate_health_recommendations(
-                service_running, connectivity, response_time_ms
-            )
+            overall_status = self._determine_health_status(service_running, connectivity)
+            recommendations = self._generate_health_recommendations(service_running, connectivity, response_time_ms)
 
             return HealthStatus(
                 overall_status=overall_status,

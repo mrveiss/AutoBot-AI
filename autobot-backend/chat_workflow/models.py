@@ -214,18 +214,14 @@ class StreamingMessage:
                 r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
                 re.DOTALL | re.IGNORECASE,
             ),
-            re.compile(
-                r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."
-            ),
+            re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
             re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
             re.compile(
                 r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
                 re.DOTALL | re.IGNORECASE,
             ),
             re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
-            re.compile(
-                r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE
-            ),
+            re.compile(r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE),
         ]
 
         filtered = text
@@ -368,6 +364,4 @@ class WorkflowSession:
     last_activity: float = field(default_factory=time.time)
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    conversation_history: List[Dict[str, str]] = field(
-        default_factory=list
-    )  # Track conversation context
+    conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context

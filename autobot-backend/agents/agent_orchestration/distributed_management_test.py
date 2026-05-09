@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.time_utils import now_utc
+
 from .distributed_management import DistributedAgentManager
 from .types import CircuitState, DistributedAgentInfo
-from autobot_shared.time_utils import now_utc
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,9 +54,7 @@ def _make_agent_info() -> DistributedAgentInfo:
     )
 
 
-def _register_agent(
-    mgr: DistributedAgentManager, agent_id: str
-) -> DistributedAgentInfo:
+def _register_agent(mgr: DistributedAgentManager, agent_id: str) -> DistributedAgentInfo:
     """Register a stub agent directly into the manager's dict."""
     info = _make_agent_info()
     mgr.distributed_agents[agent_id] = info
@@ -71,9 +70,7 @@ def _assign_task(
     """Add a task to an agent and backdating its assignment timestamp."""
     mgr.add_active_task(agent_id, task_id)
     if assigned_seconds_ago:
-        mgr._task_assigned_at[task_id] = now_utc() - timedelta(
-            seconds=assigned_seconds_ago
-        )
+        mgr._task_assigned_at[task_id] = now_utc() - timedelta(seconds=assigned_seconds_ago)
 
 
 # ---------------------------------------------------------------------------
@@ -125,15 +122,11 @@ class TestIsTaskStale:
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)
         # Backdate last progress to 60 s ago (older than progress_ttl_seconds=30)
-        mgr._task_last_progress["t1"] = now_utc() - timedelta(
-            seconds=60
-        )
+        mgr._task_last_progress["t1"] = now_utc() - timedelta(seconds=60)
         assert mgr._is_task_stale("t1", now_utc()) is True
 
     def test_max_reassignments_exceeded_prevents_stealing(self):
-        mgr = _make_manager(
-            stale_task_timeout_seconds=10, grace_period_seconds=5, max_reassignments=2
-        )
+        mgr = _make_manager(stale_task_timeout_seconds=10, grace_period_seconds=5, max_reassignments=2)
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=300)
         mgr._task_reassignment_count["t1"] = 2  # already at limit
@@ -205,9 +198,7 @@ class TestReassignTask:
         assert mgr._task_reassignment_count["t1"] == 1
         # Simulate re-assignment by manually adding task back + calling again
         mgr.distributed_agents["a1"].active_tasks.add("t1")
-        mgr._task_assigned_at["t1"] = now_utc() - timedelta(
-            seconds=400
-        )
+        mgr._task_assigned_at["t1"] = now_utc() - timedelta(seconds=400)
         await mgr._reassign_task("a1", "t1")
         assert mgr._task_reassignment_count["t1"] == 2
 
@@ -289,9 +280,7 @@ class TestDetectAndStealStaleTasks:
 
     @pytest.mark.asyncio
     async def test_max_reassignments_stops_stealing(self):
-        mgr = _make_manager(
-            stale_task_timeout_seconds=10, grace_period_seconds=5, max_reassignments=1
-        )
+        mgr = _make_manager(stale_task_timeout_seconds=10, grace_period_seconds=5, max_reassignments=1)
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=300)
         mgr._task_reassignment_count["t1"] = 1  # already at limit

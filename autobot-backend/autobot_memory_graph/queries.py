@@ -303,22 +303,16 @@ class QueryOperationsMixin:
         self.ensure_initialized()
 
         try:
-            redis_query = self._build_redis_search_query(
-                query, entity_type, tags, status
-            )
+            redis_query = self._build_redis_search_query(query, entity_type, tags, status)
             try:
                 entities = await self._execute_redis_search(redis_query, limit)
                 if not include_expired:
                     entities = [e for e in entities if _is_entity_valid(e)]
-                logger.info(
-                    "Search query '%s' returned %d results", query, len(entities)
-                )
+                logger.info("Search query '%s' returned %d results", query, len(entities))
                 return entities
             except Exception as search_error:
                 logger.warning("RediSearch failed, using fallback: %s", search_error)
-                return await self._fallback_search(
-                    query, entity_type, limit, include_expired=include_expired
-                )
+                return await self._fallback_search(query, entity_type, limit, include_expired=include_expired)
         except Exception as e:
             logger.error("Search failed: %s", e)
             return []
@@ -352,13 +346,7 @@ class QueryOperationsMixin:
                 pipe.json().get(key)
             raw_results = await pipe.execute()
 
-            return [
-                e
-                for e in raw_results
-                if e
-                and e.get("type") == entity_type
-                and _is_entity_valid_at(e, as_of)
-            ]
+            return [e for e in raw_results if e and e.get("type") == entity_type and _is_entity_valid_at(e, as_of)]
 
         except Exception as e:
             logger.error("get_entities_as_of failed: %s", e)

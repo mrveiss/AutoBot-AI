@@ -19,7 +19,6 @@ import pytest
 
 from autobot_shared.redis_management.cache_wrapper import RedisCache, _json_default
 
-
 # ---------------------------------------------------------------------------
 # Sample types
 # ---------------------------------------------------------------------------
@@ -126,9 +125,7 @@ class TestRedisCacheRoundTrip:
         assert "m:1" in store
 
         got = await cache.get_json("m:1")
-        assert got == {
-            "latest": {"timestamp": 1.0, "name": "cpu", "value": 42.0, "metadata": None}
-        }
+        assert got == {"latest": {"timestamp": 1.0, "name": "cpu", "value": 42.0, "metadata": None}}
 
     @pytest.mark.asyncio
     async def test_pydantic_round_trip(self):

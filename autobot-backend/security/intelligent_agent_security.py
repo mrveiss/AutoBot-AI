@@ -68,17 +68,12 @@ class SecureIntelligentAgentMixin:
             Sanitized user input
         """
         # Detect injection in user input
-        result = self.injection_detector.detect_injection(
-            user_input, context="user_input"
-        )
+        result = self.injection_detector.detect_injection(user_input, context="user_input")
 
         if result.blocked:
             logger.error("🚨 BLOCKED: User input contains injection patterns")
             logger.error("Patterns: %s", result.detected_patterns)
-            raise ValueError(
-                "User input blocked due to security policy violation: "
-                f"{result.detected_patterns}"
-            )
+            raise ValueError("User input blocked due to security policy violation: " f"{result.detected_patterns}")
 
         # Return sanitized input
         return result.sanitized_text
@@ -111,9 +106,7 @@ class SecureIntelligentAgentMixin:
 
         return True
 
-    def _secure_parse_llm_commands(
-        self, llm_response: str, user_goal: str
-    ) -> List[Dict[str, str]]:
+    def _secure_parse_llm_commands(self, llm_response: str, user_goal: str) -> List[Dict[str, str]]:
         """
         Securely parse commands from LLM response (Layer 2: Output Parsing)
 
@@ -142,15 +135,11 @@ class SecureIntelligentAgentMixin:
                 }
             )
 
-        logger.info(
-            "✅ Securely parsed %s commands from LLM response", len(command_dicts)
-        )
+        logger.info("✅ Securely parsed %s commands from LLM response", len(command_dicts))
 
         return command_dicts
 
-    async def _secure_execute_command(
-        self, command: str, user_goal: str, user_role: str = "agent"
-    ) -> Dict:
+    async def _secure_execute_command(self, command: str, user_goal: str, user_role: str = "agent") -> Dict:
         """
         Execute command with security validation (Layer 4: Execution Safeguards)
 

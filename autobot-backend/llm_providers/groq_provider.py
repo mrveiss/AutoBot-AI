@@ -81,14 +81,11 @@ class GroqProvider(BaseProvider):
         try:
             import groq
         except ImportError as exc:
-            raise ImportError(
-                "groq package not installed. Run: pip install groq"
-            ) from exc
+            raise ImportError("groq package not installed. Run: pip install groq") from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "Groq API key not configured. "
-                "Set GROQ_API_KEY or provide api_key in provider settings."
+                "Groq API key not configured. " "Set GROQ_API_KEY or provide api_key in provider settings."
             )
         self._client = groq.AsyncGroq(api_key=api_key)
         return self._client

@@ -49,9 +49,7 @@ async def _send_client_data_to_vnc(data: dict, vnc_ws, vnc_type: str) -> bool:
     return True
 
 
-async def _send_vnc_msg_to_client(
-    msg, websocket: WebSocket, vnc_ws, vnc_type: str
-) -> bool:
+async def _send_vnc_msg_to_client(msg, websocket: WebSocket, vnc_ws, vnc_type: str) -> bool:
     """Send VNC message to client WebSocket (Issue #315: extracted).
 
     Returns:
@@ -126,9 +124,7 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
         }
 
         # Post to VNC MCP bridge (non-blocking) using singleton HTTP client
-        backend_url = (
-            f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-        )
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
         http_client = get_http_client()
         async with await http_client.post(
             f"{backend_url}/api/vnc/observations/{vnc_type}",
@@ -191,9 +187,7 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     operation="proxy_vnc_assets",
     error_code_prefix="VNC_PROXY",
 )
-async def proxy_vnc_assets(
-    vnc_type: str, path: str, current_user: dict = Depends(get_current_user)
-):
+async def proxy_vnc_assets(vnc_type: str, path: str, current_user: dict = Depends(get_current_user)):
     """
     Proxy noVNC static assets (JS, CSS, images, etc.)
 
@@ -215,9 +209,7 @@ async def proxy_vnc_assets(
                 content = await response.read()
 
                 # Determine content type
-                content_type = response.headers.get(
-                    "Content-Type", "application/octet-stream"
-                )
+                content_type = response.headers.get("Content-Type", "application/octet-stream")
 
                 return Response(
                     content=content,
@@ -263,9 +255,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     logger.info("VNC WebSocket proxy connected: %s → %s", vnc_type, ws_url)
 
     # Record connection event for MCP
-    await record_observation(
-        vnc_type, "connection", {"endpoint": ws_url, "status": "connected"}
-    )
+    await record_observation(vnc_type, "connection", {"endpoint": ws_url, "status": "connected"})
 
     try:
         http_client = get_http_client()
@@ -312,9 +302,7 @@ async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current
 
     try:
         http_client = get_http_client()
-        async with await http_client.get(
-            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5)
-        ) as response:
+        async with await http_client.get(f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5)) as response:
             accessible = response.status == 200
             return {
                 "vnc_type": vnc_type,

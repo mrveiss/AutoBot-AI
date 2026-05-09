@@ -75,9 +75,7 @@ class TestWorkflowMemoryInit:
 class TestWorkflowMemorySet:
     def test_set_stores_json(self, memory: WorkflowMemory, redis_mock: MagicMock):
         memory.set("my_key", {"a": 1})
-        redis_mock.hset.assert_called_once_with(
-            memory._redis_key, "my_key", json.dumps({"a": 1})
-        )
+        redis_mock.hset.assert_called_once_with(memory._redis_key, "my_key", json.dumps({"a": 1}))
 
     def test_set_refreshes_ttl(self, memory: WorkflowMemory, redis_mock: MagicMock):
         memory.set("k", "v")
@@ -93,9 +91,7 @@ class TestWorkflowMemorySet:
             _, _, stored = redis_mock.hset.call_args[0]
             assert json.loads(stored) == value
 
-    def test_set_propagates_redis_error(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_set_propagates_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hset.side_effect = ConnectionError("Redis down")
         with pytest.raises(ConnectionError):
             memory.set("k", "v")
@@ -107,15 +103,11 @@ class TestWorkflowMemorySet:
 
 
 class TestWorkflowMemoryGet:
-    def test_get_returns_deserialised_value(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_returns_deserialised_value(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hget.return_value = json.dumps({"result": "ok"}).encode()
         assert memory.get("k") == {"result": "ok"}
 
-    def test_get_returns_default_when_absent(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_returns_default_when_absent(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hget.return_value = None
         assert memory.get("missing") is None
 
@@ -128,15 +120,11 @@ class TestWorkflowMemoryGet:
         redis_mock.hget.return_value = b'"hello"'
         assert memory.get("k") == "hello"
 
-    def test_get_returns_default_on_corrupt_json(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_returns_default_on_corrupt_json(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hget.return_value = b"not-json{{{"
         assert memory.get("k", default="fallback") == "fallback"
 
-    def test_get_returns_default_on_redis_error(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_returns_default_on_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hget.side_effect = ConnectionError("Redis down")
         assert memory.get("k", default="safe") == "safe"
 
@@ -159,9 +147,7 @@ class TestWorkflowMemoryGetAll:
         result = memory.get_all()
         assert result == {"key1": "value1", "key2": {"nested": True}}
 
-    def test_get_all_skips_corrupt_entries(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_all_skips_corrupt_entries(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hgetall.return_value = {
             b"good": json.dumps(1).encode(),
             b"bad": b"not-json{{",
@@ -171,9 +157,7 @@ class TestWorkflowMemoryGetAll:
         assert result == {"good": 1}
         assert "bad" not in result
 
-    def test_get_all_returns_empty_on_redis_error(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_get_all_returns_empty_on_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hgetall.side_effect = ConnectionError("Redis down")
         assert memory.get_all() == {}
 
@@ -184,22 +168,16 @@ class TestWorkflowMemoryGetAll:
 
 
 class TestWorkflowMemoryDelete:
-    def test_delete_existing_key_returns_true(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_delete_existing_key_returns_true(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hdel.return_value = 1
         assert memory.delete("k") is True
         redis_mock.hdel.assert_called_once_with(memory._redis_key, "k")
 
-    def test_delete_absent_key_returns_false(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_delete_absent_key_returns_false(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hdel.return_value = 0
         assert memory.delete("missing") is False
 
-    def test_delete_propagates_redis_error(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_delete_propagates_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.hdel.side_effect = ConnectionError("Redis down")
         with pytest.raises(ConnectionError):
             memory.delete("k")
@@ -215,9 +193,7 @@ class TestWorkflowMemoryClear:
         memory.clear()
         redis_mock.delete.assert_called_once_with(memory._redis_key)
 
-    def test_clear_propagates_redis_error(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_clear_propagates_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
         redis_mock.delete.side_effect = ConnectionError("Redis down")
         with pytest.raises(ConnectionError):
             memory.clear()
@@ -248,12 +224,8 @@ class TestWorkflowMemoryIsolation:
         wm_b.set("shared_key", "from_b")
 
         # Each mock was called with its own workflow key, not the other's.
-        mock_a.hset.assert_called_with(
-            wm_a._redis_key, "shared_key", json.dumps("from_a")
-        )
-        mock_b.hset.assert_called_with(
-            wm_b._redis_key, "shared_key", json.dumps("from_b")
-        )
+        mock_a.hset.assert_called_with(wm_a._redis_key, "shared_key", json.dumps("from_a"))
+        mock_b.hset.assert_called_with(wm_b._redis_key, "shared_key", json.dumps("from_b"))
 
 
 # ---------------------------------------------------------------------------
@@ -262,9 +234,7 @@ class TestWorkflowMemoryIsolation:
 
 
 class TestWorkflowMemoryTTL:
-    def test_expire_called_with_correct_ttl(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_expire_called_with_correct_ttl(self, memory: WorkflowMemory, redis_mock: MagicMock):
         memory.set("k", "v")
         redis_mock.expire.assert_called_with(memory._redis_key, DEFAULT_TTL_SECONDS)
 
@@ -274,17 +244,13 @@ class TestWorkflowMemoryTTL:
         wm.set("k", "v")
         redis_mock.expire.assert_called_with(wm._redis_key, 60)
 
-    def test_ttl_not_refreshed_on_get(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_ttl_not_refreshed_on_get(self, memory: WorkflowMemory, redis_mock: MagicMock):
         """get() is read-only — it must not bump the TTL."""
         redis_mock.hget.return_value = json.dumps("x").encode()
         memory.get("k")
         redis_mock.expire.assert_not_called()
 
-    def test_ttl_refresh_failure_does_not_raise(
-        self, memory: WorkflowMemory, redis_mock: MagicMock
-    ):
+    def test_ttl_refresh_failure_does_not_raise(self, memory: WorkflowMemory, redis_mock: MagicMock):
         """A TTL refresh failure must be logged but must not propagate."""
         redis_mock.expire.side_effect = ConnectionError("Redis down")
         # set() should still succeed even when expire() fails.
@@ -307,16 +273,12 @@ class TestWorkflowMemoryLazyRedis:
     def test_redis_initialised_on_first_operation(self):
         """get_redis_client() is called exactly once across multiple operations."""
         fake_redis = _make_redis_mock()
-        with patch(
-            "orchestration.workflow_memory.get_redis_client", return_value=fake_redis
-        ) as mock_factory:
+        with patch("orchestration.workflow_memory.get_redis_client", return_value=fake_redis) as mock_factory:
             wm = WorkflowMemory(workflow_id="lazy-test")
             wm.set("k", "v")
             wm.get("k")
             wm.get_all()
-            mock_factory.assert_called_once_with(
-                async_client=False, database="workflows"
-            )
+            mock_factory.assert_called_once_with(async_client=False, database="workflows")
 
 
 # ---------------------------------------------------------------------------
@@ -350,9 +312,7 @@ class TestWorkflowMemoryAutoInjection:
 
         # _simulate_step_execution raises NotImplementedError; we just need
         # to verify the context was updated before the call.
-        executor._simulate_step_execution = AsyncMock(
-            side_effect=NotImplementedError("stub")
-        )
+        executor._simulate_step_execution = AsyncMock(side_effect=NotImplementedError("stub"))
         executor._create_agent_interaction = MagicMock(return_value=None)
 
         with pytest.raises(NotImplementedError):
@@ -381,9 +341,7 @@ class TestWorkflowMemoryAutoInjection:
         context: dict = {}
         step = {"id": "step2", "assigned_agent": None}
 
-        executor._simulate_step_execution = AsyncMock(
-            side_effect=NotImplementedError("stub")
-        )
+        executor._simulate_step_execution = AsyncMock(side_effect=NotImplementedError("stub"))
         executor._create_agent_interaction = MagicMock(return_value=None)
 
         with pytest.raises(NotImplementedError):

@@ -11,7 +11,6 @@ Supports multiple SSO providers:
 
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -20,6 +19,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import CategoryDefaults
 from user_management.models.base import Base
 

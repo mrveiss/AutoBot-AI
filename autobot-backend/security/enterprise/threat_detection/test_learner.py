@@ -58,16 +58,12 @@ class TestRecordOutcome:
     def test_true_positive_increments_tp(self, learner, mock_redis):
         learner.record_outcome("brute_force:0", is_true_positive=True)
 
-        mock_redis.hincrby.assert_called_once_with(
-            _OUTCOME_KEY_PREFIX + "brute_force:0", "tp", 1
-        )
+        mock_redis.hincrby.assert_called_once_with(_OUTCOME_KEY_PREFIX + "brute_force:0", "tp", 1)
 
     def test_false_positive_increments_fp(self, learner, mock_redis):
         learner.record_outcome("brute_force:0", is_true_positive=False)
 
-        mock_redis.hincrby.assert_called_once_with(
-            _OUTCOME_KEY_PREFIX + "brute_force:0", "fp", 1
-        )
+        mock_redis.hincrby.assert_called_once_with(_OUTCOME_KEY_PREFIX + "brute_force:0", "fp", 1)
 
     def test_last_seen_updated(self, learner, mock_redis):
         learner.record_outcome("cmd_injection:1", is_true_positive=True)
@@ -162,18 +158,14 @@ class TestRecordMitigationOutcome:
 
         learner.record_mitigation_outcome("brute_force", "block_ip", success=True)
 
-        mock_redis.hset.assert_called_once_with(
-            _MITIGATION_KEY_PREFIX + "brute_force", "block_ip", "1.0"
-        )
+        mock_redis.hset.assert_called_once_with(_MITIGATION_KEY_PREFIX + "brute_force", "block_ip", "1.0")
 
     def test_first_failure_stores_0(self, learner, mock_redis):
         mock_redis.hget.return_value = None
 
         learner.record_mitigation_outcome("brute_force", "block_ip", success=False)
 
-        mock_redis.hset.assert_called_once_with(
-            _MITIGATION_KEY_PREFIX + "brute_force", "block_ip", "0.0"
-        )
+        mock_redis.hset.assert_called_once_with(_MITIGATION_KEY_PREFIX + "brute_force", "block_ip", "0.0")
 
     def test_ema_update_on_success(self, learner, mock_redis):
         # Current EMA = 0.5; outcome = 1.0

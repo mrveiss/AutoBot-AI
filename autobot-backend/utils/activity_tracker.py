@@ -14,11 +14,11 @@ import logging
 import re
 import uuid
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.time_utils import now_utc
 from models.activities import (
     BrowserActivityModel,
     DesktopActivityModel,
@@ -337,6 +337,4 @@ async def _track_secret_usage(
     db.add(usage)
     await db.commit()
 
-    logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-        "Tracked secret usage: activity=%s", activity_type
-    )
+    logger.info("Tracked secret usage: activity=%s", activity_type)  # codeql[py/clear-text-logging-sensitive-data]

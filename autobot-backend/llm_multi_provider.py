@@ -43,6 +43,7 @@ from llm_providers import (
     VLLMProvider,
     get_provider_registry,
 )
+
 logger = logging.getLogger(__name__)
 
 
@@ -253,14 +254,10 @@ class UnifiedLLMInterface:
             )
         return await selected.chat_completion(request)
 
-    async def generate_response(
-        self, prompt: str, llm_type: str = "task", **kwargs: Any
-    ) -> str:
+    async def generate_response(self, prompt: str, llm_type: str = "task", **kwargs: Any) -> str:
         """Legacy helper: run a single-turn prompt and return the text."""
         messages = [{"role": "user", "content": prompt}]
-        response = await self.chat_completion(
-            messages, llm_type=llm_type, **kwargs
-        )
+        response = await self.chat_completion(messages, llm_type=llm_type, **kwargs)
         return response.content
 
     async def safe_query(self, prompt: str, **kwargs: Any) -> Dict[str, Any]:
@@ -277,9 +274,7 @@ class UnifiedLLMInterface:
         """Return registry stats."""
         return self._get_registry().get_stats()
 
-    async def get_available_models(
-        self, provider: Optional[ProviderType] = None
-    ) -> Dict[str, List[str]]:
+    async def get_available_models(self, provider: Optional[ProviderType] = None) -> Dict[str, List[str]]:
         """Return available models per provider."""
         registry = self._get_registry()
         name_filter = provider.value if provider else None

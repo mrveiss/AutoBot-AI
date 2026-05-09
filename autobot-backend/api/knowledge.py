@@ -44,10 +44,7 @@ from fastapi import (
     Query,
     Request,
 )
-from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from services.audit.audit_log import AuditAction, audit_record
-from constants.threshold_constants import QueryDefaults
+
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -55,6 +52,10 @@ from api.schemas_knowledge import (
     DocsBrowseRequest,
     OrgKnowledgeConfigPayload,
 )
+from api.system_health import ComponentHealth, register_health_probe
+from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -100,8 +101,8 @@ from knowledge.schemas.stats import (
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
+from services.audit.audit_log import AuditAction, audit_record
 from utils.path_validation import contains_path_traversal
-from api.system_health import ComponentHealth, register_health_probe
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -128,9 +129,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Cache TTL constants (seconds)
-CATEGORY_CACHE_TTL = (
-    3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
-)
+CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
 
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
@@ -152,9 +151,7 @@ def _get_fact_source(fact: dict) -> str:
     return source
 
 
-async def _compute_category_counts(
-    all_facts: list, get_category_for_source, category_counts: dict
-) -> None:
+async def _compute_category_counts(all_facts: list, get_category_for_source, category_counts: dict) -> None:
     """Compute category counts from facts (Issue #315: extracted).
 
     Args:
@@ -264,9 +261,7 @@ async def get_knowledge_stats(
         logger.warning("get_knowledge_stats: KB uninitialized - returning offline stats")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="stats", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="stats", reason="kb_uninit").inc()
         return KnowledgeStatsResponse(
             total_documents=0,
             total_chunks=0,
@@ -313,9 +308,7 @@ async def test_main_categories(
     """
     from knowledge_categories import CATEGORY_METADATA
 
-    return TestCategoriesResponse(
-        status="working", categories=list(CATEGORY_METADATA.keys())
-    )
+    return TestCategoriesResponse(status="working", categories=list(CATEGORY_METADATA.keys()))
 
 
 @router.get("/stats/basic", response_model=KnowledgeStatsBasic)
@@ -337,14 +330,10 @@ async def get_knowledge_stats_basic(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "get_knowledge_stats_basic: KB uninitialized - returning offline stats"
-        )
+        logger.warning("get_knowledge_stats_basic: KB uninitialized - returning offline stats")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="stats_basic", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="stats_basic", reason="kb_uninit").inc()
         return KnowledgeStatsBasic(
             status="offline",
             total_facts=0,
@@ -372,9 +361,7 @@ def _get_category_cache_keys(KnowledgeCategory) -> dict:
     }
 
 
-async def _get_or_compute_category_counts(
-    kb, cache_keys: dict, get_category_for_source, category_counts: dict
-) -> None:
+async def _get_or_compute_category_counts(kb, cache_keys: dict, get_category_for_source, category_counts: dict) -> None:
     """Get cached counts or compute from facts (Issue #398: extracted)."""
     cached_values = await kb.redis().mget(list(cache_keys.values()))
     if all(v is not None for v in cached_values):
@@ -387,15 +374,11 @@ async def _get_or_compute_category_counts(
         logger.info("Cache miss - computing category counts from all facts")
         all_facts = await kb.get_all_facts()
         logger.info("Categorizing %s facts into main categories", len(all_facts))
-        await _compute_category_counts(
-            all_facts, get_category_for_source, category_counts
-        )
+        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
         logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
-            await kb.redis().set(
-                cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
-            )
+            await kb.redis().set(cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL)
 
 
 def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
@@ -453,14 +436,10 @@ async def get_main_categories(
         # Prometheus counter so operators see the outage, not just the
         # frontend banner.  reason="redis_down" - KB instance exists but
         # its Redis connection is unreachable (infra page).
-        logger.warning(
-            "KB categories returning kb_connected=false - Redis unreachable"
-        )
+        logger.warning("KB categories returning kb_connected=false - Redis unreachable")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="categories_main", reason="redis_down"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="categories_main", reason="redis_down").inc()
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -472,9 +451,7 @@ async def get_main_categories(
         logger.info("Attempting to get cached category counts...")
         try:
             cache_keys = _get_category_cache_keys(KnowledgeCategory)
-            await _get_or_compute_category_counts(
-                kb, cache_keys, get_category_for_source, category_counts
-            )
+            await _get_or_compute_category_counts(kb, cache_keys, get_category_for_source, category_counts)
         except Exception as e:
             logger.error("Error categorizing facts: %s", e)
 
@@ -505,14 +482,10 @@ async def get_knowledge_categories(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "get_knowledge_categories: KB uninitialized - returning empty list"
-        )
+        logger.warning("get_knowledge_categories: KB uninitialized - returning empty list")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="categories", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="categories", reason="kb_uninit").inc()
         return KnowledgeCategoriesResponse(categories=[], total=0)
 
     # Get stats - await async method
@@ -521,9 +494,7 @@ async def get_knowledge_categories(
 
     # Get all facts to count by category - async redis operation
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
     except Exception as redis_err:
         logger.debug("Redis error getting facts: %s", redis_err)
         all_facts_data = {}
@@ -539,10 +510,7 @@ async def get_knowledge_categories(
             continue
 
     # Format for frontend with counts
-    categories = [
-        {"name": cat, "count": category_counts.get(cat, 0), "id": cat}
-        for cat in categories_list
-    ]
+    categories = [{"name": cat, "count": category_counts.get(cat, 0), "id": cat} for cat in categories_list]
 
     # Also expose the doc_indexer's autobot_docs collection so AutoBot's own
     # indexed documentation always appears as a category, even before any user
@@ -556,13 +524,9 @@ async def get_knowledge_categories(
             doc_stats = await doc_indexer.get_stats()
             doc_count = doc_stats.get("count", 0)
             if doc_count > 0 and "autobot_docs" not in existing_names:
-                categories.append(
-                    {"name": "autobot_docs", "count": doc_count, "id": "autobot_docs"}
-                )
+                categories.append({"name": "autobot_docs", "count": doc_count, "id": "autobot_docs"})
     except Exception as doc_idx_err:
-        logger.debug(
-            "Could not fetch doc_indexer stats (non-critical): %s", doc_idx_err
-        )
+        logger.debug("Could not fetch doc_indexer stats (non-critical): %s", doc_idx_err)
 
     return KnowledgeCategoriesResponse(
         categories=categories,
@@ -597,8 +561,7 @@ def _extract_add_text_fields(request: dict) -> tuple:
     if not text:
         raise ValueError("Text content is required")
     logger.info(
-        "Adding text to knowledge: title='%s', source='%s', "
-        "access_level='%s', visibility='%s', length=%d",
+        "Adding text to knowledge: title='%s', source='%s', " "access_level='%s', visibility='%s', length=%d",
         title,
         source,
         access_level,
@@ -683,12 +646,8 @@ async def add_text_to_knowledge(
         logger.warning("add_text_to_knowledge: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="add_text", reason="kb_uninit"
-        ).inc()
-        raise InternalError(
-            "Knowledge base not initialized - please check logs for errors"
-        )
+        autobot_kb_degradation_total.labels(endpoint="add_text", reason="kb_uninit").inc()
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
 
     (
         text,
@@ -953,16 +912,10 @@ async def add_facts_to_knowledge(
         logger.warning("add_facts_to_knowledge: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="facts_add", reason="kb_uninit"
-        ).inc()
-        raise InternalError(
-            "Knowledge base not initialized - please check logs for errors"
-        )
+        autobot_kb_degradation_total.labels(endpoint="facts_add", reason="kb_uninit").inc()
+        raise InternalError("Knowledge base not initialized - please check logs for errors")
 
-    logger.info(
-        f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}"
-    )
+    logger.info(f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}")
 
     metadata: dict = {
         "title": request.title,
@@ -991,18 +944,12 @@ async def add_facts_to_knowledge(
         success=True,
         document_id=fact_id,
         title=request.title,
-        content=(
-            request.content[:100] + "..."
-            if len(request.content) > 100
-            else request.content
-        ),
+        content=(request.content[:100] + "..." if len(request.content) > 100 else request.content),
         message="Document added successfully",
     )
 
 
-async def _fetch_and_extract_url(
-    validated_url: str, fallback_title: str
-) -> "tuple[str, str]":
+async def _fetch_and_extract_url(validated_url: str, fallback_title: str) -> "tuple[str, str]":
     """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
 
     Raises HTTPException on HTTP error or connection failure.
@@ -1021,9 +968,7 @@ async def _fetch_and_extract_url(
                 allow_redirects=False,  # Prevent SSRF via redirect (#1721)
             ) as response:
                 if response.status != 200:
-                    raise HTTPException(
-                        status_code=400, detail=f"HTTP {response.status}"
-                    )
+                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
                 html_content = await response.text()
                 # Use safe HTML parser instead of regex (Issue #549 Code Review)
                 content, extracted_title = _sanitize_html_content(html_content)
@@ -1061,9 +1006,7 @@ async def add_url_to_knowledge(
         logger.warning("add_url_to_knowledge: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="url_add", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="url_add", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
     try:
@@ -1137,9 +1080,7 @@ def _extract_pdf_content(filename: str, file_content: bytes) -> str:
         pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
         return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     except ImportError:
-        raise HTTPException(
-            status_code=400, detail="PDF support requires pypdf library"
-        )
+        raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
     except Exception as e:
         logger.error("PDF parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse PDF file")
@@ -1169,9 +1110,7 @@ def _extract_docx_content(filename: str, file_content: bytes) -> str:
         doc = docx.Document(io.BytesIO(file_content))
         return "\n".join(para.text for para in doc.paragraphs)
     except ImportError:
-        raise HTTPException(
-            status_code=400, detail="DOCX support requires python-docx library"
-        )
+        raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
     except Exception as e:
         logger.error("DOCX parse error for %s: %s", filename, e)
         raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
@@ -1256,9 +1195,7 @@ async def upload_file_to_knowledge(
         logger.warning("upload_file_to_knowledge: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="upload", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1279,9 +1216,7 @@ async def upload_file_to_knowledge(
 
     content = _extract_file_content(filename, file_content)
     if not content.strip():
-        raise HTTPException(
-            status_code=400, detail="No text content could be extracted from file"
-        )
+        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
 
     # Issue #5064: sanitize uploaded document content against prompt injection
     # before the text reaches the KB / embedding pipeline.
@@ -1386,11 +1321,7 @@ async def _ingest_audio_source(
         "tags": tags,
         "type": "audio_transcript",
         "audio_source": source,
-        **{
-            k: v
-            for k, v in content_result.metadata.items()
-            if k not in {"source", "category", "type"}
-        },
+        **{k: v for k, v in content_result.metadata.items() if k not in {"source", "category", "type"}},
     }
 
     fact_id = await _store_fact_in_kb(kb_to_use, transcript, metadata)
@@ -1429,9 +1360,7 @@ async def ingest_audio_url(
         logger.warning("ingest_audio_url: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audio", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audio", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
     logger.info(
@@ -1486,9 +1415,7 @@ async def upload_audio_file(
         logger.warning("upload_audio_file: KB uninitialized - raising 500")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="audio_upload", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="audio_upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
     form = await req.form()
@@ -1565,9 +1492,7 @@ async def probe_knowledge(
     from knowledge.metrics import autobot_kb_degradation_total
 
     if request is None or not hasattr(request.app.state, "knowledge_base"):
-        autobot_kb_degradation_total.labels(
-            endpoint="probe", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="probe", reason="kb_uninit").inc()
         return ComponentHealth(
             name="knowledge",
             status="degraded",
@@ -1576,17 +1501,11 @@ async def probe_knowledge(
     try:
         kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
         if kb is None:
-            autobot_kb_degradation_total.labels(
-                endpoint="probe", reason="kb_uninit"
-            ).inc()
-            return ComponentHealth(
-                name="knowledge", status="down", detail="kb instance is None"
-            )
+            autobot_kb_degradation_total.labels(endpoint="probe", reason="kb_uninit").inc()
+            return ComponentHealth(name="knowledge", status="down", detail="kb instance is None")
         return ComponentHealth(name="knowledge", status="ok")
     except Exception as exc:
-        autobot_kb_degradation_total.labels(
-            endpoint="probe", reason="probe_error"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="probe", reason="probe_error").inc()
         return ComponentHealth(
             name="knowledge",
             status="down",
@@ -1612,14 +1531,10 @@ async def get_knowledge_health(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "get_knowledge_health: KB uninitialized - returning unhealthy status"
-        )
+        logger.warning("get_knowledge_health: KB uninitialized - returning unhealthy status")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="health", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="health", reason="kb_uninit").inc()
         return KnowledgeHealthResponse(
             status="unhealthy",
             initialized=False,
@@ -1639,9 +1554,7 @@ async def get_knowledge_health(
         try:
             rag_agent = get_rag_agent()
             # Verify RAG agent is properly initialized by checking key attributes
-            if hasattr(rag_agent, "is_rag_appropriate") and callable(
-                rag_agent.is_rag_appropriate
-            ):
+            if hasattr(rag_agent, "is_rag_appropriate") and callable(rag_agent.is_rag_appropriate):
                 rag_status = "healthy"
             else:
                 rag_status = "unhealthy: missing required methods"
@@ -1710,9 +1623,7 @@ async def get_knowledge_entries(
         logger.warning("get_knowledge_entries: KB uninitialized - returning empty list")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="entries", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="entries", reason="kb_uninit").inc()
         return _empty_entries_response(message="Knowledge base not initialized")
 
     logger.info("Getting knowledge entries: limit=%s, cursor=%s", limit, cursor)
@@ -1721,9 +1632,7 @@ async def get_knowledge_entries(
     try:
 
         def _hscan():
-            return kb.redis_client.hscan(
-                "knowledge_base:facts", cursor=current_cursor, count=limit * 2
-            )
+            return kb.redis_client.hscan("knowledge_base:facts", cursor=current_cursor, count=limit * 2)
 
         next_cursor, items = await asyncio.to_thread(_hscan)
         entries = _parse_and_filter_facts(items, category, limit)
@@ -1818,22 +1727,16 @@ async def get_detailed_stats(
         logger.warning("get_detailed_stats: KB uninitialized - returning offline stats")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="detailed_stats", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="detailed_stats", reason="kb_uninit").inc()
         return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb.redis_client.hgetall, "knowledge_base:facts")
     except Exception:
         all_facts_data = {}
 
-    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(
-        all_facts_data
-    )
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(all_facts_data)
     return DetailedKnowledgeStats(
         status="online" if basic_stats.get("initialized") else "offline",
         basic_stats=basic_stats,
@@ -1915,14 +1818,10 @@ async def get_man_pages_summary(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "get_man_pages_summary: KB uninitialized - returning error status"
-        )
+        logger.warning("get_man_pages_summary: KB uninitialized - returning error status")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="man_pages_summary", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="man_pages_summary", reason="kb_uninit").inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -1935,9 +1834,7 @@ async def get_man_pages_summary(
 
     # Get all facts and count man pages - async operation
     try:
-        all_facts_data = await asyncio.to_thread(
-            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
-        )
+        all_facts_data = await asyncio.to_thread(kb_to_use.redis_client.hgetall, "knowledge_base:facts")
 
         man_page_count = 0
         system_command_count = 0
@@ -1996,14 +1893,10 @@ async def initialize_machine_knowledge(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "initialize_machine_knowledge: KB uninitialized - returning error status"
-        )
+        logger.warning("initialize_machine_knowledge: KB uninitialized - returning error status")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="machine_knowledge_initialize", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="machine_knowledge_initialize", reason="kb_uninit").inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -2018,9 +1911,7 @@ async def initialize_machine_knowledge(
 
     return {
         "status": "success",
-        "message": (
-            f"Machine knowledge initialized. Added {commands_added} system commands."
-        ),
+        "message": (f"Machine knowledge initialized. Added {commands_added} system commands."),
         "items_added": commands_added,
         "components": {
             "system_commands": commands_added,
@@ -2048,14 +1939,10 @@ async def integrate_man_pages(
 
     if kb_to_use is None:
         # Issue #5407: KB instance not initialized.
-        logger.warning(
-            "integrate_man_pages: KB uninitialized - returning error status"
-        )
+        logger.warning("integrate_man_pages: KB uninitialized - returning error status")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="man_pages_integrate", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="man_pages_integrate", reason="kb_uninit").inc()
         return {
             "status": "error",
             "message": "Knowledge base not initialized",
@@ -2096,9 +1983,7 @@ async def search_man_pages(
         logger.warning("search_man_pages: KB uninitialized - returning empty results")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="man_pages_search", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="man_pages_search", reason="kb_uninit").inc()
         return {"results": [], "total_results": 0, "query": query}
 
     logger.info("Searching man pages: '%s' (limit=%s)", query, limit)
@@ -2130,9 +2015,7 @@ async def _clear_kb_via_redis(kb) -> int:
     """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
     if not (hasattr(kb, "redis") and kb.redis):
         logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(
-            status_code=500, detail="Knowledge base clearing not supported"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
 
     keys = await kb.redis.keys("fact:*")
     if keys:
@@ -2164,18 +2047,14 @@ async def clear_all_knowledge(
         logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="clear_all", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="clear_all", reason="kb_uninit").inc()
         return {
             "status": "error",
             "items_removed": 0,
             "message": "Knowledge base not initialized - please check logs for errors",
         }
 
-    logger.warning(
-        "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
-    )
+    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
     try:
         stats_before = await kb.get_stats()
         items_before = stats_before.get("total_facts", 0)
@@ -2268,21 +2147,14 @@ async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
     cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
 
     if cached_result:
-        logger.debug(
-            f"Cache HIT for facts_by_category (category={category}, limit={limit})"
-        )
+        logger.debug(f"Cache HIT for facts_by_category (category={category}, limit={limit})")
         return (
-            json.loads(
-                cached_result.decode("utf-8")
-                if isinstance(cached_result, bytes)
-                else cached_result
-            ),
+            json.loads(cached_result.decode("utf-8") if isinstance(cached_result, bytes) else cached_result),
             cache_key,
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - using category index lookup "
-        f"(category={category}, limit={limit})"
+        f"Cache MISS for facts_by_category - using category index lookup " f"(category={category}, limit={limit})"
     )
     return None, cache_key
 
@@ -2292,14 +2164,9 @@ async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int) ->
     category_fact_ids = {}
     for cat in categories_to_fetch:
         index_key = f"category:index:{cat}"
-        fact_ids = await asyncio.to_thread(
-            kb.redis_client.srandmember, index_key, limit
-        )
+        fact_ids = await asyncio.to_thread(kb.redis_client.srandmember, index_key, limit)
         if fact_ids:
-            decoded_ids = [
-                fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                for fid in fact_ids
-            ]
+            decoded_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids]
             category_fact_ids[cat] = decoded_ids
             logger.debug(f"Category index {cat}: fetched {len(decoded_ids)} fact IDs")
     return category_fact_ids
@@ -2333,19 +2200,13 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
     try:
         # Extract metadata
         metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
-        metadata_str = (
-            metadata_raw.decode("utf-8")
-            if isinstance(metadata_raw, bytes)
-            else str(metadata_raw)
-        )
+        metadata_str = metadata_raw.decode("utf-8") if isinstance(metadata_raw, bytes) else str(metadata_raw)
         metadata = json.loads(metadata_str) if metadata_str else {}
 
         # Extract content
         content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
         content = (
-            content_raw.decode("utf-8")
-            if isinstance(content_raw, bytes)
-            else str(content_raw) if content_raw else ""
+            content_raw.decode("utf-8") if isinstance(content_raw, bytes) else str(content_raw) if content_raw else ""
         )
 
         fact_title = metadata.get("title", metadata.get("command", "Untitled"))
@@ -2370,9 +2231,7 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
     import json
 
     try:
-        await asyncio.to_thread(
-            kb.redis_client.setex, cache_key, 60, json.dumps(result)
-        )
+        await asyncio.to_thread(kb.redis_client.setex, cache_key, 60, json.dumps(result))
         logger.debug("Cached facts_by_category result")
     except Exception as cache_error:
         logger.warning("Failed to cache facts_by_category: %s", cache_error)
@@ -2425,9 +2284,7 @@ async def get_facts_by_category(
         logger.warning("get_facts_by_category: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="facts_by_category", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="facts_by_category", reason="kb_uninit").inc()
         _raise_kb_unavailable()
 
     cached_result, cache_key = await _check_facts_cache(kb, category, limit)
@@ -2436,14 +2293,10 @@ async def get_facts_by_category(
 
     from knowledge_categories import KnowledgeCategory
 
-    categories_to_fetch = (
-        [category] if category else [c.value for c in KnowledgeCategory]
-    )
+    categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
 
     try:
-        category_fact_ids = await _fetch_category_fact_ids(
-            kb, categories_to_fetch, limit
-        )
+        category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
         if not category_fact_ids:
             logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit)
@@ -2471,9 +2324,7 @@ async def _scan_all_fact_keys(kb) -> list:
     all_fact_keys = []
     cursor = 0
     while True:
-        cursor, keys = await asyncio.to_thread(
-            kb.redis_client.scan, cursor, match="fact:*", count=1000
-        )
+        cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="fact:*", count=1000)
         all_fact_keys.extend(keys)
         if cursor == 0:
             break
@@ -2500,9 +2351,7 @@ def _decode_bytes(raw, default: str = "") -> str:
     return str(raw) if raw else default
 
 
-def _parse_fact_entry(
-    fact_key_bytes, fact_data, get_category_for_source
-) -> Optional[tuple]:
+def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Optional[tuple]:
     """Parse a single fact entry (Issue #398: extracted).
 
     Returns:
@@ -2580,11 +2429,7 @@ def _extract_fact_metadata(fact_data: dict) -> dict:
         Parsed metadata dictionary
     """
     metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-    return json.loads(
-        metadata_str.decode("utf-8")
-        if isinstance(metadata_str, bytes)
-        else metadata_str
-    )
+    return json.loads(metadata_str.decode("utf-8") if isinstance(metadata_str, bytes) else metadata_str)
 
 
 def _extract_fact_content(fact_data: dict) -> str:
@@ -2601,11 +2446,7 @@ def _extract_fact_content(fact_data: dict) -> str:
         Content string
     """
     content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-    return (
-        content_raw.decode("utf-8")
-        if isinstance(content_raw, bytes)
-        else str(content_raw) if content_raw else ""
-    )
+    return content_raw.decode("utf-8") if isinstance(content_raw, bytes) else str(content_raw) if content_raw else ""
 
 
 def _extract_fact_created_at(fact_data: dict) -> str:
@@ -2654,9 +2495,7 @@ async def get_fact_by_key(
     Issue #744: Requires admin authentication.
     """
     if contains_path_traversal(fact_key):
-        raise HTTPException(
-            status_code=400, detail="Invalid fact_key: path traversal not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid fact_key: path traversal not allowed")
 
     kb = await get_or_create_knowledge_base(req.app)
     fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
@@ -2732,9 +2571,7 @@ async def _get_indexed_docs_from_redis(kb) -> list:
     docs = []
     cursor = 0
     while True:
-        cursor, keys = await asyncio.to_thread(
-            kb.redis_client.scan, cursor, match="doc_hash:*", count=500
-        )
+        cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="doc_hash:*", count=500)
         if keys:
             # Batch fetch document data
             values = await asyncio.to_thread(kb.redis_client.mget, keys)
@@ -2765,8 +2602,7 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
         filtered = [
             d
             for d in filtered
-            if category_lower in d.get("file_path", "").lower()
-            or d.get("category", "").lower() == category_lower
+            if category_lower in d.get("file_path", "").lower() or d.get("category", "").lower() == category_lower
         ]
 
     # Filter by doc_type
@@ -2790,8 +2626,7 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
         filtered = [
             d
             for d in filtered
-            if query_lower in d.get("title", "").lower()
-            or query_lower in d.get("file_path", "").lower()
+            if query_lower in d.get("title", "").lower() or query_lower in d.get("file_path", "").lower()
         ]
 
     return filtered
@@ -2836,9 +2671,7 @@ async def browse_documentation(
         logger.warning("browse_documentation: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="docs_browse", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="docs_browse", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2851,9 +2684,7 @@ async def browse_documentation(
     sorted_docs = _sort_docs(filtered_docs, request.sort_by, request.sort_order)
 
     # Paginate
-    paginated, total, total_pages = _paginate_docs(
-        sorted_docs, request.page, request.page_size
-    )
+    paginated, total, total_pages = _paginate_docs(sorted_docs, request.page, request.page_size)
 
     return {
         "success": True,
@@ -2893,14 +2724,10 @@ async def get_documentation_categories(
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
         # Issue #5407: KB instance not initialized - emit counter before 503.
-        logger.warning(
-            "get_documentation_categories: KB uninitialized - raising 503"
-        )
+        logger.warning("get_documentation_categories: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="docs_categories", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="docs_categories", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     # Get all indexed documents
@@ -2966,9 +2793,7 @@ async def get_documentation_stats(
         logger.warning("get_documentation_stats: KB uninitialized - raising 503")
         from knowledge.metrics import autobot_kb_degradation_total
 
-        autobot_kb_degradation_total.labels(
-            endpoint="docs_stats", reason="kb_uninit"
-        ).inc()
+        autobot_kb_degradation_total.labels(endpoint="docs_stats", reason="kb_uninit").inc()
         raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
     all_docs = await _get_indexed_docs_from_redis(kb)
@@ -2993,9 +2818,7 @@ async def get_documentation_stats(
             "total_indexed_entries": len(all_docs),
             "total_chunks": total_chunks,
             "latest_indexed": latest_indexed,
-            "categories_count": len(
-                set(doc.get("category", "general") for doc in all_docs)
-            ),
+            "categories_count": len(set(doc.get("category", "general") for doc in all_docs)),
         },
     }
 
@@ -3102,9 +2925,7 @@ async def control_documentation_watcher(
 # fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
 
 
-def _resolve_target_org_id(
-    current_user: dict, override_org_id: Optional[str]
-) -> Optional[str]:
+def _resolve_target_org_id(current_user: dict, override_org_id: Optional[str]) -> Optional[str]:
     """Pick the org_id a config request should target.
 
     Admins can target another org via ``?org_id=`` query param. Non-admins
@@ -3114,9 +2935,7 @@ def _resolve_target_org_id(
     if override_org_id:
         role = (current_user or {}).get("role", "")
         if role not in ("admin", "platform_admin", "superadmin"):
-            raise HTTPException(
-                status_code=403, detail="Only admins may target another org"
-            )
+            raise HTTPException(status_code=403, detail="Only admins may target another org")
         return override_org_id
     return (current_user or {}).get("org_id")
 
@@ -3200,9 +3019,7 @@ router.include_router(maintenance_router)
 try:
     from api.knowledge_ai_stack import router as ai_stack_router
 
-    router.include_router(
-        ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"]
-    )
+    router.include_router(ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"])
 except ImportError as e:
     logging.warning("AI Stack knowledge router not available: %s", e)
 

@@ -582,9 +582,7 @@ class CommandManualManager:
 
             if in_name_section and line and not description:
                 # Remove command name and dash, keep description
-                desc_match = re.search(
-                    rf"{re.escape(command_name)}\s*[-–]\s*(.+)", line
-                )
+                desc_match = re.search(rf"{re.escape(command_name)}\s*[-–]\s*(.+)", line)
                 if desc_match:
                     description = desc_match.group(1)
                 elif " - " in line:
@@ -722,9 +720,7 @@ class CommandManualManager:
             return None
 
         try:
-            result = subprocess.run(
-                ["man", command_name], capture_output=True, text=True, timeout=10
-            )
+            result = subprocess.run(["man", command_name], capture_output=True, text=True, timeout=10)
 
             if result.returncode == 0:
                 return result.stdout
@@ -773,15 +769,11 @@ class CommandManualManager:
                     ),
                 )
                 conn.commit()
-                logger.info(
-                    "Stored manual for command: %s", command_manual.command_name
-                )
+                logger.info("Stored manual for command: %s", command_manual.command_name)
                 return True
 
         except Exception as e:
-            logger.error(
-                f"Failed to store manual for {command_manual.command_name}: {e}"
-            )
+            logger.error(f"Failed to store manual for {command_manual.command_name}: {e}")
             return False
 
     def _row_to_command_manual(self, row: tuple) -> CommandManual:
@@ -817,9 +809,7 @@ class CommandManualManager:
             logger.error("Failed to retrieve manual for %s: %s", command_name, e)
             return None
 
-    def _build_search_query(
-        self, query: str, category: Optional[str]
-    ) -> Tuple[str, List[str]]:
+    def _build_search_query(self, query: str, category: Optional[str]) -> Tuple[str, List[str]]:
         """Build SQL query and params for manual search."""
         sql = """SELECT command_name, description, syntax, common_options,
                        examples, related_commands, risk_level, category,
@@ -833,9 +823,7 @@ class CommandManualManager:
         sql += " ORDER BY command_name"
         return sql, params
 
-    def search_manuals(
-        self, query: str, category: Optional[str] = None
-    ) -> List[CommandManual]:
+    def search_manuals(self, query: str, category: Optional[str] = None) -> List[CommandManual]:
         """Search command manuals by query and optional category."""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -882,9 +870,7 @@ class CommandManualManager:
 
         suggestions = []
         for manual in manuals[:5]:  # Limit to top 5 suggestions
-            suggestions.append(
-                (manual.command_name, manual.description, manual.risk_level)
-            )
+            suggestions.append((manual.command_name, manual.description, manual.risk_level))
 
         return suggestions
 

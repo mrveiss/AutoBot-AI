@@ -106,9 +106,7 @@ class SynthesisProvenanceLog:
             return None
 
         entry = {
-            k.decode("utf-8") if isinstance(k, bytes) else k: (
-                v.decode("utf-8") if isinstance(v, bytes) else v
-            )
+            k.decode("utf-8") if isinstance(k, bytes) else k: (v.decode("utf-8") if isinstance(v, bytes) else v)
             for k, v in raw.items()
         }
         for list_field in ("source_docs", "synthesis_ids", "source_doc_ids"):
@@ -134,9 +132,7 @@ class SynthesisProvenanceLog:
         entry.setdefault("collection_name", "")
         return entry
 
-    async def get_best_run_id_for_collection(
-        self, collection_name: str
-    ) -> Optional[str]:
+    async def get_best_run_id_for_collection(self, collection_name: str) -> Optional[str]:
         """Return the run_id with the highest score for *collection_name*.
 
         Uses the ``kb:synthesis:best:{collection_name}`` sorted set for an O(1)
@@ -147,9 +143,7 @@ class SynthesisProvenanceLog:
         """
         try:
             redis = await get_async_redis_client(database="main")
-            results = await redis.zrevrange(
-                f"{_COLLECTION_BEST_KEY_PREFIX}{collection_name}", 0, 0
-            )
+            results = await redis.zrevrange(f"{_COLLECTION_BEST_KEY_PREFIX}{collection_name}", 0, 0)
         except Exception:
             logger.exception(
                 "get_best_run_id_for_collection: Redis error for collection '%s'",
@@ -218,9 +212,7 @@ class SynthesisProvenanceLog:
         results = []
         for _entry_id, fields in raw_entries:
             entry = {
-                k.decode("utf-8") if isinstance(k, bytes) else k: (
-                    v.decode("utf-8") if isinstance(v, bytes) else v
-                )
+                k.decode("utf-8") if isinstance(k, bytes) else k: (v.decode("utf-8") if isinstance(v, bytes) else v)
                 for k, v in fields.items()
             }
             for list_field in ("source_docs", "synthesis_ids", "source_doc_ids"):

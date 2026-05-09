@@ -54,9 +54,7 @@ _async_chromadb_stub = _make_stub("utils.async_chromadb_client")
 # ---------------------------------------------------------------------------
 
 _KB_SYNTH_PATH = Path(__file__).parent / "kb_synthesizer.py"
-_spec = importlib.util.spec_from_file_location(
-    "services.knowledge.kb_synthesizer", str(_KB_SYNTH_PATH)
-)
+_spec = importlib.util.spec_from_file_location("services.knowledge.kb_synthesizer", str(_KB_SYNTH_PATH))
 assert _spec and _spec.loader, "Could not load kb_synthesizer spec"
 _kb_synth_mod = importlib.util.module_from_spec(_spec)
 sys.modules["services.knowledge.kb_synthesizer"] = _kb_synth_mod
@@ -174,10 +172,7 @@ async def test_index_documents_upsert_called():
     synth = KBSynthesizer(llm_service=_make_llm())
     synth._collection = col  # inject directly
 
-    docs = [
-        {"id": "kb_syn_abc", "summary": "A summary",
-         "doc_count": 1, "synthesized_at": 0.0, "source_paths": ""}
-    ]
+    docs = [{"id": "kb_syn_abc", "summary": "A summary", "doc_count": 1, "synthesized_at": 0.0, "source_paths": ""}]
     await synth._index_documents(docs)
 
     col.upsert.assert_awaited_once()
@@ -631,9 +626,7 @@ async def test_get_relevant_context_queries_extra_collections():
     synth._collection = default_col
     synth._named_collections["autobot_synthesis_architecture"] = extra_col
 
-    ctx = await synth.get_relevant_context(
-        "architecture", collection_names=["autobot_synthesis_architecture"]
-    )
+    ctx = await synth.get_relevant_context("architecture", collection_names=["autobot_synthesis_architecture"])
 
     assert "Default summary." in ctx
     assert "Architecture summary." in ctx
@@ -652,9 +645,7 @@ async def test_get_relevant_context_deduplicates_default_collection():
     synth._collection = col
 
     # Pass default name explicitly — should be deduplicated.
-    await synth.get_relevant_context(
-        "topic", collection_names=[_kb_synth_mod._KB_SYNTHESIS_COLLECTION]
-    )
+    await synth.get_relevant_context("topic", collection_names=[_kb_synth_mod._KB_SYNTHESIS_COLLECTION])
 
     # Default collection queried exactly once (not twice).
     assert col.query.await_count == 1

@@ -16,9 +16,7 @@ from services.ai_stack_client import get_ai_stack_client
 logger = get_logger(__name__, "backend")
 
 
-def log_initialization_step(
-    stage: str, message: str, percentage: int = 0, success: bool = True
-):
+def log_initialization_step(stage: str, message: str, percentage: int = 0, success: bool = True):
     """Log initialization steps with consistent formatting."""
     icon = "✅" if success else "❌" if percentage == 100 else "🔄"
     logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
@@ -53,9 +51,7 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
 
         if health_status["status"] == "healthy":
             await update_status_fn("ai_stack", "connected")
-            log_initialization_step(
-                "AI Stack", "AI Stack connection established", 50, True
-            )
+            log_initialization_step("AI Stack", "AI Stack connection established", 50, True)
 
             # Test agent availability
             try:
@@ -83,14 +79,10 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
             await update_status_fn("ai_stack", "error")
             await append_error_fn("AI Stack health check failed")
             ai_client.start_retry_loop()
-            log_initialization_step(
-                "AI Stack", "AI Stack unreachable — retry enabled", 100, False
-            )
+            log_initialization_step("AI Stack", "AI Stack unreachable — retry enabled", 100, False)
 
     except Exception as e:
         logger.warning("AI Stack API unreachable — agent routing disabled: %s", e)
         await update_status_fn("ai_stack", "error")
         await append_error_fn(f"AI Stack init: {str(e)}")
-        log_initialization_step(
-            "AI Stack", f"Initialization failed: {str(e)}", 100, False
-        )
+        log_initialization_step("AI Stack", f"Initialization failed: {str(e)}", 100, False)

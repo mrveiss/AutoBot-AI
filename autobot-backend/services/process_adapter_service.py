@@ -35,9 +35,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
-from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +73,7 @@ class ProcessAdapterService:
     async def start(self) -> None:
         """Launch the background queue dispatcher (#1406)."""
         if self._dispatcher_task is None or self._dispatcher_task.done():
-            self._dispatcher_task = asyncio.create_task(
-                self._dispatch_loop(), name="process-dispatcher"
-            )
+            self._dispatcher_task = asyncio.create_task(self._dispatch_loop(), name="process-dispatcher")
             logger.info("ProcessAdapterService dispatcher started")
 
     async def stop(self) -> None:
@@ -101,9 +99,7 @@ class ProcessAdapterService:
 
         Returns the process_run UUID string.
         """
-        run_id = await self._create_run_row(
-            agent_id, command, args or [], timeout_seconds, task_id
-        )
+        run_id = await self._create_run_row(agent_id, command, args or [], timeout_seconds, task_id)
         await self._queue.put(run_id)
         logger.info("Process %s queued for agent %s", run_id, agent_id)
         return str(run_id)
@@ -124,9 +120,7 @@ class ProcessAdapterService:
         """
         sig_val = _VALID_SIGNALS.get(sig.upper())
         if sig_val is None:
-            raise ValueError(
-                f"Unknown signal: {sig!r}. Allowed: {list(_VALID_SIGNALS)}"
-            )
+            raise ValueError(f"Unknown signal: {sig!r}. Allowed: {list(_VALID_SIGNALS)}")
         proc = self._processes.get(process_id)
         if proc is None or proc.returncode is not None:
             logger.warning("Signal %s ignored: process %s not running", sig, process_id)
@@ -136,9 +130,7 @@ class ProcessAdapterService:
             logger.info("Signal %s sent to process %s", sig, process_id)
             return True
         except ProcessLookupError:
-            logger.warning(
-                "Signal %s failed: process %s already exited", sig, process_id
-            )
+            logger.warning("Signal %s failed: process %s already exited", sig, process_id)
             return False
 
     async def get_agent_processes(
@@ -188,32 +180,22 @@ class ProcessAdapterService:
             command, args, timeout = await self._mark_running(run_id)
             proc = await _spawn_subprocess(command, args)
             self._processes[str(run_id)] = proc
-            stdout, stderr, timed_out = await self._collect_output(
-                proc, run_id, timeout
-            )
+            stdout, stderr, timed_out = await self._collect_output(proc, run_id, timeout)
             exit_code = proc.returncode if not timed_out else None
             sig_name = "SIGKILL" if timed_out else None
             status = (
                 ProcessRunStatus.TIMED_OUT.value
                 if timed_out
-                else (
-                    ProcessRunStatus.COMPLETED.value
-                    if exit_code == 0
-                    else ProcessRunStatus.FAILED.value
-                )
+                else (ProcessRunStatus.COMPLETED.value if exit_code == 0 else ProcessRunStatus.FAILED.value)
             )
             excerpt, log_path = await _persist_log(run_id, stdout, stderr)
-            await self._finalize_run(
-                run_id, status, exit_code, sig_name, excerpt, log_path
-            )
+            await self._finalize_run(run_id, status, exit_code, sig_name, excerpt, log_path)
         except Exception:
             logger.exception("Unexpected error in process run %s", run_id)
             await self._mark_failed(run_id, "Internal process runner error")
         finally:
             self._processes.pop(str(run_id), None)
-            self._running_counts[agent_id] = max(
-                0, self._running_counts.get(agent_id, 1) - 1
-            )
+            self._running_counts[agent_id] = max(0, self._running_counts.get(agent_id, 1) - 1)
             logger.info("Process slot released for agent %s", agent_id)
 
     async def _mark_running(self, run_id: uuid.UUID) -> tuple[str, List[str], int]:
@@ -235,9 +217,7 @@ class ProcessAdapterService:
     ) -> tuple[bytes, bytes, bool]:
         """Wait for subprocess with timeout. Return (stdout, stderr, timed_out) (#1406)."""
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=float(timeout)
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
             return stdout or b"", stderr or b"", False
         except asyncio.TimeoutError:
             logger.warning("Process %s timed out after %ss", run_id, timeout)
@@ -268,9 +248,7 @@ class ProcessAdapterService:
                 row.log_path = log_path
                 row.completed_at = now_utc()
             await session.commit()
-        logger.info(
-            "Process %s finalised: status=%s exit=%s", run_id, status, exit_code
-        )
+        logger.info("Process %s finalised: status=%s exit=%s", run_id, status, exit_code)
 
     async def _mark_failed(self, run_id: uuid.UUID, reason: str) -> None:
         """Set status=failed with a short reason in log_excerpt (#1406)."""
@@ -311,9 +289,7 @@ class ProcessAdapterService:
 # -- Module-level helpers --------------------------------------------------
 
 
-async def _spawn_subprocess(
-    command: str, args: List[str]
-) -> asyncio.subprocess.Process:
+async def _spawn_subprocess(command: str, args: List[str]) -> asyncio.subprocess.Process:
     """Launch the subprocess. Raises OSError on failure (#1406)."""
     return await asyncio.create_subprocess_exec(
         command,
@@ -323,9 +299,7 @@ async def _spawn_subprocess(
     )
 
 
-async def _persist_log(
-    run_id: uuid.UUID, stdout: bytes, stderr: bytes
-) -> tuple[str, str]:
+async def _persist_log(run_id: uuid.UUID, stdout: bytes, stderr: bytes) -> tuple[str, str]:
     """
     Write combined output to a log file; return (excerpt, log_path) (#1406).
 
@@ -348,12 +322,7 @@ async def _query_agent_runs(
     limit: int,
 ) -> List[ProcessRun]:
     """Query ProcessRun rows for agent_id with optional status filter (#1406)."""
-    stmt = (
-        select(ProcessRun)
-        .where(ProcessRun.agent_id == agent_id)
-        .order_by(ProcessRun.created_at.desc())
-        .limit(limit)
-    )
+    stmt = select(ProcessRun).where(ProcessRun.agent_id == agent_id).order_by(ProcessRun.created_at.desc()).limit(limit)
     if status_filter:
         stmt = stmt.where(ProcessRun.status == status_filter)
     result = await session.execute(stmt)

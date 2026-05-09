@@ -12,8 +12,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from typing import Any, Dict, Optional, Tuple
+
+from autobot_shared.time_utils import now_utc
 
 try:
     import docker
@@ -47,10 +48,7 @@ class DockerBackend(ExecutionBackend):
         """
         super().__init__(BackendType.DOCKER)
         if docker is None:
-            raise RuntimeError(
-                "docker package not installed. "
-                "Install with: pip install docker"
-            )
+            raise RuntimeError("docker package not installed. " "Install with: pip install docker")
 
         try:
             self.client = docker.from_env(timeout=10)
@@ -115,15 +113,10 @@ class DockerBackend(ExecutionBackend):
                     result.return_code = exit_code["StatusCode"]
 
                 except Exception as timeout_error:
-                    logger.warning(
-                        f"Container {container.id} timed out: {timeout_error}"
-                    )
+                    logger.warning(f"Container {container.id} timed out: {timeout_error}")
                     container.kill()
                     result.status = ExecutionStatus.TIMEOUT
-                    result.stderr = (
-                        f"Container execution exceeded timeout of "
-                        f"{task.timeout_seconds}s"
-                    )
+                    result.stderr = f"Container execution exceeded timeout of " f"{task.timeout_seconds}s"
                     result.return_code = -1
                     return result
 
@@ -139,11 +132,7 @@ class DockerBackend(ExecutionBackend):
                     result.stderr = f"Failed to capture logs: {str(e)}"
 
                 # Determine status
-                result.status = (
-                    ExecutionStatus.SUCCESS
-                    if result.return_code == 0
-                    else ExecutionStatus.FAILED
-                )
+                result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
             except Exception as e:
                 result.status = ExecutionStatus.FAILED
@@ -158,15 +147,11 @@ class DockerBackend(ExecutionBackend):
                     container.remove(force=True)
                     self._container_map.pop(task.task_id, None)
                 except Exception as e:
-                    logger.warning(
-                        f"Error removing container {container.id}: {e}"
-                    )
+                    logger.warning(f"Error removing container {container.id}: {e}")
 
             result.completed_at = now_utc()
             if result.started_at:
-                result.execution_time_ms = (
-                    result.completed_at - result.started_at
-                ).total_seconds() * 1000
+                result.execution_time_ms = (result.completed_at - result.started_at).total_seconds() * 1000
 
         return result
 
@@ -192,9 +177,7 @@ class DockerBackend(ExecutionBackend):
                     container.kill()
                 container.remove(force=True)
             except Exception as e:
-                logger.warning(
-                    f"Error cleaning up container {container_id}: {e}"
-                )
+                logger.warning(f"Error cleaning up container {container_id}: {e}")
 
     async def verify_task_compatibility(self, task: ExecutionTask) -> Tuple[bool, str]:
         """Verify task can run in Docker.
@@ -209,8 +192,7 @@ class DockerBackend(ExecutionBackend):
         if task.language.lower() not in supported_languages:
             return (
                 False,
-                f"Language '{task.language}' not supported in Docker. "
-                f"Supported: {', '.join(supported_languages)}",
+                f"Language '{task.language}' not supported in Docker. " f"Supported: {', '.join(supported_languages)}",
             )
 
         # Check if image is available

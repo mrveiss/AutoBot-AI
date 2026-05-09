@@ -165,9 +165,7 @@ class TestClassifyRelationship:
             return "CALLS"
 
         discoverer = EdgeDiscoverer(db=db, llm=_llm)
-        edge = _make_edge(
-            _EDGE_A, _NODE_X, from_content="service A code", to_content="service B code"
-        )
+        edge = _make_edge(_EDGE_A, _NODE_X, from_content="service A code", to_content="service B code")
         await discoverer._classify_relationship(edge)
 
         assert len(received_prompt) == 1

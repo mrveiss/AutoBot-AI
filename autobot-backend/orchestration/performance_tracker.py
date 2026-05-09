@@ -26,8 +26,7 @@ class PerformanceTracker:
         from enhanced_orchestration.types import AgentPerformance
 
         self.agent_performance: Dict[str, Any] = {
-            agent: AgentPerformance(agent_type=agent)
-            for agent in agent_capabilities
+            agent: AgentPerformance(agent_type=agent) for agent in agent_capabilities
         }
 
     def update(self, agent_type: str, success: bool, execution_time: float) -> None:

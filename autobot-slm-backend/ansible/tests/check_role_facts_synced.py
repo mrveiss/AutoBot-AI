@@ -13,10 +13,10 @@ If the two files drift, behavior diverges silently. This script extracts
 the role_*_active definitions from each and compares them; exits non-zero
 on any divergence so CI fails the PR.
 """
+
 import re
 import sys
 from pathlib import Path
-
 
 REPO = Path(__file__).resolve().parents[3]
 GROUP_VARS = REPO / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"
@@ -31,10 +31,7 @@ def extract_facts(path: Path) -> dict:
     text = path.read_text()
     pattern = re.compile(r"(role_\w+_active:\s*>-(?:\n[ \t]+.*)*)")
     blocks = pattern.findall(text)
-    return {
-        re.match(r"(role_\w+_active)", b).group(1): re.sub(r"\s+", " ", b).strip()
-        for b in blocks
-    }
+    return {re.match(r"(role_\w+_active)", b).group(1): re.sub(r"\s+", " ", b).strip() for b in blocks}
 
 
 def main() -> int:

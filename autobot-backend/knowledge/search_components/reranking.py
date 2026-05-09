@@ -43,9 +43,7 @@ class RerankWeights:
     vector: float = 0.2
     edge: float = 0.0
     recency: float = 0.0
-    staleness: float = (
-        0.0  # Issue #2111: penalty weight for stale documents (0 = disabled)
-    )
+    staleness: float = 0.0  # Issue #2111: penalty weight for stale documents (0 = disabled)
     mmr_lambda: float = 0.0  # Issue #2090: MMR diversity pass (0 = disabled)
 
 
@@ -169,14 +167,9 @@ def apply_mmr_reorder(
 
             if has_embeddings and embeddings[i] is not None:
                 # Max cosine similarity to any already-selected document
-                selected_with_emb = [
-                    s for s in selected if s.get(embedding_key) is not None
-                ]
+                selected_with_emb = [s for s in selected if s.get(embedding_key) is not None]
                 if selected_with_emb:
-                    max_sim = max(
-                        _cosine_similarity(embeddings[i], sel[embedding_key])
-                        for sel in selected_with_emb
-                    )
+                    max_sim = max(_cosine_similarity(embeddings[i], sel[embedding_key]) for sel in selected_with_emb)
                 else:
                     max_sim = 0.0
             else:
@@ -231,13 +224,7 @@ def compute_blended_score(
     if weights is None:
         weights = RerankWeights()
 
-    total_weight = (
-        weights.reranker
-        + weights.vector
-        + weights.edge
-        + weights.recency
-        + weights.staleness
-    )
+    total_weight = weights.reranker + weights.vector + weights.edge + weights.recency + weights.staleness
     if total_weight == 0.0:
         logger.warning("All RerankWeights are zero; returning raw reranker score")
         return reranker_score
@@ -408,9 +395,7 @@ class ResultReranker:
             cross_encoder = await self._ensure_cross_encoder()
             pairs = [(query, r.get("content", "")) for r in results]
             scores = await asyncio.to_thread(cross_encoder.predict, pairs)
-            self._apply_rerank_scores(
-                results, scores, weights=effective_weights, staleness_map=staleness_map
-            )
+            self._apply_rerank_scores(results, scores, weights=effective_weights, staleness_map=staleness_map)
 
             # Issue #2090: optional MMR diversity pass after cross-encoder scoring
             if effective_weights.mmr_lambda > 0.0:
@@ -460,9 +445,7 @@ def get_cross_encoder():
                     _cross_encoder_model = CrossEncoder(ResultReranker.MODEL_NAME)
                     logger.info("Shared CrossEncoder model loaded successfully")
                 except ImportError:
-                    logger.warning(
-                        "sentence-transformers not available, CrossEncoder disabled"
-                    )
+                    logger.warning("sentence-transformers not available, CrossEncoder disabled")
                     _cross_encoder_model = None
                 except Exception as exc:
                     logger.error("Failed to load CrossEncoder model: %s", exc)

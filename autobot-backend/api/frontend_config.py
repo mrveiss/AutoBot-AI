@@ -6,11 +6,11 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
+from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
-from api.schemas_common import DataResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -179,29 +179,19 @@ async def get_frontend_config():
             "project": _build_project_config(),
             "api": {
                 **api_config,
-                "timeout": full_config.get("api", {}).get(
-                    "timeout", 30000
-                ),  # milliseconds
+                "timeout": full_config.get("api", {}).get("timeout", 30000),  # milliseconds
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
                 # Issue #598: Include operation-specific timeouts
-                "timeouts": _build_timeouts_config(
-                    full_config.get("api", {}).get("timeouts", {})
-                ),
+                "timeouts": _build_timeouts_config(full_config.get("api", {}).get("timeouts", {})),
             },
             "websocket": {
                 "url": NetworkConstants.get_websocket_url(),
-                "reconnect_attempts": full_config.get("websocket", {}).get(
-                    "reconnect_attempts", 5
-                ),
-                "reconnect_delay": full_config.get("websocket", {}).get(
-                    "reconnect_delay", 1000
-                ),
+                "reconnect_attempts": full_config.get("websocket", {}).get("reconnect_attempts", 5),
+                "reconnect_delay": full_config.get("websocket", {}).get("reconnect_delay", 1000),
             },
             "features": _build_features_config(full_config.get("features", {})),
             "ui": _build_ui_config(full_config.get("ui", {})),
-            "performance": _build_performance_config(
-                full_config.get("performance", {})
-            ),
+            "performance": _build_performance_config(full_config.get("performance", {})),
             # Issue #372: Use NetworkConstants method for host configs
             "hosts": NetworkConstants.get_host_configs(),
         }

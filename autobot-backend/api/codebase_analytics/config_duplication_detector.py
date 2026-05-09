@@ -180,9 +180,7 @@ class ConfigDuplicationDetector(_BaseClass):
             use_semantic_analysis: Enable LLM-based semantic matching (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = (
-            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
-        )
+        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -266,9 +264,7 @@ class ConfigDuplicationDetector(_BaseClass):
 
         return None
 
-    def _process_pydantic_field(
-        self, node: ast.Call, filepath: str, field_name: str = ""
-    ) -> None:
+    def _process_pydantic_field(self, node: ast.Call, filepath: str, field_name: str = "") -> None:
         """Extract config values from Pydantic Field() calls.
 
         Issue #670: Enhanced to pass field context for smarter filtering.
@@ -304,9 +300,7 @@ class ConfigDuplicationDetector(_BaseClass):
             if not isinstance(item, ast.AnnAssign) or item.value is None:
                 continue
             value = self._extract_value(item.value)
-            target_name = (
-                item.target.id if isinstance(item.target, ast.Name) else "field"
-            )
+            target_name = item.target.id if isinstance(item.target, ast.Name) else "field"
             context = f"dataclass {target_name}"
             if value is None or self._should_ignore_value(value, context):
                 continue
@@ -397,18 +391,12 @@ class ConfigDuplicationDetector(_BaseClass):
             if len(locations) > 1:
                 # Issue #670: Skip if value appears in too many different contexts
                 # This indicates it's likely different concepts with same value
-                if value in CONTEXT_SPECIFIC_VALUES and self._has_diverse_contexts(
-                    locations
-                ):
+                if value in CONTEXT_SPECIFIC_VALUES and self._has_diverse_contexts(locations):
                     continue
 
                 # Check if any location is a source of truth
-                source_locations = [
-                    loc for loc in locations if self._is_source_of_truth(loc[0])
-                ]
-                duplicate_locations = [
-                    loc for loc in locations if not self._is_source_of_truth(loc[0])
-                ]
+                source_locations = [loc for loc in locations if self._is_source_of_truth(loc[0])]
+                duplicate_locations = [loc for loc in locations if not self._is_source_of_truth(loc[0])]
 
                 if duplicate_locations:  # Only report if there are actual duplicates
                     duplicates[value] = {
@@ -451,31 +439,23 @@ class ConfigDuplicationDetector(_BaseClass):
         report = ["Configuration Duplication Report", "=" * 60, ""]
 
         # Sort by number of duplicates (most problematic first)
-        sorted_dups = sorted(
-            duplicates.items(), key=lambda x: len(x[1]["duplicates"]), reverse=True
-        )
+        sorted_dups = sorted(duplicates.items(), key=lambda x: len(x[1]["duplicates"]), reverse=True)
 
         for value, data in sorted_dups:
-            report.append(
-                f"\nValue: {repr(value)} ({len(data['duplicates'])} duplicates)"
-            )
+            report.append(f"\nValue: {repr(value)} ({len(data['duplicates'])} duplicates)")
 
             # Show sources of truth
             if data["sources"]:
                 report.append("  ✅ SOURCE OF TRUTH:")
                 for source in data["sources"]:
-                    report.append(
-                        f"     - {source['file']}:{source['line']} ({source['context']})"
-                    )
+                    report.append(f"     - {source['file']}:{source['line']} ({source['context']})")
 
             # Show duplicates
             report.append("  ❌ DUPLICATES:")
             for dup in data["duplicates"]:
                 report.append(f"     - {dup['file']}:{dup['line']} ({dup['context']})")
 
-        report.append(
-            f"\n\nTotal: {len(duplicates)} configuration values with duplicates"
-        )
+        report.append(f"\n\nTotal: {len(duplicates)} configuration values with duplicates")
         return "\n".join(report)
 
     # Issue #554: Async methods for semantic analysis
@@ -494,9 +474,7 @@ class ConfigDuplicationDetector(_BaseClass):
         result = self.find_duplicates()
 
         if self.use_semantic_analysis:
-            await self._cache_result(
-                cache_key, result, prefix="config_detector", ttl=1800
-            )
+            await self._cache_result(cache_key, result, prefix="config_detector", ttl=1800)
 
         return result
 
@@ -537,14 +515,8 @@ if __name__ == "__main__":
     # Test the detector
     import sys
 
-    project_root = (
-        sys.argv[1]
-        if len(sys.argv) > 1
-        else os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-    )
+    project_root = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
     result = detect_config_duplicates(project_root)
 
     logger.info(result["report"])
-    logger.info(
-        "\nFound {result['duplicates_found']} configuration values with duplicates"
-    )
+    logger.info("\nFound {result['duplicates_found']} configuration values with duplicates")

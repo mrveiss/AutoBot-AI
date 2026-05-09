@@ -34,14 +34,10 @@ class TestPropagateStalnessForDoc:
         mock_graph = MagicMock()
         mock_staleness_result = MagicMock()
         mock_staleness_result.scores = {"source": 1.0, "neighbor": 0.6}
-        mock_staleness_result.flagged_for_reembedding = MagicMock(
-            return_value=["neighbor"]
-        )
+        mock_staleness_result.flagged_for_reembedding = MagicMock(return_value=["neighbor"])
 
         with (
-            patch(
-                "autobot_shared.redis_client.get_redis_client", return_value=mock_redis
-            ),
+            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
             patch(
                 "services.mesh_brain.staleness_propagator.RedisGraphAdapter",
                 return_value=mock_graph,
@@ -101,9 +97,7 @@ class TestHandleUpdateCallsStaleness:
 
         mock_indexer = AsyncMock()
         mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(
-            return_value=self._make_index_result(success=1)
-        )
+        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(success=1))
 
         with (
             patch(
@@ -128,9 +122,7 @@ class TestHandleUpdateCallsStaleness:
 
         mock_indexer = AsyncMock()
         mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(
-            return_value=self._make_index_result(skipped=1)
-        )
+        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(skipped=1))
 
         with (
             patch(
@@ -155,9 +147,7 @@ class TestHandleUpdateCallsStaleness:
 
         mock_indexer = AsyncMock()
         mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(
-            return_value=self._make_index_result(failed=1, errors=["some error"])
-        )
+        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(failed=1, errors=["some error"]))
 
         with (
             patch(

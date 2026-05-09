@@ -107,9 +107,7 @@ class ThreatIntelligenceCache:
         """Remove expired entries from cache."""
         async with self._lock:
             current_time = time.time()
-            self._cache = {
-                k: v for k, v in self._cache.items() if v["expires_at"] > current_time
-            }
+            self._cache = {k: v for k, v in self._cache.items() if v["expires_at"] > current_time}
 
 
 class RateLimiter:
@@ -189,9 +187,7 @@ class VirusTotalClient:
 
         return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
-    def _build_error_response(
-        self, error_msg: str, score: Optional[float] = None
-    ) -> Dict[str, Any]:
+    def _build_error_response(self, error_msg: str, score: Optional[float] = None) -> Dict[str, Any]:
         """
         Build a standardized error response dictionary.
 
@@ -199,9 +195,7 @@ class VirusTotalClient:
         """
         return {"success": False, "error": error_msg, "score": score}
 
-    async def _handle_url_response(
-        self, response: aiohttp.ClientResponse, url: str
-    ) -> Dict[str, Any]:
+    async def _handle_url_response(self, response: aiohttp.ClientResponse, url: str) -> Dict[str, Any]:
         """
         Handle the HTTP response from VirusTotal URL check.
 
@@ -215,9 +209,7 @@ class VirusTotalClient:
         elif response.status == 429:
             return self._build_error_response("VirusTotal rate limit exceeded")
         else:
-            return self._build_error_response(
-                f"VirusTotal API error: HTTP {response.status}"
-            )
+            return self._build_error_response(f"VirusTotal API error: HTTP {response.status}")
 
     async def check_url(self, url: str) -> Dict[str, Any]:
         """
@@ -368,9 +360,7 @@ class URLVoidClient:
         domain = parsed.hostname or url
         return domain.lower().strip()
 
-    async def _handle_domain_response(
-        self, response: aiohttp.ClientResponse, domain: str
-    ) -> Dict[str, Any]:
+    async def _handle_domain_response(self, response: aiohttp.ClientResponse, domain: str) -> Dict[str, Any]:
         """
         Handle the HTTP response from URLVoid domain check.
 
@@ -462,19 +452,11 @@ class URLVoidClient:
         detections = root.find(".//detections")
         engines_count = root.find(".//engines_count")
 
-        detection_count = (
-            int(detections.text) if detections is not None and detections.text else 0
-        )
-        total_engines = (
-            int(engines_count.text)
-            if engines_count is not None and engines_count.text
-            else 0
-        )
+        detection_count = int(detections.text) if detections is not None and detections.text else 0
+        total_engines = int(engines_count.text) if engines_count is not None and engines_count.text else 0
         return detection_count, total_engines
 
-    def _calculate_reputation_score(
-        self, detection_count: int, total_engines: int
-    ) -> float:
+    def _calculate_reputation_score(self, detection_count: int, total_engines: int) -> float:
         """Calculate reputation score from detection counts.
 
         Args:
@@ -598,9 +580,7 @@ class ThreatIntelligenceService:
         """Check if at least one service is configured."""
         return self._virustotal.is_configured or self._urlvoid.is_configured
 
-    async def _collect_threat_scores(
-        self, url: str
-    ) -> tuple[Dict[str, Any], list[float], int]:
+    async def _collect_threat_scores(self, url: str) -> tuple[Dict[str, Any], list[float], int]:
         """
         Collect threat scores from all configured services.
 
@@ -781,9 +761,7 @@ if __name__ == "__main__":
 
         if not service.is_any_service_configured:
             logger.info("\n⚠️ No threat intelligence services configured.")
-            logger.info(
-                "Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables."
-            )
+            logger.info("Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables.")
             return
 
         # Test URLs

@@ -82,9 +82,7 @@ def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepRe
     )
 
 
-def _build_blocked_command_result(
-    task: "AgentTask", safety_reason: Optional[str], execution_time: float
-) -> StepResult:
+def _build_blocked_command_result(task: "AgentTask", safety_reason: Optional[str], execution_time: float) -> StepResult:
     """
     Build StepResult for commands blocked by security validation.
 
@@ -108,9 +106,7 @@ def _build_blocked_command_result(
     )
 
 
-def _build_execution_error_result(
-    task: "AgentTask", error: Exception, execution_time: float
-) -> StepResult:
+def _build_execution_error_result(task: "AgentTask", error: Exception, execution_time: float) -> StepResult:
     """
     Build StepResult for command execution failures.
 
@@ -178,9 +174,7 @@ class StepExecutorAgent:
         self.session_id = session_id
         # PTY session ID is usually the conversation_id
         self.pty_session_id = pty_session_id or session_id
-        self.explanation_service = (
-            explanation_service or get_command_explanation_service()
-        )
+        self.explanation_service = explanation_service or get_command_explanation_service()
         self._command_executor = None
         self._chat_history_manager = None
 
@@ -236,15 +230,11 @@ class StepExecutorAgent:
 
                 self._command_executor = CommandExecutor()
             except ImportError:
-                logger.warning(
-                    "CommandExecutor not available, using subprocess fallback"
-                )
+                logger.warning("CommandExecutor not available, using subprocess fallback")
                 self._command_executor = None
         return self._command_executor
 
-    async def _execute_and_stream_command(
-        self, task: AgentTask
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_and_stream_command(self, task: AgentTask) -> AsyncGenerator[StreamChunk, None]:
         """
         Execute command and stream output chunks.
 
@@ -289,15 +279,11 @@ class StepExecutorAgent:
 
         # Generate BOTH explanations AFTER execution
         command_explanation = await self._generate_command_explanation(task.command)
-        output_explanation = await self._generate_output_explanation(
-            task.command, full_output, return_code
-        )
+        output_explanation = await self._generate_output_explanation(task.command, full_output, return_code)
 
         return command_explanation, output_explanation
 
-    def _extract_return_code_from_chunk(
-        self, chunk: StreamChunk, current_code: int
-    ) -> int:
+    def _extract_return_code_from_chunk(self, chunk: StreamChunk, current_code: int) -> int:
         """
         Extract return code from a final chunk if available.
 
@@ -361,9 +347,7 @@ class StepExecutorAgent:
         )
         return start_time
 
-    async def _handle_command_validation(
-        self, task: AgentTask, start_time: float
-    ) -> Optional[StepResult]:
+    async def _handle_command_validation(self, task: AgentTask, start_time: float) -> Optional[StepResult]:
         """
         Validate command safety and return error result if unsafe.
 
@@ -380,14 +364,10 @@ class StepExecutorAgent:
         if not is_safe:
             task.status = StepStatus.FAILED
             task.error = safety_reason
-            return _build_blocked_command_result(
-                task, safety_reason, time.time() - start_time
-            )
+            return _build_blocked_command_result(task, safety_reason, time.time() - start_time)
         return None
 
-    async def _execute_command_phase(
-        self, task: AgentTask
-    ) -> tuple[list[str], int, Optional[Exception]]:
+    async def _execute_command_phase(self, task: AgentTask) -> tuple[list[str], int, Optional[Exception]]:
         """
         Execute command phase and collect streaming output.
 
@@ -475,9 +455,7 @@ class StepExecutorAgent:
             stream_complete=True,
         )
 
-    async def execute_step(
-        self, task: AgentTask
-    ) -> AsyncGenerator[Union[StreamChunk, StepResult], None]:
+    async def execute_step(self, task: AgentTask) -> AsyncGenerator[Union[StreamChunk, StepResult], None]:
         """
         Execute a single step with streaming output and explanations.
 
@@ -546,22 +524,14 @@ class StepExecutorAgent:
                 ],
             )
 
-    async def _generate_output_explanation(
-        self, command: str, output: str, return_code: int
-    ) -> OutputExplanation:
+    async def _generate_output_explanation(self, command: str, output: str, return_code: int) -> OutputExplanation:
         """Generate Part 2: Output explanation."""
         try:
-            return await self.explanation_service.explain_output(
-                command, output, return_code
-            )
+            return await self.explanation_service.explain_output(command, output, return_code)
         except Exception as e:
             logger.error("Failed to generate output explanation: %s", e)
             return OutputExplanation(
-                summary=(
-                    "Command completed."
-                    if return_code == 0
-                    else f"Command exited with code {return_code}."
-                ),
+                summary=("Command completed." if return_code == 0 else f"Command exited with code {return_code}."),
                 key_findings=["See output above for details."],
             )
 
@@ -601,15 +571,11 @@ class StepExecutorAgent:
                 # Try to create a new PTY session
                 from constants.path_constants import PATH
 
-                pty = simple_pty_manager.create_session(
-                    self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
-                )
+                pty = simple_pty_manager.create_session(self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
                 if not pty:
                     logger.error("[StepExecutor] Failed to create PTY session")
                     return False
-                logger.info(
-                    "[StepExecutor] Created new PTY session %s", self.pty_session_id
-                )
+                logger.info("[StepExecutor] Created new PTY session %s", self.pty_session_id)
 
             success = pty.write_input(text)
             if success:
@@ -671,9 +637,7 @@ class StepExecutorAgent:
             is_final=True,
         )
 
-    async def _execute_command_streaming(
-        self, command: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_command_streaming(self, command: str) -> AsyncGenerator[StreamChunk, None]:
         """
         Execute a command in PTY terminal and stream output.
 
@@ -689,16 +653,12 @@ class StepExecutorAgent:
             # from PTY output (Issue #935).
             pty_command = f"{command}; echo '{_PTY_EXIT_MARKER}='$?"
             if not self._write_to_pty(f"{pty_command}\n"):
-                logger.warning(
-                    "[StepExecutor] PTY write failed, falling back to subprocess"
-                )
+                logger.warning("[StepExecutor] PTY write failed, falling back to subprocess")
             else:
                 # Poll for output from chat history (Issue #620: uses helper)
                 chat_manager = await self._get_chat_history_manager()
                 if chat_manager:
-                    async for chunk in self._stream_pty_execution(
-                        command, task_id, chat_manager
-                    ):
+                    async for chunk in self._stream_pty_execution(command, task_id, chat_manager):
                         yield chunk
                     return
 
@@ -758,9 +718,7 @@ class StepExecutorAgent:
 
         while (time.time() - start_time) < timeout:
             try:
-                messages = await chat_manager.get_session_messages(
-                    session_id=self.session_id, limit=10
-                )
+                messages = await chat_manager.get_session_messages(session_id=self.session_id, limit=10)
                 current_output = self._extract_terminal_output(messages)
 
                 # Terminate early when exit-code marker appears (Issue #935)
@@ -789,9 +747,7 @@ class StepExecutorAgent:
         logger.warning("[StepExecutor] Polling timeout reached")
         return last_output
 
-    async def _execute_subprocess_streaming(
-        self, command: str, task_id: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_subprocess_streaming(self, command: str, task_id: str) -> AsyncGenerator[StreamChunk, None]:
         """
         Fallback: Execute command via subprocess (output won't appear in terminal UI).
 

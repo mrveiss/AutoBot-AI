@@ -24,15 +24,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
 from api.schemas_knowledge import (
-    PendingSourceResponse,
-    VerificationConfig,
-    VerificationRequest,
-)
-from api.schemas_knowledge import (
     KnowledgeVerificationApproveResponse,
     KnowledgeVerificationConfigResponse,
     KnowledgeVerificationPendingResponse,
     KnowledgeVerificationRejectResponse,
+    PendingSourceResponse,
+    VerificationConfig,
+    VerificationRequest,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

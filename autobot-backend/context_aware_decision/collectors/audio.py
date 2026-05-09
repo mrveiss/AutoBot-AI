@@ -36,16 +36,12 @@ class AudioContextCollector:
 
             # Recent voice commands context
             if voice_status.get("recent_activity"):
-                audio_elements.append(
-                    self._create_voice_activity_context(voice_status["recent_activity"])
-                )
+                audio_elements.append(self._create_voice_activity_context(voice_status["recent_activity"]))
 
             # Command history context
             command_history = get_voice_processing_system().get_command_history(limit=5)
             if command_history:
-                audio_elements.append(
-                    self._create_command_history_context(command_history)
-                )
+                audio_elements.append(self._create_command_history_context(command_history))
 
             return audio_elements
 
@@ -53,9 +49,7 @@ class AudioContextCollector:
             logger.debug("Audio context collection failed: %s", e)
             return []
 
-    def _create_voice_activity_context(
-        self, recent_activity: Dict[str, Any]
-    ) -> ContextElement:
+    def _create_voice_activity_context(self, recent_activity: Dict[str, Any]) -> ContextElement:
         """Create context element for voice activity."""
         return ContextElement(
             context_id=f"voice_activity_{self.time_provider.current_timestamp_millis()}",
@@ -68,9 +62,7 @@ class AudioContextCollector:
             metadata={"type": "voice_activity"},
         )
 
-    def _create_command_history_context(
-        self, command_history: List[Dict[str, Any]]
-    ) -> ContextElement:
+    def _create_command_history_context(self, command_history: List[Dict[str, Any]]) -> ContextElement:
         """Create context element for command history."""
         return ContextElement(
             context_id=f"voice_history_{self.time_provider.current_timestamp_millis()}",

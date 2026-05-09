@@ -43,9 +43,7 @@ class PostgresMemoryProvider:
             user_id = context.get("user_id")
             result = {}
             if conversation_id:
-                conversation = await self.memory_graph.get_entity(
-                    f"conversation_{conversation_id}"
-                )
+                conversation = await self.memory_graph.get_entity(f"conversation_{conversation_id}")
                 if conversation:
                     result["conversation"] = conversation
                 related = await self.memory_graph.search_entities(conversation_id)
@@ -92,10 +90,7 @@ class PostgresMemoryProvider:
                         from_entity=rel["from_entity"],
                         to_entity=rel["to_entity"],
                     )
-            logger.info(
-                f"Synced {len(entity_updates)} entity and "
-                f"{len(relation_updates)} relation updates"
-            )
+            logger.info(f"Synced {len(entity_updates)} entity and " f"{len(relation_updates)} relation updates")
         except Exception as e:
             logger.error(f"Error syncing memory updates: {e}")
             raise

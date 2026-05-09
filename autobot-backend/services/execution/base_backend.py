@@ -12,11 +12,12 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from autobot_shared.time_utils import now_utc
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
+
+from autobot_shared.time_utils import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +118,7 @@ class ExecutionBackend(ABC):
         self._last_health_check = now_utc()
 
     @abstractmethod
-    async def execute(
-        self, task: ExecutionTask
-    ) -> ExecutionResult:
+    async def execute(self, task: ExecutionTask) -> ExecutionResult:
         """Execute a task on this backend.
 
         Args:

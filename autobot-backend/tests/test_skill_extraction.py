@@ -27,7 +27,6 @@ from services.skill_management.skill_extractor import (
 )
 from services.skill_management.skill_proposer import SkillProposer
 
-
 # Sample conversation with multi-step workflow
 SAMPLE_WORKFLOW_CONVERSATION = [
     {
@@ -36,10 +35,7 @@ SAMPLE_WORKFLOW_CONVERSATION = [
     },
     {
         "role": "assistant",
-        "content": (
-            "I'll help you create a daily backup script. "
-            "First, I'll create the script file."
-        ),
+        "content": ("I'll help you create a daily backup script. " "First, I'll create the script file."),
     },
     {
         "role": "assistant",
@@ -47,10 +43,7 @@ SAMPLE_WORKFLOW_CONVERSATION = [
     },
     {
         "role": "assistant",
-        "content": (
-            "Cron job configured for 2 AM daily. "
-            "Finally, let me verify the setup."
-        ),
+        "content": ("Cron job configured for 2 AM daily. " "Finally, let me verify the setup."),
     },
     {
         "role": "assistant",
@@ -289,9 +282,7 @@ class TestSkillProposer:
             confidence=0.9,
         )
 
-        with patch.object(
-            SkillProposer, "_send_proposal_to_slm"
-        ) as mock_send:
+        with patch.object(SkillProposer, "_send_proposal_to_slm") as mock_send:
             mock_send.return_value = {"status": "accepted"}
 
             proposer = SkillProposer()
@@ -313,9 +304,7 @@ class TestSkillProposer:
             confidence=0.9,
         )
 
-        with patch.object(
-            SkillProposer, "_send_proposal_to_slm"
-        ) as mock_send:
+        with patch.object(SkillProposer, "_send_proposal_to_slm") as mock_send:
             mock_send.return_value = {"status": "rejected", "reason": "Invalid syntax"}
 
             proposer = SkillProposer()
@@ -439,11 +428,10 @@ class TestSkillIntegration:
     @pytest.mark.asyncio
     async def test_full_extraction_proposal_flow(self):
         """Test complete extraction and proposal flow."""
-        with patch(
-            "services.skill_management.skill_extractor.AIStackClient"
-        ) as mock_ai, patch(
-            "services.skill_management.skill_proposer.SkillProposer._send_proposal_to_slm"
-        ) as mock_slm:
+        with (
+            patch("services.skill_management.skill_extractor.AIStackClient") as mock_ai,
+            patch("services.skill_management.skill_proposer.SkillProposer._send_proposal_to_slm") as mock_slm,
+        ):
 
             # Mock AI stack extraction
             mock_ai_instance = AsyncMock()

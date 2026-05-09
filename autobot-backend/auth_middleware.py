@@ -7,7 +7,6 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
-from autobot_shared.time_utils import parse_utc_iso
 import json
 import logging
 import os
@@ -25,6 +24,7 @@ from autobot_shared.auth.jwt_core import (
 )
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -42,13 +42,9 @@ class AuthenticationMiddleware:
         self.enable_auth = self.security_config.get("enable_auth", True)
         self.jwt_secret = self._get_jwt_secret()
         self.jwt_expiry_hours = 24
-        self.session_timeout_minutes = self.security_config.get(
-            "session_timeout_minutes", 30
-        )
+        self.session_timeout_minutes = self.security_config.get("session_timeout_minutes", 30)
         self.max_failed_attempts = self.security_config.get("max_failed_attempts", 3)
-        self.lockout_duration_minutes = self.security_config.get(
-            "lockout_duration_minutes", 15
-        )
+        self.lockout_duration_minutes = self.security_config.get("lockout_duration_minutes", 15)
 
         # Use Redis for session storage if available, fallback to in-memory
         self.redis_client = None
@@ -58,9 +54,7 @@ class AuthenticationMiddleware:
         self.active_sessions: Dict[str, dict] = {}
         self.failed_attempts: Dict[str, dict] = {}
 
-        logger.info(
-            f"AuthenticationMiddleware initialized. Auth enabled: {self.enable_auth}"
-        )
+        logger.info(f"AuthenticationMiddleware initialized. Auth enabled: {self.enable_auth}")
 
     def _init_session_storage(self):
         """Initialize Redis session storage using centralized client management"""
@@ -70,18 +64,12 @@ class AuthenticationMiddleware:
 
                 # Use sessions database for authentication sessions
                 # REFACTORED: Use centralized Redis client management
-                self.redis_client = get_redis_client(
-                    database="sessions", async_client=False
-                )
+                self.redis_client = get_redis_client(database="sessions", async_client=False)
                 # Test connection
                 self.redis_client.ping()
-                logger.info(
-                    "Redis session storage initialized with centralized client management"
-                )
+                logger.info("Redis session storage initialized with centralized client management")
         except Exception as e:
-            logger.warning(
-                f"Failed to initialize Redis session storage, using in-memory: {e}"
-            )
+            logger.warning(f"Failed to initialize Redis session storage, using in-memory: {e}")
             self.redis_client = None
 
     def _get_jwt_secret(self) -> str:
@@ -113,9 +101,7 @@ class AuthenticationMiddleware:
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-                "Generated and stored secure JWT secret"
-            )
+            logger.info("Generated and stored secure JWT secret")  # codeql[py/clear-text-logging-sensitive-data]
             return secure_secret
         except Exception as e:
             # codeql[py/clear-text-logging-sensitive-data]
@@ -222,9 +208,7 @@ class AuthenticationMiddleware:
             details={"ip": ip_address, "reason": reason},
         )
 
-    def _build_successful_auth_response(
-        self, username: str, user_config: Dict, ip_address: str
-    ) -> Dict:
+    def _build_successful_auth_response(self, username: str, user_config: Dict, ip_address: str) -> Dict:
         """Issue #665: Extracted from authenticate_user to reduce function length.
 
         Build and return successful authentication response.
@@ -246,9 +230,7 @@ class AuthenticationMiddleware:
             "last_login": user_config["last_login"],
         }
 
-    def authenticate_user(
-        self, username: str, password: str, ip_address: str = "unknown"
-    ) -> Optional[Dict]:
+    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Optional[Dict]:
         """Authenticate user with enhanced security measures.
 
         Returns:
@@ -550,9 +532,7 @@ class AuthenticationMiddleware:
                 "user_agent": request.headers.get("User-Agent", "unknown"),
                 "ip": ip_address,
                 "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
-                "request_path": (
-                    str(request.url.path) if hasattr(request, "url") else "unknown"
-                ),
+                "request_path": (str(request.url.path) if hasattr(request, "url") else "unknown"),
             },
         )
 
@@ -588,9 +568,7 @@ class AuthenticationMiddleware:
             },
         )
 
-    def check_file_permissions(
-        self, request: Request, operation: str
-    ) -> Tuple[bool, Optional[Dict]]:
+    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Optional[Dict]]:
         """
         Enhanced permission checking with comprehensive security measures.
 
@@ -615,20 +593,14 @@ class AuthenticationMiddleware:
             )
 
             if not has_permission:
-                self._log_file_access_denied(
-                    username, operation, user_role, user_data, request, ip_address
-                )
+                self._log_file_access_denied(username, operation, user_role, user_data, request, ip_address)
                 return False, user_data
 
-            self._log_file_access_granted(
-                username, operation, user_role, user_data, ip_address
-            )
+            self._log_file_access_granted(username, operation, user_role, user_data, ip_address)
             return True, user_data
 
         except Exception as e:
-            logger.error(
-                f"Error checking file permissions for operation '{operation}': {e}"
-            )
+            logger.error(f"Error checking file permissions for operation '{operation}': {e}")
             return False, None
 
 

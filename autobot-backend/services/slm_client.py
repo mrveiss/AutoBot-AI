@@ -364,9 +364,7 @@ class SLMClient:
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
             # Accept self-signed certs for internal HTTPS (#1048, #6654)
-            connector = aiohttp.TCPConnector(
-                ssl=_create_permissive_ssl_context(self.slm_url)
-            )
+            connector = aiohttp.TCPConnector(ssl=_create_permissive_ssl_context(self.slm_url))
             self._http_session = aiohttp.ClientSession(headers=headers, connector=connector)
         return self._http_session
 
@@ -568,11 +566,7 @@ class SLMClient:
 
         try:
             # Accept self-signed certs for wss:// connections (#1048, #6654)
-            ws_ssl = (
-                _create_permissive_ssl_context(ws_url)
-                if ws_url.startswith("wss://")
-                else None
-            )
+            ws_ssl = _create_permissive_ssl_context(ws_url) if ws_url.startswith("wss://") else None
             async with websockets.connect(
                 ws_url,
                 ssl=ws_ssl,

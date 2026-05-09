@@ -104,8 +104,6 @@ if __name__ == "__main__":
             await handler(tracker)
         else:
             print(f"Unknown command: {command}")  # noqa: print
-            print(  # noqa: print
-                "Available commands: snapshot, summary, report, metrics, test-tracking, export"
-            )
+            print("Available commands: snapshot, summary, report, metrics, test-tracking, export")  # noqa: print
 
     asyncio.run(main())

@@ -28,13 +28,9 @@ def _print_executive_metrics(metrics: dict, issues: dict, report: dict) -> None:
     print(f"   🎯 Overall Quality Score: {metrics['overall_score']}/100")  # noqa: print
     print(f"   📋 Total Issues Found: {issues['total_issues']}")  # noqa: print
     print(f"   🚨 Critical Issues: {issues['critical_issues']}")  # noqa: print
-    print(
-        f"   ⚠️  High Priority Issues: {issues['high_priority_issues']}"
-    )  # noqa: print
+    print(f"   ⚠️  High Priority Issues: {issues['high_priority_issues']}")  # noqa: print
     print(f"   📁 Files Analyzed: {report['files_analyzed']}")  # noqa: print
-    print(
-        f"   ⏱️  Analysis Time: {report['analysis_time_seconds']:.2f} seconds"
-    )  # noqa: print
+    print(f"   ⏱️  Analysis Time: {report['analysis_time_seconds']:.2f} seconds")  # noqa: print
     print()  # noqa: print
 
     # Category breakdown
@@ -81,18 +77,14 @@ def _print_technical_debt(debt: dict) -> None:
     print(  # noqa: print
         f"   📊 Total Estimated Effort: {debt['estimated_total_effort_days']} days ({debt['estimated_total_effort_hours']} hours)"
     )
-    print(  # noqa: print
-        f"   🚨 Critical Issues Effort: {debt['estimated_critical_effort_hours']} hours"
-    )
+    print(f"   🚨 Critical Issues Effort: {debt['estimated_critical_effort_hours']} hours")  # noqa: print
     print(f"   📈 Debt Ratio: {debt['debt_ratio']}% of total project")  # noqa: print
     print()  # noqa: print
 
     print("💰 **Effort by Category:**")  # noqa: print
     for category, data in debt["effort_by_category"].items():
         category_name = category.replace("_", " ").title()
-        print(  # noqa: print
-            f"   • {category_name}: {data['count']} issues, {data['effort_hours']} hours"
-        )
+        print(f"   • {category_name}: {data['count']} issues, {data['effort_hours']} hours")  # noqa: print
     print()  # noqa: print
 
 
@@ -104,30 +96,18 @@ def _print_priority_issues(report: dict) -> None:
     function length and improve readability of dashboard output sections.
     """
     print("🚨 **Top Priority Issues (Immediate Action Required):**")  # noqa: print
-    critical_issues = [
-        issue
-        for issue in report["prioritized_issues"]
-        if issue["severity"] == "critical"
-    ]
-    high_issues = [
-        issue for issue in report["prioritized_issues"] if issue["severity"] == "high"
-    ]
+    critical_issues = [issue for issue in report["prioritized_issues"] if issue["severity"] == "critical"]
+    high_issues = [issue for issue in report["prioritized_issues"] if issue["severity"] == "high"]
     top_issues = critical_issues[:5] + high_issues[:5]
 
     for i, issue in enumerate(top_issues[:10], 1):
         severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
         emoji = severity_emoji.get(issue["severity"], "⚪")
 
-        print(
-            f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})"
-        )  # noqa: print
-        print(
-            f"   📂 Category: {issue['category'].replace('_', ' ').title()}"
-        )  # noqa: print
+        print(f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})")  # noqa: print
+        print(f"   📂 Category: {issue['category'].replace('_', ' ').title()}")  # noqa: print
         if issue["file_path"] != "Multiple files":
-            print(
-                f"   📄 File: {issue['file_path']}:{issue['line_number']}"
-            )  # noqa: print
+            print(f"   📄 File: {issue['file_path']}:{issue['line_number']}")  # noqa: print
         print(f"   📝 Description: {issue['description']}")  # noqa: print
         print(f"   💡 Fix: {issue['fix_suggestion']}")  # noqa: print
         print(f"   🔧 Effort: {issue['estimated_effort'].title()}")  # noqa: print
@@ -150,9 +130,7 @@ def _print_analysis_alerts(report: dict) -> None:
             print(  # noqa: print
                 f"   Found {security_data['critical_vulnerabilities']} critical security vulnerabilities!"
             )
-            print(
-                "   These must be addressed immediately before deployment."
-            )  # noqa: print
+            print("   These must be addressed immediately before deployment.")  # noqa: print
             print()  # noqa: print
 
     # Performance-specific analysis
@@ -160,12 +138,8 @@ def _print_analysis_alerts(report: dict) -> None:
         perf_data = report["detailed_analyses"]["performance"]
         if perf_data.get("critical_issues", 0) > 0:
             print("⚡ **CRITICAL PERFORMANCE ALERT:**")  # noqa: print
-            print(  # noqa: print
-                f"   Found {perf_data['critical_issues']} critical performance issues!"
-            )
-            print(
-                "   These may cause memory leaks or system instability."
-            )  # noqa: print
+            print(f"   Found {perf_data['critical_issues']} critical performance issues!")  # noqa: print
+            print("   These may cause memory leaks or system instability.")  # noqa: print
             print()  # noqa: print
 
     # Testing coverage analysis
@@ -205,9 +179,7 @@ def _print_quality_trends(report: dict) -> None:
         previous = trends[1]
         score_change = latest["overall_score"] - previous["overall_score"]
         trend_emoji = "📈" if score_change > 0 else "📉" if score_change < 0 else "➡️"
-        print(
-            f"   {trend_emoji} Score change: {score_change:+.1f} points"
-        )  # noqa: print
+        print(f"   {trend_emoji} Score change: {score_change:+.1f} points")  # noqa: print
         issue_change = latest["issue_count"] - previous["issue_count"]
         issue_emoji = "📉" if issue_change < 0 else "📈" if issue_change > 0 else "➡️"
         print(f"   {issue_emoji} Issue count change: {issue_change:+d}")  # noqa: print
@@ -392,9 +364,7 @@ async def generate_action_plan(report):
         print(f"\n🚨 **Phase 1: Critical Issues (IMMEDIATE - Week 1)**")  # noqa: print
         print(f"   Address {critical_count} critical issues:")  # noqa: print
 
-        critical_issues = [
-            i for i in report["prioritized_issues"] if i["severity"] == "critical"
-        ]
+        critical_issues = [i for i in report["prioritized_issues"] if i["severity"] == "critical"]
         for issue in critical_issues[:5]:  # Top 5 critical
             print(f"   • {issue['title']}")  # noqa: print
             print(f"     Action: {issue['fix_suggestion']}")  # noqa: print
@@ -435,9 +405,7 @@ async def generate_action_plan(report):
 
     print(f"\n⏰ **Estimated Timeline:**")  # noqa: print
     print(f"   • Critical fixes: {critical_hours} hours (1-2 weeks)")  # noqa: print
-    print(
-        f"   • Total remediation: {total_days} days ({total_days/5:.1f} weeks)"
-    )  # noqa: print
+    print(f"   • Total remediation: {total_days} days ({total_days/5:.1f} weeks)")  # noqa: print
     print(f"   • Team of 2-3 developers recommended")  # noqa: print
 
 
@@ -452,9 +420,7 @@ async def main():
 
     print("\n=== 🎯 Analysis Complete ===")  # noqa: print
     print("Next Steps:")  # noqa: print
-    print(
-        "1. Review comprehensive_quality_report.json for detailed findings"
-    )  # noqa: print
+    print("1. Review comprehensive_quality_report.json for detailed findings")  # noqa: print
     print("2. Start with critical security and performance issues")  # noqa: print
     print("3. Follow the recommended action plan phases")  # noqa: print
     print("4. Set up automated quality monitoring")  # noqa: print

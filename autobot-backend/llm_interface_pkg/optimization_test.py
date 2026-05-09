@@ -94,29 +94,14 @@ class TestOptimizationRouter:
         router = OptimizationRouter(config)
 
         # Speculation is disabled in config
-        assert (
-            router.should_apply(
-                OptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA
-            )
-            is False
-        )
+        assert router.should_apply(OptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA) is False
 
     def test_cloud_optimizations_not_on_local(self):
         """Cloud-only optimizations should not apply to local providers."""
         router = OptimizationRouter()
 
-        assert (
-            router.should_apply(
-                OptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA
-            )
-            is False
-        )
-        assert (
-            router.should_apply(
-                OptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM
-            )
-            is False
-        )
+        assert router.should_apply(OptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA) is False
+        assert router.should_apply(OptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM) is False
 
 
 class TestPromptCompressor:
@@ -259,9 +244,7 @@ class TestRateLimitHandler:
         config = RateLimitConfig(max_retries=2, base_delay=0.01)
         handler = RateLimitHandler(config)
 
-        mock_call = AsyncMock(
-            side_effect=RateLimitError("Rate limited", retry_after=0.01)
-        )
+        mock_call = AsyncMock(side_effect=RateLimitError("Rate limited", retry_after=0.01))
 
         with pytest.raises(RateLimitError):
             await handler.execute_with_retry(mock_call, provider="test")
@@ -367,9 +350,7 @@ class TestOptimizationIntegration:
         compressor = PromptCompressor()
 
         # Check if compression should be applied
-        should_compress = router.should_apply(
-            OptimizationCategory.PROMPT_COMPRESSION, ProviderType.OPENAI
-        )
+        should_compress = router.should_apply(OptimizationCategory.PROMPT_COMPRESSION, ProviderType.OPENAI)
 
         if should_compress:
             text = "Please note that this is a test. It is important to check."

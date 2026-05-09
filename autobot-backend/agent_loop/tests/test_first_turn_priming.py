@@ -11,13 +11,13 @@ Covers issue #4563 / feature #4528:
   4. Empty note guard — empty string NOT appended.
 """
 
-import pytest
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig, IterationResult, LoopState, TaskContext
-
 
 # ---------------------------------------------------------------------------
 # Helpers

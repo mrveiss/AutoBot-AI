@@ -503,9 +503,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
 ]
 
 
-def _load_single_router(
-    module_path: str, prefix: str, tags: List[str], name: str
-) -> Tuple | None:
+def _load_single_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
     """
     Load a single router with graceful fallback.
 
@@ -528,9 +526,7 @@ def _load_single_router(
         module = importlib.import_module(module_path)
         router = getattr(module, "router")
         logger.info("✅ Optional router loaded: %s", name)
-        _LOAD_RESULTS.append(
-            {"name": name, "module": module_path, "loaded": True, "error": None}
-        )
+        _LOAD_RESULTS.append({"name": name, "module": module_path, "loaded": True, "error": None})
         return (router, prefix, tags, name)
     except ImportError as e:
         logger.warning("⚠️ Optional router not available: %s - %s", name, e)
@@ -544,9 +540,7 @@ def _load_single_router(
         )
         return None
     except AttributeError as e:
-        logger.warning(
-            "⚠️ Router not found in module %s: %s - %s", module_path, name, e
-        )
+        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
         _LOAD_RESULTS.append(
             {
                 "name": name,

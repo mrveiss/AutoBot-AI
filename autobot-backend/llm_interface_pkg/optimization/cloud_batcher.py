@@ -92,9 +92,7 @@ class CloudRequestBatcher:
             max_batch_size,
         )
 
-    def set_executor(
-        self, executor: Callable[[List[Dict]], Coroutine[Any, Any, List]]
-    ) -> None:
+    def set_executor(self, executor: Callable[[List[Dict]], Coroutine[Any, Any, List]]) -> None:
         """
         Set the batch executor function.
 
@@ -122,9 +120,7 @@ class CloudRequestBatcher:
 
         request_id = str(uuid4())
         future = asyncio.get_running_loop().create_future()
-        batched_request = BatchedRequest(
-            request_id=request_id, payload=payload, future=future
-        )
+        batched_request = BatchedRequest(request_id=request_id, payload=payload, future=future)
 
         async with self._lock:
             self._pending_requests.append(batched_request)

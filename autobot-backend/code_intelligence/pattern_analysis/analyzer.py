@@ -107,12 +107,8 @@ class CodePatternAnalyzer:
         exclude_dirs: Optional[Set[str]],
     ) -> None:
         """Initialize feature flags and configuration settings. Issue #620."""
-        self.enable_clone_detection = (
-            enable_clone_detection and FINGERPRINTING_AVAILABLE
-        )
-        self.enable_anti_pattern_detection = (
-            enable_anti_pattern_detection and ANTI_PATTERN_AVAILABLE
-        )
+        self.enable_clone_detection = enable_clone_detection and FINGERPRINTING_AVAILABLE
+        self.enable_anti_pattern_detection = enable_anti_pattern_detection and ANTI_PATTERN_AVAILABLE
         self.enable_regex_detection = enable_regex_detection
         self.enable_complexity_analysis = enable_complexity_analysis
         self.enable_embedding_storage = enable_embedding_storage
@@ -122,19 +118,13 @@ class CodePatternAnalyzer:
     def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
         """Initialize sub-analyzer instances based on feature flags. Issue #620."""
         self._clone_detector = (
-            CloneDetector(exclude_dirs=list(self.exclude_dirs))
-            if self.enable_clone_detection
-            else None
+            CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
         self._anti_pattern_detector = (
-            AntiPatternDetector(exclude_dirs=list(self.exclude_dirs))
-            if self.enable_anti_pattern_detection
-            else None
+            AntiPatternDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_anti_pattern_detection else None
         )
         self._regex_detector = (
-            RegexPatternDetector(exclude_dirs=self.exclude_dirs)
-            if self.enable_regex_detection
-            else None
+            RegexPatternDetector(exclude_dirs=self.exclude_dirs) if self.enable_regex_detection else None
         )
         self._complexity_analyzer = (
             ComplexityAnalyzer(
@@ -189,9 +179,7 @@ class CodePatternAnalyzer:
             tasks.append(self._run_anti_pattern_detection(directory))
         return tasks
 
-    async def _execute_and_merge_results(
-        self, tasks: List, report: PatternAnalysisReport
-    ) -> None:
+    async def _execute_and_merge_results(self, tasks: List, report: PatternAnalysisReport) -> None:
         """Execute analysis tasks concurrently and merge results. Issue #620."""
         if not tasks:
             return
@@ -320,14 +308,10 @@ class CodePatternAnalyzer:
             return report
 
         # Split into batches
-        batches = [
-            all_files[i : i + self.BATCH_SIZE]
-            for i in range(0, file_count, self.BATCH_SIZE)
-        ]
+        batches = [all_files[i : i + self.BATCH_SIZE] for i in range(0, file_count, self.BATCH_SIZE)]
         total_batches = len(batches)
         await _report(
-            f"Found {file_count} files ({line_count} lines) "
-            f"— {total_batches} batches of {self.BATCH_SIZE}",
+            f"Found {file_count} files ({line_count} lines) " f"— {total_batches} batches of {self.BATCH_SIZE}",
             5.0,
         )
 
@@ -371,8 +355,7 @@ class CodePatternAnalyzer:
         report.calculate_metrics()
 
         logger.info(
-            "Pattern analysis complete: %d patterns found in %.2f seconds "
-            "(%d batches of %d files)",
+            "Pattern analysis complete: %d patterns found in %.2f seconds " "(%d batches of %d files)",
             report.total_patterns,
             report.analysis_duration_seconds,
             total_batches,
@@ -462,9 +445,7 @@ class CodePatternAnalyzer:
 
             report.regex_opportunities.extend(regex_results)
             all_complexity_modules.extend(complexity_modules)
-            report.modularization_suggestions.extend(
-                ap_results.get("modularization", [])
-            )
+            report.modularization_suggestions.extend(ap_results.get("modularization", []))
             report.other_patterns.extend(ap_results.get("other_patterns", []))
 
             if checkpoint_callback:
@@ -720,9 +701,7 @@ class CodePatternAnalyzer:
                 "error": "Anti-pattern detection failed",
             }
 
-    def _merge_results(
-        self, report: PatternAnalysisReport, result: Dict[str, Any]
-    ) -> None:
+    def _merge_results(self, report: PatternAnalysisReport, result: Dict[str, Any]) -> None:
         """Merge analysis results into report.
 
         Args:
@@ -774,9 +753,7 @@ class CodePatternAnalyzer:
             "low": PatternSeverity.LOW,
             "info": PatternSeverity.INFO,
         }
-        severity = severity_map.get(
-            group.severity.value.lower(), PatternSeverity.MEDIUM
-        )
+        severity = severity_map.get(group.severity.value.lower(), PatternSeverity.MEDIUM)
 
         # Get canonical code from first instance
         canonical = ""
@@ -790,9 +767,7 @@ class CodePatternAnalyzer:
             locations=locations,
             suggestion=group.refactoring_suggestion or "Extract into shared function",
             confidence=min(group.similarity_range) if group.similarity_range else 0.8,
-            similarity_score=(
-                min(group.similarity_range) if group.similarity_range else 1.0
-            ),
+            similarity_score=(min(group.similarity_range) if group.similarity_range else 1.0),
             canonical_code=canonical,
             code_reduction_potential=group.total_duplicated_lines
             - (group.total_duplicated_lines // len(group.instances)),
@@ -815,9 +790,7 @@ class CodePatternAnalyzer:
         }
         return pattern.pattern_type.value.lower() in modularization_types
 
-    def _to_modularization_suggestion(
-        self, pattern
-    ) -> Optional[ModularizationSuggestion]:
+    def _to_modularization_suggestion(self, pattern) -> Optional[ModularizationSuggestion]:
         """Convert anti-pattern to modularization suggestion.
 
         Args:
@@ -843,9 +816,7 @@ class CodePatternAnalyzer:
 
         return ModularizationSuggestion(
             pattern_type=PatternType.MODULARIZATION,
-            severity=severity_map.get(
-                pattern.severity.value.lower(), PatternSeverity.MEDIUM
-            ),
+            severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
             suggestion=pattern.suggestion,
@@ -884,9 +855,7 @@ class CodePatternAnalyzer:
             "message_chain": PatternType.COUPLING_ISSUE,
         }
 
-        pattern_type = type_map.get(
-            pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE
-        )
+        pattern_type = type_map.get(pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE)
 
         location = CodeLocation(
             file_path=pattern.file_path,
@@ -897,18 +866,14 @@ class CodePatternAnalyzer:
 
         return CodePattern(
             pattern_type=pattern_type,
-            severity=severity_map.get(
-                pattern.severity.value.lower(), PatternSeverity.MEDIUM
-            ),
+            severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
             suggestion=pattern.suggestion,
             confidence=0.7,
         )
 
-    async def _prepare_duplicate_pattern_for_storage(
-        self, dup: DuplicatePattern
-    ) -> Optional[Dict[str, Any]]:
+    async def _prepare_duplicate_pattern_for_storage(self, dup: DuplicatePattern) -> Optional[Dict[str, Any]]:
         """Prepare a duplicate pattern for ChromaDB storage. Issue #620.
 
         Args:
@@ -932,9 +897,7 @@ class CodePatternAnalyzer:
             },
         }
 
-    async def _prepare_regex_pattern_for_storage(
-        self, regex_opp: Any
-    ) -> Optional[Dict[str, Any]]:
+    async def _prepare_regex_pattern_for_storage(self, regex_opp: Any) -> Optional[Dict[str, Any]]:
         """Prepare a regex opportunity pattern for ChromaDB storage. Issue #620.
 
         Args:
@@ -951,12 +914,8 @@ class CodePatternAnalyzer:
             "code_content": regex_opp.current_code,
             "embedding": await self._generate_embedding(regex_opp.current_code),
             "metadata": {
-                "file_path": (
-                    regex_opp.locations[0].file_path if regex_opp.locations else ""
-                ),
-                "start_line": (
-                    regex_opp.locations[0].start_line if regex_opp.locations else 0
-                ),
+                "file_path": (regex_opp.locations[0].file_path if regex_opp.locations else ""),
+                "start_line": (regex_opp.locations[0].start_line if regex_opp.locations else 0),
                 "suggested_regex": regex_opp.suggested_regex,
                 "severity": regex_opp.severity.value,
             },

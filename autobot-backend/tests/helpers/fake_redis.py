@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Sync
 # ---------------------------------------------------------------------------
@@ -117,9 +116,7 @@ class AsyncHashFakeRedis:
         """Return all fields of hash *name* with bytes keys and values."""
         raw = self._store.get(name, {})
         return {
-            (k.encode("utf-8") if isinstance(k, str) else k): (
-                v if isinstance(v, bytes) else v.encode("utf-8")
-            )
+            (k.encode("utf-8") if isinstance(k, str) else k): (v if isinstance(v, bytes) else v.encode("utf-8"))
             for k, v in raw.items()
         }
 
@@ -269,9 +266,7 @@ class AsyncFullFakeRedis:
             stop = len(ordered) - 1
         return [k for k, _ in ordered[start : stop + 1]]
 
-    async def zrangebyscore(
-        self, key: str, min: float, max: float, **kwargs: Any
-    ) -> List[str]:
+    async def zrangebyscore(self, key: str, min: float, max: float, **kwargs: Any) -> List[str]:
         """Return members whose score is between *min* and *max* (inclusive)."""
         bucket = self.zsets.get(key, {})
         lo = float("-inf") if min == "-inf" else float(min)

@@ -169,11 +169,7 @@ def list_agents_by_tier(tier: AgentTier) -> list[str]:
         >>> agents = list_agents_by_tier(AgentTier.TIER_1_DEFAULT)
         >>> assert 'frontend-engineer' in agents
     """
-    return [
-        agent_type
-        for agent_type, agent_tier in AGENT_TIER_MAP.items()
-        if agent_tier == tier
-    ]
+    return [agent_type for agent_type, agent_tier in AGENT_TIER_MAP.items() if agent_tier == tier]
 
 
 def get_tier_statistics() -> Dict[AgentTier, Dict[str, any]]:
@@ -196,9 +192,7 @@ def get_tier_statistics() -> Dict[AgentTier, Dict[str, any]]:
             "count": tier_counts[tier],
             "agents": list_agents_by_tier(tier),
             "cache_hit_rate": (
-                get_cache_hit_expectation(list_agents_by_tier(tier)[0])
-                if list_agents_by_tier(tier)
-                else "N/A"
+                get_cache_hit_expectation(list_agents_by_tier(tier)[0]) if list_agents_by_tier(tier) else "N/A"
             ),
             "base_prompt": TIER_PROMPT_MAP[tier],
         }
@@ -216,8 +210,5 @@ if __name__ == "__main__":
         logger.info("  Count: {data['count']}")
         logger.info("  Cache Hit Rate: {data['cache_hit_rate']}")
         logger.info("  Base Prompt: {data['base_prompt']}")
-        print(  # noqa: print
-            f"  Agents: {', '.join(data['agents'][:5])}"
-            + ("..." if len(data["agents"]) > 5 else "")
-        )
+        print(f"  Agents: {', '.join(data['agents'][:5])}" + ("..." if len(data["agents"]) > 5 else ""))  # noqa: print
         print()  # noqa: print

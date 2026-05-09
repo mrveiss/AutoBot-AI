@@ -20,33 +20,31 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from auth_middleware import check_admin_permission
-from api.system_health import register_singleton_probe
 from api.schemas_analytics import (
     CustomReportRequest,
     DashboardResponse,
+    MaintenanceByCategoryResponse,
+    MaintenanceCustomReportResponse,
+    MaintenanceDashboardResponse,
+    MaintenanceHealthStatusResponse,
+    MaintenanceInsightsResponse,
     MaintenanceRecommendationResponse,
+    MaintenanceRecommendationsResponse,
+    MaintenanceSummaryResponse,
+    MaintenanceTrendsResponse,
+    OptimizationByTypeResponse,
+    OptimizationQuickWinsResponse,
+    OptimizationRecommendationsResponse,
     ResourceOptimizationResponse,
 )
+from api.system_health import register_singleton_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
     ResourceType,
     get_analytics_service,
-)
-from api.schemas_analytics import (
-    MaintenanceRecommendationsResponse,
-    MaintenanceByCategoryResponse,
-    MaintenanceSummaryResponse,
-    OptimizationRecommendationsResponse,
-    OptimizationByTypeResponse,
-    OptimizationQuickWinsResponse,
-    MaintenanceDashboardResponse,
-    MaintenanceHealthStatusResponse,
-    MaintenanceCustomReportResponse,
-    MaintenanceInsightsResponse,
-    MaintenanceTrendsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,18 +86,10 @@ async def get_maintenance_recommendations(
         "timestamp": utc_timestamp(),
         "total_recommendations": len(recommendations),
         "by_priority": {
-            "critical": sum(
-                1 for r in recommendations if r.priority == MaintenancePriority.CRITICAL
-            ),
-            "high": sum(
-                1 for r in recommendations if r.priority == MaintenancePriority.HIGH
-            ),
-            "medium": sum(
-                1 for r in recommendations if r.priority == MaintenancePriority.MEDIUM
-            ),
-            "low": sum(
-                1 for r in recommendations if r.priority == MaintenancePriority.LOW
-            ),
+            "critical": sum(1 for r in recommendations if r.priority == MaintenancePriority.CRITICAL),
+            "high": sum(1 for r in recommendations if r.priority == MaintenancePriority.HIGH),
+            "medium": sum(1 for r in recommendations if r.priority == MaintenancePriority.MEDIUM),
+            "low": sum(1 for r in recommendations if r.priority == MaintenancePriority.LOW),
         },
         "recommendations": [r.to_dict() for r in recommendations],
     }
@@ -161,9 +151,7 @@ async def get_maintenance_summary(
         by_category[rec.category].append(rec)
 
     # Get critical items
-    critical_items = [
-        r for r in recommendations if r.priority == MaintenancePriority.CRITICAL
-    ]
+    critical_items = [r for r in recommendations if r.priority == MaintenancePriority.CRITICAL]
 
     return {
         "timestamp": utc_timestamp(),
@@ -185,9 +173,7 @@ async def get_maintenance_summary(
                 "count": len(items),
                 "highest_priority": min(
                     items,
-                    key=lambda x: ["critical", "high", "medium", "low"].index(
-                        x.priority.value
-                    ),
+                    key=lambda x: ["critical", "high", "medium", "low"].index(x.priority.value),
                 ).priority.value,
             }
             for cat, items in by_category.items()
@@ -220,12 +206,8 @@ async def get_resource_optimizations(
     optimizations = await service.get_resource_optimizations()
 
     # Calculate totals
-    total_cost_savings = sum(
-        o.expected_savings.get("cost_usd", 0) for o in optimizations
-    )
-    total_perf_improvement = sum(
-        o.expected_savings.get("performance_percent", 0) for o in optimizations
-    )
+    total_cost_savings = sum(o.expected_savings.get("cost_usd", 0) for o in optimizations)
+    total_perf_improvement = sum(o.expected_savings.get("performance_percent", 0) for o in optimizations)
 
     return {
         "timestamp": utc_timestamp(),
@@ -234,10 +216,7 @@ async def get_resource_optimizations(
             "cost_usd": round(total_cost_savings, 2),
             "performance_improvement_percent": round(total_perf_improvement, 1),
         },
-        "by_resource_type": {
-            rt.value: sum(1 for o in optimizations if o.resource_type == rt)
-            for rt in ResourceType
-        },
+        "by_resource_type": {rt.value: sum(1 for o in optimizations if o.resource_type == rt) for rt in ResourceType},
         "recommendations": [o.to_dict() for o in optimizations],
     }
 
@@ -294,16 +273,13 @@ async def get_quick_wins(
     quick_wins = [
         o
         for o in all_optimizations
-        if o.implementation_effort == "low"
-        and o.priority in [MaintenancePriority.HIGH, MaintenancePriority.CRITICAL]
+        if o.implementation_effort == "low" and o.priority in [MaintenancePriority.HIGH, MaintenancePriority.CRITICAL]
     ]
 
     return {
         "timestamp": utc_timestamp(),
         "total_quick_wins": len(quick_wins),
-        "estimated_savings": sum(
-            o.expected_savings.get("cost_usd", 0) for o in quick_wins
-        ),
+        "estimated_savings": sum(o.expected_savings.get("cost_usd", 0) for o in quick_wins),
         "recommendations": [o.to_dict() for o in quick_wins],
     }
 
@@ -365,9 +341,7 @@ async def get_health_status(
             "cost_trend": dashboard["cost"]["trend"],
             "agent_success_rate": dashboard["agents"]["avg_success_rate"],
             "maintenance_issues": dashboard["maintenance"]["total_recommendations"],
-            "optimization_opportunities": dashboard["optimization"][
-                "total_recommendations"
-            ],
+            "optimization_opportunities": dashboard["optimization"]["total_recommendations"],
         },
     }
 
@@ -493,10 +467,7 @@ async def get_insights(
 
     # Add high-value optimizations
     for o in optimizations:
-        if (
-            o.expected_savings.get("cost_usd", 0) > 5
-            or o.expected_savings.get("performance_percent", 0) > 10
-        ):
+        if o.expected_savings.get("cost_usd", 0) > 5 or o.expected_savings.get("performance_percent", 0) > 10:
             insights.append(
                 {
                     "type": "optimization",

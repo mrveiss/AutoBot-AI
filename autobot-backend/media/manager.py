@@ -77,10 +77,7 @@ class MediaPipelineManager:
                 confidence=0.0,
                 result_data=None,
                 processing_time=0.0,
-                error_message=(
-                    f"No pipeline supports media type: "
-                    f"{media_input.media_type.value}"
-                ),
+                error_message=(f"No pipeline supports media type: " f"{media_input.media_type.value}"),
             )
 
         return await pipeline.process(media_input)

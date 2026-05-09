@@ -70,9 +70,7 @@ class TestWakeWordDetection:
 
     def test_wake_word_in_sentence(self, detector):
         """Test wake word detection within a sentence"""
-        event = detector.check_text_for_wake_word(
-            "hey autobot what's the weather", confidence=0.85
-        )
+        event = detector.check_text_for_wake_word("hey autobot what's the weather", confidence=0.85)
         assert event is not None
         assert event.wake_word == "hey autobot"
 
@@ -176,9 +174,7 @@ class TestFalsePositiveReduction:
         time.sleep(0.15)
 
         # Detection with noise words (should have lower effective confidence)
-        event2 = detector.check_text_for_wake_word(
-            "I said hey autobot to the user", confidence=0.9
-        )
+        event2 = detector.check_text_for_wake_word("I said hey autobot to the user", confidence=0.9)
         # May or may not detect depending on final confidence after penalties
         if event2:
             assert event2.confidence < conf1 * 1.1  # Should be lower due to penalties

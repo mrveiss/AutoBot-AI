@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_RATE_LIMIT = 50          # requests per 60-second window per token
+_RATE_LIMIT = 50  # requests per 60-second window per token
 _WINDOW_SECONDS = 60.0
 
 # Scope → tool prefixes
@@ -334,9 +334,7 @@ class AutoBotMCPServer:
                     "protocolVersion": "2024-11-05",
                     "serverInfo": {"name": "autobot-mcp", "version": "1.0.0"},
                     "tools": [
-                        {"name": name, **meta}
-                        for name, meta in self.TOOLS.items()
-                        if self._check_scope(scopes, name)
+                        {"name": name, **meta} for name, meta in self.TOOLS.items() if self._check_scope(scopes, name)
                     ],
                 },
                 req_id,
@@ -372,9 +370,7 @@ class AutoBotMCPServer:
                 return _err(-32603, f"Handler not implemented: {tool_name}", req_id)
             result = await handler(**arguments)
             elapsed = time.monotonic() - t0
-            logger.info(
-                "mcp tool_call tool=%s elapsed=%.3fs", tool_name, elapsed
-            )
+            logger.info("mcp tool_call tool=%s elapsed=%.3fs", tool_name, elapsed)
             return _ok({"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, req_id)
         except TypeError as exc:
             logger.warning("mcp bad_arguments tool=%s error=%s", tool_name, exc)
@@ -436,9 +432,7 @@ class AutoBotMCPServer:
             return {"error": "Entity not found", "name": name}
         return entity
 
-    async def _memory_timeline(
-        self, entity: str, range: Optional[str] = None
-    ) -> Any:
+    async def _memory_timeline(self, entity: str, range: Optional[str] = None) -> Any:
         from autobot_memory_graph import AutoBotMemoryGraph
 
         graph = AutoBotMemoryGraph()
@@ -452,9 +446,7 @@ class AutoBotMCPServer:
         relations = relations_data.get("relations", [])
 
         # Gather linked entity IDs and their details
-        neighbour_ids = {
-            r.get("from_entity") for r in relations
-        } | {r.get("to_entity") for r in relations}
+        neighbour_ids = {r.get("from_entity") for r in relations} | {r.get("to_entity") for r in relations}
         neighbour_ids.discard(entity_id)
 
         neighbours = []
@@ -464,15 +456,14 @@ class AutoBotMCPServer:
                 neighbours.append(ent)
 
         # Sort by created_at ascending (timeline order)
-        neighbours.sort(
-            key=lambda e: (e.get("metadata") or {}).get("created_at", ""), reverse=False
-        )
+        neighbours.sort(key=lambda e: (e.get("metadata") or {}).get("created_at", ""), reverse=False)
         if range:
             # range is "start/end"; filter by created_at string prefix comparison
             parts = range.split("/", 1)
             start, end = (parts[0], parts[1]) if len(parts) == 2 else (parts[0], None)
             neighbours = [
-                e for e in neighbours
+                e
+                for e in neighbours
                 if (e.get("metadata") or {}).get("created_at", "") >= start
                 and (end is None or (e.get("metadata") or {}).get("created_at", "") <= end)
             ]
@@ -517,9 +508,7 @@ class AutoBotMCPServer:
             "count": len(visited),
         }
 
-    async def _memory_verbatim_search(
-        self, query: str, session_filter: Optional[str] = None
-    ) -> Any:
+    async def _memory_verbatim_search(self, query: str, session_filter: Optional[str] = None) -> Any:
         from memory.verbatim_store import VerbatimStore
 
         store = VerbatimStore()
@@ -533,9 +522,7 @@ class AutoBotMCPServer:
     async def _agents_list(self) -> Any:
         return {"agents": _AGENT_REGISTRY, "count": len(_AGENT_REGISTRY)}
 
-    async def _agents_diary_summary(
-        self, agent_name: str, last_n: int = 10
-    ) -> Any:
+    async def _agents_diary_summary(self, agent_name: str, last_n: int = 10) -> Any:
         from memory.agent_diary import AgentDiaryService
 
         diary = AgentDiaryService()
@@ -554,13 +541,9 @@ class AutoBotMCPServer:
         loop = asyncio.get_event_loop()
 
         reader = asyncio.StreamReader()
-        await loop.connect_read_pipe(
-            lambda: asyncio.StreamReaderProtocol(reader), sys.stdin.buffer
-        )
+        await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin.buffer)
 
-        writer_transport, writer_proto = await loop.connect_write_pipe(
-            asyncio.BaseProtocol, sys.stdout.buffer
-        )
+        writer_transport, writer_proto = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
 
         logger.info("AutoBotMCPServer: stdio transport started")
 

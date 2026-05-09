@@ -184,9 +184,7 @@ class DocumentsMixin:
         """Process single file with semaphore-controlled concurrency (Issue #398: extracted)."""
         async with semaphore:
             try:
-                return await self.add_document_from_file(
-                    str(file_path), category=category
-                )
+                return await self.add_document_from_file(str(file_path), category=category)
             except Exception as e:
                 return {"status": "error", "message": "Document operation failed"}
 
@@ -217,11 +215,7 @@ class DocumentsMixin:
 
             semaphore = asyncio.Semaphore(10)
             results = await asyncio.gather(
-                *[
-                    self._process_file_with_semaphore(semaphore, f, category)
-                    for f in files
-                ],
-                return_exceptions=True
+                *[self._process_file_with_semaphore(semaphore, f, category) for f in files], return_exceptions=True
             )
 
             success_count, error_count = self._count_results(results)

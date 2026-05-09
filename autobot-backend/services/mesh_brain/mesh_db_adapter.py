@@ -96,9 +96,7 @@ class MeshDBAdapter:
         by the ``MeshGraph`` Protocol in ``staleness_propagator.py``.
         """
         rows = await self._db.get_neighbors(node_id, min_weight=0.0)
-        result: list[tuple[str, float]] = [
-            (row["neighbor_id"], float(row["weight"])) for row in rows
-        ]
+        result: list[tuple[str, float]] = [(row["neighbor_id"], float(row["weight"])) for row in rows]
         logger.debug(
             "MeshDBAdapter.get_neighbors node=%s found=%d neighbors",
             node_id,

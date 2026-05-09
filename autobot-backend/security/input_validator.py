@@ -13,6 +13,7 @@ import logging
 import re
 from typing import Any, Dict, List
 from urllib.parse import urlparse
+
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,7 @@ _SCRIPT_TAG_RE = re.compile(  # noqa: S1 codeql[py/bad-tag-filter]
     re.IGNORECASE | re.DOTALL,
 )
 _EVENT_HANDLER_RE = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
-_DANGEROUS_LINK_RE = re.compile(
-    r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE
-)
+_DANGEROUS_LINK_RE = re.compile(r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE)
 _URL_EXTRACT_RE = re.compile(r"https?://[a-zA-Z0-9$_.+!*(),;/?:@&=%-]{1,2048}")
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -153,9 +152,7 @@ class WebResearchInputValidator:
         self.dangerous_pattern_compiled = []
         for pattern in self.DANGEROUS_PATTERNS:
             try:
-                self.dangerous_pattern_compiled.append(
-                    re.compile(pattern, re.IGNORECASE | re.MULTILINE)
-                )
+                self.dangerous_pattern_compiled.append(re.compile(pattern, re.IGNORECASE | re.MULTILINE))
             except re.error as e:
                 logger.warning("Failed to compile regex pattern %s: %s", pattern, e)
 
@@ -192,9 +189,7 @@ class WebResearchInputValidator:
     def _check_query_length(self, query: str, max_length: int, result: Dict) -> str:
         """Check and truncate query if too long. Updates result warnings."""
         if len(query) > max_length:
-            result["warnings"].append(
-                f"Query length ({len(query)}) exceeds maximum ({max_length})"
-            )
+            result["warnings"].append(f"Query length ({len(query)}) exceeds maximum ({max_length})")
             query = query[:max_length]
             result["sanitized_query"] = query
         return query
@@ -219,9 +214,7 @@ class WebResearchInputValidator:
             if matches:
                 dangerous_matches.extend(matches)
         if dangerous_matches:
-            logger.warning(
-                "Dangerous patterns detected in query: %s", dangerous_matches
-            )
+            logger.warning("Dangerous patterns detected in query: %s", dangerous_matches)
             return dangerous_matches, {
                 "safe": False,
                 "threats_detected": ["DANGEROUS_PATTERNS"],
@@ -232,9 +225,7 @@ class WebResearchInputValidator:
 
     def _check_suspicious_keywords(self, query: str, result: Dict) -> Dict[str, Any]:
         """Check for suspicious keywords. Returns error result if high risk, None otherwise."""
-        suspicious_matches = [
-            kw for kw, pat in self.suspicious_keyword_patterns if pat.search(query)
-        ]
+        suspicious_matches = [kw for kw, pat in self.suspicious_keyword_patterns if pat.search(query)]
         if suspicious_matches:
             if len(suspicious_matches) >= 3:
                 return {
@@ -243,9 +234,7 @@ class WebResearchInputValidator:
                     "risk_level": "high",
                     "metadata": {"suspicious_keywords": suspicious_matches},
                 }
-            result["warnings"].append(
-                f"Potentially sensitive keywords: {', '.join(suspicious_matches)}"
-            )
+            result["warnings"].append(f"Potentially sensitive keywords: {', '.join(suspicious_matches)}")
             result["risk_level"] = "medium"
             result["metadata"]["suspicious_keywords"] = suspicious_matches
         return None
@@ -345,9 +334,7 @@ class WebResearchInputValidator:
             if re.search(pattern, url, re.IGNORECASE):
                 result["warnings"].append(f"Suspicious URL pattern detected: {pattern}")
 
-    def validate_research_query(
-        self, query: str, max_length: int = 500
-    ) -> Dict[str, Any]:
+    def validate_research_query(self, query: str, max_length: int = 500) -> Dict[str, Any]:
         """Validate and analyze a research query for safety."""
         result = self._create_query_result(query)
         try:
@@ -374,9 +361,7 @@ class WebResearchInputValidator:
             sanitized_query = self._sanitize_query(query)
             if sanitized_query != query:
                 result["sanitized_query"] = sanitized_query
-                result["warnings"].append(
-                    "Query was sanitized to remove potentially dangerous content"
-                )
+                result["warnings"].append("Query was sanitized to remove potentially dangerous content")
             if result["warnings"] and result["risk_level"] == "low":
                 result["risk_level"] = "medium"
 
@@ -454,18 +439,12 @@ class WebResearchInputValidator:
     def _validate_content_type(self, content_type: str, result: Dict) -> None:
         """Validate content type. Updates result warnings."""
         if content_type not in self.SAFE_CONTENT_TYPES:
-            result["warnings"].append(
-                f"Potentially unsafe content type: {content_type}"
-            )
+            result["warnings"].append(f"Potentially unsafe content type: {content_type}")
 
-    def _truncate_content(
-        self, content: str, result: Dict, max_length: int = 1_000_000
-    ) -> str:
+    def _truncate_content(self, content: str, result: Dict, max_length: int = 1_000_000) -> str:
         """Truncate content if too long. Updates result warnings."""
         if len(content) > max_length:
-            result["warnings"].append(
-                f"Content truncated from {len(content)} to {max_length} chars"
-            )
+            result["warnings"].append(f"Content truncated from {len(content)} to {max_length} chars")
             return content[:max_length]
         return content
 
@@ -499,9 +478,7 @@ class WebResearchInputValidator:
             result["metadata"]["dangerous_links_removed"] = dangerous_links
         return content
 
-    def _encode_dangerous_patterns(
-        self, content: str, content_type: str, result: Dict
-    ) -> str:
+    def _encode_dangerous_patterns(self, content: str, content_type: str, result: Dict) -> str:
         """Encode remaining dangerous patterns in HTML. Updates result warnings."""
         if content_type != "text/html":
             return content
@@ -522,18 +499,12 @@ class WebResearchInputValidator:
 
     def _check_remaining_threats(self, content: str, result: Dict) -> None:
         """Check for remaining suspicious patterns. Updates result warnings."""
-        remaining_threats = [
-            p.pattern for p in self.dangerous_pattern_compiled[:10] if p.search(content)
-        ]
+        remaining_threats = [p.pattern for p in self.dangerous_pattern_compiled[:10] if p.search(content)]
         if remaining_threats:
-            result["warnings"].append(
-                f"Suspicious patterns still present after sanitization: {len(remaining_threats)}"
-            )
+            result["warnings"].append(f"Suspicious patterns still present after sanitization: {len(remaining_threats)}")
             result["metadata"]["remaining_threats"] = remaining_threats[:3]
 
-    def sanitize_web_content(
-        self, content: str, content_type: str = "text/html"
-    ) -> Dict[str, Any]:
+    def sanitize_web_content(self, content: str, content_type: str = "text/html") -> Dict[str, Any]:
         """Sanitize web content before processing or storage."""
         result = self._create_content_result(content)
         try:
@@ -630,8 +601,6 @@ def validate_url(url: str) -> Dict[str, Any]:
     return get_input_validator().validate_url(url)
 
 
-def sanitize_web_content(
-    content: str, content_type: str = "text/html"
-) -> Dict[str, Any]:
+def sanitize_web_content(content: str, content_type: str = "text/html") -> Dict[str, Any]:
     """Sanitize web content"""
     return get_input_validator().sanitize_web_content(content, content_type)

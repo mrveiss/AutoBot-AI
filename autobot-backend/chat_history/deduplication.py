@@ -89,9 +89,7 @@ class DeduplicationMixin:
     This mixin is stateless and doesn't require any base class attributes.
     """
 
-    def _dedupe_streaming_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _dedupe_streaming_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Deduplicate messages to fix Issue #259.
 
@@ -114,9 +112,7 @@ class DeduplicationMixin:
         deduped_messages = self._dedupe_user_messages(messages)
 
         # STEP 2: Use extracted helper for streaming grouping (Issue #315)
-        non_streaming, streaming_groups = _group_streaming_by_time_window(
-            deduped_messages
-        )
+        non_streaming, streaming_groups = _group_streaming_by_time_window(deduped_messages)
 
         # STEP 3: Keep only longest message per streaming group
         result = list(non_streaming)
@@ -131,9 +127,7 @@ class DeduplicationMixin:
         result.sort(key=lambda m: m.get("timestamp", ""))
         return result
 
-    def _dedupe_user_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _dedupe_user_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Deduplicate user messages by content (Issue #315 - extracted)."""
         seen_user_content: set = set()
         deduped_messages = []

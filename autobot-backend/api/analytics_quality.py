@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from autobot_shared.time_utils import parse_utc_iso
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,8 +19,6 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
-from auth_middleware import check_admin_permission
-from api.schemas_common import DataResponse
 from api.schemas_analytics import (
     HealthScore,
     MetricCategory,
@@ -34,7 +31,10 @@ from api.schemas_analytics import (
     QualitySnapshotResponse,
     QualityTrendsResponse,
 )
+from api.schemas_common import DataResponse
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +75,7 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
         "documentation": 0.10,
     }
 
-    weighted_sum = sum(
-        metrics.get(category, 70) * weight for category, weight in weights.items()
-    )
+    weighted_sum = sum(metrics.get(category, 70) * weight for category, weight in weights.items())
 
     overall = min(100, max(0, weighted_sum))
     grade = get_grade(overall)
@@ -86,13 +84,9 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
     recommendations = []
     for category, score in metrics.items():
         if score < 60:
-            recommendations.append(
-                f"Critical: Improve {category} (current score: {score:.1f})"
-            )
+            recommendations.append(f"Critical: Improve {category} (current score: {score:.1f})")
         elif score < 70:
-            recommendations.append(
-                f"Warning: Address {category} issues (current score: {score:.1f})"
-            )
+            recommendations.append(f"Warning: Address {category} issues (current score: {score:.1f})")
 
     return HealthScore(
         overall=overall,
@@ -146,9 +140,7 @@ async def get_quality_data_from_storage(
         logger.warning("Failed to get quality data from Redis: %s", e)
 
     # Calculate real metrics from ChromaDB (Issue #541, #543, #6670)
-    real_data = await calculate_real_quality_metrics(
-        source_root=source_root, source_id=source_id
-    )
+    real_data = await calculate_real_quality_metrics(source_root=source_root, source_id=source_id)
     if real_data:
         # Cache the calculated data
         try:
@@ -448,11 +440,7 @@ def _calculate_documentation_score(stats: dict[str, Any]) -> float:
         except (ValueError, AttributeError):
             score = 0.0
     else:
-        score = (
-            float(docstring_ratio) * 100.0
-            if docstring_ratio < 1
-            else float(docstring_ratio)
-        )
+        score = float(docstring_ratio) * 100.0 if docstring_ratio < 1 else float(docstring_ratio)
 
     # Scale the score (target: 30% docstrings = 100% score)
     # This means 15% docstrings = 50% score
@@ -493,11 +481,7 @@ def _categorize_problems_for_patterns(
                 categories["anti_pattern"]["count"] += 1
             else:
                 categories["code_smell"]["count"] += 1
-        elif (
-            "technical_debt" in problem_type
-            or "todo" in problem_type
-            or "fixme" in problem_type
-        ):
+        elif "technical_debt" in problem_type or "todo" in problem_type or "fixme" in problem_type:
             categories["technical_debt"]["count"] += 1
         elif "bug" in problem_type or "race" in problem_type:
             categories["bug_risk"]["count"] += 1
@@ -585,9 +569,7 @@ def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dic
         "documentation": 0.10,
     }
 
-    weighted_score = sum(
-        metrics.get(category, 0) * weight for category, weight in weights.items()
-    )
+    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in weights.items())
 
     return [
         {
@@ -661,9 +643,7 @@ async def calculate_real_quality_metrics(
         Dict with calculated quality metrics, or None if no data available
     """
     # Fetch data from ChromaDB (scoped to source_root when provided)
-    problems, stats = await _get_problems_from_chromadb(
-        source_root=source_root, source_id=source_id
-    )
+    problems, stats = await _get_problems_from_chromadb(source_root=source_root, source_id=source_id)
 
     # Issue #543: If no data, return None - endpoints will return no_data status
     if not problems and not stats:
@@ -722,9 +702,7 @@ _CATEGORY_TYPE_MAP: dict[str, set[str]] = {
 }
 
 
-def _filter_problems_by_category(
-    problems: list[dict], category: str, severity: Optional[str]
-) -> list[dict]:
+def _filter_problems_by_category(problems: list[dict], category: str, severity: Optional[str]) -> list[dict]:
     """
     Filter problems by category type and optional severity.
 
@@ -739,21 +717,15 @@ def _filter_problems_by_category(
         Filtered list of problems matching criteria
     """
     target_types = _CATEGORY_TYPE_MAP.get(category.lower(), set())
-    category_problems = [
-        p for p in problems if any(t in p.get("type", "").lower() for t in target_types)
-    ]
+    category_problems = [p for p in problems if any(t in p.get("type", "").lower() for t in target_types)]
 
     if severity:
-        category_problems = [
-            p for p in category_problems if p.get("severity") == severity
-        ]
+        category_problems = [p for p in category_problems if p.get("severity") == severity]
 
     return category_problems
 
 
-def _group_problems_by_file(
-    problems: list[dict], file_filter: Optional[str]
-) -> dict[str, list[dict]]:
+def _group_problems_by_file(problems: list[dict], file_filter: Optional[str]) -> dict[str, list[dict]]:
     """
     Group problems by file path with optional filtering.
 
@@ -810,9 +782,7 @@ def _build_drill_down_file_results(file_issues: dict[str, list[dict]]) -> list[d
     return result_files
 
 
-def _build_quality_export_report(
-    format_type: str, health: Any, metrics: dict, data: dict
-) -> dict:
+def _build_quality_export_report(format_type: str, health: Any, metrics: dict, data: dict) -> dict:
     """
     Build quality export report dictionary.
 
@@ -863,9 +833,7 @@ def _export_quality_as_csv(health: Any, metrics: dict) -> str:
     writer = csv.writer(output)
 
     writer.writerow(["Section", "Metric", "Value", "Grade"])
-    writer.writerow(
-        ["Health", "Overall Score", f"{health.overall:.1f}", health.grade.value]
-    )
+    writer.writerow(["Health", "Overall Score", f"{health.overall:.1f}", health.grade.value])
 
     for cat, val in metrics.items():
         writer.writerow(
@@ -896,17 +864,13 @@ class ConnectionManager:
         """Accept new WebSocket connection."""
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(
-            f"WebSocket connected. Total connections: {len(self.active_connections)}"
-        )
+        logger.info(f"WebSocket connected. Total connections: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         """Remove disconnected WebSocket."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-            logger.info(
-                f"WebSocket disconnected. Total connections: {len(self.active_connections)}"
-            )
+            logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
         """Broadcast message to all connected clients."""
@@ -1149,9 +1113,7 @@ async def get_complexity_metrics(
                 "complexity": h.get("complexity", 0),
                 "lines": h.get("lines", 0),
                 "recommendation": (
-                    "Consider refactoring this file"
-                    if h.get("complexity", 0) > 15
-                    else "Monitor complexity"
+                    "Consider refactoring this file" if h.get("complexity", 0) > 15 else "Monitor complexity"
                 ),
             }
             for h in hotspots
@@ -1309,12 +1271,8 @@ async def get_quality_snapshot(
         ],
         "patterns_summary": {
             "total": sum(p.get("count", 0) for p in patterns),
-            "critical": sum(
-                p.get("count", 0) for p in patterns if p.get("severity") == "critical"
-            ),
-            "high": sum(
-                p.get("count", 0) for p in patterns if p.get("severity") == "high"
-            ),
+            "critical": sum(p.get("count", 0) for p in patterns if p.get("severity") == "critical"),
+            "high": sum(p.get("count", 0) for p in patterns if p.get("severity") == "high"),
         },
         "complexity_summary": {
             "avg_cyclomatic": complexity.get("average_cyclomatic", 0),
@@ -1370,11 +1328,7 @@ async def drill_down_category(
         "display_name": category.replace("_", " ").title(),
         "total_files": len(result_files),
         "total_issues": sum(f["issues"] for f in result_files),
-        "average_score": (
-            sum(f["score"] for f in result_files) / len(result_files)
-            if result_files
-            else 0
-        ),
+        "average_score": (sum(f["score"] for f in result_files) / len(result_files) if result_files else 0),
         "files": result_files[:limit],
         "filters_applied": {
             "file": file_filter,
@@ -1436,9 +1390,7 @@ async def export_quality_report(
 
 async def _handle_ws_subscribe(websocket: WebSocket, data: dict) -> None:
     """Handle WebSocket subscribe message (Issue #315: extracted)."""
-    await websocket.send_json(
-        {"type": "subscribed", "metrics": data.get("metrics", [])}
-    )
+    await websocket.send_json({"type": "subscribed", "metrics": data.get("metrics", [])})
 
 
 async def _handle_ws_refresh(websocket: WebSocket, data: dict) -> None:

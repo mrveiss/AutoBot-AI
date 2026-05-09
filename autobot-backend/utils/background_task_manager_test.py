@@ -16,6 +16,7 @@ This test file covers all three fixed sites:
 - ``_mark_orphans`` — Redis-backed cleanup (5 tests, #5463)
 - ``get_status`` — Redis-backed auto-recovery (3 tests, #5463)
 """
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from utils.background_task_manager import BackgroundTaskManager
 from autobot_shared.time_utils import now_utc
+from utils.background_task_manager import BackgroundTaskManager
 
 
 @pytest.fixture
@@ -33,9 +34,7 @@ def manager() -> BackgroundTaskManager:
     return BackgroundTaskManager(redis_prefix="test_task:", task_timeout=60)
 
 
-def _add_running_task(
-    manager: BackgroundTaskManager, task_id: str, started_at: str
-) -> None:
+def _add_running_task(manager: BackgroundTaskManager, task_id: str, started_at: str) -> None:
     """Seed manager._tasks with a running task carrying a string started_at."""
     manager._tasks[task_id] = {
         "status": "running",
@@ -67,9 +66,7 @@ def test_cleanup_stuck_with_z_suffix_started_marks_timed_out(
 ) -> None:
     """Z-suffix ISO beyond timeout — parse_utc_iso handles Z natively."""
     past = (
-        (datetime.now(tz=timezone.utc) - timedelta(seconds=120))
-        .replace(microsecond=0)
-        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        (datetime.now(tz=timezone.utc) - timedelta(seconds=120)).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     )
     _add_running_task(manager, "t2", past)
 
@@ -90,9 +87,7 @@ def test_cleanup_stuck_with_naive_iso_started_no_typeerror(
     elapsed-beyond-threshold). With the fix, the timeout check actually runs.
     """
     # Naive ISO — what pre-migration code paths wrote to Redis
-    past_naive = (now_utc() - timedelta(seconds=120)).replace(
-        tzinfo=None
-    ).isoformat()
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     _add_running_task(manager, "t3", past_naive)
 
     # Must not raise
@@ -121,9 +116,7 @@ def test_cleanup_stuck_within_timeout_with_naive_iso_keeps_running(
     marked failed. Pre-fix, TypeError in the try block silently left
     ``stuck = True`` default, causing false-positive failure marking.
     """
-    recent_naive = (
-        now_utc() - timedelta(seconds=10)
-    ).replace(tzinfo=None).isoformat()
+    recent_naive = (now_utc() - timedelta(seconds=10)).replace(tzinfo=None).isoformat()
     _add_running_task(manager, "t5", recent_naive)
 
     cleaned = manager._cleanup_stuck()
@@ -165,9 +158,7 @@ def test_cleanup_stuck_non_running_tasks_untouched(
     manager: BackgroundTaskManager,
 ) -> None:
     """Only ``status == 'running'`` tasks are considered."""
-    past_naive = (
-        now_utc() - timedelta(seconds=120)
-    ).replace(tzinfo=None).isoformat()
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     manager._tasks["t8"] = {
         "status": "pending",
         "started_at": past_naive,
@@ -209,8 +200,10 @@ class _FakeCache:
 
 def _make_cache_factory(storage: dict[str, dict]):
     """Return a patch target that always yields _FakeCache(storage)."""
+
     def _factory(*_args, **_kwargs):
         return _FakeCache(storage)
+
     return _factory
 
 
@@ -224,11 +217,7 @@ async def test_mark_orphans_with_naive_iso_beyond_timeout_marks_failed(
     skipped the timeout gate and marked the task failed regardless of age.
     Post-#5462: elapsed check actually runs; only truly-expired tasks marked.
     """
-    past_naive = (
-        (now_utc() - timedelta(seconds=120))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     storage = {
         "test_task:orphan1": {
             "status": "running",
@@ -257,11 +246,7 @@ async def test_mark_orphans_with_naive_iso_within_timeout_keeps_running(
     This is the second half of the #5462 fix: pre-fix the TypeError caused
     false-positive orphan marking for recent naive-timestamp tasks.
     """
-    recent_naive = (
-        (now_utc() - timedelta(seconds=10))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
+    recent_naive = (now_utc() - timedelta(seconds=10)).replace(tzinfo=None).isoformat()
     storage = {
         "test_task:orphan2": {
             "status": "running",
@@ -288,17 +273,11 @@ async def test_mark_orphans_skips_in_memory_tasks(
     manager: BackgroundTaskManager,
 ) -> None:
     """Tasks currently tracked in self._tasks (any worker) are not orphaned."""
-    past_naive = (
-        (now_utc() - timedelta(seconds=120))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     # Task in self._tasks — another worker might be running it
     manager._tasks["orphan3"] = {"status": "running", "started_at": past_naive}
 
-    storage = {
-        "test_task:orphan3": {"status": "running", "started_at": past_naive}
-    }
+    storage = {"test_task:orphan3": {"status": "running", "started_at": past_naive}}
     fake_redis = MagicMock()
 
     with patch(
@@ -316,11 +295,7 @@ async def test_mark_orphans_skips_non_running_tasks(
     manager: BackgroundTaskManager,
 ) -> None:
     """Only ``status == 'running'`` Redis tasks are considered."""
-    past_naive = (
-        (now_utc() - timedelta(seconds=120))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     storage = {
         "test_task:done": {"status": "completed", "started_at": past_naive},
     }
@@ -341,12 +316,8 @@ async def test_mark_orphans_with_aware_iso_beyond_timeout_marks_failed(
     manager: BackgroundTaskManager,
 ) -> None:
     """Sanity: aware +00:00 ISO also works (post-fix behavior unchanged)."""
-    past_aware = (
-        datetime.now(tz=timezone.utc) - timedelta(seconds=120)
-    ).isoformat()
-    storage = {
-        "test_task:aware": {"status": "running", "started_at": past_aware}
-    }
+    past_aware = (datetime.now(tz=timezone.utc) - timedelta(seconds=120)).isoformat()
+    storage = {"test_task:aware": {"status": "running", "started_at": past_aware}}
     fake_redis = MagicMock()
 
     with patch(
@@ -376,14 +347,8 @@ async def test_get_status_auto_recovers_timed_out_naive_task(
     Pre-#5462: TypeError silently caught → task kept reporting "running"
     indefinitely. The frontend would see infinite spinner.
     """
-    past_naive = (
-        (now_utc() - timedelta(seconds=120))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
-    storage = {
-        "test_task:zombie": {"status": "running", "started_at": past_naive}
-    }
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
+    storage = {"test_task:zombie": {"status": "running", "started_at": past_naive}}
 
     async def _fake_load(task_id: str):
         return storage.get(f"{manager._prefix}{task_id}")
@@ -412,14 +377,8 @@ async def test_get_status_keeps_recent_naive_task_running(
     manager: BackgroundTaskManager,
 ) -> None:
     """Recent task (within timeout) with naive started_at stays running."""
-    recent_naive = (
-        (now_utc() - timedelta(seconds=10))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
-    storage = {
-        "test_task:fresh": {"status": "running", "started_at": recent_naive}
-    }
+    recent_naive = (now_utc() - timedelta(seconds=10)).replace(tzinfo=None).isoformat()
+    storage = {"test_task:fresh": {"status": "running", "started_at": recent_naive}}
 
     async def _fake_load(task_id: str):
         return storage.get(f"{manager._prefix}{task_id}")
@@ -441,11 +400,7 @@ async def test_get_status_returns_in_memory_task_without_auto_recovery(
     manager: BackgroundTaskManager,
 ) -> None:
     """In-memory tasks bypass Redis + auto-recovery entirely."""
-    past_naive = (
-        (now_utc() - timedelta(seconds=120))
-        .replace(tzinfo=None)
-        .isoformat()
-    )
+    past_naive = (now_utc() - timedelta(seconds=120)).replace(tzinfo=None).isoformat()
     manager._tasks["inmem"] = {
         "status": "running",
         "started_at": past_naive,

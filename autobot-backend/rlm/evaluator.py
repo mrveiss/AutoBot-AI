@@ -119,7 +119,6 @@ class ResponseQualityEvaluator:
     async def _call_llm(self, prompt: str) -> str:
         """Send *prompt* to Ollama and return the raw text response."""
         from autobot_shared.ssot_config import get_config
-
         from llm_providers.ollama_helpers import call_ollama_generate
 
         ssot = get_config()

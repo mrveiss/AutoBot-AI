@@ -47,11 +47,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            sql_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.SQL_INJECTION
-            ]
+            sql_results = [r for r in results if r.vulnerability_type == VulnerabilityType.SQL_INJECTION]
 
             # Should detect SQL injection pattern
             assert len(sql_results) >= 1
@@ -73,11 +69,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            cmd_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION
-            ]
+            cmd_results = [r for r in results if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION]
 
             assert len(cmd_results) >= 1
             assert cmd_results[0].severity == SecuritySeverity.CRITICAL
@@ -98,11 +90,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            cmd_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION
-            ]
+            cmd_results = [r for r in results if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION]
 
             assert len(cmd_results) >= 1
             assert "shell" in cmd_results[0].description.lower()
@@ -152,11 +140,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            api_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.HARDCODED_API_KEY
-            ]
+            api_results = [r for r in results if r.vulnerability_type == VulnerabilityType.HARDCODED_API_KEY]
 
             assert len(api_results) >= 1
 
@@ -176,11 +160,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            hash_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.WEAK_HASH_ALGORITHM
-            ]
+            hash_results = [r for r in results if r.vulnerability_type == VulnerabilityType.WEAK_HASH_ALGORITHM]
 
             assert len(hash_results) >= 1
             assert "md5" in hash_results[0].description.lower()
@@ -201,11 +181,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            random_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.INSECURE_RANDOM
-            ]
+            random_results = [r for r in results if r.vulnerability_type == VulnerabilityType.INSECURE_RANDOM]
 
             assert len(random_results) >= 1
             assert "secrets" in random_results[0].recommendation.lower()
@@ -226,11 +202,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            pickle_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.PICKLE_USAGE
-            ]
+            pickle_results = [r for r in results if r.vulnerability_type == VulnerabilityType.PICKLE_USAGE]
 
             assert len(pickle_results) >= 1
             assert pickle_results[0].severity == SecuritySeverity.HIGH
@@ -251,11 +223,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            yaml_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.YAML_LOAD_UNSAFE
-            ]
+            yaml_results = [r for r in results if r.vulnerability_type == VulnerabilityType.YAML_LOAD_UNSAFE]
 
             assert len(yaml_results) >= 1
             assert "safe_load" in yaml_results[0].recommendation.lower()
@@ -276,11 +244,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            debug_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.DEBUG_MODE_ENABLED
-            ]
+            debug_results = [r for r in results if r.vulnerability_type == VulnerabilityType.DEBUG_MODE_ENABLED]
 
             assert len(debug_results) >= 1
 
@@ -335,11 +299,7 @@ class TestSecurityAnalyzer:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            yaml_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.YAML_LOAD_UNSAFE
-            ]
+            yaml_results = [r for r in results if r.vulnerability_type == VulnerabilityType.YAML_LOAD_UNSAFE]
 
             assert len(yaml_results) == 0
 
@@ -445,11 +405,7 @@ class TestSecuritySeverity:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            injection_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION
-            ]
+            injection_results = [r for r in results if r.vulnerability_type == VulnerabilityType.COMMAND_INJECTION]
 
             if injection_results:
                 assert injection_results[0].severity == SecuritySeverity.CRITICAL
@@ -467,11 +423,7 @@ class TestSecuritySeverity:
             analyzer = SecurityAnalyzer()
             results = analyzer.analyze_file(f.name)
 
-            secret_results = [
-                r
-                for r in results
-                if r.vulnerability_type == VulnerabilityType.HARDCODED_SECRET
-            ]
+            secret_results = [r for r in results if r.vulnerability_type == VulnerabilityType.HARDCODED_SECRET]
 
             if secret_results:
                 assert secret_results[0].severity == SecuritySeverity.HIGH

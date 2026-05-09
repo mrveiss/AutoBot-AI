@@ -7,6 +7,7 @@ Plugin Marketplace Sources
 Issue #6481 - User-extensible marketplace sources. Users register custom
 catalog URLs alongside the built-in AutoBot marketplace.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -108,9 +109,7 @@ async def _resolve_safe_ip(host: str) -> str:
     169.254.169.254), unique-local IPv6, multicast, reserved.
     """
     try:
-        infos = await asyncio.get_event_loop().getaddrinfo(
-            host, None, type=socket.SOCK_STREAM
-        )
+        infos = await asyncio.get_event_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except (socket.gaierror, OSError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -261,8 +260,9 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     safe_ip = await _resolve_safe_ip(host)
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
-    resolver_map = {host: [{"hostname": host, "host": safe_ip, "port": port,
-                             "family": socket.AF_INET, "proto": 0, "flags": 0}]}
+    resolver_map = {
+        host: [{"hostname": host, "host": safe_ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}]
+    }
 
     class _PinnedResolver(aiohttp.abc.AbstractResolver):
         async def resolve(self, hostname, port_, family=socket.AF_INET):
@@ -283,11 +283,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
                         detail=f"Marketplace URL returned HTTP {response.status}",
                     )
                 content_length = response.headers.get("Content-Length")
-                if (
-                    content_length
-                    and content_length.isdigit()
-                    and int(content_length) > _MAX_CATALOG_BYTES
-                ):
+                if content_length and content_length.isdigit() and int(content_length) > _MAX_CATALOG_BYTES:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Marketplace catalog exceeds 4MB",
